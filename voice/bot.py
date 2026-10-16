@@ -5,7 +5,7 @@ from pathlib import Path
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import EndTaskFrame, LLMRunFrame
+from pipecat.frames.frames import EndWorkerFrame, LLMRunFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -59,7 +59,7 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
             result = call_tools.dispatch(tool_name, params.arguments)
             await params.result_callback(result)
             if tool_name == "end_call":
-                await params.llm.push_frame(EndTaskFrame(), FrameDirection.UPSTREAM)
+                await params.llm.push_frame(EndWorkerFrame(), FrameDirection.UPSTREAM)
 
         schemas.append(
             FunctionSchema(

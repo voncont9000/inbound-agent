@@ -45,7 +45,7 @@ storage; Google Sheets and email sinks are intentionally deferred.
 
 The bot queues an `LLMRunFrame` when a client connects so the system-prompt greeting is
 spoken first. Client disconnects cancel the pipeline task. The `end_call` tool records its
-result before sending `EndTaskFrame` upstream, allowing the spoken goodbye to finish before
+result before sending `EndWorkerFrame` upstream, allowing the spoken goodbye to finish before
 the pipeline ends.
 
 ## Turn-taking and safeguards
@@ -60,8 +60,8 @@ termination date and flagged urgent at 28 days or less.
 
 ## Latency and cost
 
-The latency target is **p95 ≤ 1.5 seconds** from VAD's caller-stopped-speaking event to the
-first `BotStartedSpeakingFrame` from the transport output. M0 also records the separate
+The latency target is **p95 ≤ 1.5 seconds** from when the caller stopped speaking (VAD stop time
+minus its `stop_secs` confirmation silence) to the first `BotStartedSpeakingFrame` from the transport output. M0 also records the separate
 Smart-Turn-end-to-first-bot-speaking interval. It keeps only the latest pending caller
 turn, clears it on interruption, and reports p50, p95, and max for both intervals. Other
 measurements include Pipecat STT/LLM/TTS TTFB-family metrics, token usage, synthesized

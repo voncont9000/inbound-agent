@@ -155,7 +155,9 @@ class CallMetricsObserver(BaseObserver):
             self.latency.user_started_speaking()
         elif isinstance(frame, VADUserStoppedSpeakingFrame):
             wall_clock_offset = timestamp - time.time()
-            self.latency.vad_user_stopped_speaking(frame.timestamp + wall_clock_offset)
+            # VAD reports after stop_secs of silence; subtract it to get when speech ended.
+            speech_ended_at = frame.timestamp - (frame.stop_secs or 0.0)
+            self.latency.vad_user_stopped_speaking(speech_ended_at + wall_clock_offset)
         elif isinstance(frame, UserStoppedSpeakingFrame):
             if not self._is_duplicate_broadcast_frame(frame):
                 self.latency.user_stopped_speaking(timestamp)

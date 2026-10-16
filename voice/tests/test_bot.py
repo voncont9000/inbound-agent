@@ -2,7 +2,7 @@ import asyncio
 import importlib.util
 from pathlib import Path
 
-from pipecat.frames.frames import EndTaskFrame
+from pipecat.frames.frames import EndWorkerFrame
 from pipecat.processors.frame_processor import FrameDirection
 
 from inbound_voice.sinks import LocalFilesCallSink
@@ -15,7 +15,7 @@ BOT_MODULE = importlib.util.module_from_spec(BOT_SPEC)
 BOT_SPEC.loader.exec_module(BOT_MODULE)
 
 
-def test_end_call_sends_end_task_after_tool_result(tmp_path) -> None:
+def test_end_call_sends_end_worker_after_tool_result(tmp_path) -> None:
     events = []
 
     class FakeLLM:
@@ -40,5 +40,5 @@ def test_end_call_sends_end_task_after_tool_result(tmp_path) -> None:
     asyncio.run(handler(FakeParams()))
 
     assert events[0] == ("result", {"ok": True, "status": "The call may now end."})
-    assert isinstance(events[1][1], EndTaskFrame)
+    assert isinstance(events[1][1], EndWorkerFrame)
     assert events[1][2] is FrameDirection.UPSTREAM
