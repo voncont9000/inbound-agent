@@ -1,2 +1,6 @@
 # inbound-agent
-A personalised agent that takes inquiries via phone, email, and whats app
+A personalised AI agent that takes customer inquiries via phone (speech-to-text / text-to-speech), email (Gmail), and WhatsApp.
+
+## Docs
+- [Product requirements (PRD)](docs/PRD.md)
+- [Fonio teardown](docs/fonio-teardown.md): reverse-engineering notes on the reference product, made with [REA](https://github.com/morluto/rea)
