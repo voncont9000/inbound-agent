@@ -58,7 +58,7 @@ tenant ─┬─ organisation ──< person_org_role >── person ──< ide
         │
         ├─ commitment (who, what, due_at, status: open|kept|broken|cancelled, source_message_id)
         │     e.g. "promise to pay £480 by 24 Oct", "call back Thursday", "send quote"
-        ├─ task, case/topic (groups conversations about the same issue)
+        ├─ task, case/matter (groups conversations about the same issue; for law firms = enquiry or matter, with other parties for conflict checks)
         └─ external_record (system: xero|quickbooks|shopify|calendar, type: invoice|payment|order|booking, external_id, payload, synced_at)
 
 edge (tenant_id, src_type, src_id, rel, dst_type, dst_id, valid_from, valid_to, source_message_id)
@@ -98,7 +98,7 @@ The model above supports chasing outstanding payments without schema changes:
 - `external_record` syncs invoices and payments from **Xero** (webhooks for INVOICE create/update, then fetch the resource) or QuickBooks.
 - `commitment` records **promises to pay** made on any channel. A workflow engine (durable, scheduled) checks due dates against payments received and triggers a follow-up on the customer's preferred channel and time.
 - The graph answers "who is the payer contact at this organisation" and "what was promised, when, and where".
-- **Compliance notes:** B2B invoice chasing falls under the Late Payment of Commercial Debts (Interest) Act 1998 (statutory interest and compensation). If a tenant chases **consumer credit** debts, FCA **CONC 7** applies: explain who is contacting and why, no contact at unreasonable times, respect requested contact preferences, no disclosure to third parties, and verify identity before discussing the debt ([CONC 7.9](https://www.handbook.fca.org.uk/handbook/CONC/7/9.html)). Build in contact-time windows, per-contact channel preferences, opt-out, and identity verification from the start. Outbound WhatsApp needs approved templates.
+- **Compliance notes:** for the law-firm launch, chasing consumer clients for unpaid fees is consumer debt. CONC 7 most likely applies only if the firm provides regulated credit (to be confirmed with a compliance adviser) (e.g. fee instalment agreements), but its contact rules are sensible defaults anyway. B2B invoice chasing falls under the Late Payment of Commercial Debts (Interest) Act 1998 (statutory interest and compensation). If a tenant chases **consumer credit** debts, FCA **CONC 7** applies: explain who is contacting and why, no contact at unreasonable times, respect requested contact preferences, no disclosure to third parties, and verify identity before discussing the debt ([CONC 7.9](https://www.handbook.fca.org.uk/handbook/CONC/7/9.html)). Build in contact-time windows, per-contact channel preferences, opt-out, and identity verification from the start. Outbound WhatsApp needs approved templates.
 
 ## 9. Next steps
 1. **Spike (1 week):** take 50 synthetic multi-channel conversations. Compare (a) our extraction prompt into Postgres with (b) Graphiti (Neo4j/FalkorDB driver) on identity linkage, fact accuracy, superseded-fact handling, ingestion cost per message, and retrieval latency. Decision record afterwards.
