@@ -67,4 +67,22 @@ def test_employment_deadline_near_limit_flags_urgent(tmp_path) -> None:
     assert result["ok"] is True
     assert follow_up["ok"] is True
     tasks = json.loads((sink.directory / "tasks.json").read_text())
-    assert tasks[0]["type"] == "urgent"
+    assert [task["type"] for task in tasks] == ["urgent"]
+
+
+def test_changed_termination_date_flags_new_urgent_deadline(tmp_path) -> None:
+    sink = LocalFilesCallSink(tmp_path, "changed-deadline")
+    tools = CallTools(sink)
+    termination_date = date.today() - timedelta(days=70)
+
+    tools.save_intake(
+        "employment",
+        {"issue_type": "dismissal", "termination_date": termination_date.isoformat()},
+    )
+    tools.save_intake(
+        "employment",
+        {"termination_date": (termination_date + timedelta(days=1)).isoformat()},
+    )
+
+    tasks = json.loads((sink.directory / "tasks.json").read_text())
+    assert [task["type"] for task in tasks] == ["urgent", "urgent"]

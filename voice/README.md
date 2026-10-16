@@ -23,8 +23,10 @@ uv run --env-file .env bot.py
 ```
 
 Open the local runner's URL (normally `http://localhost:7860`) and select **WebRTC** to
-start a browser call. The page is served by Pipecat's development runner. Real speech
-processing requires the API keys.
+start a browser call. The agent greets the caller when the client connects. When it
+finishes a conversation with `end_call`, it speaks its goodbye before ending the pipeline.
+The page is served by Pipecat's development runner. Real speech processing requires the
+API keys.
 
 ## Twilio Media Streams
 
@@ -54,9 +56,11 @@ Twilio credentials are optional for local WebRTC and must never be committed.
 ## Call outputs and report
 
 Each session writes `transcript.jsonl`, `intake.json`, `tasks.json`, and `metrics.json` to
-`voice/runs/<call_id>/`. That directory is ignored by Git. Call-level metrics include the
-end-of-speech to first outgoing audio latency for each turn, Pipecat service latency and
-usage measurements, and estimated cost.
+`voice/runs/<call_id>/`. That directory is ignored by Git. Call-level metrics include
+VAD-stop-to-first-bot-speaking and Smart-Turn-end-to-first-bot-speaking latency for each
+turn, Pipecat service latency and usage measurements, and estimated cost. Deepgram
+streaming STT cost is based on the full call duration because the audio stream stays open
+for the call; measured STT audio seconds are retained as informational usage data.
 
 ```sh
 uv run python -m inbound_voice.report runs
@@ -68,7 +72,7 @@ From the repository root, the equivalent command is:
 uv run --project voice python -m inbound_voice.report voice/runs
 ```
 
-The report prints latency percentiles and estimated cost across calls. An asterisk marks
-a partial estimate where usage or a price is unknown. Edit `config/prices.yaml` only
-when you have an official current source; prices are documented in USD and exclude
-applicable taxes and other charges.
+The report prints p50, p95, and max percentiles for both latency measurements and
+estimated cost across calls. An asterisk marks a partial estimate where usage or a price
+is unknown. Edit `config/prices.yaml` only when you have an official current source;
+prices are documented in USD and exclude applicable taxes and other charges.

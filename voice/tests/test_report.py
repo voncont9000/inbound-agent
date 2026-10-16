@@ -20,6 +20,12 @@ def test_report_cli_on_fixture_runs(tmp_path) -> None:
                     "p95_seconds": 0.8,
                     "max_seconds": 0.8,
                 },
+                "turn_end_latency_summary": {
+                    "turn_count": 1,
+                    "p50_seconds": 0.3,
+                    "p95_seconds": 0.3,
+                    "max_seconds": 0.3,
+                },
                 "usage": {
                     "stt_audio_seconds": 60,
                     "tts_characters": 1000,
@@ -46,4 +52,5 @@ def test_report_cli_on_fixture_runs(tmp_path) -> None:
     output = result.stdout
     assert "fixture-call" in output
     assert "0.800s" in output
+    assert "0.300s" in output
     assert "USD" in output

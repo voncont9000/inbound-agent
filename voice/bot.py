@@ -5,6 +5,7 @@ from pathlib import Path
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.frames.frames import EndTaskFrame, LLMRunFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -13,6 +14,7 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
+from pipecat.processors.frame_processor import FrameDirection
 from pipecat.runner.run import main
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
@@ -56,6 +58,8 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
         async def handler(params: FunctionCallParams, tool_name: str = spec["name"]) -> None:
             result = call_tools.dispatch(tool_name, params.arguments)
             await params.result_callback(result)
+            if tool_name == "end_call":
+                await params.llm.push_frame(EndTaskFrame(), FrameDirection.UPSTREAM)
 
         schemas.append(
             FunctionSchema(
@@ -126,6 +130,15 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
         ),
         observers=[metrics_observer],
     )
+
+    @transport.event_handler("on_client_connected")
+    async def on_client_connected(_transport: object, _client: object) -> None:
+        await task.queue_frame(LLMRunFrame())
+
+    @transport.event_handler("on_client_disconnected")
+    async def on_client_disconnected(_transport: object, _client: object) -> None:
+        await task.cancel()
+
     try:
         await PipelineRunner().run(task)
     finally:

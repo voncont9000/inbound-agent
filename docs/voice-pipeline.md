@@ -43,6 +43,11 @@ storage; Google Sheets and email sinks are intentionally deferred.
   interruption handling. A firm config and intake tool layer keep product policy apart
   from vendor-specific adapters.
 
+The bot queues an `LLMRunFrame` when a client connects so the system-prompt greeting is
+spoken first. Client disconnects cancel the pipeline task. The `end_call` tool records its
+result before sending `EndTaskFrame` upstream, allowing the spoken goodbye to finish before
+the pipeline ends.
+
 ## Turn-taking and safeguards
 
 Silero VAD detects speech activity and Pipecat's local Smart Turn v3 analyzer predicts
@@ -55,16 +60,20 @@ termination date and flagged urgent at 28 days or less.
 
 ## Latency and cost
 
-The latency target is **p95 ≤ 1.5 seconds** from user-stopped-speaking to the first bot
-audio frame sent to the transport. M0 records one end-of-speech/first-audio interval per
-turn, plus Pipecat STT/LLM/TTS TTFB-family metrics, token usage, synthesized characters,
-and call duration. The report computes p50, p95 and max latency per call.
+The latency target is **p95 ≤ 1.5 seconds** from VAD's caller-stopped-speaking event to the
+first `BotStartedSpeakingFrame` from the transport output. M0 also records the separate
+Smart-Turn-end-to-first-bot-speaking interval. It keeps only the latest pending caller
+turn, clears it on interruption, and reports p50, p95, and max for both intervals. Other
+measurements include Pipecat STT/LLM/TTS TTFB-family metrics, token usage, synthesized
+characters, and call duration.
 
-Estimated cost uses `voice/config/prices.yaml`: Deepgram Nova-3 STT per minute, Aura-2
-TTS per 1,000 characters, OpenRouter LLM input/output per million tokens, and UK local
-Twilio inbound per minute. The table records official source URLs and the 2026-10-16
-check date. Missing price or usage components are reported as unknown, not silently
-treated as a zero-cost service. Twilio number rental and taxes are excluded.
+Estimated cost uses `voice/config/prices.yaml`: Deepgram Nova-3 streaming STT per minute
+of full call duration (the stream remains open for the call), Aura-2 TTS per 1,000
+characters, OpenRouter LLM input/output per million tokens, and UK local Twilio inbound
+per minute. Measured STT audio seconds remain in usage metrics for information but do not
+determine STT cost. The table records official source URLs and the 2026-10-16 check date.
+Missing price or usage components are reported as unknown, not silently treated as a
+zero-cost service. Twilio number rental and taxes are excluded.
 
 ## Deferred
 

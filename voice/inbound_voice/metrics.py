@@ -23,7 +23,15 @@ def percentile(values: list[float], percentile_value: float) -> float | None:
 
 
 def summarize_turn_latencies(turns: list[dict[str, Any]]) -> dict[str, float | int | None]:
-    values = [float(turn["seconds"]) for turn in turns if turn.get("seconds") is not None]
+    return _summarize_latencies(turns, "seconds")
+
+
+def summarize_turn_end_latencies(turns: list[dict[str, Any]]) -> dict[str, float | int | None]:
+    return _summarize_latencies(turns, "turn_end_to_audio_seconds")
+
+
+def _summarize_latencies(turns: list[dict[str, Any]], field: str) -> dict[str, float | int | None]:
+    values = [float(turn[field]) for turn in turns if turn.get(field) is not None]
     return {
         "turn_count": len(values),
         "p50_seconds": percentile(values, 50),
@@ -35,30 +43,69 @@ def summarize_turn_latencies(turns: list[dict[str, Any]]) -> dict[str, float | i
 class TurnLatencyTracker:
     def __init__(self) -> None:
         self.turns: list[dict[str, Any]] = []
-        self._waiting_for_audio: dict[str, float] = {}
+        self._pending: dict[str, Any] | None = None
+        self._next_turn_id = 1
 
-    def user_stopped_speaking(self, timestamp: float | None = None) -> str:
-        turn_id = str(len(self.turns) + len(self._waiting_for_audio) + 1)
-        self._waiting_for_audio[turn_id] = timestamp if timestamp is not None else time.monotonic()
-        return turn_id
+    def user_started_speaking(self) -> None:
+        self._pending = None
+
+    def vad_user_stopped_speaking(self, timestamp: float | None = None) -> None:
+        if self._pending is None:
+            self._pending = self._new_pending_turn()
+        if self._pending["vad_user_stopped_speaking_at"] is None:
+            self._pending["vad_user_stopped_speaking_at"] = (
+                timestamp if timestamp is not None else time.monotonic()
+            )
+
+    def user_stopped_speaking(self, timestamp: float | None = None) -> None:
+        if self._pending is None or self._pending["user_stopped_speaking_at"] is not None:
+            self._pending = self._new_pending_turn()
+        self._pending["user_stopped_speaking_at"] = (
+            timestamp if timestamp is not None else time.monotonic()
+        )
+
+    def interrupted(self) -> None:
+        self._pending = None
 
     def first_bot_audio(self, timestamp: float | None = None) -> dict[str, Any] | None:
-        if not self._waiting_for_audio:
+        pending = self._pending
+        self._pending = None
+        if pending is None or (
+            pending["vad_user_stopped_speaking_at"] is None
+            and pending["user_stopped_speaking_at"] is None
+        ):
             return None
-        turn_id = next(iter(self._waiting_for_audio))
-        stopped_at = self._waiting_for_audio.pop(turn_id)
+
         audio_at = timestamp if timestamp is not None else time.monotonic()
+        vad_stopped_at = pending["vad_user_stopped_speaking_at"]
+        user_stopped_at = pending["user_stopped_speaking_at"]
         turn = {
-            "turn_id": turn_id,
-            "user_stopped_speaking_at": stopped_at,
+            "turn_id": pending["turn_id"],
+            "vad_user_stopped_speaking_at": vad_stopped_at,
+            "user_stopped_speaking_at": user_stopped_at,
             "first_bot_audio_at": audio_at,
-            "seconds": max(0.0, audio_at - stopped_at),
+            "seconds": max(0.0, audio_at - vad_stopped_at) if vad_stopped_at is not None else None,
+            "turn_end_to_audio_seconds": (
+                max(0.0, audio_at - user_stopped_at) if user_stopped_at is not None else None
+            ),
         }
         self.turns.append(turn)
         return turn
 
+    def _new_pending_turn(self) -> dict[str, Any]:
+        turn = {
+            "turn_id": str(self._next_turn_id),
+            "vad_user_stopped_speaking_at": None,
+            "user_stopped_speaking_at": None,
+        }
+        self._next_turn_id += 1
+        return turn
+
     def summary(self) -> dict[str, float | int | None]:
         return summarize_turn_latencies(self.turns)
+
+    def turn_end_summary(self) -> dict[str, float | int | None]:
+        return summarize_turn_end_latencies(self.turns)
 
 
 class CallMetricsObserver(BaseObserver):
@@ -69,6 +116,7 @@ class CallMetricsObserver(BaseObserver):
         self.sink = sink
         self.telephony = telephony
         self.latency = TurnLatencyTracker()
+        self._seen_broadcast_frame_ids: set[int] = set()
         self.service_metrics: list[dict[str, Any]] = []
         self.usage: dict[str, float | int] = {
             "stt_audio_seconds": 0,
@@ -83,11 +131,15 @@ class CallMetricsObserver(BaseObserver):
 
     async def on_push_frame(self, data: Any) -> None:
         from pipecat.frames.frames import (
+            BotStartedSpeakingFrame,
+            InterruptionFrame,
             MetricsFrame,
-            OutputAudioRawFrame,
             TranscriptionFrame,
             TTSTextFrame,
+            UserStartedSpeakingFrame,
             UserStoppedSpeakingFrame,
+            VADUserStartedSpeakingFrame,
+            VADUserStoppedSpeakingFrame,
         )
 
         frame = data.frame
@@ -97,14 +149,36 @@ class CallMetricsObserver(BaseObserver):
                 self.sink.append_transcript("caller", frame.text, frame.timestamp)
         elif isinstance(frame, TTSTextFrame):
             self.sink.append_transcript("assistant", frame.text)
+        elif isinstance(frame, InterruptionFrame):
+            self.latency.interrupted()
+        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
+            self.latency.user_started_speaking()
+        elif isinstance(frame, VADUserStoppedSpeakingFrame):
+            wall_clock_offset = timestamp - time.time()
+            self.latency.vad_user_stopped_speaking(frame.timestamp + wall_clock_offset)
         elif isinstance(frame, UserStoppedSpeakingFrame):
-            self.latency.user_stopped_speaking(timestamp)
-        elif isinstance(frame, OutputAudioRawFrame):
-            turn = self.latency.first_bot_audio(timestamp)
-            if turn is not None:
-                self._save()
+            if not self._is_duplicate_broadcast_frame(frame):
+                self.latency.user_stopped_speaking(timestamp)
+        elif isinstance(frame, BotStartedSpeakingFrame):
+            if not self._is_duplicate_broadcast_frame(frame):
+                turn = self.latency.first_bot_audio(timestamp)
+                if turn is not None:
+                    self._save()
         elif isinstance(frame, MetricsFrame):
             self._record_service_metrics(frame)
+
+    def _is_duplicate_broadcast_frame(self, frame: Any) -> bool:
+        frame_id = frame.id
+        sibling_id = getattr(frame, "broadcast_sibling_id", None)
+        if sibling_id is None:
+            return False
+        if (
+            frame_id in self._seen_broadcast_frame_ids
+            or sibling_id in self._seen_broadcast_frame_ids
+        ):
+            return True
+        self._seen_broadcast_frame_ids.update((frame_id, sibling_id))
+        return False
 
     def _record_service_metrics(self, frame: Any) -> None:
         from pipecat.metrics.metrics import (
@@ -163,6 +237,7 @@ class CallMetricsObserver(BaseObserver):
             "call_duration_seconds": max(0.0, time.monotonic() - self.started_at),
             "turns": self.latency.turns,
             "turn_latency_summary": self.latency.summary(),
+            "turn_end_latency_summary": self.latency.turn_end_summary(),
             "service_metrics": self.service_metrics,
             "usage": self.usage,
         }
@@ -194,7 +269,7 @@ def calculate_cost(metrics: dict[str, Any], price_table: dict[str, Any]) -> dict
     )
     components = {
         "deepgram_stt": _priced_cost(
-            usage.get("stt_audio_seconds"),
+            metrics.get("call_duration_seconds"),
             prices.get("deepgram_stt_per_minute", {}).get("value"),
             divisor=60,
         ),

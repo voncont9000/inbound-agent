@@ -34,7 +34,7 @@ class CallTools:
         if isinstance(validated, EmploymentIntake) and validated.termination_date:
             days_left = days_until_unfair_dismissal_deadline(validated.termination_date)
             output_data["unfair_dismissal_days_remaining"] = days_left
-            if days_left <= 28:
+            if days_left <= 28 and data["termination_date"] != previous.get("termination_date"):
                 self.flag_urgent(
                     f"Employment termination date recorded; unfair dismissal deadline "
                     f"calculated as {days_left} days away."

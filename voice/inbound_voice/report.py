@@ -40,10 +40,22 @@ def collect_report(runs_dir: str | Path, prices_path: str | Path) -> list[dict[s
 
 
 def print_report(calls: list[dict[str, Any]]) -> None:
-    headings = ("CALL", "DURATION", "TURNS", "P50", "P95", "MAX", "COST")
+    headings = (
+        "CALL",
+        "DURATION",
+        "TURNS",
+        "VAD P50",
+        "VAD P95",
+        "VAD MAX",
+        "TURN END P50",
+        "TURN END P95",
+        "TURN END MAX",
+        "COST",
+    )
     rows = []
     for call in calls:
         summary = call.get("turn_latency_summary", {})
+        turn_end_summary = call.get("turn_end_latency_summary", {})
         cost = call["cost"]
         rows.append(
             (
@@ -53,6 +65,9 @@ def print_report(calls: list[dict[str, Any]]) -> None:
                 _seconds(summary.get("p50_seconds")),
                 _seconds(summary.get("p95_seconds")),
                 _seconds(summary.get("max_seconds")),
+                _seconds(turn_end_summary.get("p50_seconds")),
+                _seconds(turn_end_summary.get("p95_seconds")),
+                _seconds(turn_end_summary.get("max_seconds")),
                 f"{cost['currency']} {cost['total']:.6f}*"
                 if cost["unknown_components"]
                 else f"{cost['currency']} {cost['total']:.6f}",
@@ -62,12 +77,12 @@ def print_report(calls: list[dict[str, Any]]) -> None:
         max(len(headings[index]), *(len(row[index]) for row in rows))
         if rows
         else len(headings[index])
-        for index in range(7)
+        for index in range(len(headings))
     ]
-    print("  ".join(headings[index].ljust(widths[index]) for index in range(7)))
+    print("  ".join(headings[index].ljust(widths[index]) for index in range(len(headings))))
     print("  ".join("-" * width for width in widths))
     for row in rows:
-        print("  ".join(row[index].ljust(widths[index]) for index in range(7)))
+        print("  ".join(row[index].ljust(widths[index]) for index in range(len(headings))))
     if any(call["cost"]["unknown_components"] for call in calls):
         print("* Partial estimated cost; unknown price or usage components are not included.")
 
