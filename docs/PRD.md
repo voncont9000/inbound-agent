@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v0.3 |
+| Status | Draft v0.4 |
 | Owner | Vincent (voncont9000) |
 | Reference analysis | [Fonio teardown](./fonio-teardown.md), [Context graph](./context-graph.md) |
 
@@ -111,13 +111,13 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 
 **Later**
 - FR-T4: Call transfer/forwarding (see FR-P6), sending WhatsApp messages from a call, web search, generic webhooks (before/during/after a conversation, templated request and response mapping), MCP tools.
-- FR-T5: Legal practice management systems (e.g. Clio, LEAP, Actionstep), Outlook mail and calendar, Xero (payment follow-up).
+- FR-T5: **Practice management systems, kept flexible:** one `PracticeManagementConnector` interface (`findClient`, `findMatter`, `createEnquiry`, `addNote`, `createTask`) with adapters added when customers need them (candidates: Clio, LEAP, Actionstep, Osprey, Quill). Until an adapter exists, firms use the Google Sheets intake log, email or webhooks. Later: Outlook mail and calendar, and Xero (payment follow-up).
 
 ### 7.9 Analytics and billing
 - FR-M1: Dashboard: conversations per channel, answered calls, minutes, resolution rate, time saved, top intents, outcomes, new enquiries per practice area, knowledge gaps.
 - FR-M2: Cost metering per conversation (telephony, STT, LLM, TTS, WhatsApp fees). Workspace spend limits and alerts.
-- FR-M3: **Pricing is per answered call.** A call is billable when the AI answers it, the caller speaks, and the call lasts ≥ 15 s (threshold configurable by us). Not billable: test calls, calls flagged as spam or robocalls, calls dropped before the greeting ends. Each call stores a billable flag with the reason, shown to the tenant.
-- FR-M4: Plans with a monthly number of included answered calls plus a per-call price above that (Stripe metered billing). Max call duration caps the cost per call. The dashboard shows the count of billable calls so far in the billing period.
+- FR-M3: **Pricing is per answered call.** A call is billable when the AI answers it, the caller speaks, and the call lasts ≥ 15 s (confirmed; configurable by us). Not billable: test calls, calls flagged as spam or robocalls, calls dropped before the greeting ends. Each call stores a billable flag with the reason, shown to the tenant.
+- FR-M4: **Three tiers by monthly range of answered calls.** Email and WhatsApp conversations are included in every tier (subject to fair use). If a tenant goes over its range, they get a warning at 80% and 100% and an upgrade prompt. Calls above the range are billed per call at the tier rate rather than blocked. Stripe subscriptions with metered usage. Max call duration caps the cost per call. The dashboard shows billable calls so far in the billing period.
 
 ### 7.10 Customer context graph
 See [context-graph.md](./context-graph.md) for research and design.
@@ -130,7 +130,10 @@ See [context-graph.md](./context-graph.md) for research and design.
 
 ### 7.11 Law-firm requirements (launch vertical)
 - FR-L1: **No legal advice.** The agent gives general information only from the firm's approved knowledge base, says it is not giving legal advice, and routes advice questions to a solicitor (callback or booking). Configurable disclaimer.
-- FR-L2: **Intake by practice area.** Preset extraction schemas (family, conveyancing, wills/probate, immigration, employment, personal injury, criminal) capture the matter type, short facts, key dates and **deadlines** (e.g. hearing date, tribunal time limits), funding (private, legal aid, no win no fee) and contact preferences.
+- FR-L2: **Intake by practice area.** Launch presets: **conveyancing** and **employment law**. Others (family, wills/probate, immigration, personal injury) come later as presets on the same schema engine.
+  - *Conveyancing* (residential): transaction type (purchase / sale / both / remortgage), property address and postcode, price, tenure (freehold / leasehold / shared ownership), new build, mortgage and lender, first-time buyer, chain status, estate agent, target exchange/completion date, other side's solicitor if known. Answers price questions from the firm's published conveyancing fees and offers a quote-request or callback.
+  - *Employment* (employee side): issue type (dismissal, redundancy, discrimination, settlement agreement, grievance), employer name (conflict check), job title, length of service, key dates (dismissal / effective date of termination, last act complained of), whether ACAS early conciliation has started. Flag **tribunal time limits** as urgent (e.g. unfair dismissal claims normally have to start within 3 months less one day of the termination date, with ACAS early conciliation first). Settlement-agreement enquiries are routed to booking.
+  - All presets also capture funding (private, legal expenses insurance, legal aid where relevant, no win no fee) and contact preferences.
 - FR-L3: **Conflict-check data.** Intake captures names of other parties (opposing party, spouse, employer, other driver). These are flagged as "conflict check pending" on the enquiry. The agent never confirms the firm will act for someone.
 - FR-L4: **Urgency and safeguarding.** Detect urgent or vulnerable situations (domestic abuse, a hearing or arrest today, deadlines within days, distress). The agent escalates at once (urgent task plus staff notification) and gives emergency guidance (999) where there is danger.
 - FR-L5: **Confidentiality.** The agent never confirms or denies that someone is a client, and never discusses a matter until the caller is verified (FR-G4). It does not leave detailed voicemails or messages. Third parties (family members, the other side) get no information.
@@ -176,10 +179,10 @@ See [context-graph.md](./context-graph.md) for research and design.
 | Cross-channel memory | Postgres-native customer context graph ([context-graph.md](./context-graph.md)) |
 | v1 integrations | Calendar, Google Sheets, email. Later: call forwarding, WhatsApp sends, web search, webhooks |
 | Launch vertical | UK B2C law firms |
-| Pricing | Per answered call |
+| Pricing | Per answered call (≥ 15 s, caller spoke). Three tiers by monthly call range. Email and WhatsApp included |
+| Launch practice areas | Conveyancing, employment law |
+| Practice management | No fixed vendor. Connector interface, adapters on demand |
 
 ## 12. Open questions
-1. How are email and WhatsApp conversations priced: included, or charged per conversation?
-2. Which practice areas come first for the intake presets (e.g. family and conveyancing)?
-3. Answered-call threshold (15 s proposed) and spam handling: are they acceptable commercially?
-4. Which practice management system matters most to the target firms (Clio, LEAP, Actionstep)?
+1. Call ranges and prices for the three tiers, and the overage rate per call.
+2. Fair-use limits for included email and WhatsApp conversations.
