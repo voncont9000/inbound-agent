@@ -1,0 +1,27 @@
+firm_name: Demo & Co Solicitors
+office_hours:
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday]
+  opens: "09:00"
+  closes: "17:30"
+  timezone: Europe/London
+practice_areas:
+  - Residential conveyancing
+  - Employment law
+fees:
+  - service: Residential conveyancing purchase, freehold
+    price: "£1,250–£1,800 plus VAT and disbursements"
+    notes: "Illustrative demo range; leasehold, new-build and complex work may cost more."
+  - service: Residential conveyancing sale
+    price: "£850–£1,250 plus VAT and disbursements"
+    notes: "Illustrative demo range; actual scope and disbursements affect the total."
+  - service: Employment settlement agreement review
+    price: "£500–£900 plus VAT"
+    notes: "Illustrative demo range; confirm scope and any employer contribution."
+  - service: Employment tribunal initial assessment
+    price: "£250 plus VAT"
+    notes: "Illustrative demo fee; further work is separately scoped."
+complaints_contact: complaints@demoandco.example
+complaints_procedure: "Ask for the written complaints procedure from the complaints handler."
+legal_ombudsman_information: "Legal Ombudsman: www.legalombudsman.org.uk; telephone 0300 555 0333."
+disclaimer: "I can provide general information, but not legal advice. A solicitor can advise you."
+greeting: "Hello, you are speaking with the AI assistant for Demo & Co Solicitors. How can I help?"

@@ -1,0 +1,28 @@
+currency: USD
+checked: "2026-10-16"
+prices:
+  deepgram_stt_per_minute:
+    value: 0.0048
+    source: https://deepgram.com/pricing
+    checked: "2026-10-16"
+    details: "Nova-3 monolingual pay-as-you-go, USD per audio minute."
+  deepgram_tts_per_1000_characters:
+    value: 0.03
+    source: https://deepgram.com/pricing
+    checked: "2026-10-16"
+    details: "Aura-2 pay-as-you-go, USD per 1,000 input characters."
+  llm_input_per_1m_tokens:
+    value: 0.3
+    source: https://openrouter.ai/google/gemini-2.5-flash
+    checked: "2026-10-16"
+    details: "OpenRouter listed standard input price, USD per 1M tokens."
+  llm_output_per_1m_tokens:
+    value: 2.5
+    source: https://openrouter.ai/google/gemini-2.5-flash
+    checked: "2026-10-16"
+    details: "OpenRouter listed standard output price, USD per 1M tokens."
+  twilio_uk_inbound_per_minute:
+    value: 0.01
+    source: https://www.twilio.com/en-us/voice/pricing/gb
+    checked: "2026-10-16"
+    details: "UK local number inbound voice, USD per minute; number rental excluded."
