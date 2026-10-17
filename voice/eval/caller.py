@@ -18,7 +18,13 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiortc.mediastreams import AudioStreamTrack, MediaStreamError
 from av import AudioFrame, AudioResampler
 
-from eval.synth_callers import AUDIO_DIR, SCENARIOS_PATH, WEBRTC_SAMPLE_RATE, load_scenarios
+from eval.synth_callers import (
+    AUDIO_DIR,
+    SCENARIOS_PATH,
+    WEBRTC_SAMPLE_RATE,
+    load_scenarios,
+    utterance_audio_path,
+)
 
 FRAME_SAMPLES = WEBRTC_SAMPLE_RATE // 50
 SPEECH_ENERGY_THRESHOLD = 250.0
@@ -358,6 +364,7 @@ async def run_call(
         "server_disconnect_detected": False,
         "server_disconnect_at_seconds": None,
         "seconds_from_last_agent_speech_end_to_disconnect": None,
+        "number_holds": [],
         "caller_lines_completed": 0,
         "caller_finished_all_lines": False,
         "error": None,
@@ -413,7 +420,9 @@ async def run_call(
                 for index in range(len(utterances)):
                     if server_disconnected.is_set():
                         break
-                    audio_path = Path(audio_dir) / scenario_name / f"{index}.wav"
+                    audio_path = utterance_audio_path(
+                        audio_dir, scenario_name, index, utterances[index]
+                    )
                     if not audio_path.exists():
                         raise FileNotFoundError(f"Missing synthesized caller audio: {audio_path}")
                     previous_speeches = recorder.completed_speeches

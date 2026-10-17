@@ -44,6 +44,10 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "Do not call a tool to confirm critical fields" in prompt
     assert "creates an urgent task after the call" in prompt
     assert "Collect other details conversationally" in prompt
+    assert (
+        "Offer a callback at most once per topic. If the caller does not clearly accept, "
+        "do not offer it again; continue with their questions." in " ".join(prompt.split())
+    )
     assert "No live actions are enabled." in prompt
     assert "end_call" not in prompt
 

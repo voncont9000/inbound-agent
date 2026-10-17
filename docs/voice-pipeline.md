@@ -103,7 +103,16 @@ without calling a tool. Caller-final transcripts are
 always checked against configured keyword urgency rules. In v1, date-deadline escalation,
 callback requests, and complaints are post-call tasks; the employment unfair-dismissal
 deadline rule is calculated from merged intake in code. Live tasks use source `live` and
-post-call tasks use `post_call`.
+post-call tasks use `post_call`. The live prompt offers a callback at most once per topic,
+and post-call extraction does not treat contact details or an unaccepted offer as consent.
+
+The bot subclasses Pipecat's turn-analyzer stop strategy to hold finalization for
+`NUMBER_HOLD_SECS` (default 2 seconds) only when the caller's trailing digits resemble an
+incomplete UK phone number. Resumed speech cancels the hold and remains in the same caller
+turn; complete or ordinary turns have no extra delay. Each hold is recorded in `metrics.json`
+and the evaluation `caller_timeline.json`, including whether the caller resumed and the
+elapsed hold time. Latency remains measured from the final caller stop after resumed speech,
+or includes the full hold when the caller does not resume.
 
 ## Hybrid intake and provenance
 

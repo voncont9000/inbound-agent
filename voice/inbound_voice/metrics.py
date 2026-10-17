@@ -127,6 +127,7 @@ class CallMetricsObserver(BaseObserver):
         self.latency = TurnLatencyTracker()
         self._seen_broadcast_frame_ids: set[int] = set()
         self.service_metrics: list[dict[str, Any]] = []
+        self.number_holds: list[dict[str, Any]] = []
         self.usage: dict[str, float | int] = {
             "stt_audio_seconds": 0,
             "tts_characters": 0,
@@ -259,6 +260,23 @@ class CallMetricsObserver(BaseObserver):
         self.usage["extraction_output_tokens"] = usage.get("output_tokens", 0)
         self._save()
 
+    def start_number_hold(self) -> dict[str, Any]:
+        record = {
+            "number_hold_started": max(0.0, time.monotonic() - self.started_at),
+            "resumed": False,
+            "held_secs": None,
+        }
+        self.number_holds.append(record)
+        self._save()
+        return record
+
+    def finish_number_hold(
+        self, record: dict[str, Any], *, resumed: bool, held_secs: float
+    ) -> None:
+        record["resumed"] = resumed
+        record["held_secs"] = max(0.0, held_secs)
+        self._save()
+
     def snapshot(self) -> dict[str, Any]:
         metrics = {
             "call_id": self.sink.call_id,
@@ -268,6 +286,7 @@ class CallMetricsObserver(BaseObserver):
             "turns": self.latency.turns,
             "turn_latency_summary": self.latency.summary(),
             "turn_end_latency_summary": self.latency.turn_end_summary(),
+            "number_holds": self.number_holds,
             "service_metrics": self.service_metrics,
             "usage": self.usage,
         }

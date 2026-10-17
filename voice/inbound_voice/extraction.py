@@ -532,8 +532,9 @@ def _extraction_prompt(
         "answer). Evidence must be an exact quote from the caller."
     )
     callback_requested_instruction = (
-        "Set callback_requested.requested true only when the caller explicitly asks "
-        "for a callback or says yes to an offer of one. "
+        "Giving a name, phone number or email is not agreement to a callback. "
+        "callback_requested is true only if the caller asks for a callback or answers yes to an "
+        "offer of one. "
         "An assistant offer without caller agreement is false."
     )
     return f"""Extract intake facts and requested post-call actions from this call.

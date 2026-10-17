@@ -291,6 +291,17 @@ async def run_matrix(
                             run_dir = await _newest_run_dir(before)
                             if run_dir is not None:
                                 await _wait_for_extraction(run_dir)
+                                metrics_path = run_dir / "metrics.json"
+                                if metrics_path.exists():
+                                    run_metrics = json.loads(
+                                        metrics_path.read_text(encoding="utf-8")
+                                    )
+                                    timeline["number_holds"] = run_metrics.get("number_holds", [])
+                                    timeline_path = scratch / "caller_timeline.json"
+                                    timeline_path.write_text(
+                                        json.dumps(timeline, indent=2, ensure_ascii=False) + "\n",
+                                        encoding="utf-8",
+                                    )
                             if run_dir is not None:
                                 for filename in ("bot_audio.wav", "caller_timeline.json"):
                                     source = scratch / filename

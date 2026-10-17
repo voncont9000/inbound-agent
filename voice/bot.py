@@ -3,6 +3,7 @@ import json
 import math
 import os
 import re
+import time
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -60,12 +61,14 @@ from inbound_voice.prompts import render_system_prompt
 from inbound_voice.providers import create_llm, create_stt, create_tts, resolve_providers
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
+from inbound_voice.turns import incomplete_phone_number
 
 ROOT = Path(__file__).resolve().parent
 ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
 EXTRACTION_TIMEOUT_SECONDS = 60
 GOODBYE_HANGUP_SECONDS = 1.5
 IDLE_PROMPT_DEFAULT_SECONDS = 8.0
+NUMBER_HOLD_DEFAULT_SECS = 2.0
 SMART_TURN_STOP_DEFAULT_SECS = 0.7
 IDLE_PROMPT_TEXT = "Are you still there?"
 IDLE_GOODBYE_TEXT = "I'll end the call now. Thank you for calling. Goodbye."
@@ -285,6 +288,118 @@ def idle_prompt_secs(env: Mapping[str, str]) -> float:
     return idle_seconds
 
 
+def number_hold_secs(env: Mapping[str, str]) -> float:
+    try:
+        hold_secs = float(env.get("NUMBER_HOLD_SECS", str(NUMBER_HOLD_DEFAULT_SECS)).strip())
+    except ValueError as error:
+        raise ValueError("NUMBER_HOLD_SECS must be a positive number.") from error
+    if not math.isfinite(hold_secs) or hold_secs <= 0:
+        raise ValueError("NUMBER_HOLD_SECS must be a positive number.")
+    return hold_secs
+
+
+class IncompletePhoneNumberTurnStopStrategy(TurnAnalyzerUserTurnStopStrategy):
+    def __init__(
+        self,
+        *,
+        turn_analyzer: LocalSmartTurnAnalyzerV3,
+        hold_seconds: float,
+        metrics_observer: CallMetricsObserver,
+    ) -> None:
+        super().__init__(turn_analyzer=turn_analyzer)
+        self._hold_seconds = hold_seconds
+        self._metrics_observer = metrics_observer
+        self._turn_text = ""
+        self._number_hold_task: asyncio.Task[None] | None = None
+        self._number_hold_record: dict[str, Any] | None = None
+        self._number_hold_started_at: float | None = None
+
+    async def process_frame(self, frame: Any) -> Any:
+        if isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
+            await self._finish_number_hold(resumed=True)
+        if isinstance(frame, TranscriptionFrame) and getattr(frame, "finalized", True):
+            self._append_turn_text(frame.text)
+        return await super().process_frame(frame)
+
+    async def handle_user_turn_started(self) -> None:
+        self._turn_text = ""
+        await super().handle_user_turn_started()
+
+    async def handle_user_turn_stopped(self) -> None:
+        await self._finish_number_hold(resumed=False)
+        self._turn_text = ""
+        await super().handle_user_turn_stopped()
+
+    async def cleanup(self) -> None:
+        await self._finish_number_hold(resumed=False)
+        await super().cleanup()
+
+    async def _maybe_trigger_user_turn_stopped(self) -> None:
+        has_transcript = bool(self._text) and (
+            self._transcript_finalized or self._timeout_task is None
+        )
+        ready_to_stop = self._turn_complete and (not self._wait_for_transcript or has_transcript)
+        if (
+            ready_to_stop
+            and self._number_hold_task is None
+            and incomplete_phone_number(self._turn_text)
+        ):
+            self._number_hold_record = self._metrics_observer.start_number_hold()
+            self._number_hold_started_at = time.monotonic()
+            self._number_hold_task = asyncio.create_task(self._wait_for_number_hold())
+            return
+        await super()._maybe_trigger_user_turn_stopped()
+
+    def _append_turn_text(self, text: str) -> None:
+        words = text.split()
+        if not words:
+            return
+        previous_words = self._turn_text.split()
+        for overlap in range(min(len(previous_words), len(words)), 0, -1):
+            if previous_words[-overlap:] == words[:overlap]:
+                self._turn_text = " ".join([*previous_words, *words[overlap:]])
+                return
+        self._turn_text = " ".join([*previous_words, *words])
+
+    async def _wait_for_number_hold(self) -> None:
+        try:
+            await asyncio.sleep(self._hold_seconds)
+        except asyncio.CancelledError:
+            return
+        if self._number_hold_task is not asyncio.current_task():
+            return
+        record = self._number_hold_record
+        started_at = self._number_hold_started_at
+        self._number_hold_task = None
+        self._number_hold_record = None
+        self._number_hold_started_at = None
+        if record is not None and started_at is not None:
+            self._metrics_observer.finish_number_hold(
+                record,
+                resumed=False,
+                held_secs=time.monotonic() - started_at,
+            )
+        await super()._maybe_trigger_user_turn_stopped()
+
+    async def _finish_number_hold(self, *, resumed: bool) -> None:
+        task = self._number_hold_task
+        record = self._number_hold_record
+        started_at = self._number_hold_started_at
+        if task is None or record is None or started_at is None:
+            return
+        self._number_hold_task = None
+        self._number_hold_record = None
+        self._number_hold_started_at = None
+        if task is not asyncio.current_task():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self._metrics_observer.finish_number_hold(
+            record,
+            resumed=resumed,
+            held_secs=time.monotonic() - started_at,
+        )
+
+
 def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
     schemas = []
     for spec in tool_specs(call_tools.config):
@@ -350,10 +465,12 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
                 user_turn_strategies=UserTurnStrategies(
                     start=[VADUserTurnStartStrategy(enable_interruptions=True)],
                     stop=[
-                        TurnAnalyzerUserTurnStopStrategy(
+                        IncompletePhoneNumberTurnStopStrategy(
                             turn_analyzer=LocalSmartTurnAnalyzerV3(
                                 params=SmartTurnParams(stop_secs=smart_turn_stop_secs(os.environ))
-                            )
+                            ),
+                            hold_seconds=number_hold_secs(os.environ),
+                            metrics_observer=metrics_observer,
                         )
                     ],
                 ),

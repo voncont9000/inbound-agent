@@ -134,9 +134,10 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
         "answer from business knowledge" in client.models.arguments["contents"]
     )
     assert (
-        "Set callback_requested.requested true only when the caller explicitly asks for a "
-        "callback or says yes to an offer of one. An assistant offer without caller agreement "
-        "is false." in client.models.arguments["contents"]
+        "Giving a name, phone number or email is not agreement to a callback. "
+        "callback_requested is true only if the caller asks for a callback or answers yes to an "
+        "offer of one. An assistant offer without caller agreement is false."
+        in client.models.arguments["contents"]
     )
     assert '"2026-08-10: dismissed"' in client.models.arguments["contents"]
     assert schema == _extraction_schema(config)

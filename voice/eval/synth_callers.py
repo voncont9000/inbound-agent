@@ -3,13 +3,18 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import io
+import math
 import os
+import re
 import subprocess
+import wave
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import aiohttp
+import numpy as np
 import yaml
 
 VOICE_ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +22,7 @@ SCENARIOS_PATH = Path(__file__).with_name("scenarios.yaml")
 AUDIO_DIR = Path(__file__).with_name("audio")
 SPEECHIFY_URL = "https://api.speechify.ai/v1/audio/speech"
 WEBRTC_SAMPLE_RATE = 48_000
+PAUSE_MARKER = re.compile(r"\s*\|\s*pause\s+(\d+(?:\.\d+)?)\s*\|\s*", re.IGNORECASE)
 
 
 def load_scenarios(path: str | Path = SCENARIOS_PATH) -> dict[str, Any]:
@@ -25,6 +31,67 @@ def load_scenarios(path: str | Path = SCENARIOS_PATH) -> dict[str, Any]:
     if not isinstance(scenarios, dict):
         raise ValueError("scenarios.yaml must contain a scenarios mapping.")
     return scenarios
+
+
+def split_paused_utterance(utterance: str) -> tuple[list[str], list[float]]:
+    parts = []
+    pauses = []
+    cursor = 0
+    for marker in PAUSE_MARKER.finditer(utterance):
+        part = utterance[cursor : marker.start()].strip()
+        pause = float(marker.group(1))
+        if not part or not math.isfinite(pause) or pause <= 0:
+            raise ValueError("Pause markers require non-empty speech and a positive duration.")
+        parts.append(part)
+        pauses.append(pause)
+        cursor = marker.end()
+    final_part = utterance[cursor:].strip()
+    if not final_part:
+        raise ValueError("Pause markers must be followed by caller speech.")
+    parts.append(final_part)
+    return parts, pauses
+
+
+def utterance_audio_path(
+    audio_dir: str | Path,
+    scenario_name: str,
+    index: int,
+    utterance: str,
+) -> Path:
+    _, pauses = split_paused_utterance(utterance)
+    suffix = "-paused" if pauses else ""
+    return Path(audio_dir) / scenario_name / f"{index}{suffix}.wav"
+
+
+def combine_segment_wavs(segment_wavs: list[bytes], pauses: list[float]) -> bytes:
+    if len(segment_wavs) != len(pauses) + 1:
+        raise ValueError("Each pause must separate two synthesized speech segments.")
+    segments = []
+    for segment_wav in segment_wavs:
+        with wave.open(io.BytesIO(segment_wav), "rb") as audio_file:
+            if (
+                audio_file.getnchannels() != 1
+                or audio_file.getsampwidth() != 2
+                or audio_file.getframerate() != WEBRTC_SAMPLE_RATE
+            ):
+                raise ValueError("Caller segments must be 48 kHz, mono, 16-bit WAV files.")
+            segments.append(
+                np.frombuffer(audio_file.readframes(audio_file.getnframes()), dtype=np.int16)
+            )
+
+    chunks = []
+    for index, segment in enumerate(segments):
+        chunks.append(segment)
+        if index < len(pauses):
+            chunks.append(np.zeros(round(pauses[index] * WEBRTC_SAMPLE_RATE), dtype=np.int16))
+    samples = np.concatenate(chunks)
+    output = io.BytesIO()
+    with wave.open(output, "wb") as audio_file:
+        audio_file.setnchannels(1)
+        audio_file.setsampwidth(2)
+        audio_file.setframerate(WEBRTC_SAMPLE_RATE)
+        audio_file.writeframes(samples.tobytes())
+    return output.getvalue()
 
 
 def phone_band_wav(mp3_audio: bytes) -> bytes:
@@ -107,16 +174,17 @@ async def synthesize_scenarios(
 
     root = Path(output_dir)
     targets: dict[str, list[Path]] = {}
-    pending: list[tuple[str, int, str, str, Path]] = []
+    pending: list[tuple[str, int, list[str], list[float], str, Path]] = []
     for name in scenario_names:
         scenario = scenarios[name]
         caller_voice = scenario["caller_voice"]
         targets[name] = []
         for index, utterance in enumerate(scenario["utterances"]):
-            path = root / name / f"{index}.wav"
+            path = utterance_audio_path(root, name, index, utterance)
             targets[name].append(path)
             if not path.exists():
-                pending.append((name, index, utterance, caller_voice, path))
+                parts, pauses = split_paused_utterance(utterance)
+                pending.append((name, index, parts, pauses, caller_voice, path))
     if not pending:
         return targets
 
@@ -126,9 +194,12 @@ async def synthesize_scenarios(
 
     timeout = aiohttp.ClientTimeout(total=90)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        for _, _, utterance, caller_voice, path in pending:
-            audio = await _synthesize_utterance(session, api_key, utterance, caller_voice)
-            converted = phone_band_wav(audio)
+        for _, _, parts, pauses, caller_voice, path in pending:
+            segment_wavs = []
+            for part in parts:
+                audio = await _synthesize_utterance(session, api_key, part, caller_voice)
+                segment_wavs.append(phone_band_wav(audio))
+            converted = combine_segment_wavs(segment_wavs, pauses)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(converted)
     return targets

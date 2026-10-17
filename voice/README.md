@@ -147,10 +147,16 @@ WebSocket service.
 ## Turn-taking
 
 `SMART_TURN_STOP_SECS` defaults to `0.7` seconds. Pipecat uses this silence timeout when
-Smart Turn judges an utterance incomplete. Set `IDLE_PROMPT_SECS` (default `8`) to control
+Smart Turn judges an utterance incomplete. `NUMBER_HOLD_SECS` defaults to `2.0` seconds and
+holds only turns ending in a likely partial UK phone number; resumed speech stays in the same
+turn, while ordinary turns have no added delay. Set `IDLE_PROMPT_SECS` (default `8`) to control
 the idle interval: after bot speech, the assistant asks “Are you still there?” and, after a
 second idle interval, says “I'll end the call now. Thank you for calling. Goodbye.” before
-ending the call. Caller speech resets the timer.
+ending the call. Caller speech resets the timer. The live prompt limits callback offers to
+once per topic and continues with the caller's questions if they do not clearly accept.
+
+Scenario utterances may use `| pause 1.4 |` to split caller speech into separately synthesized
+segments with silence between them; the segments still count as one caller line.
 
 The evaluation runner accepts `--smart-turn-stop-secs` to set and record the value for
 each runner. Matrix summaries include caller-stop→turn-end, turn-end→LLM-first-token,

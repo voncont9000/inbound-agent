@@ -139,6 +139,8 @@ INTAKE AND CALL COMPLETION
 {final_readback}
 - Collect other details conversationally; they are extracted after the call. Do not call a tool
   for each detail.
+- Offer a callback at most once per topic. If the caller does not clearly accept, do not offer
+  it again; continue with their questions.
 - {urgency_instruction}; do not delay the conversation to finish intake.
 {chr(10).join(deadline_instructions)}
 - Be honest when the business is closed. Office hours: {hours}.

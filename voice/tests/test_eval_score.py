@@ -104,6 +104,13 @@ def test_score_call_checks_end_source_and_disconnect_timing(tmp_path) -> None:
             {
                 "server_disconnect_detected": True,
                 "seconds_from_last_agent_speech_end_to_disconnect": 1.5,
+                "number_holds": [
+                    {
+                        "number_hold_started": 4.0,
+                        "resumed": True,
+                        "held_secs": 0.8,
+                    }
+                ],
             }
         ),
         encoding="utf-8",
@@ -112,6 +119,7 @@ def test_score_call_checks_end_source_and_disconnect_timing(tmp_path) -> None:
     result = score_call(
         run_dir,
         {
+            "task_checks": {"callback": False},
             "expected_end_call_source": "idle",
             "expected_server_disconnect": True,
         },
@@ -119,9 +127,23 @@ def test_score_call_checks_end_source_and_disconnect_timing(tmp_path) -> None:
 
     assert result["task_checks"]["end_call_source"]["passed"]
     assert result["task_checks"]["server_disconnect_detected"]["passed"]
+    assert result["task_checks"]["callback"]["passed"]
     assert result["end_call_source"] == "idle"
     assert result["server_disconnect_detected"]
     assert result["seconds_from_last_agent_speech_end_to_disconnect"] == 1.5
+    assert result["number_holds"][0]["resumed"]
+    assert result["number_hold_resumed_count"] == 1
+    assert result["number_hold_not_resumed_count"] == 0
+
+    (run_dir / "tasks.json").write_text(
+        json.dumps([{"type": "callback"}]),
+        encoding="utf-8",
+    )
+    callback_found = score_call(
+        run_dir,
+        {"task_checks": {"callback": False}},
+    )
+    assert not callback_found["task_checks"]["callback"]["passed"]
 
 
 def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
@@ -134,6 +156,14 @@ def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
     assert scenarios["idle_check"]["expected_end_call_source"] == "idle"
     assert scenarios["idle_check"]["expected_server_disconnect"] is True
     assert len(scenarios["knowledge_check"]["utterances"]) == 7
+    knowledge_check = scenarios["knowledge_check"]
+    assert "| pause 1.4 |" in knowledge_check["utterances"][4]
+    assert knowledge_check["assistant_checks"]["phone_readback"] == r"900\s?456"
+    assert knowledge_check["task_checks"]["callback"] is False
+    assert knowledge_check["assistant_max_matches"]["callback_offers"] == {
+        "pattern": "(?i)call ?back",
+        "max": 1,
+    }
     assert "knowledge_check" not in {"employment", "conveyancing", "idle_check"}
 
 
@@ -148,6 +178,7 @@ def test_score_call_checks_assistant_answers_and_knowledge_gaps(tmp_path) -> Non
                 {"role": "assistant", "text": "Our remortgage fee is £595 plus VAT."},
                 {"role": "assistant", "text": "There is no free parking near our office."},
                 {"role": "assistant", "text": "We do not offer probate services."},
+                {"role": "assistant", "text": "Would you like a callback?"},
             ]
         ),
         encoding="utf-8",
@@ -173,6 +204,7 @@ def test_score_call_checks_assistant_answers_and_knowledge_gaps(tmp_path) -> Non
                 "parking": "(?i)no free parking",
                 "probate": "(?i)do not.*probate",
             },
+            "assistant_max_matches": {"callback_offers": {"pattern": "(?i)call ?back", "max": 1}},
             "knowledge_gap_checks": {
                 "unanswered": {"pattern": "(?i)NHS|discount", "present": True},
                 "answered": {"pattern": "(?i)remortgag|parking|probate", "present": False},
@@ -181,7 +213,20 @@ def test_score_call_checks_assistant_answers_and_knowledge_gaps(tmp_path) -> Non
     )
 
     assert all(check["passed"] for check in result["assistant_checks"].values())
+    assert result["assistant_max_matches"]["callback_offers"]["actual"] == 1
+    assert result["assistant_max_matches"]["callback_offers"]["passed"]
     assert all(check["passed"] for check in result["knowledge_gap_checks"].values())
+
+    with (run_dir / "transcript.jsonl").open("a", encoding="utf-8") as transcript_file:
+        transcript_file.write(
+            "\n" + json.dumps({"role": "assistant", "text": "I can call back tomorrow."}) + "\n"
+        )
+    over_limit = score_call(
+        run_dir,
+        {"assistant_max_matches": {"callback_offers": {"pattern": "(?i)call ?back", "max": 1}}},
+    )
+    assert over_limit["assistant_max_matches"]["callback_offers"]["actual"] == 2
+    assert not over_limit["assistant_max_matches"]["callback_offers"]["passed"]
 
     gaps["unanswered_questions"][0]["evidence"] += " Parking details were also requested."
     (run_dir / "knowledge_gaps.json").write_text(

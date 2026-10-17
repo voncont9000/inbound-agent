@@ -55,6 +55,17 @@ def score_call(
         }
         for name, pattern in scenario.get("assistant_checks", {}).items()
     }
+    assistant_max_matches = {}
+    for name, spec in scenario.get("assistant_max_matches", {}).items():
+        pattern = spec["pattern"]
+        maximum = int(spec["max"])
+        count = len(re.findall(pattern, assistant_text, re.IGNORECASE))
+        assistant_max_matches[name] = {
+            "pattern": pattern,
+            "max": maximum,
+            "actual": count,
+            "passed": count <= maximum,
+        }
     fields = intake.get("fields", {}) if isinstance(intake, dict) else {}
     patterns = scenario.get("intake_checks", {})
     intake_checks = _intake_checks(fields, patterns)
@@ -113,6 +124,7 @@ def score_call(
     checks = [
         *transcript_checks.values(),
         *assistant_checks.values(),
+        *assistant_max_matches.values(),
         *intake_checks.values(),
         *task_checks.values(),
         *knowledge_gap_checks.values(),
@@ -129,12 +141,17 @@ def score_call(
         if isinstance(task, dict):
             source = task.get("source", "legacy")
             task_sources[source] = task_sources.get(source, 0) + 1
+    number_holds = metrics.get("number_holds") or caller_timeline.get("number_holds", [])
+    number_hold_resumed_count = sum(
+        bool(item.get("resumed")) for item in number_holds if isinstance(item, dict)
+    )
 
     return {
         "call_id": metrics.get("call_id", directory.name),
         "run_dir": str(directory),
         "transcript_checks": transcript_checks,
         "assistant_checks": assistant_checks,
+        "assistant_max_matches": assistant_max_matches,
         "knowledge_gap_checks": knowledge_gap_checks,
         "intake_checks": intake_checks,
         "live_intake_checks": live_intake_checks,
@@ -145,6 +162,9 @@ def score_call(
         "checks_total": len(checks),
         "turn_latency_summary": metrics.get("turn_latency_summary", {}),
         "turn_end_latency_summary": metrics.get("turn_end_latency_summary", {}),
+        "number_holds": number_holds,
+        "number_hold_resumed_count": number_hold_resumed_count,
+        "number_hold_not_resumed_count": len(number_holds) - number_hold_resumed_count,
         "turn_latencies_seconds": [
             float(turn["seconds"])
             for turn in metrics.get("turns", [])
