@@ -49,6 +49,33 @@ def test_number_hold_secs_parses_default_and_override() -> None:
         BOT_MODULE.number_hold_secs({"NUMBER_HOLD_SECS": "0"})
 
 
+def test_caller_id_uses_test_override_or_twilio_start_parameters() -> None:
+    assert (
+        BOT_MODULE.resolve_caller_id(
+            {"from": "+441234567890", "body": {}},
+            {"CALLER_ID_OVERRIDE": "07700900456"},
+            telephony=False,
+        )
+        == "07700900456"
+    )
+    assert (
+        BOT_MODULE.resolve_caller_id(
+            {"from": "+441234567890", "body": {"From": "07700111222"}},
+            {"CALLER_ID_OVERRIDE": "07700900456"},
+            telephony=True,
+        )
+        == "07700111222"
+    )
+    assert (
+        BOT_MODULE.resolve_caller_id(
+            {"start": {"customParameters": {"from_number": "07700900456"}}},
+            {},
+            telephony=True,
+        )
+        == "07700900456"
+    )
+
+
 def test_number_hold_strategy_waits_only_for_incomplete_numbers() -> None:
     class Metrics:
         def __init__(self) -> None:
@@ -73,6 +100,8 @@ def test_number_hold_strategy_waits_only_for_incomplete_numbers() -> None:
             self.stop_calls = 0
 
         async def trigger_user_turn_stopped(self, **kwargs):
+            if self._number_hold_task is not None:
+                return
             self.stop_calls += 1
 
     async def run() -> None:
@@ -112,10 +141,70 @@ def test_number_hold_strategy_waits_only_for_incomplete_numbers() -> None:
         unresolved._transcript_finalized = True
         await unresolved._maybe_trigger_user_turn_stopped()
         assert unresolved.stop_calls == 0
+        await unresolved._maybe_trigger_user_turn_stopped()
+        await unresolved.trigger_user_turn_stopped()
+        assert unresolved.stop_calls == 0
         await asyncio.sleep(0.03)
         assert unresolved.stop_calls == 1
         assert metrics.holds[-1]["resumed"] is False
         assert metrics.holds[-1]["held_secs"] >= 0.01
+
+    asyncio.run(run())
+
+
+def test_number_hold_starts_when_final_transcript_arrives_after_stop_decision() -> None:
+    class Metrics:
+        def __init__(self) -> None:
+            self.holds = []
+
+        def start_number_hold(self):
+            record = {"number_hold_started": 0.0, "resumed": False, "held_secs": None}
+            self.holds.append(record)
+            return record
+
+        def finish_number_hold(self, record, *, resumed, held_secs):
+            record["resumed"] = resumed
+            record["held_secs"] = held_secs
+
+    class RecordingStrategy(BOT_MODULE.IncompletePhoneNumberTurnStopStrategy):
+        def __init__(self, metrics):
+            super().__init__(
+                turn_analyzer=object(),
+                hold_seconds=0.02,
+                metrics_observer=metrics,
+            )
+            self.stop_calls = 0
+
+        async def trigger_user_turn_stopped(self, **kwargs):
+            if self._number_hold_task is None:
+                self.stop_calls += 1
+
+    async def run() -> None:
+        metrics = Metrics()
+        strategy = RecordingStrategy(metrics)
+        strategy._turn_complete = True
+        strategy._vad_stopped = True
+
+        await strategy._maybe_trigger_user_turn_stopped()
+        assert strategy.stop_calls == 0
+        assert metrics.holds == []
+
+        await strategy.process_frame(
+            TranscriptionFrame(
+                text="My number is 07700 90045",
+                user_id="caller",
+                timestamp="2026-10-17T00:00:00Z",
+                finalized=True,
+            )
+        )
+        assert strategy.stop_calls == 0
+        assert len(metrics.holds) == 1
+        assert strategy._number_hold_task is not None
+
+        await asyncio.sleep(0.03)
+        assert strategy.stop_calls == 1
+        assert metrics.holds[0]["resumed"] is False
+        assert metrics.holds[0]["held_secs"] >= 0.02
 
     asyncio.run(run())
 

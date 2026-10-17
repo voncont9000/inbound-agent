@@ -285,3 +285,21 @@ The matrix defaults to Speechify `beatrice_32` and ElevenLabs Katie X
 
 Caller audio is synthetic TTS, band-limited to 8 kHz and upsampled for WebRTC; it is not a
 substitute for real UK callers or representative real-world speech.
+
+## Business prompt, readback, and caller ID
+
+Call behavior belongs in each assistant's multiline `instructions` setting, not in generic
+prompt code. The `uk_law_firm` template supplies the Demo & Co behavior; the renderer adds
+identity, configured business data, knowledge, and only the mechanics enabled by settings.
+Set `readback` to `off`, `email`, or `critical`. The law-firm template uses `email`.
+
+For Twilio calls, the caller number is read from the start message's `From` custom parameter.
+Local/evaluation WebRTC calls may set `CALLER_ID_OVERRIDE`; it is test-only and must not be
+used as a production caller identity. When caller ID is present it is merged into the service's
+phone field with `source: caller_id` and confidence `1.0`; a different number stated by the
+caller takes precedence and retains caller ID as an alternative.
+
+Incomplete UK phone numbers hold user-turn finalization for up to `NUMBER_HOLD_SECS`
+(default `2.0`). Caller speech resuming within the hold continues the same turn; otherwise the
+turn proceeds when the hold expires. Holds and their actual duration/resumption are recorded
+in `metrics.json` and the scripted caller timeline.

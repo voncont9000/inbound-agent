@@ -137,17 +137,36 @@ def merge_intake(
                 "confirmed_at": live_entry.get("confirmed_at"),
             }
         if post_entry is not None:
-            sources["post_call"] = {
+            source_name = post_entry.get("source", "post_call")
+            sources[source_name] = {
                 "value": post_value,
                 "confidence": post_entry.get("confidence", 0),
                 "evidence": post_entry.get("evidence", ""),
                 "confirmed_by_caller": bool(post_entry.get("confirmed_by_caller", False)),
             }
+            for alternative in post_entry.get("alternatives", []):
+                sources["caller_id"] = {
+                    "value": alternative,
+                    "confidence": 1.0,
+                    "evidence": "Caller ID",
+                    "confirmed_by_caller": False,
+                }
 
         confidence = 0.0
         alternative = None
         invalid = bool(post_entry and post_entry.get("invalid"))
-        if has_live and has_post:
+        post_source = post_entry.get("source") if post_entry else None
+        if has_live and has_post and post_source == "caller_id":
+            if _normalise(live_value, name, service_model) == _normalise(
+                post_value, name, service_model
+            ):
+                value = post_value
+            else:
+                value = live_value
+                alternative = post_value
+            status = "caller_id"
+            confidence = 1.0
+        elif has_live and has_post:
             if _normalise(live_value, name, service_model) == _normalise(
                 post_value, name, service_model
             ):
@@ -171,9 +190,16 @@ def merge_intake(
         else:
             value = post_value
             status = (
-                "filled_confirmed" if post_entry.get("confirmed_by_caller", False) else "filled"
+                "caller_id"
+                if post_source == "caller_id"
+                else (
+                    "filled_confirmed" if post_entry.get("confirmed_by_caller", False) else "filled"
+                )
             )
             confidence = float(post_entry.get("confidence", 0))
+
+        if post_entry and post_entry.get("caller_id_alternative"):
+            status = "caller_id"
 
         review = status == "conflict" or invalid or confidence < threshold
         field_result = {
@@ -188,6 +214,10 @@ def merge_intake(
         }
         if alternative is not None:
             field_result["alternative"] = alternative
+        if post_source == "caller_id" and has_live and alternative is not None:
+            field_result["alternatives"] = [alternative]
+        if post_entry and post_entry.get("alternatives"):
+            field_result["alternatives"] = list(post_entry["alternatives"])
         if invalid:
             field_result["invalid"] = True
         merged_fields[name] = field_result
@@ -201,12 +231,42 @@ def build_intake_artifacts(
     live_intake: dict[str, Any],
     result: dict[str, Any],
     config: AssistantConfig,
+    caller_id: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     service_name = result.get("service") or live_intake.get("service")
+    extracted_fields = dict(result.get("fields", {}))
+    service_config = config.services.get(service_name)
+    phone_field = next(
+        (
+            field.name
+            for field in (service_config.fields if service_config else [])
+            if field.type == "phone" or field.name == "phone"
+        ),
+        None,
+    )
+    if caller_id and phone_field:
+        extracted_phone = extracted_fields.get(phone_field)
+        if extracted_phone and extracted_phone.get("value"):
+            caller_digits = re.sub(r"\D", "", caller_id)
+            stated_digits = re.sub(r"\D", "", str(extracted_phone["value"]))
+            if stated_digits != caller_digits:
+                extracted_fields[phone_field] = {
+                    **extracted_phone,
+                    "alternatives": [caller_id],
+                    "caller_id_alternative": True,
+                }
+        else:
+            extracted_fields[phone_field] = {
+                "value": caller_id,
+                "confidence": 1.0,
+                "evidence": "Caller ID",
+                "confirmed_by_caller": False,
+                "source": "caller_id",
+            }
     post_call = {
         "service": service_name,
         "model": result.get("model", ""),
-        "fields": result.get("fields", {}),
+        "fields": extracted_fields,
         "callback_requested": _callback_request(result.get("callback_requested")),
         "complaint": _complaint(result.get("complaint")),
     }

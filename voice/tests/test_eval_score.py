@@ -158,12 +158,18 @@ def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
     assert len(scenarios["knowledge_check"]["utterances"]) == 7
     knowledge_check = scenarios["knowledge_check"]
     assert "| pause 1.4 |" in knowledge_check["utterances"][4]
-    assert knowledge_check["assistant_checks"]["phone_readback"] == r"900\s?456"
+    assert "phone_readback" not in knowledge_check["assistant_checks"]
     assert knowledge_check["task_checks"]["callback"] is False
+    assert knowledge_check["task_checks"]["number_hold_resumed"] is True
+    assert knowledge_check["no_agent_speech_between_segments"] is True
     assert knowledge_check["assistant_max_matches"]["callback_offers"] == {
         "pattern": "(?i)call ?back",
         "max": 1,
     }
+    assert scenarios["employment"]["caller_id"] == "07700900456"
+    assert scenarios["employment"]["utterances"][2] == "Yes, that's fine."
+    assert "email_readback" in scenarios["employment"]["assistant_checks"]
+    assert scenarios["conveyancing"]["assistant_not_matches"] == "(?i)call ?back"
     assert "knowledge_check" not in {"employment", "conveyancing", "idle_check"}
 
 
@@ -246,6 +252,45 @@ def test_score_call_checks_assistant_answers_and_knowledge_gaps(tmp_path) -> Non
         },
     )
     assert not forbidden_evidence["knowledge_gap_checks"]["forbidden"]["passed"]
+
+
+def test_score_call_checks_resumed_hold_and_speech_gaps(tmp_path) -> None:
+    run_dir = tmp_path / "fixture-call"
+    shutil.copytree(FIXTURE, run_dir)
+    (run_dir / "transcript.jsonl").write_text(
+        json.dumps({"role": "assistant", "text": "Hello there."}) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "caller_timeline.json").write_text(
+        json.dumps(
+            {
+                "number_holds": [{"number_hold_started": 3.0, "resumed": True, "held_secs": 1.4}],
+                "utterances": [
+                    {
+                        "segments": [
+                            {"start_seconds": 1.0, "end_seconds": 2.0},
+                            {"start_seconds": 3.4, "end_seconds": 4.0},
+                        ]
+                    }
+                ],
+                "agent_speech": [{"start_seconds": 0.5, "end_seconds": 0.8}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = score_call(
+        run_dir,
+        {
+            "assistant_not_matches": "(?i)call ?back",
+            "task_checks": {"number_hold_resumed": True},
+            "no_agent_speech_between_segments": True,
+        },
+    )
+
+    assert result["assistant_not_matches"]["unexpected_match"]["passed"]
+    assert result["task_checks"]["number_hold_resumed"]["passed"]
+    assert result["task_checks"]["no_agent_speech_between_segments"]["passed"]
 
 
 def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> None:

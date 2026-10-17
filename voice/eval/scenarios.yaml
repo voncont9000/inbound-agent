@@ -5,10 +5,11 @@
 scenarios:
   employment:
     caller_voice: hamish            # Speechify en-GB male, not used as an agent voice
+    caller_id: "07700900456"
     utterances:
       - "Hi there. I think I've been unfairly dismissed and I'd like to speak to someone about it."
       - "My name is Siobhan McAllister."
-      - "My mobile is oh seven seven zero zero, nine double oh, one two three."
+      - "Yes, that's fine."
       - "I worked for Brightwell Logistics Limited as a warehouse supervisor for just over four years."
       - "They dismissed me on the tenth of August."
       - "No, I haven't contacted ACAS yet."
@@ -19,11 +20,12 @@ scenarios:
       caller_surname: "mc ?allister|mcalister"
       employer: "brightwell"
       acas: "\\bacas\\b"
-      phone_digits: "0?7700.{0,3}900.{0,3}123|oh seven seven zero zero"
       dismissal_date: "10(th)? (of )?august|tenth of august"
+    assistant_checks:
+      email_readback: "(?i)s[ ,.-]*i[ ,.-]*o[ ,.-]*b[ ,.-]*h[ ,.-]*a[ ,.-]*n"
     intake_checks:                  # field: regex over the stringified saved value
       caller_name: "(?i)siobhan.*mc ?allister"
-      phone: "07700 ?900 ?123|\\+?44 ?7700 ?900 ?123"
+      phone: "07700 ?900 ?456|\\+?44 ?7700 ?900 ?456"
       email: "(?i)^siobhan\\.mcallister@example\\.com$"
       employer_name: "(?i)brightwell"
       termination_date: "^2026-08-10$"
@@ -34,6 +36,7 @@ scenarios:
     expected_server_disconnect: true
   conveyancing:
     caller_voice: catriona          # Speechify en-GB female, not used as an agent voice
+    assistant_not_matches: "(?i)call ?back"
     utterances:
       - "Hello. I'm buying a leasehold flat and I'd like a quote for the conveyancing."
       - "The purchase price is two hundred and eighty-five thousand pounds."
@@ -76,7 +79,6 @@ scenarios:
       remortgage_fee: "595"
       parking: "(?i)(Wellington Street|Q-Park|no free parking)"
       probate_not_offered: "(?i)(don't|do not|doesn't).*probate|probate.*(not|isn't)"
-      phone_readback: "900\\s?456"
     assistant_max_matches:
       callback_offers:
         pattern: "(?i)call ?back"
@@ -94,6 +96,8 @@ scenarios:
       phone: "07700 ?900 ?456|\\+?44 ?7700 ?900 ?456"
     task_checks:
       callback: false
+      number_hold_resumed: true
+    no_agent_speech_between_segments: true
     expected_end_call_source: goodbye_detected
     expected_server_disconnect: true
 

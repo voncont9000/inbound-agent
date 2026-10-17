@@ -1,6 +1,11 @@
 import pytest
 
-from eval.run_matrix import PROVIDER_ERROR, _configure_llm_provider, _configure_tts_voice
+from eval.run_matrix import (
+    PROVIDER_ERROR,
+    _configure_caller_id_override,
+    _configure_llm_provider,
+    _configure_tts_voice,
+)
 
 
 def test_provider_error_detection_ignores_timestamp_status_fragment() -> None:
@@ -49,8 +54,17 @@ def test_matrix_runner_sets_llm_provider_and_uses_provider_default_model() -> No
     _configure_llm_provider(process_env, "google")
     assert process_env["LLM_PROVIDER"] == "google"
     assert "LLM_MODEL" not in process_env
-
     process_env["LLM_MODEL"] = "inherited-custom-model"
     _configure_llm_provider(process_env, "openrouter")
     assert process_env["LLM_PROVIDER"] == "openrouter"
     assert "LLM_MODEL" not in process_env
+
+
+def test_matrix_runner_sets_and_clears_test_caller_id() -> None:
+    process_env = {"CALLER_ID_OVERRIDE": "inherited"}
+
+    _configure_caller_id_override(process_env, "07700900456")
+    assert process_env["CALLER_ID_OVERRIDE"] == "07700900456"
+
+    _configure_caller_id_override(process_env, None)
+    assert "CALLER_ID_OVERRIDE" not in process_env

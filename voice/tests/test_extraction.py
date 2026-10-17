@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from inbound_voice.config import load_assistant_config
 from inbound_voice.extraction import (
     _extraction_schema,
+    build_intake_artifacts,
     build_post_call_tasks,
     extract_intake,
     merge_intake,
@@ -160,6 +161,68 @@ def test_extraction_can_be_skipped_or_fail_without_raising() -> None:
     assert skipped["callback_requested"]["requested"] is False
     assert failed["status"] == "failed"
     assert "offline" in failed["error"]
+
+
+def test_caller_id_populates_phone_with_provenance() -> None:
+    config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    result = {
+        "service": "employment",
+        "status": "completed",
+        "model": "test",
+        "fields": {},
+        "callback_requested": {},
+        "complaint": {},
+    }
+
+    post_call, merged = build_intake_artifacts(
+        {"service": "employment", "fields": {}},
+        result,
+        config,
+        caller_id="07700900456",
+    )
+
+    assert post_call["fields"]["phone"] == {
+        "value": "07700900456",
+        "confidence": 1.0,
+        "evidence": "Caller ID",
+        "confirmed_by_caller": False,
+        "source": "caller_id",
+    }
+    assert merged["fields"]["phone"]["status"] == "caller_id"
+    assert merged["fields"]["phone"]["value"] == "07700900456"
+    assert merged["fields"]["phone"]["confidence"] == 1.0
+
+
+def test_stated_phone_overrides_caller_id_and_keeps_alternative() -> None:
+    config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    result = {
+        "service": "employment",
+        "status": "completed",
+        "model": "test",
+        "fields": {
+            "phone": {
+                "value": "07700111222",
+                "confidence": 0.9,
+                "evidence": "My other number is 07700 111222.",
+                "confirmed_by_caller": False,
+            }
+        },
+        "callback_requested": {},
+        "complaint": {},
+    }
+
+    post_call, merged = build_intake_artifacts(
+        {"service": "employment", "fields": {}},
+        result,
+        config,
+        caller_id="07700900456",
+    )
+
+    assert post_call["fields"]["phone"]["value"] == "07700111222"
+    assert post_call["fields"]["phone"]["alternatives"] == ["07700900456"]
+    assert merged["fields"]["phone"]["value"] == "07700111222"
+    assert merged["fields"]["phone"]["alternatives"] == ["07700900456"]
+    assert merged["fields"]["phone"]["sources"]["caller_id"]["value"] == "07700900456"
 
 
 def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, monkeypatch) -> None:

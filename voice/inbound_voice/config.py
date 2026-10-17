@@ -125,6 +125,8 @@ class AssistantConfig(BaseModel):
     language: str = "English"
     business_name: str
     greeting: str
+    instructions: str = ""
+    readback: Literal["off", "email", "critical"] = "off"
     office_hours: OfficeHours
     price_list: list[PriceItem]
     policies: list[str]

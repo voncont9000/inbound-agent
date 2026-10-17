@@ -7,10 +7,26 @@ import pytest
 from eval.caller import (
     AgentAudioRecorder,
     _seconds_from_last_agent_speech_end_to_disconnect,
+    _speech_segment_offsets,
     _wait_for_agent_speech_or_disconnect,
     _wait_for_event_or_disconnect,
     final_call_timeout_seconds,
 )
+
+
+def test_pause_audio_records_two_segments_as_one_utterance() -> None:
+    samples = np.concatenate(
+        [
+            np.full(48_000, 1_000, dtype=np.int16),
+            np.zeros(round(1.4 * 48_000), dtype=np.int16),
+            np.full(48_000, 1_000, dtype=np.int16),
+        ]
+    )
+
+    segments = _speech_segment_offsets(samples)
+
+    assert len(segments) == 2
+    assert (segments[1][0] - segments[0][1]) / 48_000 == pytest.approx(1.4)
 
 
 def test_wait_for_speech_allows_long_agent_turn_after_speech_starts(tmp_path) -> None:

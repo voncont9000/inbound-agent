@@ -38,17 +38,15 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "acknowledge them briefly and continue" in prompt
     assert "Never ask the same question twice in a row" in " ".join(prompt.split())
     assert "return to it once before the end" in prompt
-    assert "read back all collected, unconfirmed critical details in one sentence" in prompt
-    assert "Read back names, phone numbers, email addresses and dates" in prompt
-    assert "ask the caller to confirm them" in prompt
-    assert "Do not call a tool to confirm critical fields" in prompt
     assert "creates an urgent task after the call" in prompt
     assert "Collect other details conversationally" in prompt
-    assert (
-        "Offer a callback at most once per topic. If the caller does not clearly accept, "
-        "do not offer it again; continue with their questions." in " ".join(prompt.split())
-    )
-    assert "No live actions are enabled." in prompt
+    assert "Offer a callback at most once" not in prompt
+    assert "Offer to pass unanswered questions to the team." in prompt
+    assert "Be honest when the business is closed." in prompt
+    assert "Recognize urgency immediately" in prompt
+    assert "After the caller confirms the final readback, say goodbye." in prompt
+    assert "Do not read back other details." in prompt
+    assert "No live actions are enabled." not in prompt
     assert "end_call" not in prompt
 
 
@@ -62,21 +60,73 @@ def test_prompt_only_mentions_enabled_actions() -> None:
     assert "confirm_critical_fields" not in prompt
     assert "request_callback" not in prompt
     assert "flag_urgent" not in prompt
-    assert "Read back names, phone numbers, email addresses and dates" in prompt
-    assert "Do not call a tool to confirm critical fields" in prompt
+    assert (
+        "When the caller gives an email address, spell it back once, letter by letter, "
+        "and ask them to confirm. Do not read back other details."
+    ) in prompt
+    assert "Read back names, phone numbers, email addresses and dates" not in prompt
 
     assistant = assistant.model_copy(
         update={"live_actions": ["confirm_critical_fields", "end_call"]}
     )
     prompt = render_system_prompt(assistant)
     assert "confirm_critical_fields" in prompt
-    assert "Do not call a tool to confirm critical fields" not in prompt
+    assert "If the caller confirms any values, call confirm_critical_fields" in prompt
 
     assistant = assistant.model_copy(update={"live_actions": []})
     prompt = render_system_prompt(assistant)
 
     assert "end_call" not in prompt
     assert "flag_urgent" not in prompt
+
+
+def test_neutral_instructions_do_not_create_callback_behavior() -> None:
+    assistant = AssistantConfig.model_validate(
+        {
+            "business_name": "Example",
+            "greeting": "Hello",
+            "instructions": "Use neutral language.",
+            "readback": "off",
+            "office_hours": {
+                "days": ["Monday"],
+                "opens": "09:00",
+                "closes": "17:00",
+            },
+            "price_list": [],
+            "policies": [],
+            "contacts": {},
+            "services": {},
+            "urgency_rules": [],
+            "live_actions": [],
+        }
+    )
+
+    prompt = render_system_prompt(assistant)
+
+    assert "callback" not in prompt.casefold()
+    assert "Use neutral language." in prompt
+    assert "Do not read details back to the caller." in prompt
+
+
+def test_critical_readback_renders_existing_confirmation_mechanics() -> None:
+    assistant = load_assistant_config(ROOT / "config" / "assistants" / "demo_firm.yaml")
+    assistant.readback = "critical"
+
+    prompt = render_system_prompt(assistant)
+
+    assert "Read back names, phone numbers, email addresses and dates to confirm them." in prompt
+    assert "read back all collected, unconfirmed critical details in one sentence" in prompt
+
+
+def test_caller_id_instruction_is_rendered_verbatim() -> None:
+    assistant = load_assistant_config(ROOT / "config" / "assistants" / "demo_firm.yaml")
+    prompt = render_system_prompt(assistant, caller_id="07700900456")
+
+    assert (
+        "The caller is calling from 07700900456. Do not ask for their phone number; ask once "
+        "whether this is the best number to reach them on, and only take a different number "
+        "if they say no."
+    ) in prompt
 
 
 def test_knowledge_prompt_includes_only_configured_sections() -> None:

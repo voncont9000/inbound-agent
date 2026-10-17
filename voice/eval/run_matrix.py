@@ -80,6 +80,12 @@ def _configure_llm_provider(process_env: dict[str, str], llm: str) -> None:
     process_env.pop("LLM_MODEL", None)
 
 
+def _configure_caller_id_override(process_env: dict[str, str], caller_id: str | None) -> None:
+    process_env.pop("CALLER_ID_OVERRIDE", None)
+    if caller_id:
+        process_env["CALLER_ID_OVERRIDE"] = caller_id
+
+
 async def _start_runner(
     stt: str,
     tts: str,
@@ -88,6 +94,7 @@ async def _start_runner(
     elevenlabs_voice: str | None = None,
     smart_turn_stop_secs: float = SMART_TURN_STOP_DEFAULT_SECS,
     knowledge_digest_path: str | None = None,
+    caller_id_override: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
     process_env["STT_PROVIDER"] = stt
@@ -97,6 +104,7 @@ async def _start_runner(
     process_env["SMART_TURN_STOP_SECS"] = str(smart_turn_stop_secs)
     if knowledge_digest_path:
         process_env["KNOWLEDGE_DIGEST_PATH"] = knowledge_digest_path
+    _configure_caller_id_override(process_env, caller_id_override)
     process = await asyncio.create_subprocess_exec(
         "uv",
         "run",
@@ -263,18 +271,31 @@ async def run_matrix(
     for stt in dict.fromkeys(stt_providers):
         for tts in dict.fromkeys(tts_providers):
             for llm in dict.fromkeys(llm_providers):
-                print(f"\n=== Starting runner for STT={stt}, TTS={tts}, LLM={llm} ===")
-                process, output_task, output_lines = await _start_runner(
-                    stt,
-                    tts,
-                    llm,
-                    speechify_voice,
-                    elevenlabs_voice,
-                    smart_turn_stop_secs,
-                    knowledge_digest_path,
-                )
+                process = None
+                output_task = None
+                output_lines = []
+                active_caller_id = object()
                 try:
                     for scenario_name in scenario_names:
+                        caller_id = scenarios[scenario_name].get("caller_id")
+                        if caller_id != active_caller_id:
+                            if process is not None:
+                                await _stop_runner(process, output_task)
+                            print(
+                                f"\n=== Starting runner for STT={stt}, TTS={tts}, "
+                                f"LLM={llm}, scenario={scenario_name} ==="
+                            )
+                            process, output_task, output_lines = await _start_runner(
+                                stt,
+                                tts,
+                                llm,
+                                speechify_voice,
+                                elevenlabs_voice,
+                                smart_turn_stop_secs,
+                                knowledge_digest_path,
+                                caller_id,
+                            )
+                            active_caller_id = caller_id
                         for repetition in repetitions:
                             before = _existing_run_dirs()
                             scratch = (
@@ -346,7 +367,8 @@ async def run_matrix(
                         if provider_errors:
                             break
                 finally:
-                    await _stop_runner(process, output_task)
+                    if process is not None:
+                        await _stop_runner(process, output_task)
                 if provider_errors:
                     break
             if provider_errors:

@@ -66,6 +66,18 @@ def score_call(
             "actual": count,
             "passed": count <= maximum,
         }
+    assistant_not_matches = {}
+    not_match_specs = scenario.get("assistant_not_matches", {})
+    if isinstance(not_match_specs, str):
+        not_match_specs = {"unexpected_match": not_match_specs}
+    for name, spec in not_match_specs.items():
+        pattern = spec if isinstance(spec, str) else spec["pattern"]
+        count = len(re.findall(pattern, assistant_text, re.IGNORECASE))
+        assistant_not_matches[name] = {
+            "pattern": pattern,
+            "actual": count,
+            "passed": count == 0,
+        }
     fields = intake.get("fields", {}) if isinstance(intake, dict) else {}
     patterns = scenario.get("intake_checks", {})
     intake_checks = _intake_checks(fields, patterns)
@@ -82,11 +94,39 @@ def score_call(
     task_checks = {}
     task_types = {task.get("type") for task in tasks if isinstance(task, dict)}
     for name, expected in scenario.get("task_checks", {}).items():
-        actual = "urgent" in task_types if name == "urgent" else name in task_types
+        if name == "number_hold_resumed":
+            actual = any(
+                hold.get("resumed")
+                for hold in caller_timeline.get("number_holds", [])
+                if isinstance(hold, dict)
+            )
+        else:
+            actual = "urgent" in task_types if name == "urgent" else name in task_types
         task_checks[name] = {
             "expected": expected,
             "actual": actual,
             "passed": actual is expected,
+        }
+    if scenario.get("no_agent_speech_between_segments"):
+        gaps = [
+            (segments[index]["end_seconds"], segments[index + 1]["start_seconds"])
+            for utterance in caller_timeline.get("utterances", [])
+            for segments in [utterance.get("segments", [])]
+            if len(segments) >= 2
+            for index in range(len(segments) - 1)
+            if segments[index].get("end_seconds") is not None
+            and segments[index + 1].get("start_seconds") is not None
+        ]
+        interrupted = any(
+            start < float(speech.get("start_seconds", 0)) < end
+            for start, end in gaps
+            for speech in caller_timeline.get("agent_speech", [])
+            if speech.get("start_seconds") is not None
+        )
+        task_checks["no_agent_speech_between_segments"] = {
+            "expected": True,
+            "actual": not interrupted and bool(gaps),
+            "passed": not interrupted and bool(gaps),
         }
     if "expected_end_call_source" in scenario:
         expected = scenario["expected_end_call_source"]
@@ -125,6 +165,7 @@ def score_call(
         *transcript_checks.values(),
         *assistant_checks.values(),
         *assistant_max_matches.values(),
+        *assistant_not_matches.values(),
         *intake_checks.values(),
         *task_checks.values(),
         *knowledge_gap_checks.values(),
@@ -152,6 +193,7 @@ def score_call(
         "transcript_checks": transcript_checks,
         "assistant_checks": assistant_checks,
         "assistant_max_matches": assistant_max_matches,
+        "assistant_not_matches": assistant_not_matches,
         "knowledge_gap_checks": knowledge_gap_checks,
         "intake_checks": intake_checks,
         "live_intake_checks": live_intake_checks,

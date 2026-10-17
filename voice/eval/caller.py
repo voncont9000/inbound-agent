@@ -34,6 +34,32 @@ MAX_AGENT_TURN_SECONDS = 90
 FINAL_CALL_TIMEOUT_SECONDS = 25
 
 
+def _speech_segment_offsets(samples: np.ndarray) -> list[tuple[int, int]]:
+    frame_size = WEBRTC_SAMPLE_RATE // 100
+    energies = [
+        float(np.sqrt(np.mean(np.square(samples[index : index + frame_size].astype(np.float32)))))
+        for index in range(0, len(samples), frame_size)
+    ]
+    active = [energy >= SPEECH_ENERGY_THRESHOLD for energy in energies]
+    runs: list[tuple[int, int]] = []
+    index = 0
+    while index < len(active):
+        if not active[index]:
+            index += 1
+            continue
+        start = index
+        while index < len(active) and active[index]:
+            index += 1
+        runs.append((start * frame_size, min(index * frame_size, len(samples))))
+    merged: list[tuple[int, int]] = []
+    for start, end in runs:
+        if merged and start - merged[-1][1] < WEBRTC_SAMPLE_RATE // 2:
+            merged[-1] = (merged[-1][0], end)
+        else:
+            merged.append((start, end))
+    return merged
+
+
 @dataclass
 class PlaybackItem:
     samples: np.ndarray
@@ -55,8 +81,19 @@ class ScriptedAudioTrack(AudioStreamTrack):
         self._track_started: float | None = None
 
     def queue_utterance(self, samples: np.ndarray, timeline_entry: dict[str, Any]) -> PlaybackItem:
+        normalized_samples = np.asarray(samples, dtype=np.int16).reshape(-1)
+        if "| pause " in str(timeline_entry.get("text", "")):
+            timeline_entry["segments"] = [
+                {
+                    "start_offset_seconds": start / WEBRTC_SAMPLE_RATE,
+                    "end_offset_seconds": end / WEBRTC_SAMPLE_RATE,
+                    "start_seconds": None,
+                    "end_seconds": None,
+                }
+                for start, end in _speech_segment_offsets(normalized_samples)
+            ]
         item = PlaybackItem(
-            samples=np.asarray(samples, dtype=np.int16).reshape(-1),
+            samples=normalized_samples,
             timeline_entry=timeline_entry,
             completed=asyncio.Event(),
         )
@@ -83,6 +120,13 @@ class ScriptedAudioTrack(AudioStreamTrack):
             item = self._current
             if item.timeline_entry["start_seconds"] is None:
                 item.timeline_entry["start_seconds"] = max(0.0, loop.time() - self._call_started)
+                for segment in item.timeline_entry.get("segments", []):
+                    segment["start_seconds"] = (
+                        item.timeline_entry["start_seconds"] + segment["start_offset_seconds"]
+                    )
+                    segment["end_seconds"] = (
+                        item.timeline_entry["start_seconds"] + segment["end_offset_seconds"]
+                    )
             count = min(FRAME_SAMPLES, len(item.samples) - item.cursor)
             samples[:count] = item.samples[item.cursor : item.cursor + count]
             item.cursor += count

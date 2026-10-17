@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
+from loguru import logger
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
@@ -334,16 +335,37 @@ class IncompletePhoneNumberTurnStopStrategy(TurnAnalyzerUserTurnStopStrategy):
         await self._finish_number_hold(resumed=False)
         await super().cleanup()
 
+    async def trigger_user_turn_stopped(self, *args: Any, **kwargs: Any) -> None:
+        if self._number_hold_task is not None:
+            logger.info(
+                "{} blocked user-turn finalization while holding phone text: turn_text={!r}, "
+                "latest_text={!r}",
+                self,
+                self._turn_text,
+                self._text,
+            )
+            return
+        await super().trigger_user_turn_stopped(*args, **kwargs)
+
     async def _maybe_trigger_user_turn_stopped(self) -> None:
         has_transcript = bool(self._text) and (
             self._transcript_finalized or self._timeout_task is None
         )
         ready_to_stop = self._turn_complete and (not self._wait_for_transcript or has_transcript)
-        if (
-            ready_to_stop
-            and self._number_hold_task is None
-            and incomplete_phone_number(self._turn_text)
-        ):
+        if ready_to_stop:
+            is_incomplete_number = incomplete_phone_number(self._turn_text)
+            logger.info(
+                "{} phone-number stop decision: turn_text={!r}, latest_text={!r}, incomplete={}",
+                self,
+                self._turn_text,
+                self._text,
+                is_incomplete_number,
+            )
+            if self._number_hold_task is not None:
+                return
+        else:
+            is_incomplete_number = False
+        if ready_to_stop and is_incomplete_number:
             self._number_hold_record = self._metrics_observer.start_number_hold()
             self._number_hold_started_at = time.monotonic()
             self._number_hold_task = asyncio.create_task(self._wait_for_number_hold())
@@ -433,7 +455,11 @@ def create_llm_context(call_tools: CallTools) -> LLMContext:
     return LLMContext(tools=schemas) if schemas else LLMContext()
 
 
-async def run_bot(transport: object, telephony: bool = False) -> None:
+async def run_bot(
+    transport: object,
+    telephony: bool = False,
+    caller_id: str | None = None,
+) -> None:
     providers = resolve_providers(os.environ)
     call_id = str(uuid.uuid4())
     sink = LocalFilesCallSink(ROOT / "runs", call_id)
@@ -455,7 +481,11 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
 
     async with aiohttp.ClientSession() as session:
         stt = create_stt(providers, os.environ)
-        llm = create_llm(providers, os.environ, render_system_prompt(assistant))
+        llm = create_llm(
+            providers,
+            os.environ,
+            render_system_prompt(assistant, caller_id=caller_id),
+        )
         tts = create_tts(providers, os.environ, session)
         context = create_llm_context(call_tools)
         context_aggregators = LLMContextAggregatorPair(
@@ -524,7 +554,13 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
         finally:
             goodbye_hangup.close()
             idle_hangup.close()
-            await finalize_call_intake(sink, assistant, metrics_observer, os.environ)
+            await finalize_call_intake(
+                sink,
+                assistant,
+                metrics_observer,
+                os.environ,
+                caller_id=caller_id,
+            )
             metrics_observer.persist()
 
 
@@ -533,6 +569,7 @@ async def finalize_call_intake(
     assistant: Any,
     metrics_observer: CallMetricsObserver,
     env: Mapping[str, str],
+    caller_id: str | None = None,
 ) -> dict[str, Any]:
     model = env.get("EXTRACTION_MODEL", DEFAULT_EXTRACTION_MODEL).strip()
     key = env.get("GOOGLE_API_KEY", "").strip()
@@ -582,7 +619,12 @@ async def finalize_call_intake(
             "error": f"{type(error).__name__}: {error}",
         }
 
-    post_call, merged = build_intake_artifacts(live, result, assistant)
+    post_call, merged = build_intake_artifacts(
+        live,
+        result,
+        assistant,
+        caller_id=caller_id,
+    )
     tasks_path = sink.directory / "tasks.json"
     existing_tasks = (
         json.loads(tasks_path.read_text(encoding="utf-8")) if tasks_path.exists() else []
@@ -615,7 +657,52 @@ async def bot(runner_args: RunnerArguments) -> None:
             ),
         },
     )
-    await run_bot(transport, telephony=getattr(runner_args, "transport_type", None) == "twilio")
+    telephony = getattr(runner_args, "transport_type", None) == "twilio"
+    caller_id = resolve_caller_id(
+        getattr(runner_args, "call_data", None),
+        os.environ,
+        telephony=telephony,
+    )
+    await run_bot(transport, telephony=telephony, caller_id=caller_id)
+
+
+def resolve_caller_id(
+    call_data: Any,
+    env: Mapping[str, str],
+    *,
+    telephony: bool,
+) -> str | None:
+    if not telephony:
+        override = env.get("CALLER_ID_OVERRIDE", "").strip()
+        if override:
+            return override
+    if call_data is None:
+        return None
+    body = (
+        call_data.get("body", {})
+        if isinstance(call_data, Mapping)
+        else getattr(call_data, "body", {})
+    )
+    body = body if isinstance(body, Mapping) else {}
+    start = call_data.get("start", {}) if isinstance(call_data, Mapping) else {}
+    start = start if isinstance(start, Mapping) else {}
+    custom_parameters = start.get("customParameters", {})
+    custom_parameters = custom_parameters if isinstance(custom_parameters, Mapping) else {}
+    values = [
+        body.get("from_number"),
+        body.get("From"),
+        body.get("from"),
+        custom_parameters.get("from_number"),
+        custom_parameters.get("From"),
+        start.get("From"),
+        start.get("from"),
+        (
+            call_data.get("from")
+            if isinstance(call_data, Mapping)
+            else getattr(call_data, "from_number", None)
+        ),
+    ]
+    return next((str(value).strip() for value in values if value), None)
 
 
 if __name__ == "__main__":

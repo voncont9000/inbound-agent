@@ -334,5 +334,27 @@ multi-tenancy, persistence/retention controls, practice-management connectors, a
 production operations are later work. Demo fees are fictional and must be replaced with
 firm-approved prices before any real client-facing use.
 
+## Business instructions, readback, and caller ID
+
+Assistant behavior is configured in each business's multiline `instructions` field and
+formatted with the business name, greeting, and office-hours placeholders. The prompt
+renderer contributes identity, business data, knowledge, and feature mechanics; it does not
+hard-code callback or other call-behavior policy. `readback` selects `off`, `email`, or
+`critical` behavior. The law-firm template selects `email`.
+
+Twilio caller identity is taken from the start message's `From` custom parameter. For local
+and evaluation WebRTC calls only, `CALLER_ID_OVERRIDE` supplies a test caller number. The
+number is added to the prompt and post-call phone intake with `source: caller_id` and
+confidence `1.0`; a different number stated by the caller wins and keeps caller ID in
+`alternatives`.
+
+The incomplete-phone-number stop strategy gates turn finalization, so an active hold cannot
+fall through to Pipecat's parent stop strategy. A likely partial UK number holds for at most
+`NUMBER_HOLD_SECS` (default `2.0`); caller resumption continues the turn, and timeout releases
+it. The decision-time transcript text and each hold's start, duration, and resumption are
+recorded for evaluation. Paused scripted utterances stay one caller turn while the caller
+timeline records their separate speech segments, allowing checks for agent speech during a
+pause.
+
 Scripted A/B calls use synthetic TTS caller audio band-limited to 8 kHz; this is not a
 substitute for real UK callers.
