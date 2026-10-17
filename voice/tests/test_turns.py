@@ -15,6 +15,7 @@ from inbound_voice.turns import incomplete_phone_number
         ("price is 595", False),
         ("my number is 07700 90045 and", True),
         ("my number is 07700 90045.", True),
+        ("my number is 07. 70. 09.", True),
     ],
 )
 def test_incomplete_phone_number(text: str, expected: bool) -> None:

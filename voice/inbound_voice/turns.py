@@ -42,7 +42,7 @@ def _normalize_spoken_digits(text: str) -> str:
 
 
 def _trailing_number_run(text: str) -> str:
-    match = re.search(r"([0-9+\s-]+)$", text)
+    match = re.search(r"([0-9+.\s-]+)$", text)
     return match.group(1) if match else ""
 
 
@@ -64,7 +64,7 @@ def incomplete_phone_number(text: str) -> bool:
     if len(digits) < 4:
         return False
 
-    compact = re.sub(r"[\s-]", "", run)
+    compact = re.sub(r"[\s.-]", "", run)
     return (compact.startswith("0") and len(digits) < 11) or (
         (compact.startswith("44") or compact.startswith("+44")) and len(digits) < 12
     )
