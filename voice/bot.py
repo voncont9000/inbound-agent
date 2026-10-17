@@ -75,15 +75,25 @@ ASSISTANT_GOODBYE = re.compile(r"\b(?:goodbye|bye)\b", re.IGNORECASE)
 
 
 def should_goodbye_detected_end_call(
-    caller_text: str,
+    caller_closing_seen: bool,
     assistant_text: str,
     *,
     end_call_received: bool = False,
 ) -> bool:
-    return (
-        not end_call_received
-        and CLOSING_PHRASE.search(caller_text) is not None
-        and ASSISTANT_GOODBYE.search(assistant_text) is not None
+    if end_call_received:
+        return False
+    if caller_closing_seen and ASSISTANT_GOODBYE.search(assistant_text) is not None:
+        return True
+    sentences = [
+        sentence.strip() for sentence in re.split(r"[.!?]", assistant_text) if sentence.strip()
+    ]
+    return bool(
+        sentences
+        and re.search(
+            r"\b(?:goodbye|bye)(?:\s+for now)?\s*$",
+            sentences[-1],
+            re.IGNORECASE,
+        )
     )
 
 
@@ -100,26 +110,28 @@ class GoodbyeDetectedHangup(BaseObserver):
         self.call_tools = call_tools
         self.push_end_worker = push_end_worker
         self.delay_seconds = delay_seconds
-        self.last_caller_final = ""
+        self.caller_closing_seen = False
         self.assistant_text: list[str] = []
         self.pending: asyncio.Task[None] | None = None
         self._generation = 0
 
     async def on_push_frame(self, data: Any) -> None:
         frame = data.frame
-        if isinstance(frame, TranscriptionFrame) and getattr(frame, "finalized", True):
-            self.last_caller_final = frame.text
+        if isinstance(frame, EndWorkerFrame):
+            self._cancel_pending()
+        elif isinstance(frame, TranscriptionFrame) and getattr(frame, "finalized", True):
+            if CLOSING_PHRASE.search(frame.text) is not None:
+                self.caller_closing_seen = True
             self.assistant_text.clear()
         elif isinstance(frame, TTSTextFrame):
             self.assistant_text.append(frame.text)
         elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
-            self.last_caller_final = ""
             self._cancel_pending()
         elif isinstance(frame, BotStoppedSpeakingFrame):
             assistant_text = " ".join(self.assistant_text)
             self.assistant_text.clear()
             if should_goodbye_detected_end_call(
-                self.last_caller_final,
+                self.caller_closing_seen,
                 assistant_text,
                 end_call_received=self.call_tools.end_call_requested,
             ):
@@ -168,9 +180,15 @@ class IdleHangupObserver(BaseObserver):
         self._phase = "conversation"
         self._bot_speaking = False
         self._caller_speaking = False
+        self._seen_speaking_frame_siblings: set[frozenset[Any]] = set()
 
     async def on_push_frame(self, data: Any) -> None:
         frame = data.frame
+        if isinstance(frame, (BotStartedSpeakingFrame, BotStoppedSpeakingFrame)):
+            sibling_ids = frozenset((frame.id, getattr(frame, "broadcast_sibling_id", None)))
+            if sibling_ids in self._seen_speaking_frame_siblings:
+                return
+            self._seen_speaking_frame_siblings.add(sibling_ids)
         if isinstance(frame, EndWorkerFrame):
             self._cancel_timer()
             self._phase = "done"

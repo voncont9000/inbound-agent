@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from eval.score import aggregate_calls, render_summary, score_call
+from eval.synth_callers import load_scenarios
 
 
 def test_latency_breakdown_aligns_turns_with_service_metrics() -> None:
@@ -92,6 +93,48 @@ def test_score_call_uses_fixture_transcript_intake_tasks_and_metrics(tmp_path) -
     assert result["needs_review"] == []
 
 
+def test_score_call_checks_end_source_and_disconnect_timing(tmp_path) -> None:
+    run_dir = tmp_path / "fixture-call"
+    shutil.copytree(FIXTURE, run_dir)
+    (run_dir / "tasks.json").write_text(
+        json.dumps([{"type": "end_call", "source": "idle"}]), encoding="utf-8"
+    )
+    (run_dir / "caller_timeline.json").write_text(
+        json.dumps(
+            {
+                "server_disconnect_detected": True,
+                "seconds_from_last_agent_speech_end_to_disconnect": 1.5,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = score_call(
+        run_dir,
+        {
+            "expected_end_call_source": "idle",
+            "expected_server_disconnect": True,
+        },
+    )
+
+    assert result["task_checks"]["end_call_source"]["passed"]
+    assert result["task_checks"]["server_disconnect_detected"]["passed"]
+    assert result["end_call_source"] == "idle"
+    assert result["server_disconnect_detected"]
+    assert result["seconds_from_last_agent_speech_end_to_disconnect"] == 1.5
+
+
+def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
+    scenarios = load_scenarios()
+    final_confirmation = "Yes, that's all correct. Thanks, bye."
+
+    assert scenarios["employment"]["utterances"][-1] == final_confirmation
+    assert scenarios["conveyancing"]["utterances"][-1] == final_confirmation
+    assert scenarios["idle_check"]["utterances"] == ["Hi, I'm calling about a property purchase."]
+    assert scenarios["idle_check"]["expected_end_call_source"] == "idle"
+    assert scenarios["idle_check"]["expected_server_disconnect"] is True
+
+
 def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> None:
     calls = [
         {
@@ -106,6 +149,9 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
             "checks_total": 5,
             "turn_latency_summary": {"p50_seconds": 0.6, "p95_seconds": 1.1},
             "turn_end_latency_summary": {"p50_seconds": 0.2, "p95_seconds": 0.4},
+            "turn_latencies_seconds": [0.5, 1.0],
+            "server_disconnect_detected": True,
+            "seconds_from_last_agent_speech_end_to_disconnect": 2.0,
             "estimated_cost": {"currency": "USD", "total": 0.08},
             "ended_via_end_call": True,
         },
@@ -121,6 +167,8 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
             "checks_total": 5,
             "turn_latency_summary": {"p50_seconds": 0.8, "p95_seconds": 1.4},
             "turn_end_latency_summary": {"p50_seconds": 0.3, "p95_seconds": 0.5},
+            "turn_latencies_seconds": [1.5, 2.0],
+            "server_disconnect_detected": False,
             "estimated_cost": {"currency": "USD", "total": 0.1},
             "ended_via_end_call": False,
         },
@@ -131,6 +179,7 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
 
     assert aggregate["median_p50_latency_seconds"] == 0.7
     assert aggregate["max_p95_latency_seconds"] == 1.4
+    assert aggregate["all_turns_p95_latency_seconds"] == pytest.approx(1.925)
     assert aggregate["checks_passed"] == 9
     assert aggregate["checks_total"] == 10
     assert aggregate["mean_cost"] == 0.09
@@ -141,6 +190,9 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
     assert "Task sources" in summary
     assert "Smart turn stop" in summary
     assert "LLM TTFB median" in summary
+    assert "all-turn p95" in summary
+    assert "Server disconnect" in summary
+    assert "Speech-end→disconnect" in summary
     assert "beatrice_32" in summary
     assert "| Aggregate " in summary
     assert "9/10" in summary

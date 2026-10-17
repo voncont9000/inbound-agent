@@ -9,7 +9,9 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     EndWorkerFrame,
+    TranscriptionFrame,
     TTSSpeakFrame,
+    TTSTextFrame,
     UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
 )
@@ -43,11 +45,89 @@ def test_idle_prompt_secs_parses_default_and_override() -> None:
 def test_goodbye_fallback_decision_is_pure() -> None:
     decide = BOT_MODULE.should_goodbye_detected_end_call
 
-    assert decide("That's everything, thank you.", "Goodbye.")
-    assert decide("Thank you, bye.", "Bye for now.")
-    assert not decide("I have another question.", "Goodbye.")
-    assert not decide("That's all.", "I can help with anything else.")
-    assert not decide("Goodbye.", "Bye.", end_call_received=True)
+    assert decide(True, "Goodbye.")
+    assert decide(True, "Thanks for confirming. Bye for now.")
+    assert decide(False, "Thanks, goodbye.")
+    assert not decide(False, "Before we say goodbye, can I take your email?")
+    assert not decide(True, "I can help with anything else.")
+    assert not decide(True, "Goodbye.", end_call_received=True)
+
+
+def test_goodbye_hangup_remembers_caller_closing_through_confirmation(tmp_path) -> None:
+    async def run() -> None:
+        sink = LocalFilesCallSink(tmp_path, "goodbye-sticky")
+        end_worker_calls = []
+
+        async def push_end_worker() -> None:
+            end_worker_calls.append(True)
+
+        observer = BOT_MODULE.GoodbyeDetectedHangup(
+            sink,
+            CallTools(sink),
+            push_end_worker,
+            delay_seconds=0.01,
+        )
+
+        async def push(frame) -> None:
+            await observer.on_push_frame(SimpleNamespace(frame=frame))
+
+        await push(
+            TranscriptionFrame(
+                text="That's everything. Bye.",
+                user_id="caller",
+                timestamp="2026-10-17T00:00:00Z",
+            )
+        )
+        await push(UserStartedSpeakingFrame())
+        await push(
+            TranscriptionFrame(
+                text="Yes, that's right.",
+                user_id="caller",
+                timestamp="2026-10-17T00:00:01Z",
+            )
+        )
+        await push(TTSTextFrame(text="Thank you for confirming.", aggregated_by="test"))
+        await push(TTSTextFrame(text="Goodbye.", aggregated_by="test"))
+        await push(BotStoppedSpeakingFrame())
+        await asyncio.sleep(0.03)
+
+        tasks = json.loads((sink.directory / "tasks.json").read_text())
+        assert end_worker_calls == [True]
+        assert tasks[0]["type"] == "end_call"
+        assert tasks[0]["source"] == "goodbye_detected"
+        observer.close()
+
+    asyncio.run(run())
+
+
+def test_goodbye_hangup_does_not_duplicate_an_existing_end_worker(tmp_path) -> None:
+    async def run() -> None:
+        sink = LocalFilesCallSink(tmp_path, "goodbye-end-worker")
+        end_worker_calls = []
+
+        async def push_end_worker() -> None:
+            end_worker_calls.append(True)
+
+        observer = BOT_MODULE.GoodbyeDetectedHangup(
+            sink,
+            CallTools(sink),
+            push_end_worker,
+            delay_seconds=0.01,
+        )
+
+        async def push(frame) -> None:
+            await observer.on_push_frame(SimpleNamespace(frame=frame))
+
+        await push(TTSTextFrame(text="Goodbye.", aggregated_by="test"))
+        await push(BotStoppedSpeakingFrame())
+        await push(EndWorkerFrame())
+        await asyncio.sleep(0.03)
+
+        assert end_worker_calls == []
+        assert json.loads((sink.directory / "tasks.json").read_text()) == []
+        observer.close()
+
+    asyncio.run(run())
 
 
 def test_end_call_sends_end_worker_after_tool_result(tmp_path) -> None:
@@ -108,18 +188,25 @@ def test_idle_hangup_prompts_then_ends_after_bot_stops(tmp_path) -> None:
         async def push(frame) -> None:
             await observer.on_push_frame(SimpleNamespace(frame=frame))
 
-        await push(BotStoppedSpeakingFrame())
+        async def push_speaking_pair(frame_type) -> None:
+            frame, sibling = frame_type(), frame_type()
+            frame.broadcast_sibling_id = sibling.id
+            sibling.broadcast_sibling_id = frame.id
+            await push(frame)
+            await push(sibling)
+
+        await push_speaking_pair(BotStoppedSpeakingFrame)
         await asyncio.sleep(0.03)
         assert isinstance(queued_frames[0], TTSSpeakFrame)
         assert queued_frames[0].text == "Are you still there?"
 
-        await push(BotStartedSpeakingFrame())
-        await push(BotStoppedSpeakingFrame())
+        await push_speaking_pair(BotStartedSpeakingFrame)
+        await push_speaking_pair(BotStoppedSpeakingFrame)
         await asyncio.sleep(0.03)
         assert queued_frames[1].text == ("I'll end the call now. Thank you for calling. Goodbye.")
 
-        await push(BotStartedSpeakingFrame())
-        await push(BotStoppedSpeakingFrame())
+        await push_speaking_pair(BotStartedSpeakingFrame)
+        await push_speaking_pair(BotStoppedSpeakingFrame)
         assert end_worker_calls == [True]
         tasks = json.loads((sink.directory / "tasks.json").read_text())
         assert len(tasks) == 1

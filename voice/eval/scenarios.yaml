@@ -14,6 +14,7 @@ scenarios:
       - "No, I haven't contacted ACAS yet."
       - "My email is siobhan dot mcallister at example dot com."
       - "A call back tomorrow morning would be great. That's everything, thank you. Bye."
+      - "Yes, that's all correct. Thanks, bye."
     transcript_checks:              # regex, case-insensitive, over all user turns joined by spaces
       caller_surname: "mc ?allister|mcalister"
       employer: "brightwell"
@@ -29,6 +30,8 @@ scenarios:
       acas_early_conciliation_started: "^False$"
     task_checks:
       urgent: true                  # deadline 2026-11-09 is <= 28 days from 2026-10-17
+    expected_end_call_source: goodbye_detected
+    expected_server_disconnect: true
   conveyancing:
     caller_voice: catriona          # Speechify en-GB female, not used as an agent voice
     utterances:
@@ -39,6 +42,7 @@ scenarios:
       - "I'm a first-time buyer and there's no chain."
       - "My name is Daniel Okafor, and my number is oh seven seven zero zero, nine double oh, four five six."
       - "That's everything for now, thank you. Goodbye."
+      - "Yes, that's all correct. Thanks, bye."
     transcript_checks:
       price: "285,?000|two hundred and eighty.five thousand"
       postcode: "ls ?6 ?2ab|l s six,? two a b"
@@ -55,3 +59,13 @@ scenarios:
       mortgage: "^True$"
     task_checks:
       urgent: false
+    expected_end_call_source: goodbye_detected
+    expected_server_disconnect: true
+
+  idle_check:
+    caller_voice: catriona
+    utterances:
+      - "Hi, I'm calling about a property purchase."
+    final_call_timeout_seconds: 35
+    expected_end_call_source: idle
+    expected_server_disconnect: true

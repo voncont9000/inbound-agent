@@ -25,7 +25,7 @@ SPEECH_ENERGY_THRESHOLD = 250.0
 SILENCE_SECONDS = 1.2
 TURN_TIMEOUT_SECONDS = 25
 MAX_AGENT_TURN_SECONDS = 90
-FINAL_CALL_TIMEOUT_SECONDS = 15
+FINAL_CALL_TIMEOUT_SECONDS = 25
 
 
 @dataclass
@@ -94,6 +94,77 @@ class ScriptedAudioTrack(AudioStreamTrack):
         frame.time_base = Fraction(1, WEBRTC_SAMPLE_RATE)
         self._timestamp += FRAME_SAMPLES
         return frame
+
+
+async def _wait_for_event_or_disconnect(
+    event: asyncio.Event,
+    server_disconnected: asyncio.Event,
+    timeout: float,
+) -> bool:
+    if event.is_set():
+        return True
+    if server_disconnected.is_set():
+        return False
+
+    event_task = asyncio.create_task(event.wait())
+    disconnect_task = asyncio.create_task(server_disconnected.wait())
+    done, pending = await asyncio.wait(
+        {event_task, disconnect_task},
+        timeout=timeout,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+    if not done:
+        raise TimeoutError("Timed out waiting for caller or server event.")
+    return event.is_set()
+
+
+async def _wait_for_agent_speech_or_disconnect(
+    recorder: AgentAudioRecorder,
+    previous_speeches: int,
+    server_disconnected: asyncio.Event,
+) -> bool:
+    speech_task = asyncio.create_task(
+        recorder.wait_for_speech_after(
+            previous_speeches, TURN_TIMEOUT_SECONDS, MAX_AGENT_TURN_SECONDS
+        )
+    )
+    disconnect_task = asyncio.create_task(server_disconnected.wait())
+    done, pending = await asyncio.wait(
+        {speech_task, disconnect_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+    if disconnect_task in done and speech_task not in done:
+        return False
+    await speech_task
+    return True
+
+
+def _seconds_from_last_agent_speech_end_to_disconnect(
+    timeline: dict[str, Any],
+) -> float | None:
+    if not timeline.get("server_disconnect_detected"):
+        return None
+    disconnect_at = timeline.get("server_disconnect_at_seconds")
+    speech_ends = [
+        float(speech["end_seconds"])
+        for speech in timeline.get("agent_speech", [])
+        if speech.get("end_seconds") is not None
+    ]
+    if disconnect_at is None or not speech_ends:
+        return None
+    return max(0.0, float(disconnect_at) - max(speech_ends))
+
+
+def final_call_timeout_seconds(scenario: dict[str, Any]) -> float:
+    return float(scenario.get("final_call_timeout_seconds", FINAL_CALL_TIMEOUT_SECONDS))
 
 
 class AgentAudioRecorder:
@@ -285,6 +356,10 @@ async def run_call(
         ],
         "agent_speech": [],
         "server_disconnect_detected": False,
+        "server_disconnect_at_seconds": None,
+        "seconds_from_last_agent_speech_end_to_disconnect": None,
+        "caller_lines_completed": 0,
+        "caller_finished_all_lines": False,
         "error": None,
     }
     peer = RTCPeerConnection()
@@ -296,6 +371,7 @@ async def run_call(
     recording_tasks: list[asyncio.Task[None]] = []
     audio_track_event = asyncio.Event()
     server_disconnected = asyncio.Event()
+    closing_peer = False
 
     @peer.on("track")
     def on_track(track: Any) -> None:
@@ -305,61 +381,89 @@ async def run_call(
 
     @peer.on("connectionstatechange")
     async def on_connectionstatechange() -> None:
-        if peer.connectionState in {"disconnected", "failed", "closed"}:
+        if (
+            not closing_peer
+            and peer.connectionState in {"disconnected", "failed", "closed"}
+            and not server_disconnected.is_set()
+        ):
+            timeline["server_disconnect_at_seconds"] = max(0.0, time.monotonic() - call_started)
+            timeline["server_disconnect_detected"] = True
             server_disconnected.set()
 
     session_timeout = ClientTimeout(total=20)
+    caller_lines_completed = 0
     try:
         async with ClientSession(timeout=session_timeout) as session:
             await _connect(peer, base_url, session)
             try:
-                await asyncio.wait_for(audio_track_event.wait(), timeout=TURN_TIMEOUT_SECONDS)
-                await recorder.wait_for_speech_after(
-                    0, TURN_TIMEOUT_SECONDS, MAX_AGENT_TURN_SECONDS
+                audio_track_ready = await _wait_for_event_or_disconnect(
+                    audio_track_event, server_disconnected, TURN_TIMEOUT_SECONDS
                 )
+                if audio_track_ready:
+                    greeting_spoken = await _wait_for_agent_speech_or_disconnect(
+                        recorder, 0, server_disconnected
+                    )
+                    if not greeting_spoken:
+                        audio_track_ready = False
             except TimeoutError as error:
-                raise TimeoutError("Timed out waiting for the agent's greeting.") from error
+                if not server_disconnected.is_set():
+                    raise TimeoutError("Timed out waiting for the agent's greeting.") from error
 
-            for index in range(len(utterances)):
-                audio_path = Path(audio_dir) / scenario_name / f"{index}.wav"
-                if not audio_path.exists():
-                    raise FileNotFoundError(f"Missing synthesized caller audio: {audio_path}")
-                previous_speeches = recorder.completed_speeches
-                item = caller_track.queue_utterance(
-                    _read_caller_audio(audio_path),
-                    timeline["utterances"][index],
-                )
-                assert item.completed is not None
-                try:
-                    await asyncio.wait_for(item.completed.wait(), timeout=30)
-                except TimeoutError as error:
-                    raise TimeoutError(
-                        f"Caller utterance {index} did not finish playback."
-                    ) from error
-
-                if index < len(utterances) - 1:
+            if audio_track_ready and not server_disconnected.is_set():
+                for index in range(len(utterances)):
+                    if server_disconnected.is_set():
+                        break
+                    audio_path = Path(audio_dir) / scenario_name / f"{index}.wav"
+                    if not audio_path.exists():
+                        raise FileNotFoundError(f"Missing synthesized caller audio: {audio_path}")
+                    previous_speeches = recorder.completed_speeches
+                    item = caller_track.queue_utterance(
+                        _read_caller_audio(audio_path),
+                        timeline["utterances"][index],
+                    )
+                    assert item.completed is not None
                     try:
-                        await recorder.wait_for_speech_after(
-                            previous_speeches, TURN_TIMEOUT_SECONDS, MAX_AGENT_TURN_SECONDS
+                        played = await _wait_for_event_or_disconnect(
+                            item.completed, server_disconnected, timeout=30
                         )
                     except TimeoutError as error:
                         raise TimeoutError(
-                            f"Timed out waiting for the agent response after utterance {index}."
+                            f"Caller utterance {index} did not finish playback."
                         ) from error
-                else:
-                    try:
-                        await asyncio.wait_for(
-                            server_disconnected.wait(),
-                            timeout=FINAL_CALL_TIMEOUT_SECONDS,
-                        )
-                    except TimeoutError:
-                        pass
-                    timeline["server_disconnect_detected"] = server_disconnected.is_set()
+                    if not played:
+                        break
+                    caller_lines_completed += 1
+
+                    if index < len(utterances) - 1:
+                        try:
+                            response_spoken = await _wait_for_agent_speech_or_disconnect(
+                                recorder, previous_speeches, server_disconnected
+                            )
+                            if not response_spoken:
+                                break
+                        except TimeoutError as error:
+                            if not server_disconnected.is_set():
+                                raise TimeoutError(
+                                    "Timed out waiting for the agent response after "
+                                    f"utterance {index}."
+                                ) from error
+                            break
+                    else:
+                        try:
+                            await asyncio.wait_for(
+                                server_disconnected.wait(),
+                                timeout=final_call_timeout_seconds(scenario),
+                            )
+                        except TimeoutError:
+                            pass
     except Exception as error:
         timeline["error"] = f"{type(error).__name__}: {error}"
     finally:
+        timeline["caller_lines_completed"] = caller_lines_completed
+        timeline["caller_finished_all_lines"] = caller_lines_completed == len(utterances)
         timeline["call_ended_at"] = datetime.now(UTC).isoformat()
         timeline["duration_seconds"] = max(0.0, time.monotonic() - call_started)
+        closing_peer = True
         timeline["server_disconnect_detected"] = server_disconnected.is_set()
         await peer.close()
         for task in recording_tasks:
@@ -369,6 +473,9 @@ async def run_call(
                 task.cancel()
         if not (output / "bot_audio.wav").exists():
             recorder._write_audio()
+        timeline["seconds_from_last_agent_speech_end_to_disconnect"] = (
+            _seconds_from_last_agent_speech_end_to_disconnect(timeline)
+        )
         (output / "caller_timeline.json").write_text(
             json.dumps(timeline, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",

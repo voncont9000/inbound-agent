@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from inbound_voice.metrics import calculate_cost, load_price_table
+from inbound_voice.metrics import calculate_cost, load_price_table, percentile
 
 VOICE_ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS_PATH = Path(__file__).with_name("scenarios.yaml")
@@ -36,6 +36,7 @@ def score_call(
     intake = _read_json(directory / "intake.json", {})
     tasks = _read_json(directory / "tasks.json", [])
     metrics = _read_json(directory / "metrics.json", {})
+    caller_timeline = _read_json(directory / "caller_timeline.json", {})
 
     transcript_checks = {
         name: {
@@ -52,11 +53,31 @@ def score_call(
     live_intake_checks = _intake_checks(live_intake.get("fields", {}), patterns)
     post_call_intake_checks = _intake_checks(post_call_intake.get("fields", {}), patterns)
 
+    end_call_task = next(
+        (task for task in tasks if isinstance(task, dict) and task.get("type") == "end_call"),
+        None,
+    )
+    end_call_source = end_call_task.get("source") or "tool" if end_call_task is not None else None
     task_checks = {}
     task_types = {task.get("type") for task in tasks if isinstance(task, dict)}
     for name, expected in scenario.get("task_checks", {}).items():
         actual = "urgent" in task_types if name == "urgent" else name in task_types
         task_checks[name] = {
+            "expected": expected,
+            "actual": actual,
+            "passed": actual is expected,
+        }
+    if "expected_end_call_source" in scenario:
+        expected = scenario["expected_end_call_source"]
+        task_checks["end_call_source"] = {
+            "expected": expected,
+            "actual": end_call_source,
+            "passed": end_call_source == expected,
+        }
+    if "expected_server_disconnect" in scenario:
+        expected = scenario["expected_server_disconnect"]
+        actual = bool(caller_timeline.get("server_disconnect_detected"))
+        task_checks["server_disconnect_detected"] = {
             "expected": expected,
             "actual": actual,
             "passed": actual is expected,
@@ -70,10 +91,6 @@ def score_call(
     stt_ttfb = _ttfb_median(service_metrics, "stt")
     tts_ttfb = _ttfb_median(service_metrics, "tts")
     llm_ttfb = _ttfb_median(service_metrics, "llm")
-    end_call_task = next(
-        (task for task in tasks if isinstance(task, dict) and task.get("type") == "end_call"),
-        None,
-    )
     task_sources = {}
     for task in tasks:
         if isinstance(task, dict):
@@ -93,6 +110,11 @@ def score_call(
         "checks_total": len(checks),
         "turn_latency_summary": metrics.get("turn_latency_summary", {}),
         "turn_end_latency_summary": metrics.get("turn_end_latency_summary", {}),
+        "turn_latencies_seconds": [
+            float(turn["seconds"])
+            for turn in metrics.get("turns", [])
+            if turn.get("seconds") is not None
+        ],
         "latency_breakdown_medians": _latency_breakdown_medians(
             metrics.get("turns", []), service_metrics
         ),
@@ -103,8 +125,10 @@ def score_call(
         "call_duration_seconds": metrics.get("call_duration_seconds"),
         "estimated_cost": cost,
         "ended_via_end_call": "end_call" in task_types,
-        "end_call_source": (
-            end_call_task.get("source") or "tool" if end_call_task is not None else None
+        "end_call_source": end_call_source,
+        "server_disconnect_detected": bool(caller_timeline.get("server_disconnect_detected")),
+        "seconds_from_last_agent_speech_end_to_disconnect": caller_timeline.get(
+            "seconds_from_last_agent_speech_end_to_disconnect"
         ),
         "task_sources": task_sources,
         "tts_voice": provider_metadata.get("tts_voice"),
@@ -207,10 +231,43 @@ def aggregate_calls(calls: list[dict[str, Any]]) -> dict[str, Any]:
         for call in calls
         if call.get("estimated_cost", {}).get("total") is not None
     ]
+    all_turn_latencies = [
+        float(value) for call in calls for value in call.get("turn_latencies_seconds", [])
+    ]
+    max_latencies = [
+        call["turn_latency_summary"]["max_seconds"]
+        for call in calls
+        if call.get("turn_latency_summary", {}).get("max_seconds") is not None
+    ]
+    max_turn_end_latencies = [
+        call["turn_end_latency_summary"]["max_seconds"]
+        for call in calls
+        if call.get("turn_end_latency_summary", {}).get("max_seconds") is not None
+    ]
+    disconnect_gaps = [
+        float(call["seconds_from_last_agent_speech_end_to_disconnect"])
+        for call in calls
+        if call.get("seconds_from_last_agent_speech_end_to_disconnect") is not None
+    ]
+    disconnect_values = [
+        call["server_disconnect_detected"]
+        for call in calls
+        if call.get("server_disconnect_detected") is not None
+    ]
     return {
         "calls": len(calls),
         "median_p50_latency_seconds": statistics.median(latency_p50) if latency_p50 else None,
         "max_p95_latency_seconds": max(latency_p95) if latency_p95 else None,
+        "all_turns_p95_latency_seconds": percentile(all_turn_latencies, 95),
+        "max_latency_seconds": max(max_latencies) if max_latencies else None,
+        "max_turn_end_latency_seconds": (
+            max(max_turn_end_latencies) if max_turn_end_latencies else None
+        ),
+        "server_disconnect_count": sum(bool(value) for value in disconnect_values),
+        "server_disconnect_total": len(disconnect_values),
+        "median_disconnect_gap_seconds": (
+            statistics.median(disconnect_gaps) if disconnect_gaps else None
+        ),
         "checks_passed": sum(call.get("checks_passed", 0) for call in calls),
         "checks_total": sum(call.get("checks_total", 0) for call in calls),
         "mean_cost": statistics.fmean(costs) if costs else None,
@@ -233,8 +290,11 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
         "Task sources",
         "p50 latency",
         "p95 latency max",
+        "max latency",
         "turn-end p50",
         "turn-end p95",
+        "turn-end max",
+        "all-turn p95",
         "Caller stop→turn-end median",
         "Turn-end→LLM median",
         "LLM→TTS first audio median",
@@ -245,6 +305,8 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
         "Duration",
         "Mean/total cost",
         "End mode",
+        "Server disconnect",
+        "Speech-end→disconnect",
     )
     rows = []
     grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
@@ -276,8 +338,11 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 _task_sources(call.get("task_sources", {})),
                 _seconds(call.get("turn_latency_summary", {}).get("p50_seconds")),
                 _seconds(call.get("turn_latency_summary", {}).get("p95_seconds")),
+                _seconds(call.get("turn_latency_summary", {}).get("max_seconds")),
                 _seconds(call.get("turn_end_latency_summary", {}).get("p50_seconds")),
                 _seconds(call.get("turn_end_latency_summary", {}).get("p95_seconds")),
+                _seconds(call.get("turn_end_latency_summary", {}).get("max_seconds")),
+                "—",
                 _seconds(
                     call.get("latency_breakdown_medians", {}).get("caller_stop_to_turn_end_seconds")
                 ),
@@ -298,6 +363,8 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 _seconds(call.get("call_duration_seconds")),
                 _cost(call),
                 _end_mode(call),
+                _value(call.get("server_disconnect_detected")),
+                _seconds(call.get("seconds_from_last_agent_speech_end_to_disconnect")),
             )
         )
     for (stt, tts, llm, llm_model), combination_calls in grouped.items():
@@ -334,8 +401,11 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 _aggregate_task_sources(combination_calls),
                 _seconds(aggregate["median_p50_latency_seconds"]),
                 _seconds(aggregate["max_p95_latency_seconds"]),
+                _seconds(aggregate["max_latency_seconds"]),
                 "—",
                 "—",
+                _seconds(aggregate["max_turn_end_latency_seconds"]),
+                _seconds(aggregate["all_turns_p95_latency_seconds"]),
                 "—",
                 "—",
                 "—",
@@ -346,6 +416,12 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 "—",
                 _money(aggregate["mean_cost"]),
                 "—",
+                (
+                    f"{aggregate['server_disconnect_count']}/{aggregate['server_disconnect_total']}"
+                    if aggregate["server_disconnect_total"]
+                    else "—"
+                ),
+                _seconds(aggregate["median_disconnect_gap_seconds"]),
             )
         )
     widths = [
@@ -364,8 +440,10 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
     )
     lines.append("")
     lines.append(
-        "Aggregate p50 is the median of per-call p50 latency; aggregate p95 is the maximum "
-        "per-call p95. Costs are estimated."
+        "Aggregate p50 is the median of per-call p50; per-call p95 is interpolated within "
+        "each call; all-turn p95 is interpolated across every measured turn. Disconnect "
+        "shows detected/total calls, and the gap is the median across detected calls. "
+        "Costs are estimated."
     )
     return "\n".join(lines) + "\n"
 

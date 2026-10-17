@@ -129,18 +129,38 @@ actions enabled by default; each action, including `end_call`, can be enabled pe
 assistant. When `end_call` is enabled, the goodbye is spoken in the same LLM response as
 the tool call, avoiding a follow-up inference. Caller-final keyword urgency rules always
 run live; date-deadline checks, callback requests, and complaints become post-call tasks.
-If the caller and assistant exchange a goodbye without an `end_call` tool, the bot hangs up
-1.5 seconds after bot speech stops unless the caller starts speaking again.
+The goodbye detector remembers caller closing intent for the whole call. If the caller
+previously said goodbye and the assistant later says goodbye (including after a readback
+confirmation), the bot hangs up 1.5 seconds after bot speech stops unless the caller starts
+speaking again. Without caller closing intent, a goodbye at the end of the assistant's
+final sentence also triggers the hang-up; mentioning goodbye while asking a question does
+not. The scripted callers confirm the final readback and wait up to 25 seconds for server
+disconnect. Their timeline and score summary record the disconnect and the time since the
+agent's last speech. A disconnect before all caller lines finish is treated as an early
+clean stop.
+
+The named `idle_check` scenario has a single property-purchase utterance followed by
+silence. It checks for the idle `end_call` source and server disconnect after the
+“Are you still there?” prompt and second idle interval. Its final wait is 35 seconds to
+allow the agent's initial response, both 8-second idle intervals, and goodbye speech;
+employment and conveyancing keep a 25-second final wait. It is not selected by default; run
+it explicitly:
+
+```sh
+uv run python -m eval.run_matrix \
+  --stt soniox --tts speechify --llm google --scenario idle_check --reps 1
+```
 
 The 2.0s, 1.0s, and 0.5s rows summarize the previous two-call-per-scenario matrices. The
-0.7s row is the requested rep-3 run, with one call per scenario.
+0.7s row summarizes three repetitions each for employment and conveyancing. Its pooled
+p95 is calculated over every measured turn in all six calls.
 
-| Smart turn stop | Checks | Aggregate p50 | Maximum per-call p95 |
-|---:|---:|---:|---:|
-| 2.0s | 41/50 | 1.684s | 3.608s |
-| 1.0s | 43/50 | 1.204s | 2.992s |
-| 0.5s | 42/50 | 1.481s | 2.425s |
-| 0.7s | 22/25 | 1.313s | 1.915s |
+| Smart turn stop | Checks | Aggregate p50 | Maximum per-call p95 | Pooled all-turn p95 |
+|---:|---:|---:|---:|---:|
+| 2.0s | 41/50 | 1.684s | 3.608s | — |
+| 1.0s | 43/50 | 1.204s | 2.992s | — |
+| 0.5s | 42/50 | 1.481s | 2.425s | — |
+| 0.7s | 78/87 | 1.221s | 2.088s | 1.946s |
 
 ## Browser web call
 

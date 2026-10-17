@@ -132,20 +132,40 @@ Extraction usage and estimated cost are separate from live-call LLM metrics. The
 values and provenance are intended to map to customer context-graph facts; see
 [`context-graph.md`](context-graph.md).
 
-If the last caller final and the assistant's following turn both contain goodbye language,
-but no `end_call` tool arrives, the goodbye detector queues `EndWorkerFrame` 1.5 seconds
-after `BotStoppedSpeaking`. New caller speech cancels the timer; the end task source is
-`goodbye_detected`. Separately, after bot speech and `IDLE_PROMPT_SECS` (default 8) of
-caller silence, an idle prompt is queued. After a second idle interval it says “I'll end
-the call now. Thank you for calling. Goodbye.” and ends the call after speech stops, with
-an `end_call` task source of `idle`. Caller speech resets the timer, and neither idle
-message is queued while the bot is speaking.
+The goodbye detector remembers caller closing intent for the whole call. If the caller
+previously said goodbye and the assistant later says goodbye (including after a readback
+confirmation), it queues `EndWorkerFrame` 1.5 seconds after `BotStoppedSpeaking` unless
+the caller starts speaking again. Without caller closing intent, an assistant goodbye at
+the end of its final sentence also triggers the hang-up; mentioning goodbye before a
+question does not. The task source is `goodbye_detected`.
+
+Separately, after bot speech and `IDLE_PROMPT_SECS` (default 8) of caller silence, an idle
+prompt is queued. After a second idle interval it says “I'll end the call now. Thank you
+for calling. Goodbye.” and ends the call after speech stops, with an `end_call` task source
+of `idle`. Caller speech resets the timer, and neither idle message is queued while the bot
+is speaking.
 
 `SMART_TURN_STOP_SECS` controls Pipecat's silence fallback when Smart Turn marks an
 utterance incomplete; it defaults to `0.7` seconds.
 The matrix runner accepts `--smart-turn-stop-secs`, sets it for each runner, and records the
 value in JSON results and summary rows. Its summary reports caller-stop→turn-end,
 turn-end→LLM-first-token, LLM-first-token→TTS-first-audio medians, and LLM TTFB.
+
+Employment and conveyancing scripted callers append a final confirmation (“Yes, that's all
+correct. Thanks, bye.”), then wait up to 25 seconds for the server to disconnect. The
+caller timeline records whether the disconnect was detected and seconds since the end of
+the agent's last speech; the score summary surfaces both. If the server disconnects before
+all scripted lines are played, the caller stops cleanly without recording a caller error.
+The named `idle_check` scenario sends one property-purchase utterance and remains silent;
+it scores the `idle` end-call source and server disconnect. Its final wait is 35 seconds
+to allow the initial response, both 8-second idle intervals, and goodbye speech;
+employment and conveyancing wait up to 25 seconds. It is run only when explicitly
+selected, for example:
+
+```sh
+uv run python -m eval.run_matrix \
+  --stt soniox --tts speechify --llm google --scenario idle_check --reps 1
+```
 
 At the 2.0-second setting, baseline stage medians were:
 
@@ -158,15 +178,16 @@ These are one baseline call per scenario, not a p95 guarantee. Lower endpointing
 must be evaluated for interruption/cut-off risk as well as latency.
 
 Turn-stop matrix comparison (aggregate checks, median of per-call p50, maximum per-call
-p95). The 2.0s, 1.0s, and 0.5s rows are from the earlier two-call-per-scenario runs; 0.7s
-is the requested rep-3 run, with one call per scenario:
+p95). The 2.0s, 1.0s, and 0.5s rows are from earlier two-call-per-scenario runs; 0.7s
+includes three repetitions each for employment and conveyancing. Its pooled p95 is
+calculated over every measured turn across all six calls:
 
-| Smart turn stop | Checks | Aggregate p50 | Maximum per-call p95 |
-|---:|---:|---:|---:|
-| 2.0s | 41/50 | 1.684s | 3.608s |
-| 1.0s | 43/50 | 1.204s | 2.992s |
-| 0.5s | 42/50 | 1.481s | 2.425s |
-| 0.7s | 22/25 | 1.313s | 1.915s |
+| Smart turn stop | Checks | Aggregate p50 | Maximum per-call p95 | Pooled all-turn p95 |
+|---:|---:|---:|---:|---:|
+| 2.0s | 41/50 | 1.684s | 3.608s | — |
+| 1.0s | 43/50 | 1.204s | 2.992s | — |
+| 0.5s | 42/50 | 1.481s | 2.425s | — |
+| 0.7s | 78/87 | 1.221s | 2.088s | 1.946s |
 
 ## Latency and cost
 
