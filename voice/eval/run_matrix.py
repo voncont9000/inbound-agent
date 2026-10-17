@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import math
 import os
 import re
 import shutil
 import signal
+import tempfile
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -84,6 +86,7 @@ async def _start_runner(
     speechify_voice: str | None = None,
     elevenlabs_voice: str | None = None,
     smart_turn_stop_secs: float = 2.0,
+    knowledge_digest_path: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
     process_env["STT_PROVIDER"] = stt
@@ -91,6 +94,8 @@ async def _start_runner(
     _configure_tts_voice(process_env, tts, speechify_voice, elevenlabs_voice)
     _configure_llm_provider(process_env, llm)
     process_env["SMART_TURN_STOP_SECS"] = str(smart_turn_stop_secs)
+    if knowledge_digest_path:
+        process_env["KNOWLEDGE_DIGEST_PATH"] = knowledge_digest_path
     process = await asyncio.create_subprocess_exec(
         "uv",
         "run",
@@ -235,6 +240,7 @@ async def run_matrix(
     elevenlabs_voice: str | None = None,
     llm_providers: Sequence[str] = ("google",),
     smart_turn_stop_secs: float = 2.0,
+    knowledge_digest_path: str | None = None,
 ) -> Path:
     from eval.synth_callers import load_scenarios
 
@@ -258,7 +264,13 @@ async def run_matrix(
             for llm in dict.fromkeys(llm_providers):
                 print(f"\n=== Starting runner for STT={stt}, TTS={tts}, LLM={llm} ===")
                 process, output_task, output_lines = await _start_runner(
-                    stt, tts, llm, speechify_voice, elevenlabs_voice, smart_turn_stop_secs
+                    stt,
+                    tts,
+                    llm,
+                    speechify_voice,
+                    elevenlabs_voice,
+                    smart_turn_stop_secs,
+                    knowledge_digest_path,
                 )
                 try:
                     for scenario_name in scenario_names:
@@ -366,19 +378,88 @@ def main() -> None:
     parser.add_argument("--speechify-voice")
     parser.add_argument("--elevenlabs-voice")
     parser.add_argument("--smart-turn-stop-secs", type=float, default=2.0)
+    parser.add_argument("--knowledge-fixture", action="store_true")
     arguments = parser.parse_args()
-    asyncio.run(
-        run_matrix(
-            arguments.stt,
-            arguments.tts,
-            arguments.scenario,
-            arguments.reps,
-            arguments.speechify_voice,
-            arguments.elevenlabs_voice,
-            arguments.llm,
-            arguments.smart_turn_stop_secs,
+    if not arguments.knowledge_fixture:
+        asyncio.run(
+            run_matrix(
+                arguments.stt,
+                arguments.tts,
+                arguments.scenario,
+                arguments.reps,
+                arguments.speechify_voice,
+                arguments.elevenlabs_voice,
+                arguments.llm,
+                arguments.smart_turn_stop_secs,
+            )
         )
+        return
+
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+
+    from inbound_voice.knowledge import import_knowledge
+
+    fixture_site = VOICE_ROOT / "eval" / "fixtures" / "demo_site"
+    fixture_docs = VOICE_ROOT / "eval" / "fixtures" / "demo_docs" / "client_care.md"
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        partial(SimpleHTTPRequestHandler, directory=str(fixture_site)),
     )
+    server_thread = Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    try:
+        with tempfile.TemporaryDirectory(prefix="inbound-knowledge-") as temporary:
+            imported = asyncio.run(
+                import_knowledge(
+                    assistant_path=VOICE_ROOT / "config" / "assistants" / "demo_firm.yaml",
+                    urls=[f"http://127.0.0.1:{server.server_port}/"],
+                    files=[fixture_docs],
+                    output_dir=Path(temporary) / "knowledge" / "demo_firm",
+                )
+            )
+            print(
+                f"Knowledge fixture digest: {imported['digest_chars']} chars; "
+                f"cost {imported['digest_cost']}"
+            )
+            results_dir = asyncio.run(
+                run_matrix(
+                    arguments.stt,
+                    arguments.tts,
+                    arguments.scenario,
+                    arguments.reps,
+                    arguments.speechify_voice,
+                    arguments.elevenlabs_voice,
+                    arguments.llm,
+                    arguments.smart_turn_stop_secs,
+                    imported["digest_path"],
+                )
+            )
+            digest_copy = results_dir / "knowledge_fixture" / "digest.md"
+            digest_copy.parent.mkdir(parents=True, exist_ok=True)
+            digest_bytes = Path(imported["digest_path"]).read_bytes()
+            digest_copy.write_bytes(digest_bytes)
+            results_path = results_dir / "results.json"
+            result_data = json.loads(results_path.read_text(encoding="utf-8"))
+            result_data["knowledge_fixture"] = {
+                "digest_path": str(digest_copy),
+                "digest_sha256": hashlib.sha256(digest_bytes).hexdigest(),
+                "digest_chars": imported["digest_chars"],
+                "digest_cost": imported["digest_cost"],
+            }
+            results_path.write_text(
+                json.dumps(result_data, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            print(
+                f"Knowledge digest saved at {digest_copy} "
+                f"(SHA-256 {result_data['knowledge_fixture']['digest_sha256']})"
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=2)
 
 
 if __name__ == "__main__":

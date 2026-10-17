@@ -62,6 +62,34 @@ scenarios:
     expected_end_call_source: goodbye_detected
     expected_server_disconnect: true
 
+  knowledge_check:
+    caller_voice: catriona
+    utterances:
+      - "Hi, I'm thinking of remortgaging. Do you do remortgages and how much is it?"
+      - "Great. Is there parking at your office?"
+      - "And do you handle probate as well?"
+      - "One more thing, do you offer a discount for NHS workers?"
+      - "My name is Daniel Okafor, and my number is 07700 900456."
+      - "No, that's everything, thanks. Bye."
+      - "Yes, that's all correct. Thanks, bye."
+    assistant_checks:
+      remortgage_fee: "595"
+      parking: "(?i)(Wellington Street|Q-Park|no free parking)"
+      probate_not_offered: "(?i)(don't|do not|doesn't).*probate|probate.*(not|isn't)"
+    knowledge_gap_checks:
+      nhs_discount:
+        pattern: "(?i)NHS|discount"
+        present: true
+      answered_questions:
+        pattern: "(?i)remortgag|parking|probate"
+        scope: all
+        present: false
+    intake_checks:
+      caller_name: "(?i)daniel okafor"
+      phone: "07700 ?900 ?456|\\+?44 ?7700 ?900 ?456"
+    expected_end_call_source: goodbye_detected
+    expected_server_disconnect: true
+
   idle_check:
     caller_voice: catriona
     utterances:

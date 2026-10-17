@@ -51,6 +51,7 @@ from inbound_voice.config import load_assistant_config
 from inbound_voice.extraction import (
     DEFAULT_EXTRACTION_MODEL,
     build_intake_artifacts,
+    build_knowledge_gap_tasks,
     build_post_call_tasks,
     extract_intake,
 )
@@ -457,6 +458,7 @@ async def finalize_call_intake(
             "model": model,
             "fields": {},
             "usage": {"input_tokens": 0, "output_tokens": 0},
+            "unanswered_questions": [],
             "error": f"{type(error).__name__}: {error}",
         }
 
@@ -465,7 +467,12 @@ async def finalize_call_intake(
     existing_tasks = (
         json.loads(tasks_path.read_text(encoding="utf-8")) if tasks_path.exists() else []
     )
-    for task in build_post_call_tasks(post_call, merged, assistant, existing_tasks):
+    gaps = {"unanswered_questions": result.get("unanswered_questions", [])}
+    sink.save_knowledge_gaps(gaps)
+    for task in [
+        *build_post_call_tasks(post_call, merged, assistant, existing_tasks),
+        *build_knowledge_gap_tasks(gaps["unanswered_questions"]),
+    ]:
         task_details = {key: value for key, value in task.items() if key != "type"}
         sink.append_task(task["type"], task_details)
     sink.save_post_call_intake(post_call)

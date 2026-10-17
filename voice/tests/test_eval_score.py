@@ -133,6 +133,74 @@ def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
     assert scenarios["idle_check"]["utterances"] == ["Hi, I'm calling about a property purchase."]
     assert scenarios["idle_check"]["expected_end_call_source"] == "idle"
     assert scenarios["idle_check"]["expected_server_disconnect"] is True
+    assert len(scenarios["knowledge_check"]["utterances"]) == 7
+    assert "knowledge_check" not in {"employment", "conveyancing", "idle_check"}
+
+
+def test_score_call_checks_assistant_answers_and_knowledge_gaps(tmp_path) -> None:
+    run_dir = tmp_path / "fixture-call"
+    shutil.copytree(FIXTURE, run_dir)
+    (run_dir / "transcript.jsonl").write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in [
+                {"role": "caller", "text": "Do you offer a discount for NHS workers?"},
+                {"role": "assistant", "text": "Our remortgage fee is £595 plus VAT."},
+                {"role": "assistant", "text": "There is no free parking near our office."},
+                {"role": "assistant", "text": "We do not offer probate services."},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    gaps = {
+        "unanswered_questions": [
+            {
+                "question": "Do you offer a discount for NHS workers?",
+                "evidence": "Do you offer a discount for NHS workers?",
+            }
+        ]
+    }
+    (run_dir / "knowledge_gaps.json").write_text(
+        json.dumps(gaps),
+        encoding="utf-8",
+    )
+
+    result = score_call(
+        run_dir,
+        {
+            "assistant_checks": {
+                "fee": "595",
+                "parking": "(?i)no free parking",
+                "probate": "(?i)do not.*probate",
+            },
+            "knowledge_gap_checks": {
+                "unanswered": {"pattern": "(?i)NHS|discount", "present": True},
+                "answered": {"pattern": "(?i)remortgag|parking|probate", "present": False},
+            },
+        },
+    )
+
+    assert all(check["passed"] for check in result["assistant_checks"].values())
+    assert all(check["passed"] for check in result["knowledge_gap_checks"].values())
+
+    gaps["unanswered_questions"][0]["evidence"] += " Parking details were also requested."
+    (run_dir / "knowledge_gaps.json").write_text(
+        json.dumps(gaps),
+        encoding="utf-8",
+    )
+    forbidden_evidence = score_call(
+        run_dir,
+        {
+            "knowledge_gap_checks": {
+                "forbidden": {
+                    "pattern": "(?i)remortgag|parking|probate",
+                    "scope": "all",
+                    "present": False,
+                }
+            }
+        },
+    )
+    assert not forbidden_evidence["knowledge_gap_checks"]["forbidden"]["passed"]
 
 
 def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> None:

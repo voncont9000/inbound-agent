@@ -17,6 +17,7 @@ def render_system_prompt(config: AssistantConfig, today: date | None = None) -> 
     contacts = "\n".join(
         f"- {name.replace('_', ' ')}: {value}" for name, value in config.contacts.items()
     )
+    knowledge = _render_knowledge(config)
     services = []
     has_critical_fields = False
     for name, service in config.services.items():
@@ -132,6 +133,8 @@ SERVICES AND INTAKE FIELDS
 PUBLISHED PRICES — never treat these as a guaranteed quote:
 {fee_table}
 
+{knowledge}
+
 INTAKE AND CALL COMPLETION
 {final_readback}
 - Collect other details conversationally; they are extracted after the call. Do not call a tool
@@ -143,3 +146,27 @@ INTAKE AND CALL COMPLETION
 
 {actions}
 """
+
+
+def _render_knowledge(config: AssistantConfig) -> str:
+    knowledge = config.knowledge
+    if not knowledge.faqs and not knowledge.digest_content:
+        return ""
+    lines = [
+        "Business knowledge (answer questions only from this, the fee list and the details above):"
+    ]
+    if knowledge.faqs:
+        lines.append("FAQs set by the business (these override the reference sheet):")
+        lines.extend(f"- Q: {faq.question} A: {faq.answer}" for faq in knowledge.faqs)
+    if knowledge.digest_content:
+        lines.extend(("Reference sheet:", knowledge.digest_content.strip()))
+    lines.extend(
+        (
+            "- If the answer is not in this knowledge, say you don't have that information "
+            "and will pass the question to the team. Do not guess.",
+            '- Never mention sources, URLs in brackets or "CONFLICT" to the caller; where '
+            "facts conflict, say the team will confirm.",
+            "- Keep answers to one or two short sentences, then return to the caller's enquiry.",
+        )
+    )
+    return "\n".join(lines)

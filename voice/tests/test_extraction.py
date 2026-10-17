@@ -34,7 +34,7 @@ class FakeClient:
         self.aio = SimpleNamespace(models=self.models)
 
 
-def _response(fields):
+def _response(fields, unanswered_questions=None):
     return SimpleNamespace(
         text=json.dumps(
             {
@@ -46,6 +46,7 @@ def _response(fields):
                     "preferred_time": "tomorrow morning",
                 },
                 "complaint": {"made": True, "summary": "Delay returning a call"},
+                "unanswered_questions": unanswered_questions or [],
             }
         ),
         usage_metadata=SimpleNamespace(prompt_token_count=100, candidates_token_count=25),
@@ -69,7 +70,13 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
                     "confidence": 0.8,
                     "evidence": "My email is not-an-email.",
                 },
-            ]
+            ],
+            unanswered_questions=[
+                {
+                    "question": "Do you discount for NHS workers?",
+                    "evidence": "Do you discount for NHS workers?",
+                }
+            ],
         )
     )
 
@@ -99,6 +106,12 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
         "preferred_time": "tomorrow morning",
     }
     assert result["complaint"] == {"made": True, "summary": "Delay returning a call"}
+    assert result["unanswered_questions"] == [
+        {
+            "question": "Do you discount for NHS workers?",
+            "evidence": "Do you discount for NHS workers?",
+        }
+    ]
     assert result["usage"] == {"input_tokens": 100, "output_tokens": 25}
     generation_config = client.models.arguments["config"]
     assert generation_config["response_mime_type"] == "application/json"
@@ -114,6 +127,12 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
     assert item_properties["confirmed_by_caller"]["type"] == "boolean"
     assert "callback_requested" in schema["properties"]
     assert "complaint" in schema["properties"]
+    assert "unanswered_questions" in schema["required"]
+    assert "unanswered_questions" in schema["properties"]
+    assert (
+        "List in unanswered_questions each question the caller asked that the assistant did not "
+        "answer from business knowledge" in client.models.arguments["contents"]
+    )
     assert '"2026-08-10: dismissed"' in client.models.arguments["contents"]
     assert schema == _extraction_schema(config)
     assert "1. caller:" in client.models.arguments["contents"]
@@ -183,6 +202,12 @@ def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, mon
                     "evidence": "I was dismissed.",
                 }
             },
+            "unanswered_questions": [
+                {
+                    "question": "Can you discount for NHS staff?",
+                    "evidence": "Do you offer a discount for NHS staff?",
+                }
+            ],
             "usage": {"input_tokens": 1_000_000, "output_tokens": 1_000_000},
         }
 
@@ -195,11 +220,15 @@ def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, mon
     merged = json.loads((tmp_path / "intake.json").read_text(encoding="utf-8"))
     post_call = json.loads((tmp_path / "intake.post_call.json").read_text(encoding="utf-8"))
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    gaps = json.loads((tmp_path / "knowledge_gaps.json").read_text(encoding="utf-8"))
+    tasks = json.loads((tmp_path / "tasks.json").read_text(encoding="utf-8"))
     assert result["extraction_status"] == "completed"
     assert merged["fields"]["issue_type"]["status"] == "filled"
     assert post_call["fields"]["issue_type"]["value"] == "dismissal"
     assert metrics["usage"]["extraction_input_tokens"] == 1_000_000
     assert metrics["estimated_cost"]["components"]["extraction"] == 4.5
+    assert gaps["unanswered_questions"][0]["evidence"] == "Do you offer a discount for NHS staff?"
+    assert any(task["type"] == "knowledge_gap" and task["source"] == "post_call" for task in tasks)
 
 
 def test_merge_intake_covers_agreed_live_filled_conflict_and_corrected() -> None:

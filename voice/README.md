@@ -55,6 +55,36 @@ The command reads `transcript.jsonl` and `intake.live.json`, rewrites
 `intake.post_call.json` and `intake.json`, and recalculates the extraction usage/cost in
 `metrics.json` when that file exists.
 
+## Business knowledge
+
+Assistant YAML may define optional FAQs and a digest path:
+
+```yaml
+knowledge:
+  sources: [{url: https://example.com}, {file: docs/faq.md}]
+  faqs:
+    - question: "Do you offer video meetings?"
+      answer: "Yes, via Microsoft Teams."
+  digest_path: knowledge/demo_firm/digest.md
+  max_digest_chars: 24000
+```
+
+Import websites and supported documents with:
+
+```sh
+uv run python -m inbound_voice.knowledge import \
+  --assistant config/assistants/demo_firm.yaml \
+  --url https://example.com \
+  --file docs/faq.md \
+  --max-pages 50 \
+  --out knowledge/demo_firm
+```
+
+The importer writes `digest.md`, `chunks.jsonl`, and `manifest.json`. The digest is loaded
+once with the assistant configuration and added to the system prompt; `KNOWLEDGE_DIGEST_PATH`
+overrides the configured `digest_path` and may be set in `.env`. Knowledge sources in YAML
+are descriptive; import inputs come from the CLI.
+
 ## Selecting providers and voices
 
 Change `STT_PROVIDER` and `TTS_PROVIDER` in `.env`, then restart the runner to A/B providers.

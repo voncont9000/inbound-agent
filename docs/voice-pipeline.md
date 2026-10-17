@@ -132,6 +132,34 @@ Extraction usage and estimated cost are separate from live-call LLM metrics. The
 values and provenance are intended to map to customer context-graph facts; see
 [`context-graph.md`](context-graph.md).
 
+## Business knowledge and knowledge gaps
+
+An optional `knowledge` config contains business FAQs and a digest path. The importer
+crawls same-host websites subject to `robots.txt` and reads HTML, PDF, DOCX, TXT, and
+Markdown sources. It writes a cited Markdown digest, a source manifest with token usage and
+cost, and approximately 1,200-character chunks with hashes.
+
+The digest is loaded once when assistant configuration is loaded and placed directly in
+the system prompt alongside business FAQs and the configured fee list. This avoids a
+latency-bearing live retrieval tool and keeps common answers available in the first LLM
+response. Chunks are retained for M1 pgvector retrieval; future retrieval should run in
+parallel with a turn, not as a live tool call that delays the response.
+
+Post-call extraction includes `unanswered_questions` with the caller's exact evidence
+quotes. Each question is written to `knowledge_gaps.json` and creates a `knowledge_gap`
+task with source `post_call`. Re-extraction writes the same artifact and tasks.
+
+```sh
+uv run python -m inbound_voice.knowledge import \
+  --assistant config/assistants/demo_firm.yaml \
+  --url https://example.com \
+  --file docs/faq.md
+```
+
+`KNOWLEDGE_DIGEST_PATH` overrides the YAML digest path. The named `knowledge_check` matrix
+scenario is not part of the default scenarios; use `--knowledge-fixture` to import the
+local Demo & Co site and client-care document before running it.
+
 The goodbye detector remembers caller closing intent for the whole call. If the caller
 previously said goodbye and the assistant later says goodbye (including after a readback
 confirmation), it queues `EndWorkerFrame` 1.5 seconds after `BotStoppedSpeaking` unless

@@ -19,6 +19,8 @@ class CallSink(Protocol):
 
     def save_post_call_intake(self, intake: dict[str, Any]) -> None: ...
 
+    def save_knowledge_gaps(self, gaps: dict[str, Any]) -> None: ...
+
     def append_task(self, task_type: str, details: dict[str, Any]) -> None: ...
 
     def save_metrics(self, metrics: dict[str, Any]) -> None: ...
@@ -77,6 +79,9 @@ class LocalFilesCallSink:
 
     def save_post_call_intake(self, intake: dict[str, Any]) -> None:
         self._write_json("intake.post_call.json", intake)
+
+    def save_knowledge_gaps(self, gaps: dict[str, Any]) -> None:
+        self._write_json("knowledge_gaps.json", gaps)
 
     def append_task(self, task_type: str, details: dict[str, Any]) -> None:
         path = self.directory / "tasks.json"

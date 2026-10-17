@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
+
+VOICE_ROOT = Path(__file__).resolve().parents[1]
 
 
 class OfficeHours(BaseModel):
@@ -80,6 +83,36 @@ class DateDeadlineUrgencyRule(BaseModel):
     reason: str
 
 
+class KnowledgeSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: AnyHttpUrl | None = None
+    file: str | None = None
+
+    @model_validator(mode="after")
+    def validate_source(self) -> KnowledgeSource:
+        if (self.url is None) == (self.file is None):
+            raise ValueError("A knowledge source must have exactly one of url or file.")
+        return self
+
+
+class KnowledgeFAQ(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str
+    answer: str
+
+
+class KnowledgeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sources: list[KnowledgeSource] = Field(default_factory=list)
+    faqs: list[KnowledgeFAQ] = Field(default_factory=list)
+    digest_path: str | None = None
+    max_digest_chars: int = Field(default=24_000, gt=0)
+    digest_content: str | None = Field(default=None, exclude=True)
+
+
 UrgencyRule = Annotated[
     KeywordUrgencyRule | DateDeadlineUrgencyRule,
     Field(discriminator="type"),
@@ -98,6 +131,7 @@ class AssistantConfig(BaseModel):
     contacts: dict[str, str]
     services: dict[str, ServiceConfig]
     urgency_rules: list[UrgencyRule]
+    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     live_actions: list[
         Literal[
             "confirm_critical_fields",
@@ -120,7 +154,16 @@ def load_assistant_config(path: str | Path) -> AssistantConfig:
         with template_path.open(encoding="utf-8") as template_file:
             template_data = yaml.safe_load(template_file) or {}
         assistant_data = _deep_merge(template_data, assistant_data)
-    return AssistantConfig.model_validate(assistant_data)
+    config = AssistantConfig.model_validate(assistant_data)
+    digest_override = os.environ.get("KNOWLEDGE_DIGEST_PATH", "").strip()
+    digest_path = Path(digest_override) if digest_override else None
+    if digest_path is None and config.knowledge.digest_path:
+        digest_path = Path(config.knowledge.digest_path)
+    if digest_path is not None and not digest_path.is_absolute():
+        digest_path = VOICE_ROOT / digest_path
+    if digest_path is not None and digest_path.is_file():
+        config.knowledge.digest_content = digest_path.read_text(encoding="utf-8")
+    return config
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

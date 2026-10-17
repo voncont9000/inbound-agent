@@ -1,6 +1,12 @@
 extends: uk_law_firm
 business_name: Demo & Co Solicitors
 greeting: "Hello, you are speaking with the AI assistant for Demo & Co Solicitors. How can I help?"
+knowledge:
+  sources:
+    - url: https://demoandco.example/
+    - file: eval/fixtures/demo_docs/client_care.md
+  digest_path: knowledge/demo_firm/digest.md
+  max_digest_chars: 24000
 office_hours:
   days: [Monday, Tuesday, Wednesday, Thursday, Friday]
   opens: "09:00"
@@ -13,6 +19,9 @@ price_list:
   - service: Residential conveyancing sale
     price: "£850–£1,250 plus VAT and disbursements"
     notes: "Illustrative demo range; actual scope and disbursements affect the total."
+  - service: Residential remortgage
+    price: "£595 plus VAT and disbursements"
+    notes: "Fixed fee; disbursements are additional."
   - service: Employment settlement agreement review
     price: "£500–£900 plus VAT"
     notes: "Illustrative demo range; confirm scope and any employer contribution."

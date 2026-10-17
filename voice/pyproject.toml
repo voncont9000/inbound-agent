@@ -8,6 +8,9 @@ dependencies = [
     "pydantic>=2.10,<3",
     "pyyaml>=6.0,<7",
     "email-validator>=2.2,<3",
+    "trafilatura>=2.3.1",
+    "pypdf>=6.21.1",
+    "python-docx>=1.2.0",
 ]
 
 [build-system]

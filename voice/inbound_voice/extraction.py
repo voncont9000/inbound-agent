@@ -42,6 +42,7 @@ async def extract_intake(
             "fields": {},
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
+            "unanswered_questions": [],
             "usage": {"input_tokens": 0, "output_tokens": 0},
         }
     try:
@@ -90,6 +91,7 @@ async def extract_intake(
             "fields": fields,
             "callback_requested": _callback_request(parsed.get("callback_requested")),
             "complaint": _complaint(parsed.get("complaint")),
+            "unanswered_questions": _unanswered_questions(parsed.get("unanswered_questions")),
             "usage": _usage(response),
         }
     except Exception as error:
@@ -100,6 +102,7 @@ async def extract_intake(
             "fields": {},
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
+            "unanswered_questions": [],
             "usage": {"input_tokens": 0, "output_tokens": 0},
             "error": f"{type(error).__name__}: {error}",
         }
@@ -311,6 +314,32 @@ def _complaint(value: Any) -> dict[str, Any]:
     return {"made": bool(value.get("made", False)), "summary": value.get("summary")}
 
 
+def _unanswered_questions(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    return [
+        {"question": item["question"], "evidence": item["evidence"]}
+        for item in value
+        if isinstance(item, dict)
+        and isinstance(item.get("question"), str)
+        and item["question"].strip()
+        and isinstance(item.get("evidence"), str)
+    ]
+
+
+def build_knowledge_gap_tasks(unanswered_questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "knowledge_gap",
+            "question": item["question"],
+            "evidence": item["evidence"],
+            "source": "post_call",
+        }
+        for item in unanswered_questions
+        if item.get("question") and item.get("evidence")
+    ]
+
+
 async def reextract_run(
     run_dir: str | Path,
     config_path: str | Path | None = None,
@@ -346,9 +375,17 @@ async def reextract_run(
     _write_json(directory / "intake.json", merged)
     tasks_path = directory / "tasks.json"
     tasks = json.loads(tasks_path.read_text(encoding="utf-8")) if tasks_path.exists() else []
+    tasks = [task for task in tasks if task.get("type") != "knowledge_gap"]
+    _write_json(
+        directory / "knowledge_gaps.json",
+        {"unanswered_questions": result.get("unanswered_questions", [])},
+    )
     tasks.extend(
         {"created_at": datetime.now(UTC).isoformat(), **task}
-        for task in build_post_call_tasks(post_call, merged, config, tasks)
+        for task in [
+            *build_post_call_tasks(post_call, merged, config, tasks),
+            *build_knowledge_gap_tasks(result.get("unanswered_questions", [])),
+        ]
     )
     _write_json(tasks_path, tasks)
 
@@ -447,8 +484,26 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
                 "required": ["made", "summary"],
                 "additionalProperties": False,
             },
+            "unanswered_questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string"},
+                        "evidence": {"type": "string"},
+                    },
+                    "required": ["question", "evidence"],
+                    "additionalProperties": False,
+                },
+            },
         },
-        "required": ["service", "fields", "callback_requested", "complaint"],
+        "required": [
+            "service",
+            "fields",
+            "callback_requested",
+            "complaint",
+            "unanswered_questions",
+        ],
         "additionalProperties": False,
     }
 
@@ -471,6 +526,11 @@ def _extraction_prompt(
                 f"- {field.name} ({field.label}; type={field.type}{choices}): {field.description}"
             )
         services.append(f"{name} ({service.label}):\n" + "\n".join(field_lines))
+    unanswered_questions_instruction = (
+        "List in unanswered_questions each question the caller asked that the assistant did not "
+        "answer from business knowledge (it declined, said it would pass it on, or gave no "
+        "answer). Evidence must be an exact quote from the caller."
+    )
     return f"""Extract intake facts and requested post-call actions from this call.
 Use only facts stated by the caller. Return null for facts not stated. Dates must be ISO
 YYYY-MM-DD using today's date ({date.today().isoformat()}) to resolve relative dates.
@@ -483,6 +543,7 @@ Set confirmed_by_caller true only when the assistant read that value back and th
 affirmed it. Set callback_requested.requested only when the caller asked for a callback;
 include the reason and preferred time if stated. Set complaint.made only when the caller
 made a complaint, and summarize it briefly.
+{unanswered_questions_instruction}
 
 Confirmed live values:
 {json.dumps(live_intake, ensure_ascii=False)}

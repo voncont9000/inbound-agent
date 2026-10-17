@@ -102,9 +102,9 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-C3: The assistant can read only fields the owner allows (allowed contact fields).
 
 ### 7.7 Knowledge
-- FR-K1: Sources: company info (markdown), FAQ entries, website crawl, uploaded PDFs/DOCX, opening hours with holidays.
-- FR-K2: RAG retrieval with citations stored in the run log. Answers outside the knowledge are declined or escalated (no hallucinated prices or availability).
-- FR-K3: **Knowledge gaps:** unanswered questions are clustered and listed. Resolving one creates a knowledge entry.
+- FR-K1: Sources: company info (markdown), FAQ entries, website crawl, uploaded PDFs/DOCX, opening hours with holidays. **M0:** YAML FAQs and a CLI importer support website, PDF, DOCX, TXT, and Markdown sources; imports write a digest, manifest, and hashed chunks.
+- FR-K2: RAG retrieval with citations stored in the run log. Answers outside the knowledge are declined or escalated (no hallucinated prices or availability). **M0:** the cited digest is loaded into the prompt for low-latency answers; unknown questions are declined and passed to the team. Chunks are reserved for M1 pgvector retrieval.
+- FR-K3: **Knowledge gaps:** unanswered questions are clustered and listed. Resolving one creates a knowledge entry. **M0:** post-call extraction records unanswered questions and exact caller evidence in `knowledge_gaps.json` and creates `knowledge_gap` tasks; clustering and resolution remain future work.
 
 ### 7.8 Integrations and tools
 **v1**

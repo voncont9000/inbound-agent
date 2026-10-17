@@ -33,6 +33,9 @@ def score_call(
     user_text = " ".join(
         str(row.get("text", "")) for row in transcript if row.get("role") in {"caller", "user"}
     )
+    assistant_text = " ".join(
+        str(row.get("text", "")) for row in transcript if row.get("role") == "assistant"
+    )
     intake = _read_json(directory / "intake.json", {})
     tasks = _read_json(directory / "tasks.json", [])
     metrics = _read_json(directory / "metrics.json", {})
@@ -44,6 +47,13 @@ def score_call(
             "passed": re.search(pattern, user_text, re.IGNORECASE) is not None,
         }
         for name, pattern in scenario.get("transcript_checks", {}).items()
+    }
+    assistant_checks = {
+        name: {
+            "pattern": pattern,
+            "passed": re.search(pattern, assistant_text, re.IGNORECASE) is not None,
+        }
+        for name, pattern in scenario.get("assistant_checks", {}).items()
     }
     fields = intake.get("fields", {}) if isinstance(intake, dict) else {}
     patterns = scenario.get("intake_checks", {})
@@ -83,7 +93,30 @@ def score_call(
             "passed": actual is expected,
         }
 
-    checks = [*transcript_checks.values(), *intake_checks.values(), *task_checks.values()]
+    knowledge_gaps = _read_json(directory / "knowledge_gaps.json", {})
+    unanswered = knowledge_gaps.get("unanswered_questions", [])
+    gap_text = " ".join(str(item.get("question", "")) for item in unanswered)
+    all_gap_text = json.dumps(knowledge_gaps, ensure_ascii=False)
+    knowledge_gap_checks = {}
+    for name, spec in scenario.get("knowledge_gap_checks", {}).items():
+        pattern = spec["pattern"]
+        expected_present = spec.get("present", True)
+        text = all_gap_text if spec.get("scope") == "all" else gap_text
+        actual_present = re.search(pattern, text, re.IGNORECASE) is not None
+        knowledge_gap_checks[name] = {
+            "pattern": pattern,
+            "expected_present": expected_present,
+            "actual_present": actual_present,
+            "passed": actual_present is expected_present,
+        }
+
+    checks = [
+        *transcript_checks.values(),
+        *assistant_checks.values(),
+        *intake_checks.values(),
+        *task_checks.values(),
+        *knowledge_gap_checks.values(),
+    ]
     price_table = prices if prices is not None else load_price_table(PRICES_PATH)
     cost = calculate_cost(metrics, price_table)
     service_metrics = metrics.get("service_metrics", [])
@@ -101,6 +134,8 @@ def score_call(
         "call_id": metrics.get("call_id", directory.name),
         "run_dir": str(directory),
         "transcript_checks": transcript_checks,
+        "assistant_checks": assistant_checks,
+        "knowledge_gap_checks": knowledge_gap_checks,
         "intake_checks": intake_checks,
         "live_intake_checks": live_intake_checks,
         "post_call_intake_checks": post_call_intake_checks,
