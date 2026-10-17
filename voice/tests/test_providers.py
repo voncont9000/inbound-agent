@@ -6,12 +6,15 @@ from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService, ElevenLabsTTSService
+from pipecat.services.google.llm import GoogleLLMService
+from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.soniox.stt import SonioxSTTService
 from pipecat.services.speechify.tts import SpeechifyHttpTTSService
 
 from inbound_voice.providers import (
     KEYTERMS,
     VoiceProviders,
+    create_llm,
     create_stt,
     create_tts,
     resolve_providers,
@@ -20,6 +23,7 @@ from inbound_voice.providers import (
 
 def _environment(**overrides: str) -> dict[str, str]:
     return {
+        "GOOGLE_API_KEY": "test-google-key",
         "OPENROUTER_API_KEY": "test-openrouter-key",
         "ASSEMBLYAI_API_KEY": "test-assemblyai-key",
         "SONIOX_API_KEY": "test-soniox-key",
@@ -38,6 +42,8 @@ def test_provider_defaults_and_normalization() -> None:
         tts="speechify",
         tts_voice=None,
         elevenlabs_model="eleven_v4_turbo",
+        llm="google",
+        llm_model="gemini-2.5-flash",
     )
     normalized = resolve_providers(
         _environment(STT_PROVIDER=" SONIOX ", TTS_PROVIDER=" DEEPGRAM ", TTS_VOICE=" voice ")
@@ -50,7 +56,8 @@ def test_provider_defaults_and_normalization() -> None:
 @pytest.mark.parametrize(
     ("variable", "overrides"),
     [
-        ("OPENROUTER_API_KEY", {}),
+        ("GOOGLE_API_KEY", {}),
+        ("OPENROUTER_API_KEY", {"LLM_PROVIDER": "openrouter"}),
         ("ASSEMBLYAI_API_KEY", {}),
         ("SONIOX_API_KEY", {"STT_PROVIDER": "soniox"}),
         ("DEEPGRAM_API_KEY", {"STT_PROVIDER": "deepgram"}),
@@ -70,6 +77,18 @@ def test_selected_provider_requires_api_key(variable: str, overrides: dict[str, 
 def test_unknown_provider_reports_allowed_values() -> None:
     with pytest.raises(ValueError, match="assemblyai, soniox, deepgram"):
         resolve_providers(_environment(STT_PROVIDER="unknown"))
+
+
+def test_openrouter_provider_uses_its_default_model() -> None:
+    providers = resolve_providers(_environment(LLM_PROVIDER="openrouter"))
+
+    assert providers.llm == "openrouter"
+    assert providers.llm_model == "google/gemini-2.5-flash"
+
+
+def test_unknown_llm_provider_reports_allowed_values() -> None:
+    with pytest.raises(ValueError, match="google, openrouter"):
+        resolve_providers(_environment(LLM_PROVIDER="unknown"))
 
 
 def test_elevenlabs_requires_voice_id() -> None:
@@ -137,3 +156,20 @@ def test_create_tts() -> None:
     assert elevenlabs_flash._settings.voice == "elevenlabs-voice-id"
     assert isinstance(deepgram, DeepgramTTSService)
     assert deepgram._settings.voice == "aura-2-pandora-en"
+
+
+def test_create_llm() -> None:
+    google_env = _environment()
+    google = create_llm(resolve_providers(google_env), google_env, "system prompt")
+
+    assert isinstance(google, GoogleLLMService)
+    assert google._settings.model == "gemini-2.5-flash"
+    assert google._settings.system_instruction == "system prompt"
+    assert google._settings.thinking.thinking_budget == 0
+
+    openrouter_env = _environment(LLM_PROVIDER="openrouter")
+    openrouter = create_llm(resolve_providers(openrouter_env), openrouter_env, "system prompt")
+
+    assert isinstance(openrouter, OpenRouterLLMService)
+    assert openrouter._settings.model == "google/gemini-2.5-flash"
+    assert openrouter._settings.system_instruction == "system prompt"

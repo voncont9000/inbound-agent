@@ -14,7 +14,7 @@ Browser SmallWebRTC / Twilio Media Streams
        Silero VAD + local Smart Turn v3
                   │
                   ▼
- OpenRouter LLM (configurable model, function tools)
+ Google Gemini API LLM (OpenRouter optional, function tools)
                   │
                   ▼
  Speechify / ElevenLabs / Deepgram TTS
@@ -34,16 +34,17 @@ storage; Google Sheets and email sinks are intentionally deferred.
 
 ## Provider choices and seams
 
-The speech providers are selected independently through `STT_PROVIDER` and `TTS_PROVIDER`.
-The provider-specific Pipecat service construction is isolated in
-`inbound_voice/providers.py`; the LLM remains OpenRouter.
+The STT, TTS, and LLM providers are selected independently through `STT_PROVIDER`,
+`TTS_PROVIDER`, and `LLM_PROVIDER`. Provider-specific Pipecat service construction is
+isolated in `inbound_voice/providers.py`.
 
 | Component | Provider | Model/configuration | Voice/key |
 |---|---|---|---|
 | STT | AssemblyAI | Universal-3.6 Pro Realtime; legal keyterms | `ASSEMBLYAI_API_KEY` |
 | STT | Soniox | `stt-rt-v5`; English hint and legal context terms | `SONIOX_API_KEY` |
 | STT | Deepgram | Nova-3, `en-GB`, legal keyterms | `DEEPGRAM_API_KEY` |
-| LLM | OpenRouter | `LLM_MODEL`, default `google/gemini-2.5-flash` | `OPENROUTER_API_KEY` |
+| LLM | Google Gemini API | `LLM_MODEL`, default `gemini-2.5-flash` | `GOOGLE_API_KEY` |
+| LLM | OpenRouter (optional) | `LLM_MODEL`, default `google/gemini-2.5-flash` | `OPENROUTER_API_KEY` |
 | TTS | Speechify | Simba 3.2 | `SPEECHIFY_API_KEY`; optional `TTS_VOICE`, default `beatrice_32` (en-GB) |
 | TTS | ElevenLabs | `ELEVENLABS_MODEL`, default `eleven_v4_turbo` | `ELEVENLABS_API_KEY`; required `TTS_VOICE` ID; suggested Katie X `MzqUf1HbJ8UmQ0wUsx2p`, built-in Alice alternative `Xb7hH8MSUJpSbSDYk0k2` |
 | TTS | Deepgram | Aura-2 | `DEEPGRAM_API_KEY`; optional `TTS_VOICE`, default `aura-2-pandora-en` |
@@ -57,10 +58,14 @@ ElevenLabs voices can be listed with `GET /v2/voices`; shared British conversati
 voices can be searched with `GET /v1/shared-voices?language=en&accent=british&use_cases=conversational`.
 
 - **Speech providers** use separate API keys, except Deepgram uses one key for either
-  selected side. `OPENROUTER_API_KEY` is always required.
-- **OpenRouter** provides a common OpenAI-compatible interface to an environment-selected
-  model. `LLM_MODEL` defaults to `google/gemini-2.5-flash`; replacing the LLM service does
-  not affect the turn or sink interfaces.
+  selected side. Google is the default LLM provider and requires `GOOGLE_API_KEY`;
+  `OPENROUTER_API_KEY` is required only when `LLM_PROVIDER=openrouter`.
+- **Google Gemini API** uses Pipecat's `GoogleLLMService`; `gemini-2.5-flash` is the
+  default model. Thinking is explicitly disabled with `thinking_budget=0` to avoid
+  Gemini 2.5 Flash's dynamic-thinking latency.
+- **OpenRouter** remains an optional OpenAI-compatible LLM provider. Its default model is
+  `google/gemini-2.5-flash`; replacing the LLM service does not affect the turn or sink
+  interfaces.
 - **Pipecat** owns real-time orchestration, WebRTC/Twilio transports, service metrics, and
   interruption handling. A firm config and intake tool layer keep product policy apart
   from vendor-specific adapters.
@@ -95,11 +100,13 @@ characters, and call duration.
 
 Estimated cost uses provider-specific STT per-minute rates multiplied by full call
 duration (the stream/session remains open for the call), provider-specific TTS rates per
-1,000 synthesized characters, model-specific OpenRouter input/output rates per million
-tokens, and UK local Twilio inbound per minute. Measured STT audio seconds remain in usage
+1,000 synthesized characters, model-specific Google Gemini or OpenRouter input/output rates
+per million tokens, and UK local Twilio inbound per minute. Measured STT audio seconds remain in usage
 metrics for information but do not determine STT cost. `prices.yaml` records vendor
-sources and check dates; older metrics without provider metadata default to Deepgram and
-Gemini 2.5 Flash.
+sources and check dates; Google Gemini prices use the official
+[Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing), paid-tier text
+rates. OpenRouter prices are retained for the optional provider. Older metrics without
+provider metadata default to Deepgram and Gemini 2.5 Flash.
 Missing price or usage components are reported as unknown, not silently treated as a
 zero-cost service. Twilio number rental and taxes are excluded.
 

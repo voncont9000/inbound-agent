@@ -32,6 +32,28 @@ prices:
     checked: "2026-10-17"
     details: "Flash/Turbo API rate $0.04 per 1,000 characters; Artificial Analysis lists Eleven v4 Turbo at $40/1M. Non-turbo eleven_v4 is $0.08 and is not used."
   llm_models:
+    gemini-2.5-flash:
+      input_per_1m_tokens:
+        value: 0.3
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, text input, USD per 1M tokens."
+      output_per_1m_tokens:
+        value: 2.5
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, output including thinking tokens, USD per 1M tokens."
+    gemini-2.5-flash-lite:
+      input_per_1m_tokens:
+        value: 0.1
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, text input, USD per 1M tokens."
+      output_per_1m_tokens:
+        value: 0.4
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, output including thinking tokens, USD per 1M tokens."
     google/gemini-2.5-flash:
       input_per_1m_tokens:
         value: 0.3

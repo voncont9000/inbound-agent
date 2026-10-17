@@ -5,6 +5,7 @@
   "providers": {
     "stt": "assemblyai",
     "tts": "speechify",
+    "llm": "openrouter",
     "llm_model": "google/gemini-2.5-flash"
   },
   "usage": {

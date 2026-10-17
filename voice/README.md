@@ -12,8 +12,8 @@ uv sync
 cp .env.example .env
 ```
 
-Set `OPENROUTER_API_KEY` and the API key for each selected speech provider in `.env`.
-`OPENROUTER_API_KEY` is always required. The default selection is
+Set `GOOGLE_API_KEY` and the API key for each selected speech provider in `.env`.
+`OPENROUTER_API_KEY` is needed only when `LLM_PROVIDER=openrouter`. The default selection is
 `STT_PROVIDER=assemblyai` and `TTS_PROVIDER=speechify`, requiring
 `ASSEMBLYAI_API_KEY` and `SPEECHIFY_API_KEY`. Use `SONIOX_API_KEY` for Soniox,
 `ELEVENLABS_API_KEY` for ElevenLabs, and `DEEPGRAM_API_KEY` when either provider is
@@ -23,8 +23,14 @@ Deepgram. The demo firm, fees, and price table are illustrative.
 
 Change `STT_PROVIDER` and `TTS_PROVIDER` in `.env`, then restart the runner to A/B providers.
 Supported STT values are `assemblyai`, `soniox`, and `deepgram`; supported TTS values are
-`speechify`, `elevenlabs`, and `deepgram`. The LLM stays on OpenRouter:
-`LLM_MODEL` defaults to `google/gemini-2.5-flash`.
+`speechify`, `elevenlabs`, and `deepgram`. `LLM_PROVIDER` defaults to `google`; the optional
+`openrouter` provider remains available. `LLM_MODEL` defaults to `gemini-2.5-flash` for Google
+and `google/gemini-2.5-flash` for OpenRouter.
+
+Google's Gemini 2.5 Flash uses `thinking_budget=0` to disable dynamic thinking and reduce
+response latency. The paid-tier text rates are $0.30 input / $2.50 output per 1M tokens for
+Flash and $0.10 / $0.40 for Flash-Lite, from Google's
+[Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing).
 
 `TTS_VOICE` is optional for Speechify and Deepgram. Speechify defaults to `beatrice_32`
 (a user-verified en-GB voice for Simba 3.2). List available Speechify voices with:

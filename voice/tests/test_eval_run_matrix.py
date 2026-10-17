@@ -1,6 +1,6 @@
 import pytest
 
-from eval.run_matrix import PROVIDER_ERROR, _configure_tts_voice
+from eval.run_matrix import PROVIDER_ERROR, _configure_llm_provider, _configure_tts_voice
 
 
 def test_provider_error_detection_ignores_timestamp_status_fragment() -> None:
@@ -41,3 +41,16 @@ def test_matrix_runner_sets_provider_voice_defaults_and_overrides() -> None:
 
     _configure_tts_voice(process_env, "elevenlabs", elevenlabs_voice="custom-elevenlabs")
     assert process_env["TTS_VOICE"] == "custom-elevenlabs"
+
+
+def test_matrix_runner_sets_llm_provider_and_uses_provider_default_model() -> None:
+    process_env = {"LLM_MODEL": "inherited-custom-model"}
+
+    _configure_llm_provider(process_env, "google")
+    assert process_env["LLM_PROVIDER"] == "google"
+    assert "LLM_MODEL" not in process_env
+
+    process_env["LLM_MODEL"] = "inherited-custom-model"
+    _configure_llm_provider(process_env, "openrouter")
+    assert process_env["LLM_PROVIDER"] == "openrouter"
+    assert "LLM_MODEL" not in process_env

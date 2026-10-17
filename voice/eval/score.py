@@ -91,6 +91,8 @@ def score_call(
         "estimated_cost": cost,
         "ended_via_end_call": "end_call" in task_types,
         "tts_voice": provider_metadata.get("tts_voice"),
+        "llm": provider_metadata.get("llm"),
+        "llm_model": provider_metadata.get("llm_model"),
     }
 
 
@@ -140,6 +142,7 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
         "Kind",
         "STT",
         "TTS",
+        "LLM",
         "Voice",
         "Scenario",
         "Rep",
@@ -156,15 +159,18 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
         "end_call",
     )
     rows = []
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
     for call in calls:
         stt, tts = call.get("stt", "—"), call.get("tts", "—")
-        grouped.setdefault((stt, tts), []).append(call)
+        llm = str(call.get("llm") or "—")
+        llm_model = str(call.get("llm_model") or "—")
+        grouped.setdefault((stt, tts, llm, llm_model), []).append(call)
         rows.append(
             (
                 "Call",
                 stt,
                 tts,
+                _llm_label(llm, llm_model),
                 str(call.get("tts_voice") or "—"),
                 call.get("scenario", "—"),
                 str(call.get("rep", "—")),
@@ -181,13 +187,14 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 str(bool(call.get("ended_via_end_call"))),
             )
         )
-    for (stt, tts), combination_calls in grouped.items():
+    for (stt, tts, llm, llm_model), combination_calls in grouped.items():
         aggregate = aggregate_calls(combination_calls)
         rows.append(
             (
                 "Aggregate",
                 stt,
                 tts,
+                _llm_label(llm, llm_model),
                 ", ".join(
                     sorted(
                         {
@@ -251,6 +258,16 @@ def _money(value: Any) -> str:
 
 def _value(value: Any) -> str:
     return "—" if value is None else str(value)
+
+
+def _llm_label(provider: Any, model: Any) -> str:
+    if provider == "—" and model == "—":
+        return "—"
+    if provider == "—":
+        return str(model)
+    if model == "—":
+        return str(provider)
+    return f"{provider} ({model})"
 
 
 def _cost(call: dict[str, Any]) -> str:

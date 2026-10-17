@@ -155,7 +155,7 @@ See [context-graph.md](./context-graph.md) for research and design.
 
 ## 9. Proposed architecture (v1)
 - **Backend:** TypeScript (Node) API plus workers. Postgres with pgvector for data, RAG and the customer context graph (row-level security per tenant). Redis for realtime session state. A durable job queue for email and WhatsApp runs.
-- **Voice gateway:** a separate realtime service handling telephony media streams (Twilio Media Streams / SIP). Built in-house, not on Vapi/Retell. M0 provider candidates are AssemblyAI, Soniox or Deepgram for STT; OpenRouter for the LLM; and Speechify, ElevenLabs or Deepgram for TTS. Open-source orchestration libraries (e.g. Pipecat, LiveKit Agents) are allowed inside our own service.
+- **Voice gateway:** a separate realtime service handling telephony media streams (Twilio Media Streams / SIP). Built in-house, not on Vapi/Retell. M0 provider candidates are AssemblyAI, Soniox or Deepgram for STT; Google Gemini API for the LLM (OpenRouter optional); and Speechify, ElevenLabs or Deepgram for TTS. Open-source orchestration libraries (e.g. Pipecat, LiveKit Agents) are allowed inside our own service.
 - **Channel adapters:** Gmail (Pub/Sub watch plus History API), WhatsApp Cloud API webhooks, telephony. All channels normalise into one `Conversation`/`Message` model and one agent runtime with shared tools.
 - **Frontend:** React web app (assistant setup, inbox, contacts, knowledge, analytics).
 

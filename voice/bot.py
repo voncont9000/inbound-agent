@@ -23,7 +23,6 @@ from pipecat.runner.run import main
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.llm_service import FunctionCallParams
-from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
 from pipecat.turns.user_start import VADUserTurnStartStrategy
@@ -33,7 +32,7 @@ from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from inbound_voice.config import load_firm_config
 from inbound_voice.metrics import CallMetricsObserver
 from inbound_voice.prompts import render_system_prompt
-from inbound_voice.providers import create_stt, create_tts, resolve_providers
+from inbound_voice.providers import create_llm, create_stt, create_tts, resolve_providers
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
 
@@ -75,7 +74,6 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
 
 async def run_bot(transport: object, telephony: bool = False) -> None:
     providers = resolve_providers(os.environ)
-    llm_model = os.getenv("LLM_MODEL", "google/gemini-2.5-flash")
     call_id = str(uuid.uuid4())
     sink = LocalFilesCallSink(ROOT / "runs", call_id)
     metrics_observer = CallMetricsObserver(
@@ -85,7 +83,8 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
             "stt": providers.stt,
             "tts": providers.tts,
             "tts_voice": providers.tts_voice,
-            "llm_model": llm_model,
+            "llm": providers.llm,
+            "llm_model": providers.llm_model,
         },
     )
     call_tools = CallTools(sink)
@@ -93,14 +92,7 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
 
     async with aiohttp.ClientSession() as session:
         stt = create_stt(providers, os.environ)
-        llm = OpenRouterLLMService(
-            api_key=os.environ["OPENROUTER_API_KEY"],
-            settings=OpenRouterLLMService.Settings(
-                model=llm_model,
-                system_instruction=render_system_prompt(firm),
-                temperature=0.2,
-            ),
-        )
+        llm = create_llm(providers, os.environ, render_system_prompt(firm))
         tts = create_tts(providers, os.environ, session)
         context = LLMContext(tools=create_function_schemas(call_tools))
         context_aggregators = LLMContextAggregatorPair(

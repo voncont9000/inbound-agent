@@ -18,7 +18,7 @@ import aiohttp
 from eval.caller import run_call
 from eval.score import render_summary, score_call
 from eval.synth_callers import AUDIO_DIR, synthesize_scenarios
-from inbound_voice.providers import STT_PROVIDERS, TTS_PROVIDERS
+from inbound_voice.providers import LLM_DEFAULT_MODELS, LLM_PROVIDERS, STT_PROVIDERS, TTS_PROVIDERS
 
 VOICE_ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = VOICE_ROOT / "runs"
@@ -28,6 +28,7 @@ DEFAULT_SPEECHIFY_VOICE = "beatrice_32"
 DEFAULT_ELEVENLABS_VOICE = "MzqUf1HbJ8UmQ0wUsx2p"
 API_KEY_NAMES = (
     "OPENROUTER_API_KEY",
+    "GOOGLE_API_KEY",
     "ASSEMBLYAI_API_KEY",
     "SONIOX_API_KEY",
     "SPEECHIFY_API_KEY",
@@ -70,9 +71,15 @@ def _configure_tts_voice(
         process_env["TTS_VOICE"] = elevenlabs_voice or DEFAULT_ELEVENLABS_VOICE
 
 
+def _configure_llm_provider(process_env: dict[str, str], llm: str) -> None:
+    process_env["LLM_PROVIDER"] = llm
+    process_env.pop("LLM_MODEL", None)
+
+
 async def _start_runner(
     stt: str,
     tts: str,
+    llm: str,
     speechify_voice: str | None = None,
     elevenlabs_voice: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
@@ -80,6 +87,7 @@ async def _start_runner(
     process_env["STT_PROVIDER"] = stt
     process_env["TTS_PROVIDER"] = tts
     _configure_tts_voice(process_env, tts, speechify_voice, elevenlabs_voice)
+    _configure_llm_provider(process_env, llm)
     process = await asyncio.create_subprocess_exec(
         "uv",
         "run",
@@ -205,6 +213,7 @@ async def run_matrix(
     repetitions: Sequence[int],
     speechify_voice: str | None = None,
     elevenlabs_voice: str | None = None,
+    llm_providers: Sequence[str] = ("google",),
 ) -> Path:
     from eval.synth_callers import load_scenarios
 
@@ -223,63 +232,73 @@ async def run_matrix(
 
     for stt in dict.fromkeys(stt_providers):
         for tts in dict.fromkeys(tts_providers):
-            print(f"\n=== Starting runner for STT={stt}, TTS={tts} ===")
-            process, output_task, output_lines = await _start_runner(
-                stt, tts, speechify_voice, elevenlabs_voice
-            )
-            try:
-                for scenario_name in scenario_names:
-                    for repetition in repetitions:
-                        before = _existing_run_dirs()
-                        scratch = (
-                            results_dir / "calls" / f"{stt}-{tts}-{scenario_name}-rep{repetition}"
-                        )
-                        timeline = await run_call(
-                            scenario_name,
-                            scratch,
-                            base_url=RUNNER_URL,
-                            audio_dir=AUDIO_DIR,
-                        )
-                        run_dir = await _newest_run_dir(before)
-                        if run_dir is not None:
-                            for filename in ("bot_audio.wav", "caller_timeline.json"):
-                                source = scratch / filename
-                                if source.exists():
-                                    shutil.copy2(source, run_dir / filename)
-                            scored = score_call(run_dir, scenarios[scenario_name])
-                            scored["run_dir"] = str(run_dir)
-                        else:
-                            scored = score_call(scratch, scenarios[scenario_name])
-                            scored["run_dir"] = None
-                        scored.update(
-                            {
-                                "stt": stt,
-                                "tts": tts,
-                                "scenario": scenario_name,
-                                "rep": repetition,
-                                "caller_error": timeline.get("error"),
-                                "caller_timeline_path": (
-                                    str(run_dir / "caller_timeline.json")
-                                    if run_dir is not None
-                                    else str(scratch / "caller_timeline.json")
-                                ),
-                            }
-                        )
-                        calls.append(scored)
-                        if timeline.get("error"):
-                            caller_errors.append(
-                                f"{stt}/{tts}/{scenario_name} rep {repetition}: {timeline['error']}"
+            for llm in dict.fromkeys(llm_providers):
+                print(f"\n=== Starting runner for STT={stt}, TTS={tts}, LLM={llm} ===")
+                process, output_task, output_lines = await _start_runner(
+                    stt, tts, llm, speechify_voice, elevenlabs_voice
+                )
+                try:
+                    for scenario_name in scenario_names:
+                        for repetition in repetitions:
+                            before = _existing_run_dirs()
+                            scratch = (
+                                results_dir
+                                / "calls"
+                                / f"{stt}-{tts}-{llm}-{scenario_name}-rep{repetition}"
                             )
-                        found_errors = [
-                            line for line in output_lines if PROVIDER_ERROR.search(line)
-                        ]
-                        if found_errors:
-                            provider_errors.extend(found_errors)
+                            timeline = await run_call(
+                                scenario_name,
+                                scratch,
+                                base_url=RUNNER_URL,
+                                audio_dir=AUDIO_DIR,
+                            )
+                            run_dir = await _newest_run_dir(before)
+                            if run_dir is not None:
+                                for filename in ("bot_audio.wav", "caller_timeline.json"):
+                                    source = scratch / filename
+                                    if source.exists():
+                                        shutil.copy2(source, run_dir / filename)
+                                scored = score_call(run_dir, scenarios[scenario_name])
+                                scored["run_dir"] = str(run_dir)
+                            else:
+                                scored = score_call(scratch, scenarios[scenario_name])
+                                scored["run_dir"] = None
+                            scored.update(
+                                {
+                                    "stt": stt,
+                                    "tts": tts,
+                                    "llm": llm,
+                                    "llm_model": (
+                                        scored.get("llm_model") or LLM_DEFAULT_MODELS[llm]
+                                    ),
+                                    "scenario": scenario_name,
+                                    "rep": repetition,
+                                    "caller_error": timeline.get("error"),
+                                    "caller_timeline_path": (
+                                        str(run_dir / "caller_timeline.json")
+                                        if run_dir is not None
+                                        else str(scratch / "caller_timeline.json")
+                                    ),
+                                }
+                            )
+                            calls.append(scored)
+                            if timeline.get("error"):
+                                caller_errors.append(
+                                    f"{stt}/{tts}/{scenario_name} rep {repetition}: "
+                                    f"{timeline['error']}"
+                                )
+                            found_errors = [
+                                line for line in output_lines if PROVIDER_ERROR.search(line)
+                            ]
+                            if found_errors:
+                                provider_errors.extend(found_errors)
+                                break
+                        if provider_errors:
                             break
-                    if provider_errors:
-                        break
-            finally:
-                await _stop_runner(process, output_task)
+                finally:
+                    await _stop_runner(process, output_task)
+                if provider_errors:
+                    break
             if provider_errors:
                 break
         if provider_errors:
@@ -314,6 +333,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run scripted voice-provider A/B calls.")
     parser.add_argument("--stt", nargs="+", choices=STT_PROVIDERS, required=True)
     parser.add_argument("--tts", nargs="+", choices=TTS_PROVIDERS, required=True)
+    parser.add_argument("--llm", nargs="+", choices=LLM_PROVIDERS, default=["google"])
     parser.add_argument("--scenario", nargs="+", required=True)
     parser.add_argument("--reps", nargs="+", type=int, required=True)
     parser.add_argument("--speechify-voice")
@@ -327,6 +347,7 @@ def main() -> None:
             arguments.reps,
             arguments.speechify_voice,
             arguments.elevenlabs_voice,
+            arguments.llm,
         )
     )
 

@@ -30,6 +30,7 @@ def test_report_cli_on_fixture_runs(tmp_path) -> None:
                     "stt": "assemblyai",
                     "tts": "speechify",
                     "tts_voice": None,
+                    "llm": "openrouter",
                     "llm_model": "google/gemini-2.5-flash-lite",
                 },
                 "usage": {
@@ -62,7 +63,9 @@ def test_report_cli_on_fixture_runs(tmp_path) -> None:
     assert "USD" in output
     assert "STT" in output
     assert "TTS" in output
+    assert "LLM" in output
     assert "LLM MODEL" in output
     assert "assemblyai" in output
     assert "speechify" in output
+    assert "openrouter" in output
     assert "google/gemini-2.5-flash-lite" in output
