@@ -9,7 +9,7 @@ from inbound_voice.tools import DEFAULT_CONFIG_PATH, CallTools, tool_specs
 def test_tool_specs_include_only_enabled_actions_and_no_save_intake() -> None:
     names = {spec["name"] for spec in tool_specs()}
 
-    assert names == {"end_call"}
+    assert names == set()
     assert "save_intake" not in names
 
 

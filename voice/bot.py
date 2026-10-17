@@ -14,13 +14,18 @@ from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     EndWorkerFrame,
+    FunctionCallResultProperties,
     LLMRunFrame,
     TranscriptionFrame,
+    TTSSpeakFrame,
     TTSTextFrame,
     UserStartedSpeakingFrame,
+    UserStoppedSpeakingFrame,
     VADUserStartedSpeakingFrame,
+    VADUserStoppedSpeakingFrame,
 )
 from pipecat.observers.base_observer import BaseObserver
 from pipecat.pipeline.pipeline import Pipeline
@@ -58,7 +63,10 @@ from inbound_voice.tools import CallTools, tool_specs
 ROOT = Path(__file__).resolve().parent
 ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
 EXTRACTION_TIMEOUT_SECONDS = 60
-HANGUP_FALLBACK_SECONDS = 1.5
+GOODBYE_HANGUP_SECONDS = 1.5
+IDLE_PROMPT_DEFAULT_SECONDS = 8.0
+IDLE_PROMPT_TEXT = "Are you still there?"
+IDLE_GOODBYE_TEXT = "I'll end the call now. Thank you for calling. Goodbye."
 CLOSING_PHRASE = re.compile(
     r"\b(?:goodbye|bye|that['’]s all|that['’]s everything|thank you,\s*bye)\b",
     re.IGNORECASE,
@@ -66,7 +74,7 @@ CLOSING_PHRASE = re.compile(
 ASSISTANT_GOODBYE = re.compile(r"\b(?:goodbye|bye)\b", re.IGNORECASE)
 
 
-def should_fallback_end_call(
+def should_goodbye_detected_end_call(
     caller_text: str,
     assistant_text: str,
     *,
@@ -79,13 +87,13 @@ def should_fallback_end_call(
     )
 
 
-class GoodbyeHangupFallback(BaseObserver):
+class GoodbyeDetectedHangup(BaseObserver):
     def __init__(
         self,
         sink: LocalFilesCallSink,
         call_tools: CallTools,
         push_end_worker: Any,
-        delay_seconds: float = HANGUP_FALLBACK_SECONDS,
+        delay_seconds: float = GOODBYE_HANGUP_SECONDS,
     ) -> None:
         super().__init__(observe_every_push=False)
         self.sink = sink
@@ -110,7 +118,7 @@ class GoodbyeHangupFallback(BaseObserver):
         elif isinstance(frame, BotStoppedSpeakingFrame):
             assistant_text = " ".join(self.assistant_text)
             self.assistant_text.clear()
-            if should_fallback_end_call(
+            if should_goodbye_detected_end_call(
                 self.last_caller_final,
                 assistant_text,
                 end_call_received=self.call_tools.end_call_requested,
@@ -138,18 +146,121 @@ class GoodbyeHangupFallback(BaseObserver):
             return
         if generation != self._generation or self.call_tools.end_call_requested:
             return
-        self.sink.append_task("end_call", {"source": "fallback"})
+        self.sink.append_task("end_call", {"source": "goodbye_detected"})
         await self.push_end_worker()
+
+
+class IdleHangupObserver(BaseObserver):
+    def __init__(
+        self,
+        sink: LocalFilesCallSink,
+        queue_frame: Any,
+        push_end_worker: Any,
+        idle_seconds: float = IDLE_PROMPT_DEFAULT_SECONDS,
+    ) -> None:
+        super().__init__(observe_every_push=False)
+        self.sink = sink
+        self.queue_frame = queue_frame
+        self.push_end_worker = push_end_worker
+        self.idle_seconds = idle_seconds
+        self.pending: asyncio.Task[None] | None = None
+        self._generation = 0
+        self._phase = "conversation"
+        self._bot_speaking = False
+        self._caller_speaking = False
+
+    async def on_push_frame(self, data: Any) -> None:
+        frame = data.frame
+        if isinstance(frame, EndWorkerFrame):
+            self._cancel_timer()
+            self._phase = "done"
+        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
+            self._caller_speaking = True
+            self._cancel_timer()
+            if self._phase != "done":
+                self._phase = "conversation"
+        elif isinstance(frame, (UserStoppedSpeakingFrame, VADUserStoppedSpeakingFrame)):
+            self._caller_speaking = False
+        elif isinstance(frame, BotStartedSpeakingFrame):
+            self._bot_speaking = True
+            if self._phase == "prompt_queued":
+                self._phase = "prompt_speaking"
+            elif self._phase == "goodbye_queued":
+                self._phase = "goodbye_speaking"
+            elif self._phase != "done":
+                self._cancel_timer()
+                self._phase = "conversation"
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self._bot_speaking = False
+            if self._phase == "prompt_speaking":
+                self._schedule("waiting_goodbye", "goodbye_queued", IDLE_GOODBYE_TEXT)
+            elif self._phase == "goodbye_speaking":
+                self._phase = "done"
+                self.sink.append_task("end_call", {"source": "idle"})
+                await self.push_end_worker()
+            elif self._phase not in {"prompt_queued", "goodbye_queued", "done"}:
+                if not self._caller_speaking:
+                    self._schedule("waiting_prompt", "prompt_queued", IDLE_PROMPT_TEXT)
+
+    def close(self) -> None:
+        self._cancel_timer()
+        self._phase = "done"
+
+    def _cancel_timer(self) -> None:
+        self._generation += 1
+        if self.pending is not None:
+            self.pending.cancel()
+            self.pending = None
+
+    def _schedule(self, waiting_phase: str, queued_phase: str, text: str) -> None:
+        self._cancel_timer()
+        self._phase = waiting_phase
+        generation = self._generation
+        self.pending = asyncio.create_task(
+            self._speak_after_idle(generation, waiting_phase, queued_phase, text)
+        )
+
+    async def _speak_after_idle(
+        self,
+        generation: int,
+        waiting_phase: str,
+        queued_phase: str,
+        text: str,
+    ) -> None:
+        try:
+            await asyncio.sleep(self.idle_seconds)
+        except asyncio.CancelledError:
+            return
+        if (
+            generation != self._generation
+            or self._phase != waiting_phase
+            or self._bot_speaking
+            or self._caller_speaking
+        ):
+            return
+        self.pending = None
+        self._phase = queued_phase
+        await self.queue_frame(TTSSpeakFrame(text))
 
 
 def smart_turn_stop_secs(env: Mapping[str, str]) -> float:
     try:
-        stop_secs = float(env.get("SMART_TURN_STOP_SECS", "2.0").strip())
+        stop_secs = float(env.get("SMART_TURN_STOP_SECS", "0.7").strip())
     except ValueError as error:
         raise ValueError("SMART_TURN_STOP_SECS must be a positive number.") from error
     if not math.isfinite(stop_secs) or stop_secs <= 0:
         raise ValueError("SMART_TURN_STOP_SECS must be a positive number.")
     return stop_secs
+
+
+def idle_prompt_secs(env: Mapping[str, str]) -> float:
+    try:
+        idle_seconds = float(env.get("IDLE_PROMPT_SECS", str(IDLE_PROMPT_DEFAULT_SECONDS)).strip())
+    except ValueError as error:
+        raise ValueError("IDLE_PROMPT_SECS must be a positive number.") from error
+    if not math.isfinite(idle_seconds) or idle_seconds <= 0:
+        raise ValueError("IDLE_PROMPT_SECS must be a positive number.")
+    return idle_seconds
 
 
 def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
@@ -158,7 +269,13 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
 
         async def handler(params: FunctionCallParams, tool_name: str = spec["name"]) -> None:
             result = call_tools.dispatch(tool_name, params.arguments)
-            await params.result_callback(result)
+            if tool_name == "end_call":
+                await params.result_callback(
+                    result,
+                    properties=FunctionCallResultProperties(run_llm=False),
+                )
+            else:
+                await params.result_callback(result)
             if tool_name == "end_call":
                 await params.llm.push_frame(EndWorkerFrame(), FrameDirection.UPSTREAM)
 
@@ -172,6 +289,11 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
             )
         )
     return schemas
+
+
+def create_llm_context(call_tools: CallTools) -> LLMContext:
+    schemas = create_function_schemas(call_tools)
+    return LLMContext(tools=schemas) if schemas else LLMContext()
 
 
 async def run_bot(transport: object, telephony: bool = False) -> None:
@@ -198,7 +320,7 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
         stt = create_stt(providers, os.environ)
         llm = create_llm(providers, os.environ, render_system_prompt(assistant))
         tts = create_tts(providers, os.environ, session)
-        context = LLMContext(tools=create_function_schemas(call_tools))
+        context = create_llm_context(call_tools)
         context_aggregators = LLMContextAggregatorPair(
             context,
             user_params=LLMUserAggregatorParams(
@@ -231,14 +353,23 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
         async def push_end_worker() -> None:
             await task.queue_frame(EndWorkerFrame())
 
-        hangup_fallback = GoodbyeHangupFallback(sink, call_tools, push_end_worker)
+        async def queue_frame(frame: Any) -> None:
+            await task.queue_frame(frame)
+
+        goodbye_hangup = GoodbyeDetectedHangup(sink, call_tools, push_end_worker)
+        idle_hangup = IdleHangupObserver(
+            sink,
+            queue_frame,
+            push_end_worker,
+            idle_seconds=idle_prompt_secs(os.environ),
+        )
         task = PipelineTask(
             pipeline,
             params=PipelineParams(
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[metrics_observer, hangup_fallback],
+            observers=[metrics_observer, goodbye_hangup, idle_hangup],
         )
 
         @transport.event_handler("on_client_connected")
@@ -252,7 +383,8 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
         try:
             await PipelineRunner().run(task)
         finally:
-            hangup_fallback.close()
+            goodbye_hangup.close()
+            idle_hangup.close()
             await finalize_call_intake(sink, assistant, metrics_observer, os.environ)
             metrics_observer.persist()
 

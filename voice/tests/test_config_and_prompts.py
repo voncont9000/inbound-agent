@@ -26,7 +26,7 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "call 999" in prompt
     assert "Today is 2026-10-17" in prompt
     assert "termination_date" in prompt
-    assert assistant.live_actions == ["end_call"]
+    assert assistant.live_actions == []
     assert "confirm_critical_fields" not in prompt
     assert "Speak British English." in prompt
     assert "acknowledge them briefly and continue" in prompt
@@ -38,7 +38,8 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "Do not call a tool to confirm critical fields" in prompt
     assert "creates an urgent task after the call" in prompt
     assert "Collect other details conversationally" in prompt
-    assert "end_call" in prompt
+    assert "No live actions are enabled." in prompt
+    assert "end_call" not in prompt
 
 
 def test_prompt_only_mentions_enabled_actions() -> None:

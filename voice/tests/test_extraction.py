@@ -117,6 +117,11 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
     assert '"2026-08-10: dismissed"' in client.models.arguments["contents"]
     assert schema == _extraction_schema(config)
     assert "1. caller:" in client.models.arguments["contents"]
+    assert (
+        "When the caller spells a value, preserve that spelling."
+        in client.models.arguments["contents"]
+    )
+    assert '"siobhan.mcallister@" means "Siobhan McAllister"' in client.models.arguments["contents"]
 
 
 def test_extraction_can_be_skipped_or_fail_without_raising() -> None:

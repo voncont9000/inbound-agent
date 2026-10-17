@@ -25,12 +25,14 @@ Deepgram. The demo business, fees, and price table are illustrative.
 `ASSISTANT_CONFIG` selects a business configuration (default
 `config/assistants/demo_firm.yaml`). It extends a template in `config/templates/`; the first
 template, `uk_law_firm.yaml`, supplies conveyancing and employment services, field
-definitions, safeguards, urgency rules, and enabled live actions. Assistant files override
+definitions, safeguards, urgency rules, and configurable live actions. Its live-action
+default is empty. Assistant files override
 template values using recursive dictionary merging; lists and scalar values replace the
 template values. Service fields and actions are data-driven so a future settings UI can
 edit the same configuration shape.
 
-Critical fields are confirmed during the call with `confirm_critical_fields`; other intake
+Critical fields are read back and confirmed verbally; the optional
+`confirm_critical_fields` action records that confirmation live when enabled. Other intake
 details are extracted after the call. `intake.live.json` records caller-confirmed values,
 `intake.post_call.json` records extracted values, and merged `intake.json` preserves
 provenance, confidence, alternatives, and `needs_review` flags for conflicts, invalid
@@ -40,7 +42,7 @@ The assistant speaks the configured `language` (the UK law-firm template uses Br
 English). The prompt acknowledges volunteered details, asks critical questions naturally,
 returns once to unanswered critical fields, and avoids repeating the same question twice
 in a row. Before ending, it reads back collected unconfirmed critical details together and
-waits for confirmation; enabled confirmation and end-call actions are then used in order.
+waits for confirmation. Enabled actions are called only when configured.
 
 Re-run extraction and the live/post-call merge for an existing call without starting a
 runner:
@@ -114,42 +116,31 @@ WebSocket service.
 
 ## Turn-taking
 
-`SMART_TURN_STOP_SECS` defaults to `2.0` seconds. Pipecat uses this silence timeout when
-Smart Turn judges an utterance incomplete; the first scripted smoke call fell back to its
-3-second default on four of eight turns, adding about 3.2 seconds before turn end.
+`SMART_TURN_STOP_SECS` defaults to `0.7` seconds. Pipecat uses this silence timeout when
+Smart Turn judges an utterance incomplete. Set `IDLE_PROMPT_SECS` (default `8`) to control
+the idle interval: after bot speech, the assistant asks “Are you still there?” and, after a
+second idle interval, says “I'll end the call now. Thank you for calling. Goodbye.” before
+ending the call. Caller speech resets the timer.
 
-The evaluation runner accepts `--smart-turn-stop-secs` to set and record this value for
-each runner; compare settings with `uv run python -m eval.run_matrix --smart-turn-stop-secs
-1.0 ...`.
+The evaluation runner accepts `--smart-turn-stop-secs` to set and record the value for
+each runner. Matrix summaries include caller-stop→turn-end, turn-end→LLM-first-token,
+LLM-first-token→TTS-first-audio stage medians and LLM TTFB. The template has no live
+actions enabled by default; each action, including `end_call`, can be enabled per
+assistant. When `end_call` is enabled, the goodbye is spoken in the same LLM response as
+the tool call, avoiding a follow-up inference. Caller-final keyword urgency rules always
+run live; date-deadline checks, callback requests, and complaints become post-call tasks.
+If the caller and assistant exchange a goodbye without an `end_call` tool, the bot hangs up
+1.5 seconds after bot speech stops unless the caller starts speaking again.
 
-The template enables only `end_call` as a live action by default. Other actions can be
-enabled per assistant. Caller-final keyword urgency rules remain live regardless of action
-settings; configured date-deadline checks, callback requests, and complaints also become
-post-call tasks from extraction. If caller and assistant exchange a goodbye but no
-`end_call` tool arrives, the bot ends the call 1.5 seconds after speaking finishes unless
-the caller starts speaking again.
+The 2.0s, 1.0s, and 0.5s rows summarize the previous two-call-per-scenario matrices. The
+0.7s row is the requested rep-3 run, with one call per scenario.
 
-The baseline turn-stage medians at a 2-second Smart Turn setting were: employment —
-caller stop→turn-end **2.200 s**, turn-end→LLM first token **0.276 s**, LLM first
-token→TTS first audio **0.399 s**; conveyancing — **0.305 s**, **0.170 s**, and
-**0.309 s** respectively. These were one call per scenario; matrix summaries now include
-the stage medians and LLM TTFB.
-The evaluation runner accepts `--smart-turn-stop-secs` to set and record this value for
-each runner; compare settings with `uv run python -m eval.run_matrix --smart-turn-stop-secs
-1.0 ...`.
-
-The template enables only `end_call` as a live action by default. Other actions can be
-enabled per assistant. Caller-final keyword urgency rules remain live regardless of action
-settings; configured date-deadline checks, callback requests, and complaints also become
-post-call tasks from extraction. If the caller and assistant exchange a goodbye but no
-`end_call` tool arrives, the bot ends the call 1.5 seconds after speaking finishes unless
-the caller starts speaking again.
-
-The baseline turn-stage medians at a 2-second Smart Turn setting were: employment —
-caller stop→turn-end **2.200 s**, turn-end→LLM first token **0.276 s**, LLM first
-token→TTS first audio **0.399 s**; conveyancing — **0.305 s**, **0.170 s**, and
-**0.309 s** respectively. These were one call per scenario; matrix summaries now include
-the stage medians and LLM TTFB.
+| Smart turn stop | Checks | Aggregate p50 | Maximum per-call p95 |
+|---:|---:|---:|---:|
+| 2.0s | 41/50 | 1.684s | 3.608s |
+| 1.0s | 43/50 | 1.204s | 2.992s |
+| 0.5s | 42/50 | 1.481s | 2.425s |
+| 0.7s | 22/25 | 1.313s | 1.915s |
 
 ## Browser web call
 

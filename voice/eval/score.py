@@ -424,8 +424,8 @@ def _aggregate_task_sources(calls: list[dict[str, Any]]) -> str:
 
 def _end_mode(call: dict[str, Any]) -> str:
     source = call.get("end_call_source")
-    if source == "fallback":
-        return "fallback"
+    if source in {"fallback", "goodbye_detected", "idle"}:
+        return source
     if source in {"live", "tool"} or (source is None and call.get("ended_via_end_call")):
         return "tool"
     return "none"

@@ -92,10 +92,20 @@ def render_system_prompt(config: AssistantConfig, today: date | None = None) -> 
     if "end_call" in config.live_actions:
         end_call_instruction = (
             "- After the caller confirms the final readback, say goodbye and call end_call "
-            "in the same turn."
+            "in the same response. Do not wait for another LLM turn after the tool call."
             if has_critical_fields
-            else "- When the caller is ready to finish, say goodbye and call end_call "
-            "in the same turn."
+            else "- When the caller is ready to finish, say goodbye and call end_call in "
+            "the same response. Do not wait for another LLM turn after the tool call."
+        )
+    elif has_critical_fields:
+        end_call_instruction = (
+            "- After the caller confirms the final readback, say goodbye. When the caller "
+            "says goodbye, say goodbye in response."
+        )
+    else:
+        end_call_instruction = (
+            "- When the caller is ready to finish, say goodbye. When the caller says "
+            "goodbye, say goodbye in response."
         )
     return f"""You are the telephone assistant for {config.business_name}.
 

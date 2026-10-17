@@ -88,15 +88,18 @@ Silero VAD detects speech activity and Pipecat's local Smart Turn v3 analyzer pr
 when the caller has finished a turn. Interruptions are enabled. The prompt speaks the
 configured language, acknowledges volunteered details, asks critical fields naturally,
 returns once to unanswered critical fields, and avoids repeating the same question twice
-in a row. At completion it reads back collected unconfirmed critical details together,
-waits for confirmation, then invokes the enabled confirmation and end-call actions in
-order. The prompt discloses AI use, prevents legal advice and client-status disclosure,
-constrains prices to the demo fee table, and directs danger, urgency, complaints, and
-callback requests to explicit tools. Intake models are built dynamically from configured
-service field specs. Only configured live actions are exposed. The law-firm template
-defaults to `end_call` only; confirmation, manual urgency, callback, and complaint actions
-remain opt-in. When live confirmation is disabled, the assistant still reads back critical
-values and asks the caller to confirm without calling a tool. Caller-final transcripts are
+in a row. At completion it reads back collected unconfirmed critical details together and
+waits for confirmation. Confirmation and end-call actions are optional and run only when
+enabled; the default live-action set is empty. If enabled, `end_call` returns with
+`run_llm=False` so the goodbye is spoken in the same response as the tool call. The prompt
+discloses AI use, prevents legal advice and client-status disclosure,
+constrains prices to the demo fee table, and applies urgency, complaint, and callback
+handling from configured rules and post-call extraction. Intake models are built
+dynamically from configured service field specs. Only configured live actions are exposed;
+when none are enabled, the LLM context receives no tool schemas. Confirmation, manual
+urgency, callback, complaint, and end-call actions remain opt-in. When live confirmation
+is disabled, the assistant still reads back critical values and asks the caller to confirm
+without calling a tool. Caller-final transcripts are
 always checked against configured keyword urgency rules. In v1, date-deadline escalation,
 callback requests, and complaints are post-call tasks; the employment unfair-dismissal
 deadline rule is calculated from merged intake in code. Live tasks use source `live` and
@@ -130,13 +133,16 @@ values and provenance are intended to map to customer context-graph facts; see
 [`context-graph.md`](context-graph.md).
 
 If the last caller final and the assistant's following turn both contain goodbye language,
-but no `end_call` tool arrives, a fallback queues `EndWorkerFrame` 1.5 seconds after
-`BotStoppedSpeaking`. New caller speech cancels the timer. The resulting end task is tagged
-with source `fallback`.
+but no `end_call` tool arrives, the goodbye detector queues `EndWorkerFrame` 1.5 seconds
+after `BotStoppedSpeaking`. New caller speech cancels the timer; the end task source is
+`goodbye_detected`. Separately, after bot speech and `IDLE_PROMPT_SECS` (default 8) of
+caller silence, an idle prompt is queued. After a second idle interval it says “I'll end
+the call now. Thank you for calling. Goodbye.” and ends the call after speech stops, with
+an `end_call` task source of `idle`. Caller speech resets the timer, and neither idle
+message is queued while the bot is speaking.
 
 `SMART_TURN_STOP_SECS` controls Pipecat's silence fallback when Smart Turn marks an
-utterance incomplete; it defaults to `2.0` seconds. The first scripted smoke call used
-Pipecat's 3-second default on four of eight turns, adding about 3.2 seconds before turn end.
+utterance incomplete; it defaults to `0.7` seconds.
 The matrix runner accepts `--smart-turn-stop-secs`, sets it for each runner, and records the
 value in JSON results and summary rows. Its summary reports caller-stop→turn-end,
 turn-end→LLM-first-token, LLM-first-token→TTS-first-audio medians, and LLM TTFB.
@@ -150,6 +156,17 @@ At the 2.0-second setting, baseline stage medians were:
 
 These are one baseline call per scenario, not a p95 guarantee. Lower endpointing settings
 must be evaluated for interruption/cut-off risk as well as latency.
+
+Turn-stop matrix comparison (aggregate checks, median of per-call p50, maximum per-call
+p95). The 2.0s, 1.0s, and 0.5s rows are from the earlier two-call-per-scenario runs; 0.7s
+is the requested rep-3 run, with one call per scenario:
+
+| Smart turn stop | Checks | Aggregate p50 | Maximum per-call p95 |
+|---:|---:|---:|---:|
+| 2.0s | 41/50 | 1.684s | 3.608s |
+| 1.0s | 43/50 | 1.204s | 2.992s |
+| 0.5s | 42/50 | 1.481s | 2.425s |
+| 0.7s | 22/25 | 1.313s | 1.915s |
 
 ## Latency and cost
 
@@ -208,8 +225,8 @@ p95 **5.12 s**; turn-end-to-audio p50 **1.15 s**; **4/12** checks; estimated cos
 
 ### Post-fix scripted smoke call (2026-10-17)
 
-After adding the generated intake schema, explicit tool-use instructions, and a
-`SMART_TURN_STOP_SECS=2.0` default, the same AssemblyAI + Speechify employment scenario
+After adding the generated intake schema, explicit tool-use instructions, and testing with
+`SMART_TURN_STOP_SECS=2.0`, the same AssemblyAI + Speechify employment scenario
 reported headline VAD-stop-to-audio p50 **2.45 s** / p95 **3.99 s**; turn-end-to-audio
 p50 **1.21 s**; **4/12** checks; estimated cost **$0.029**. `end_call` fired, but
 `save_intake` still did not: `intake.json` had no practice area or fields, and no urgent
