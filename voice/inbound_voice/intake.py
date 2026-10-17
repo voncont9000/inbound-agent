@@ -2,7 +2,7 @@ import calendar
 from datetime import date, timedelta
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, create_model
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, create_model
 
 from inbound_voice.config import FieldSpec, ServiceConfig
 
@@ -32,7 +32,13 @@ def _annotation_for(field: FieldSpec):
 
 
 def build_service_model(service: ServiceConfig) -> type[BaseModel]:
-    definitions = {field.name: (_annotation_for(field) | None, None) for field in service.fields}
+    definitions = {
+        field.name: (
+            _annotation_for(field) | None,
+            Field(default=None, json_schema_extra={"field_type": field.type}),
+        )
+        for field in service.fields
+    }
     return create_model(
         f"{service.label.replace(' ', '')}Intake",
         __config__=ConfigDict(extra="forbid"),

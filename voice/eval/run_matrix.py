@@ -195,6 +195,23 @@ async def _newest_run_dir(before: set[Path], timeout: float = 12) -> Path | None
     return newest
 
 
+async def _wait_for_extraction(run_dir: Path, timeout: float = 90) -> str | None:
+    deadline = time.monotonic() + timeout
+    intake_path = run_dir / "intake.json"
+    while time.monotonic() < deadline:
+        if intake_path.exists():
+            try:
+                status = json.loads(intake_path.read_text(encoding="utf-8")).get(
+                    "extraction_status"
+                )
+            except (OSError, json.JSONDecodeError):
+                status = None
+            if status and status != "pending":
+                return status
+        await asyncio.sleep(0.3)
+    return None
+
+
 def _create_results_dir() -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     path = RESULTS_DIR / stamp
@@ -253,6 +270,8 @@ async def run_matrix(
                                 audio_dir=AUDIO_DIR,
                             )
                             run_dir = await _newest_run_dir(before)
+                            if run_dir is not None:
+                                await _wait_for_extraction(run_dir)
                             if run_dir is not None:
                                 for filename in ("bot_audio.wav", "caller_timeline.json"):
                                     source = scratch / filename

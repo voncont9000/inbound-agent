@@ -30,7 +30,11 @@ Browser SmallWebRTC / Twilio Media Streams
 `voice/bot.py` is a single entry point for the browser and Twilio transports. Pipecat's
 development runner creates the requested transport and invokes the same voice pipeline.
 The `CallSink` protocol isolates transcript, intake, follow-up tasks and metrics from
-storage; Google Sheets and email sinks are intentionally deferred.
+storage; Google Sheets and email sinks are intentionally deferred. Business behavior lives
+in assistant YAML that extends a template: `AssistantConfig` contains policies, services,
+typed fields, urgency rules, live actions, and a review-confidence threshold. Dictionary
+values merge recursively while assistant lists and scalars replace template values.
+`uk_law_firm.yaml` is the first template; the product model is not law-firm-specific.
 
 ## Provider choices and seams
 
@@ -69,7 +73,7 @@ voices can be searched with `GET /v1/shared-voices?language=en&accent=british&us
   `google/gemini-2.5-flash`; replacing the LLM service does not affect the turn or sink
   interfaces.
 - **Pipecat** owns real-time orchestration, WebRTC/Twilio transports, service metrics, and
-  interruption handling. A firm config and intake tool layer keep product policy apart
+  interruption handling. Assistant templates and a generic intake tool layer keep product policy apart
   from vendor-specific adapters.
 
 The bot queues an `LLMRunFrame` when a client connects so the system-prompt greeting is
@@ -83,9 +87,29 @@ Silero VAD detects speech activity and Pipecat's local Smart Turn v3 analyzer pr
 when the caller has finished a turn. Interruptions are enabled. The prompt discloses AI
 use, prevents legal advice and client-status disclosure, constrains prices to the demo
 fee table, and directs danger, urgency, complaints, and callback requests to explicit
-tools. Intake is validated against separate conveyancing and employment Pydantic presets.
-Employment unfair-dismissal deadlines are calculated in code from the effective
-termination date and flagged urgent at 28 days or less.
+tools. Intake models are built dynamically from configured service field specs. Only
+configured live actions are exposed; critical values are confirmed during the call and
+other fields are extracted after it. Employment unfair-dismissal deadlines are an example
+of a template-configured date rule, calculated in code and flagged urgent at 28 days or
+less. Caller-final transcripts are checked against configured keyword rules.
+
+## Hybrid intake and provenance
+
+`confirm_critical_fields` accepts only configured critical fields, validates each service's
+dynamic Pydantic model, and writes `intake.live.json` with confirmation timestamps. After
+disconnect, end-call, or pipeline completion, the Google Gemini API extractor runs for at
+most 60 seconds (default `EXTRACTION_MODEL=gemini-3.8-flash`, thinking level `low`). It
+receives numbered role-tagged transcript rows, live confirmations, and configured field
+specs. Missing API credentials or a blank model skip extraction; errors are recorded and
+do not crash the call.
+
+`intake.post_call.json` retains extracted values, confidence, and caller evidence quotes.
+Merged `intake.json` assigns each value a status (`agreed`, `live_only`, `filled`,
+`conflict`, or `corrected`) and retains both source values. Conflicts, invalid coercions,
+and confidence below the assistant's review threshold are listed in `needs_review`.
+Extraction usage and estimated cost are separate from live-call LLM metrics. The merged
+values and provenance are intended to map to customer context-graph facts; see
+[`context-graph.md`](context-graph.md).
 
 `SMART_TURN_STOP_SECS` controls Pipecat's silence fallback when Smart Turn marks an
 utterance incomplete; it defaults to `2.0` seconds. The first scripted smoke call used
@@ -103,7 +127,8 @@ characters, and call duration.
 Estimated cost uses provider-specific STT per-minute rates multiplied by full call
 duration (the stream/session remains open for the call), provider-specific TTS rates per
 1,000 synthesized characters, model-specific Google Gemini or OpenRouter input/output rates
-per million tokens, and UK local Twilio inbound per minute. Measured STT audio seconds remain in usage
+per million tokens, a separate post-call extraction component, and UK local Twilio inbound
+per minute. Measured STT audio seconds remain in usage
 metrics for information but do not determine STT cost. `prices.yaml` records vendor
 sources and check dates; Google Gemini prices use the official
 [Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing), paid-tier text
@@ -163,6 +188,22 @@ six `save_intake` calls, all successful, and the call recorded `urgent`, `callba
 turn-end-to-audio p50 was **1.87 s**, up from about **1.15 s** because tool-call turns
 need a second LLM round trip. The caller's name was still misheard as “Mac Alistair,” and
 the email was captured as `yvonne.mcallister`.
+
+### Settled 16-call provider matrix (2026-10-17)
+
+The two-repetition employment calls used OpenRouter Gemini 2.5 Flash. Soniox scored
+**10/12** in all four calls; AssemblyAI scored **8–9/12**. AssemblyAI misheard the email
+(`yvonne.mcallister@…`) in all four calls and the phone's extra zero (“9000”) in three of
+four. Soniox captured both correctly in all four calls. Both providers struggled with the
+surname “McAllister”. Turn-end-to-audio p50 ranged from **2.9–3.6 s**.
+
+Estimated cost per roughly 2.4-minute call was about **$0.022** for Soniox + Speechify,
+**$0.044** for Soniox + ElevenLabs, **$0.037** for AssemblyAI + Speechify, and **$0.055**
+for AssemblyAI + ElevenLabs. All eight conveyancing calls timed out after the first caller
+utterance because the caller harness used a fixed 25-second deadline while the agent was
+still speaking; the caller-turn fix now waits for speech to start and then allows up to
+90 seconds for the agent turn to finish. These are synthetic callers, not a substitute for
+real UK callers.
 
 ### Soniox + ElevenLabs Flash v2.5 conveyancing smoke (2026-10-17)
 

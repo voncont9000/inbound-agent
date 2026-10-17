@@ -1,6 +1,6 @@
 import math
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -117,11 +117,13 @@ class CallMetricsObserver(BaseObserver):
         sink: CallSink,
         telephony: bool = False,
         providers: Mapping[str, str | None] | None = None,
+        caller_text_callback: Callable[[str], Any] | None = None,
     ) -> None:
         super().__init__(observe_every_push=False)
         self.sink = sink
         self.telephony = telephony
         self.providers = dict(providers or {})
+        self.caller_text_callback = caller_text_callback
         self.latency = TurnLatencyTracker()
         self._seen_broadcast_frame_ids: set[int] = set()
         self.service_metrics: list[dict[str, Any]] = []
@@ -130,6 +132,8 @@ class CallMetricsObserver(BaseObserver):
             "tts_characters": 0,
             "llm_input_tokens": 0,
             "llm_output_tokens": 0,
+            "extraction_input_tokens": 0,
+            "extraction_output_tokens": 0,
         }
         self.price_table = load_price_table(
             Path(__file__).resolve().parents[1] / "config" / "prices.yaml"
@@ -154,6 +158,8 @@ class CallMetricsObserver(BaseObserver):
         if isinstance(frame, TranscriptionFrame):
             if getattr(frame, "finalized", True):
                 self.sink.append_transcript("caller", frame.text, frame.timestamp)
+                if self.caller_text_callback is not None:
+                    self.caller_text_callback(frame.text)
         elif isinstance(frame, TTSTextFrame):
             self.sink.append_transcript("assistant", frame.text)
         elif isinstance(frame, InterruptionFrame):
@@ -239,6 +245,19 @@ class CallMetricsObserver(BaseObserver):
     def persist(self) -> None:
         self._save()
 
+    def record_extraction(
+        self,
+        model: str,
+        status: str,
+        usage: Mapping[str, int] | None = None,
+    ) -> None:
+        self.providers["extraction_model"] = model
+        self.providers["extraction_status"] = status
+        usage = usage or {}
+        self.usage["extraction_input_tokens"] = usage.get("input_tokens", 0)
+        self.usage["extraction_output_tokens"] = usage.get("output_tokens", 0)
+        self._save()
+
     def snapshot(self) -> dict[str, Any]:
         metrics = {
             "call_id": self.sink.call_id,
@@ -270,6 +289,8 @@ def calculate_cost(metrics: dict[str, Any], price_table: dict[str, Any]) -> dict
     tts_provider = providers.get("tts", "deepgram")
     llm_model = providers.get("llm_model", "google/gemini-2.5-flash")
     llm_prices = prices.get("llm_models", {}).get(llm_model, {})
+    extraction_model = providers.get("extraction_model")
+    extraction_prices = prices.get("llm_models", {}).get(extraction_model, {})
     transport = metrics.get("transport")
     twilio_cost = (
         _priced_cost(
@@ -305,6 +326,27 @@ def calculate_cost(metrics: dict[str, Any], price_table: dict[str, Any]) -> dict
         ),
         "twilio": twilio_cost,
     }
+    if extraction_model is not None or "extraction_input_tokens" in usage:
+        input_tokens = usage.get("extraction_input_tokens", 0)
+        output_tokens = usage.get("extraction_output_tokens", 0)
+        if not input_tokens and not output_tokens:
+            components["extraction"] = 0.0
+        else:
+            extraction_input = _priced_cost(
+                input_tokens,
+                extraction_prices.get("input_per_1m_tokens", {}).get("value"),
+                divisor=1_000_000,
+            )
+            extraction_output = _priced_cost(
+                output_tokens,
+                extraction_prices.get("output_per_1m_tokens", {}).get("value"),
+                divisor=1_000_000,
+            )
+            components["extraction"] = (
+                None
+                if extraction_input is None or extraction_output is None
+                else extraction_input + extraction_output
+            )
     return {
         "currency": price_table.get("currency", "USD"),
         "components": components,

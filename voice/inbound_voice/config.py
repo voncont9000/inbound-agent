@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -81,7 +81,7 @@ class DateDeadlineUrgencyRule(BaseModel):
 
 
 UrgencyRule = Annotated[
-    Union[KeywordUrgencyRule, DateDeadlineUrgencyRule],
+    KeywordUrgencyRule | DateDeadlineUrgencyRule,
     Field(discriminator="type"),
 ]
 

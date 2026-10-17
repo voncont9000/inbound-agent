@@ -194,8 +194,7 @@ class AgentAudioRecorder:
                 try:
                     await asyncio.wait_for(
                         self._condition.wait_for(
-                            lambda: self._completed_speeches > previous_count
-                            or self.ended.is_set()
+                            lambda: self._completed_speeches > previous_count or self.ended.is_set()
                         ),
                         timeout=remaining,
                     )

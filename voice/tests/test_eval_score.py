@@ -53,6 +53,9 @@ def test_score_call_uses_fixture_transcript_intake_tasks_and_metrics(tmp_path) -
     assert result["llm"] == "openrouter"
     assert result["llm_model"] == "google/gemini-2.5-flash"
     assert result["estimated_cost"]["components"]["stt"] == pytest.approx(0.015)
+    assert result["live_intake_checks"]["caller_name"]["passed"]
+    assert result["post_call_intake_checks"]["caller_name"]["passed"]
+    assert result["needs_review"] == []
 
 
 def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> None:
@@ -99,6 +102,8 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
     assert aggregate["mean_cost"] == 0.09
     assert "google (gemini-2.5-flash)" in summary
     assert "Voice" in summary
+    assert "Intake live / post / merged" in summary
+    assert "Review" in summary
     assert "beatrice_32" in summary
     assert "| Aggregate " in summary
     assert "9/10" in summary

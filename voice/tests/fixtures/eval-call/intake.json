@@ -1,9 +1,12 @@
 {
-  "practice_area": "employment",
+  "service": "employment",
   "fields": {
-    "caller_name": "Siobhan McAllister",
-    "termination_date": "2026-08-10",
-    "acas_early_conciliation_started": false,
-    "null_field": null
-  }
+    "caller_name": {"value": "Siobhan McAllister", "status": "agreed"},
+    "termination_date": {"value": "2026-08-10", "status": "filled"},
+    "acas_early_conciliation_started": {"value": false, "status": "filled"},
+    "null_field": {"value": null, "status": "filled"}
+  },
+  "needs_review": [],
+  "extraction_status": "completed",
+  "conflict_check": "pending"
 }

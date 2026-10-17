@@ -1,7 +1,8 @@
 # Inbound voice prototype (M0)
 
-This prototype runs an inbound UK law-firm voice agent with browser WebRTC as the primary
-test path and a Twilio Media Streams transport for later phone-number testing.
+This prototype runs a configurable inbound voice assistant with browser WebRTC as the
+primary test path and a Twilio Media Streams transport for later phone-number testing.
+Businesses use assistant configuration files; UK law firms are the first template.
 
 ## Setup
 
@@ -17,7 +18,23 @@ Set `GOOGLE_API_KEY` and the API key for each selected speech provider in `.env`
 `STT_PROVIDER=assemblyai` and `TTS_PROVIDER=speechify`, requiring
 `ASSEMBLYAI_API_KEY` and `SPEECHIFY_API_KEY`. Use `SONIOX_API_KEY` for Soniox,
 `ELEVENLABS_API_KEY` for ElevenLabs, and `DEEPGRAM_API_KEY` when either provider is
-Deepgram. The demo firm, fees, and price table are illustrative.
+Deepgram. The demo business, fees, and price table are illustrative.
+
+## Assistant configuration
+
+`ASSISTANT_CONFIG` selects a business configuration (default
+`config/assistants/demo_firm.yaml`). It extends a template in `config/templates/`; the first
+template, `uk_law_firm.yaml`, supplies conveyancing and employment services, field
+definitions, safeguards, urgency rules, and enabled live actions. Assistant files override
+template values using recursive dictionary merging; lists and scalar values replace the
+template values. Service fields and actions are data-driven so a future settings UI can
+edit the same configuration shape.
+
+Critical fields are confirmed during the call with `confirm_critical_fields`; other intake
+details are extracted after the call. `intake.live.json` records caller-confirmed values,
+`intake.post_call.json` records extracted values, and merged `intake.json` preserves
+provenance, confidence, alternatives, and `needs_review` flags for conflicts, invalid
+values, or confidence below the configured threshold.
 
 ## Selecting providers and voices
 
@@ -35,6 +52,11 @@ the paid tier for client data. Paid-tier text prices per 1M input/output tokens 
 $0.30/$2.50 for 3.5 Flash-Lite, $0.25/$1.50 for 3.1 Flash-Lite, and $0.75/$3.75 for 3.8
 Flash (scheduled to increase to $1.50/$7.50 on 2027-01-01), from the official
 [Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing).
+
+Post-call extraction defaults to `EXTRACTION_MODEL=gemini-3.8-flash` with low thinking and
+uses the Google Gemini API directly. It is skipped when `GOOGLE_API_KEY` is absent or the
+model setting is blank. Extraction errors are recorded without ending the call, and
+extraction tokens are priced separately from live LLM usage.
 
 `TTS_VOICE` is optional for Speechify and Deepgram. Speechify defaults to `beatrice_32`
 (a user-verified en-GB voice for Simba 3.2). List available Speechify voices with:
@@ -118,12 +140,13 @@ Twilio credentials are optional for local WebRTC and must never be committed.
 
 ## Call outputs and report
 
-Each session writes `transcript.jsonl`, `intake.json`, `tasks.json`, `tool_calls.jsonl`, and
-`metrics.json` to `voice/runs/<call_id>/`. That directory is ignored by Git. Call-level
+Each session writes `transcript.jsonl`, `intake.live.json`, `intake.post_call.json`,
+`intake.json`, `tasks.json`, `tool_calls.jsonl`, and `metrics.json` to
+`voice/runs/<call_id>/`. That directory is ignored by Git. Call-level
 metrics include
 VAD-stop-to-first-bot-speaking and Smart-Turn-end-to-first-bot-speaking latency for each
 turn, selected STT/TTS providers and LLM model, Pipecat service latency and usage
-measurements, and estimated cost. STT cost is based on the full call duration because the
+measurements, extraction usage, and estimated cost. STT cost is based on the full call duration because the
 stream/session stays open for the call; measured STT audio seconds are retained as
 informational usage data. TTS cost uses synthesized characters and LLM cost uses the
 selected model's token rates.

@@ -150,6 +150,37 @@ def test_google_gemini_flash_cost_uses_direct_api_price() -> None:
     assert cost["components"]["llm_output"] == 2.5
 
 
+def test_extraction_cost_is_a_separate_component() -> None:
+    from pathlib import Path
+
+    from inbound_voice.metrics import load_price_table
+
+    prices = load_price_table(Path(__file__).resolve().parents[1] / "config" / "prices.yaml")
+    cost = calculate_cost(
+        {
+            "transport": "webrtc",
+            "call_duration_seconds": 60,
+            "providers": {
+                "stt": "assemblyai",
+                "tts": "speechify",
+                "llm": "google",
+                "llm_model": "gemini-3.5-flash-lite",
+                "extraction_model": "gemini-3.8-flash",
+            },
+            "usage": {
+                "tts_characters": 0,
+                "llm_input_tokens": 0,
+                "llm_output_tokens": 0,
+                "extraction_input_tokens": 1_000_000,
+                "extraction_output_tokens": 1_000_000,
+            },
+        },
+        prices,
+    )
+
+    assert cost["components"]["extraction"] == 4.5
+
+
 def test_legacy_metrics_default_to_deepgram_and_gemini_flash() -> None:
     from pathlib import Path
 

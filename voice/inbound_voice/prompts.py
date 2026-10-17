@@ -5,9 +5,10 @@ from inbound_voice.config import AssistantConfig
 
 def render_system_prompt(config: AssistantConfig, today: date | None = None) -> str:
     current_date = today or date.today()
-    fee_table = "\n".join(
-        f"- {fee.service}: {fee.price}. {fee.notes}" for fee in config.price_list
-    ) or "- No published prices are configured."
+    fee_table = (
+        "\n".join(f"- {fee.service}: {fee.price}. {fee.notes}" for fee in config.price_list)
+        or "- No published prices are configured."
+    )
     hours = (
         f"{', '.join(config.office_hours.days)}, {config.office_hours.opens}–"
         f"{config.office_hours.closes} {config.office_hours.timezone}"
@@ -34,9 +35,14 @@ def render_system_prompt(config: AssistantConfig, today: date | None = None) -> 
         if enabled_actions
         else "No live actions are enabled."
     )
+    urgency_instruction = (
+        "Recognize urgency immediately and flag it using flag_urgent"
+        if "flag_urgent" in config.live_actions
+        else "Recognize urgency immediately"
+    )
     return f"""You are the telephone assistant for {config.business_name}.
 
-Speak British English. Use short, natural spoken sentences. Ask one question at a time.
+Use short, natural spoken sentences. Ask one question at a time.
 Do not ask for information the caller has already given.
 
 At the beginning of every call, disclose that you are an AI assistant. Say: "{config.greeting}"
@@ -60,7 +66,7 @@ PUBLISHED PRICES — never treat these as a guaranteed quote:
 INTAKE AND CALL COMPLETION
 - Collect other details conversationally; they are extracted after the call. Do not call a tool
   for each detail.
-- Recognize urgency immediately{"; flag it using flag_urgent" if "flag_urgent" in config.live_actions else ""}; do not delay the conversation to finish intake.
+- {urgency_instruction}; do not delay the conversation to finish intake.
 - Be honest when the business is closed. Office hours: {hours}.
 - After saying goodbye, call end_call in the same turn if that action is enabled.
 

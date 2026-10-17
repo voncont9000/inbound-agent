@@ -35,9 +35,7 @@ def test_dynamic_service_model_rejects_invalid_enum_and_extra_fields() -> None:
     config = load_assistant_config(CONFIG_PATH)
     model = build_service_model(config.services["conveyancing"])
     with pytest.raises(ValidationError):
-        model.model_validate(
-            {"transaction_type": "transfer", "unknown": "not allowed"}
-        )
+        model.model_validate({"transaction_type": "transfer", "unknown": "not allowed"})
 
 
 def test_dynamic_employment_model_validates_dates_and_enum() -> None:
@@ -84,8 +82,6 @@ def test_generic_deadline_month_end(termination_date: date, expected: date) -> N
 
 def test_days_until_deadline() -> None:
     assert (
-        days_until_deadline(
-            date(2026, 1, 1), add_months=3, minus_days=1, today=date(2026, 3, 20)
-        )
+        days_until_deadline(date(2026, 1, 1), add_months=3, minus_days=1, today=date(2026, 3, 20))
         == 11
     )

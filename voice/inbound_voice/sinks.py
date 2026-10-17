@@ -15,6 +15,10 @@ class CallSink(Protocol):
 
     def save_intake(self, intake: dict[str, Any]) -> None: ...
 
+    def save_live_intake(self, intake: dict[str, Any]) -> None: ...
+
+    def save_post_call_intake(self, intake: dict[str, Any]) -> None: ...
+
     def append_task(self, task_type: str, details: dict[str, Any]) -> None: ...
 
     def save_metrics(self, metrics: dict[str, Any]) -> None: ...
@@ -28,7 +32,18 @@ class LocalFilesCallSink:
         (self.directory / "transcript.jsonl").touch(exist_ok=True)
         (self.directory / "tool_calls.jsonl").touch(exist_ok=True)
         self._write_json(
-            "intake.json", {"practice_area": None, "fields": {}, "conflict_check": "pending"}
+            "intake.json",
+            {
+                "service": None,
+                "fields": {},
+                "needs_review": [],
+                "extraction_status": "pending",
+                "conflict_check": "pending",
+                "versions": {
+                    "live": "intake.live.json",
+                    "post_call": "intake.post_call.json",
+                },
+            },
         )
         self._write_json("tasks.json", [])
         self._write_json("metrics.json", {})
@@ -56,6 +71,12 @@ class LocalFilesCallSink:
 
     def save_intake(self, intake: dict[str, Any]) -> None:
         self._write_json("intake.json", intake)
+
+    def save_live_intake(self, intake: dict[str, Any]) -> None:
+        self._write_json("intake.live.json", intake)
+
+    def save_post_call_intake(self, intake: dict[str, Any]) -> None:
+        self._write_json("intake.post_call.json", intake)
 
     def append_task(self, task_type: str, details: dict[str, Any]) -> None:
         path = self.directory / "tasks.json"
