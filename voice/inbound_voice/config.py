@@ -89,6 +89,7 @@ UrgencyRule = Annotated[
 class AssistantConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    language: str = "English"
     business_name: str
     greeting: str
     office_hours: OfficeHours

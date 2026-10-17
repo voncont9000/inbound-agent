@@ -3,7 +3,12 @@ import json
 from types import SimpleNamespace
 
 from inbound_voice.config import load_assistant_config
-from inbound_voice.extraction import extract_intake, merge_intake
+from inbound_voice.extraction import (
+    _extraction_schema,
+    extract_intake,
+    merge_intake,
+    reextract_run,
+)
 from inbound_voice.intake import build_service_model
 from inbound_voice.tools import DEFAULT_CONFIG_PATH
 
@@ -74,7 +79,16 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
         "invalid": True,
     }
     assert result["usage"] == {"input_tokens": 100, "output_tokens": 25}
-    assert client.models.arguments["config"]["response_mime_type"] == "application/json"
+    generation_config = client.models.arguments["config"]
+    assert generation_config["response_mime_type"] == "application/json"
+    assert "response_schema" not in generation_config
+    assert "response_json_schema" in generation_config
+    schema = generation_config["response_json_schema"]
+    assert schema["properties"]["service"]["enum"] == list(config.services)
+    assert schema["properties"]["fields"]["items"]["properties"]["name"]["enum"] == sorted(
+        {field.name for service in config.services.values() for field in service.fields}
+    )
+    assert schema == _extraction_schema(config)
     assert "1. caller:" in client.models.arguments["contents"]
 
 
@@ -88,6 +102,71 @@ def test_extraction_can_be_skipped_or_fail_without_raising() -> None:
     assert skipped["status"] == "skipped"
     assert failed["status"] == "failed"
     assert "offline" in failed["error"]
+
+
+def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, monkeypatch) -> None:
+    import inbound_voice.extraction as extraction
+
+    (tmp_path / "transcript.jsonl").write_text(
+        json.dumps({"role": "caller", "text": "I was dismissed."}) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "intake.live.json").write_text(
+        json.dumps({"service": "employment", "fields": {}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "metrics.json").write_text(
+        json.dumps(
+            {
+                "transport": "webrtc",
+                "call_duration_seconds": 60,
+                "providers": {
+                    "stt": "soniox",
+                    "tts": "speechify",
+                    "llm_model": "gemini-3.5-flash-lite",
+                },
+                "usage": {
+                    "tts_characters": 0,
+                    "llm_input_tokens": 0,
+                    "llm_output_tokens": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def fake_extract_intake(transcript_rows, live_intake, config, client, model):
+        assert transcript_rows[0]["text"] == "I was dismissed."
+        assert live_intake["service"] == "employment"
+        assert client is None
+        return {
+            "status": "completed",
+            "service": "employment",
+            "model": model,
+            "fields": {
+                "issue_type": {
+                    "value": "dismissal",
+                    "confidence": 0.9,
+                    "evidence": "I was dismissed.",
+                }
+            },
+            "usage": {"input_tokens": 1_000_000, "output_tokens": 1_000_000},
+        }
+
+    monkeypatch.setattr(extraction, "extract_intake", fake_extract_intake)
+    monkeypatch.setenv("EXTRACTION_MODEL", "gemini-3.8-flash")
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    result = asyncio.run(reextract_run(tmp_path, DEFAULT_CONFIG_PATH))
+
+    merged = json.loads((tmp_path / "intake.json").read_text(encoding="utf-8"))
+    post_call = json.loads((tmp_path / "intake.post_call.json").read_text(encoding="utf-8"))
+    metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    assert result["extraction_status"] == "completed"
+    assert merged["fields"]["issue_type"]["status"] == "filled"
+    assert post_call["fields"]["issue_type"]["value"] == "dismissal"
+    assert metrics["usage"]["extraction_input_tokens"] == 1_000_000
+    assert metrics["estimated_cost"]["components"]["extraction"] == 4.5
 
 
 def test_merge_intake_covers_agreed_live_filled_conflict_and_corrected() -> None:

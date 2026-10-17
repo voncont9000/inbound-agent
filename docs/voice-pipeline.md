@@ -31,9 +31,10 @@ Browser SmallWebRTC / Twilio Media Streams
 development runner creates the requested transport and invokes the same voice pipeline.
 The `CallSink` protocol isolates transcript, intake, follow-up tasks and metrics from
 storage; Google Sheets and email sinks are intentionally deferred. Business behavior lives
-in assistant YAML that extends a template: `AssistantConfig` contains policies, services,
-typed fields, urgency rules, live actions, and a review-confidence threshold. Dictionary
-values merge recursively while assistant lists and scalars replace template values.
+in assistant YAML that extends a template: `AssistantConfig` contains a response language,
+policies, services, typed fields, urgency rules, live actions, and a review-confidence
+threshold. Dictionary values merge recursively while assistant lists and scalars replace
+template values.
 `uk_law_firm.yaml` is the first template; the product model is not law-firm-specific.
 
 ## Provider choices and seams
@@ -84,14 +85,19 @@ the pipeline ends.
 ## Turn-taking and safeguards
 
 Silero VAD detects speech activity and Pipecat's local Smart Turn v3 analyzer predicts
-when the caller has finished a turn. Interruptions are enabled. The prompt discloses AI
-use, prevents legal advice and client-status disclosure, constrains prices to the demo
-fee table, and directs danger, urgency, complaints, and callback requests to explicit
-tools. Intake models are built dynamically from configured service field specs. Only
-configured live actions are exposed; critical values are confirmed during the call and
-other fields are extracted after it. Employment unfair-dismissal deadlines are an example
-of a template-configured date rule, calculated in code and flagged urgent at 28 days or
-less. Caller-final transcripts are checked against configured keyword rules.
+when the caller has finished a turn. Interruptions are enabled. The prompt speaks the
+configured language, acknowledges volunteered details, asks critical fields naturally,
+returns once to unanswered critical fields, and avoids repeating the same question twice
+in a row. At completion it reads back collected unconfirmed critical details together,
+waits for confirmation, then invokes the enabled confirmation and end-call actions in
+order. The prompt discloses AI use, prevents legal advice and client-status disclosure,
+constrains prices to the demo fee table, and directs danger, urgency, complaints, and
+callback requests to explicit tools. Intake models are built dynamically from configured
+service field specs. Only configured live actions are exposed; critical values are
+confirmed during the call and other fields are extracted after it. Employment
+unfair-dismissal deadlines are an example of a template-configured date rule, calculated
+in code and flagged urgent at 28 days or less. Caller-final transcripts are checked
+against configured keyword rules.
 
 ## Hybrid intake and provenance
 
@@ -102,6 +108,12 @@ most 60 seconds (default `EXTRACTION_MODEL=gemini-3.8-flash`, thinking level `lo
 receives numbered role-tagged transcript rows, live confirmations, and configured field
 specs. Missing API credentials or a blank model skip extraction; errors are recorded and
 do not crash the call.
+
+To re-run extraction and merge for an existing call without starting a voice runner, use
+`uv run python -m inbound_voice.extraction --run-dir runs/<call_id> [--config
+config/assistants/demo_firm.yaml]`. It reads `transcript.jsonl` and `intake.live.json`,
+rewrites `intake.post_call.json` and `intake.json`, and updates extraction usage/cost in
+`metrics.json` when present.
 
 `intake.post_call.json` retains extracted values, confidence, and caller evidence quotes.
 Merged `intake.json` assigns each value a status (`agreed`, `live_only`, `filled`,

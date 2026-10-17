@@ -88,6 +88,45 @@ def test_deadline_rule_flags_urgent_once_per_rule_and_value(tmp_path) -> None:
     assert [task["type"] for task in tasks] == ["urgent"]
 
 
+def test_flag_urgent_and_deadline_rule_deduplicate_same_date(tmp_path) -> None:
+    sink = LocalFilesCallSink(tmp_path, "deadline-dedup")
+    tools = CallTools(sink)
+    termination_date = date.today() - timedelta(days=70)
+    reason = (
+        f"Employment termination date provided as {termination_date.isoformat()}, "
+        "checking proximity to tribunal time limits."
+    )
+
+    flagged = tools.flag_urgent(reason)
+    confirmed = tools.confirm_critical_fields(
+        "employment",
+        {"termination_date": termination_date.isoformat()},
+    )
+    tasks = json.loads((sink.directory / "tasks.json").read_text())
+
+    assert flagged["ok"] is True
+    assert confirmed["ok"] is True
+    assert len(tasks) == 1
+    assert tasks[0]["rule"] == 1
+    assert tasks[0]["value"] == termination_date.isoformat()
+
+
+def test_keyword_and_deadline_rules_keep_independent_urgent_tasks(tmp_path) -> None:
+    sink = LocalFilesCallSink(tmp_path, "keyword-and-deadline")
+    tools = CallTools(sink)
+    termination_date = date.today() - timedelta(days=70)
+
+    tools.check_caller_text("I have a hearing today.")
+    tools.confirm_critical_fields(
+        "employment",
+        {"termination_date": termination_date.isoformat()},
+    )
+    tasks = json.loads((sink.directory / "tasks.json").read_text())
+
+    assert len(tasks) == 2
+    assert all(task["type"] == "urgent" for task in tasks)
+
+
 def test_keyword_urgency_rule_flags_once_per_rule(tmp_path) -> None:
     sink = LocalFilesCallSink(tmp_path, "keyword-urgency")
     tools = CallTools(sink)

@@ -36,6 +36,23 @@ details are extracted after the call. `intake.live.json` records caller-confirme
 provenance, confidence, alternatives, and `needs_review` flags for conflicts, invalid
 values, or confidence below the configured threshold.
 
+The assistant speaks the configured `language` (the UK law-firm template uses British
+English). The prompt acknowledges volunteered details, asks critical questions naturally,
+returns once to unanswered critical fields, and avoids repeating the same question twice
+in a row. Before ending, it reads back collected unconfirmed critical details together and
+waits for confirmation; enabled confirmation and end-call actions are then used in order.
+
+Re-run extraction and the live/post-call merge for an existing call without starting a
+runner:
+
+```bash
+uv run python -m inbound_voice.extraction --run-dir runs/<call_id> [--config config/assistants/demo_firm.yaml]
+```
+
+The command reads `transcript.jsonl` and `intake.live.json`, rewrites
+`intake.post_call.json` and `intake.json`, and recalculates the extraction usage/cost in
+`metrics.json` when that file exists.
+
 ## Selecting providers and voices
 
 Change `STT_PROVIDER` and `TTS_PROVIDER` in `.env`, then restart the runner to A/B providers.

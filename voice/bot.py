@@ -33,8 +33,11 @@ from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
 from inbound_voice.config import load_assistant_config
-from inbound_voice.extraction import extract_intake, merge_intake
-from inbound_voice.intake import build_service_model
+from inbound_voice.extraction import (
+    DEFAULT_EXTRACTION_MODEL,
+    build_intake_artifacts,
+    extract_intake,
+)
 from inbound_voice.metrics import CallMetricsObserver
 from inbound_voice.prompts import render_system_prompt
 from inbound_voice.providers import create_llm, create_stt, create_tts, resolve_providers
@@ -43,7 +46,6 @@ from inbound_voice.tools import CallTools, tool_specs
 
 ROOT = Path(__file__).resolve().parent
 ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
-DEFAULT_EXTRACTION_MODEL = "gemini-3.8-flash"
 EXTRACTION_TIMEOUT_SECONDS = 60
 
 
@@ -208,32 +210,8 @@ async def finalize_call_intake(
             "error": f"{type(error).__name__}: {error}",
         }
 
-    service_name = result.get("service") or live.get("service")
-    post_call = {
-        "service": service_name,
-        "model": model,
-        "fields": result.get("fields", {}),
-    }
+    post_call, merged = build_intake_artifacts(live, result, assistant)
     sink.save_post_call_intake(post_call)
-    service_model = (
-        build_service_model(assistant.services[service_name])
-        if service_name in assistant.services
-        else None
-    )
-    merged = (
-        merge_intake(live, post_call, service_model, assistant.review_confidence_threshold)
-        if service_model is not None
-        else {"service": service_name, "fields": {}, "needs_review": []}
-    )
-    merged.update(
-        {
-            "extraction_status": result["status"],
-            "conflict_check": "pending",
-            "versions": {"live": "intake.live.json", "post_call": "intake.post_call.json"},
-        }
-    )
-    if result.get("error"):
-        merged["extraction_error"] = result["error"]
     sink.save_intake(merged)
     metrics_observer.record_extraction(model, result["status"], result.get("usage"))
     return merged

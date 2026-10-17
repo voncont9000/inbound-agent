@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -109,8 +110,58 @@ class CallTools:
         return matches
 
     def flag_urgent(self, reason: str) -> dict[str, Any]:
+        deadline_matches = self._matching_deadline_mentions(reason)
+        if deadline_matches:
+            added = False
+            for index, value in deadline_matches:
+                key = (index, value)
+                if key in self._deadline_tasks:
+                    continue
+                self._deadline_tasks.add(key)
+                self.sink.append_task(
+                    "urgent",
+                    {"reason": reason, "rule": index, "value": value},
+                )
+                added = True
+            status = (
+                "Urgent deadline follow-up flagged."
+                if added
+                else "Urgent deadline follow-up already flagged."
+            )
+            return {"ok": True, "status": status}
         self.sink.append_task("urgent", {"reason": reason})
         return {"ok": True, "status": "Urgent follow-up flagged."}
+
+    def _matching_deadline_mentions(self, reason: str) -> list[tuple[int, str]]:
+        normalized_reason = reason.casefold()
+        values = set(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", reason))
+        matches = []
+        for index, rule in enumerate(self.config.urgency_rules):
+            if not isinstance(rule, DateDeadlineUrgencyRule):
+                continue
+            service = self.config.services.get(rule.service)
+            field = (
+                next(
+                    (item for item in service.fields if item.name == rule.field),
+                    None,
+                )
+                if service
+                else None
+            )
+            labels = {rule.field.casefold()}
+            if field:
+                labels.add(field.label.casefold())
+            if not any(label in normalized_reason for label in labels):
+                continue
+            for value in values:
+                try:
+                    start = date.fromisoformat(value)
+                except ValueError:
+                    continue
+                days_left = days_until_deadline(start, rule.add_months, rule.minus_days)
+                if days_left <= rule.urgent_within_days:
+                    matches.append((index, value))
+        return matches
 
     def log_complaint(self, summary: str) -> dict[str, Any]:
         self.sink.append_task("complaint", {"summary": summary})
