@@ -44,7 +44,7 @@ The provider-specific Pipecat service construction is isolated in
 | STT | Soniox | `stt-rt-v5`; English hint and legal context terms | `SONIOX_API_KEY` |
 | STT | Deepgram | Nova-3, `en-GB`, legal keyterms | `DEEPGRAM_API_KEY` |
 | LLM | OpenRouter | `LLM_MODEL`, default `google/gemini-2.5-flash` | `OPENROUTER_API_KEY` |
-| TTS | Speechify | Simba 3.2 | `SPEECHIFY_API_KEY`; optional `TTS_VOICE`, default `geffen_32` |
+| TTS | Speechify | Simba 3.2 | `SPEECHIFY_API_KEY`; optional `TTS_VOICE`, default `beatrice_32` (en-GB) |
 | TTS | ElevenLabs | `ELEVENLABS_MODEL`, default `eleven_v4_turbo` | `ELEVENLABS_API_KEY`; required `TTS_VOICE` ID |
 | TTS | Deepgram | Aura-2 | `DEEPGRAM_API_KEY`; optional `TTS_VOICE`, default `aura-2-pandora-en` |
 
@@ -120,3 +120,6 @@ M0 writes local files only. Google Sheets and email sinks, the customer context 
 multi-tenancy, persistence/retention controls, practice-management connectors, and
 production operations are later work. Demo fees are fictional and must be replaced with
 firm-approved prices before any real client-facing use.
+
+Scripted A/B calls use synthetic TTS caller audio band-limited to 8 kHz; this is not a
+substitute for real UK callers.

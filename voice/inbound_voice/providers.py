@@ -110,7 +110,7 @@ def create_tts(
             aiohttp_session=aiohttp_session,
             settings=SpeechifyHttpTTSService.Settings(
                 model="simba-3.2",
-                voice=providers.tts_voice or "geffen_32",
+                voice=providers.tts_voice or "beatrice_32",
             ),
         )
     if providers.tts == "elevenlabs":

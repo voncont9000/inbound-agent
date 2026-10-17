@@ -26,9 +26,8 @@ Supported STT values are `assemblyai`, `soniox`, and `deepgram`; supported TTS v
 `speechify`, `elevenlabs`, and `deepgram`. The LLM stays on OpenRouter:
 `LLM_MODEL` defaults to `google/gemini-2.5-flash`.
 
-`TTS_VOICE` is optional for Speechify and Deepgram. Speechify defaults to `geffen_32`
-(Pipecat's default voice); British Speechify voices have not yet been verified. List
-available Speechify voices with:
+`TTS_VOICE` is optional for Speechify and Deepgram. Speechify defaults to `beatrice_32`
+(a user-verified en-GB voice for Simba 3.2). List available Speechify voices with:
 
 ```sh
 curl -G https://api.speechify.ai/v1/voices \
@@ -112,3 +111,23 @@ The report prints p50, p95, and max percentiles for both latency measurements an
 estimated cost across calls. An asterisk marks a partial estimate where usage or a price
 is unknown. Edit `config/prices.yaml` only when you have an official current source;
 prices are documented in USD and exclude applicable taxes and other charges.
+
+## Scripted A/B calls
+
+Run the scripted caller harness from this directory:
+
+```sh
+uv run python -m eval.run_matrix \
+  --stt assemblyai --tts speechify --scenario employment --reps 1
+```
+
+The harness synthesizes missing caller utterances with Speechify Simba 3.2 using each
+scenario's caller voice, caches them under `eval/audio/`, connects an aiortc caller to the
+SmallWebRTC runner, records agent audio and a caller-side timeline, and scores each call
+against the scenario checks. `results.json` and the per-call plus aggregate `summary.md`
+are written under `eval/results/<UTC timestamp>/`; call artefacts, including `bot_audio.wav`
+and `caller_timeline.json`, are copied into `runs/<call_id>/`.
+Select multiple providers, scenarios, or repetitions by listing values after each option.
+
+Caller audio is synthetic TTS, band-limited to 8 kHz and upsampled for WebRTC; it is not a
+substitute for real UK callers or representative real-world speech.

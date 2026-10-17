@@ -1,0 +1,29 @@
+{
+  "call_id": "fixture-call",
+  "transport": "webrtc",
+  "call_duration_seconds": 120,
+  "providers": {
+    "stt": "assemblyai",
+    "tts": "speechify",
+    "llm_model": "google/gemini-2.5-flash"
+  },
+  "usage": {
+    "tts_characters": 1000,
+    "llm_input_tokens": 1000,
+    "llm_output_tokens": 500
+  },
+  "turn_latency_summary": {
+    "p50_seconds": 0.8,
+    "p95_seconds": 1.2,
+    "max_seconds": 1.4
+  },
+  "turn_end_latency_summary": {
+    "p50_seconds": 0.3,
+    "p95_seconds": 0.5,
+    "max_seconds": 0.6
+  },
+  "service_metrics": [
+    {"kind": "ttfb", "processor": "AssemblyAISTTService", "seconds": 0.2},
+    {"kind": "ttfa", "processor": "SpeechifyHttpTTSService", "ttfb_seconds": 0.15}
+  ]
+}

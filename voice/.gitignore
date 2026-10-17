@@ -4,4 +4,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 runs/
+eval/audio/
+eval/results/
 *.egg-info/

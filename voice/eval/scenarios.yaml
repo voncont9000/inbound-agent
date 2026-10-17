@@ -1,0 +1,57 @@
+# Scripted caller scenarios for provider A/B calls.
+# Caller audio is synthesised once (fixed voices) and band-limited to 8 kHz to approximate
+# a phone line. Each utterance is played after the agent has finished speaking.
+# Checks are scored against transcript.jsonl (user turns), intake.json and tasks.json.
+scenarios:
+  employment:
+    caller_voice: hamish            # Speechify en-GB male, not used as an agent voice
+    utterances:
+      - "Hi there. I think I've been unfairly dismissed and I'd like to speak to someone about it."
+      - "My name is Siobhan McAllister."
+      - "My mobile is oh seven seven zero zero, nine double oh, one two three."
+      - "I worked for Brightwell Logistics Limited as a warehouse supervisor for just over four years."
+      - "They dismissed me on the tenth of August."
+      - "No, I haven't contacted ACAS yet."
+      - "My email is siobhan dot mcallister at example dot com."
+      - "A call back tomorrow morning would be great. That's everything, thank you. Bye."
+    transcript_checks:              # regex, case-insensitive, over all user turns joined by spaces
+      caller_surname: "mc ?allister|mcalister"
+      employer: "brightwell"
+      acas: "\\bacas\\b"
+      phone_digits: "0?7700.{0,3}900.{0,3}123|oh seven seven zero zero"
+      dismissal_date: "10(th)? (of )?august|tenth of august"
+    intake_checks:                  # field: regex over the stringified saved value
+      caller_name: "(?i)siobhan.*mc ?allister"
+      phone: "07700 ?900 ?123|\\+?44 ?7700 ?900 ?123"
+      email: "(?i)^siobhan\\.mcallister@example\\.com$"
+      employer_name: "(?i)brightwell"
+      termination_date: "^2026-08-10$"
+      acas_early_conciliation_started: "^False$"
+    task_checks:
+      urgent: true                  # deadline 2026-11-09 is <= 28 days from 2026-10-17
+  conveyancing:
+    caller_voice: catriona          # Speechify en-GB female, not used as an agent voice
+    utterances:
+      - "Hello. I'm buying a leasehold flat and I'd like a quote for the conveyancing."
+      - "The purchase price is two hundred and eighty-five thousand pounds."
+      - "It's in Leeds, the postcode is L S six, two A B."
+      - "Yes, I've got a mortgage offer from Nationwide."
+      - "I'm a first-time buyer and there's no chain."
+      - "My name is Daniel Okafor, and my number is oh seven seven zero zero, nine double oh, four five six."
+      - "That's everything for now, thank you. Goodbye."
+    transcript_checks:
+      price: "285,?000|two hundred and eighty.five thousand"
+      postcode: "ls ?6 ?2ab|l s six,? two a b"
+      lender: "nationwide"
+      leasehold: "leasehold"
+      surname: "okafor"
+    intake_checks:
+      caller_name: "(?i)daniel okafor"
+      phone: "07700 ?900 ?456|\\+?44 ?7700 ?900 ?456"
+      postcode: "(?i)^ls6 ?2ab$"
+      tenure: "(?i)leasehold"
+      lender: "(?i)nationwide"
+      first_time_buyer: "^True$"
+      mortgage: "^True$"
+    task_checks:
+      urgent: false

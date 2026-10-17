@@ -125,7 +125,7 @@ def test_create_tts() -> None:
 
     assert isinstance(speechify, SpeechifyHttpTTSService)
     assert speechify._settings.model == "simba-3.2"
-    assert speechify._settings.voice == "geffen_32"
+    assert speechify._settings.voice == "beatrice_32"
     assert isinstance(elevenlabs, ElevenLabsTTSService)
     assert elevenlabs._settings.model == "eleven_v4_turbo"
     assert elevenlabs._settings.voice == "elevenlabs-voice-id"
