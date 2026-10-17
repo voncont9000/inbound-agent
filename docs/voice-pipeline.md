@@ -9,7 +9,7 @@ Browser SmallWebRTC / Twilio Media Streams
            Pipecat transport
                   │
                   ▼
- Deepgram Nova-3 STT (en-GB + legal keyterms)
+ AssemblyAI / Soniox / Deepgram STT
                   │
        Silero VAD + local Smart Turn v3
                   │
@@ -17,7 +17,7 @@ Browser SmallWebRTC / Twilio Media Streams
  OpenRouter LLM (configurable model, function tools)
                   │
                   ▼
- Deepgram Aura-2 TTS (British voice)
+ Speechify / ElevenLabs / Deepgram TTS
                   │
                   ▼
            Pipecat transport
@@ -32,10 +32,24 @@ development runner creates the requested transport and invokes the same voice pi
 The `CallSink` protocol isolates transcript, intake, follow-up tasks and metrics from
 storage; Google Sheets and email sinks are intentionally deferred.
 
-## Vendor choices and seams
+## Provider choices and seams
 
-- **Deepgram** supplies streaming Nova-3 speech recognition and Aura-2 speech synthesis.
-  `DEEPGRAM_API_KEY`, `TTS_VOICE`, and the service classes are isolated in the bot.
+The speech providers are selected independently through `STT_PROVIDER` and `TTS_PROVIDER`.
+The provider-specific Pipecat service construction is isolated in
+`inbound_voice/providers.py`; the LLM remains OpenRouter.
+
+| Component | Provider | Model/configuration | Voice/key |
+|---|---|---|---|
+| STT | AssemblyAI | Universal-3.6 Pro Realtime; legal keyterms | `ASSEMBLYAI_API_KEY` |
+| STT | Soniox | `stt-rt-v5`; English hint and legal context terms | `SONIOX_API_KEY` |
+| STT | Deepgram | Nova-3, `en-GB`, legal keyterms | `DEEPGRAM_API_KEY` |
+| LLM | OpenRouter | `LLM_MODEL`, default `google/gemini-2.5-flash` | `OPENROUTER_API_KEY` |
+| TTS | Speechify | Simba 3.2 | `SPEECHIFY_API_KEY`; optional `TTS_VOICE`, default `geffen_32` |
+| TTS | ElevenLabs | `ELEVENLABS_MODEL`, default `eleven_v4_turbo` | `ELEVENLABS_API_KEY`; required `TTS_VOICE` ID |
+| TTS | Deepgram | Aura-2 | `DEEPGRAM_API_KEY`; optional `TTS_VOICE`, default `aura-2-pandora-en` |
+
+- **Speech providers** use separate API keys, except Deepgram uses one key for either
+  selected side. `OPENROUTER_API_KEY` is always required.
 - **OpenRouter** provides a common OpenAI-compatible interface to an environment-selected
   model. `LLM_MODEL` defaults to `google/gemini-2.5-flash`; replacing the LLM service does
   not affect the turn or sink interfaces.
@@ -67,13 +81,38 @@ turn, clears it on interruption, and reports p50, p95, and max for both interval
 measurements include Pipecat STT/LLM/TTS TTFB-family metrics, token usage, synthesized
 characters, and call duration.
 
-Estimated cost uses `voice/config/prices.yaml`: Deepgram Nova-3 streaming STT per minute
-of full call duration (the stream remains open for the call), Aura-2 TTS per 1,000
-characters, OpenRouter LLM input/output per million tokens, and UK local Twilio inbound
-per minute. Measured STT audio seconds remain in usage metrics for information but do not
-determine STT cost. The table records official source URLs and the 2026-10-16 check date.
+Estimated cost uses provider-specific STT per-minute rates multiplied by full call
+duration (the stream/session remains open for the call), provider-specific TTS rates per
+1,000 synthesized characters, model-specific OpenRouter input/output rates per million
+tokens, and UK local Twilio inbound per minute. Measured STT audio seconds remain in usage
+metrics for information but do not determine STT cost. `prices.yaml` records vendor
+sources and check dates; older metrics without provider metadata default to Deepgram and
+Gemini 2.5 Flash.
 Missing price or usage components are reported as unknown, not silently treated as a
 zero-cost service. Twilio number rental and taxes are excluded.
+
+## Provider research (2026-10-17)
+
+The following are **public benchmarks and vendor list prices, not measurements from this
+project**:
+
+| Component | Option | Quality | Latency | Price | ~Per 3-min call |
+|---|---|---|---|---|---|
+| STT | AssemblyAI Universal-3.6 Pro | 2.2% WER (Coval) | 133 ms time-to-final (Coval) | $0.45/hr | $0.0225 |
+| STT | Soniox stt-rt-v5 | 4.8% WER (Coval) | 45 ms time-to-final (Coval) | $0.12/hr | $0.006 |
+| STT | Deepgram Nova-3 | 5.3% WER (Coval) | 85 ms time-to-final (Coval) | $0.29/hr | $0.0144 |
+| TTS | Speechify Simba 3.2 | Vapi Humanness 97 (joint #1); Artificial Analysis #9 | 125 ms TTFA (Coval) | $10/1M chars | $0.015 |
+| TTS | ElevenLabs v4 Turbo | Artificial Analysis #1 (Elo 1330) | 198 ms TTFA (Coval) | $40/1M chars | $0.06 |
+| TTS | Deepgram Aura-2 | Vapi Humanness ~57 | 297 ms TTFA (Coval) | $30/1M chars | $0.045 |
+| LLM | Gemini 2.5 Flash (OpenRouter) | — | ~0.6 s TTFT median (LiveKit) | $0.30/$2.50 per 1M tokens | $0.017 |
+| LLM | Gemini 2.5 Flash Lite (OpenRouter) | test tool-calling first | ~0.7 s p50 via OpenRouter | $0.10/$0.40 per 1M tokens | $0.005 |
+
+Assumptions: 3-minute call, ~1,500 agent characters, ~45k input / 1.5k output tokens,
+Twilio UK inbound ~$0.03 extra. Recommended default: AssemblyAI + Gemini 2.5 Flash +
+Speechify ≈ $0.09/call incl. Twilio; Soniox is the cheaper STT fallback; ElevenLabs is
+the premium voice (~$0.135/call with AssemblyAI). Sources: humannessindex.vapi.ai,
+artificialanalysis.ai/text-to-speech/leaderboard/provider-voice, benchmarks.coval.ai,
+livekit.com/benchmarks/latency.
 
 ## Deferred
 

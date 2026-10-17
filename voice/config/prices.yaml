@@ -11,16 +11,49 @@ prices:
     source: https://deepgram.com/pricing
     checked: "2026-10-16"
     details: "Aura-2 pay-as-you-go, USD per 1,000 input characters."
-  llm_input_per_1m_tokens:
-    value: 0.3
-    source: https://openrouter.ai/google/gemini-2.5-flash
-    checked: "2026-10-16"
-    details: "OpenRouter listed standard input price, USD per 1M tokens."
-  llm_output_per_1m_tokens:
-    value: 2.5
-    source: https://openrouter.ai/google/gemini-2.5-flash
-    checked: "2026-10-16"
-    details: "OpenRouter listed standard output price, USD per 1M tokens."
+  assemblyai_stt_per_minute:
+    value: 0.0075
+    source: https://www.assemblyai.com/pricing
+    checked: "2026-10-17"
+    details: "Universal-3.6 Pro Realtime $0.45/hr base, billed on session duration (WebSocket open time)."
+  soniox_stt_per_minute:
+    value: 0.002
+    source: https://soniox.com/pricing
+    checked: "2026-10-17"
+    details: "stt-rt-v5 real-time $0.12/hr."
+  speechify_tts_per_1000_characters:
+    value: 0.01
+    source: https://speechify.com/pricing-api/
+    checked: "2026-10-17"
+    details: "Simba pay-as-you-go $10 per 1M characters."
+  elevenlabs_tts_per_1000_characters:
+    value: 0.04
+    source: https://elevenlabs.io/pricing/api
+    checked: "2026-10-17"
+    details: "Flash/Turbo API rate $0.04 per 1,000 characters; Artificial Analysis lists Eleven v4 Turbo at $40/1M. Non-turbo eleven_v4 is $0.08 and is not used."
+  llm_models:
+    google/gemini-2.5-flash:
+      input_per_1m_tokens:
+        value: 0.3
+        source: https://openrouter.ai/google/gemini-2.5-flash
+        checked: "2026-10-17"
+        details: "OpenRouter listed standard input price, USD per 1M tokens."
+      output_per_1m_tokens:
+        value: 2.5
+        source: https://openrouter.ai/google/gemini-2.5-flash
+        checked: "2026-10-17"
+        details: "OpenRouter listed standard output price, USD per 1M tokens."
+    google/gemini-2.5-flash-lite:
+      input_per_1m_tokens:
+        value: 0.1
+        source: https://openrouter.ai/google/gemini-2.5-flash-lite
+        checked: "2026-10-17"
+        details: "OpenRouter listed standard input price, USD per 1M tokens."
+      output_per_1m_tokens:
+        value: 0.4
+        source: https://openrouter.ai/google/gemini-2.5-flash-lite
+        checked: "2026-10-17"
+        details: "OpenRouter listed standard output price, USD per 1M tokens."
   twilio_uk_inbound_per_minute:
     value: 0.01
     source: https://www.twilio.com/en-us/voice/pricing/gb

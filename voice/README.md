@@ -12,9 +12,43 @@ uv sync
 cp .env.example .env
 ```
 
-Set `OPENROUTER_API_KEY` and `DEEPGRAM_API_KEY` in `.env`. The demo firm, fees, and price
-table are illustrative. `LLM_MODEL` defaults to `google/gemini-2.5-flash`; `TTS_VOICE`
-defaults to `aura-2-pandora-en` and can be set to `aura-2-draco-en`.
+Set `OPENROUTER_API_KEY` and the API key for each selected speech provider in `.env`.
+`OPENROUTER_API_KEY` is always required. The default selection is
+`STT_PROVIDER=assemblyai` and `TTS_PROVIDER=speechify`, requiring
+`ASSEMBLYAI_API_KEY` and `SPEECHIFY_API_KEY`. Use `SONIOX_API_KEY` for Soniox,
+`ELEVENLABS_API_KEY` for ElevenLabs, and `DEEPGRAM_API_KEY` when either provider is
+Deepgram. The demo firm, fees, and price table are illustrative.
+
+## Selecting providers and voices
+
+Change `STT_PROVIDER` and `TTS_PROVIDER` in `.env`, then restart the runner to A/B providers.
+Supported STT values are `assemblyai`, `soniox`, and `deepgram`; supported TTS values are
+`speechify`, `elevenlabs`, and `deepgram`. The LLM stays on OpenRouter:
+`LLM_MODEL` defaults to `google/gemini-2.5-flash`.
+
+`TTS_VOICE` is optional for Speechify and Deepgram. Speechify defaults to `geffen_32`
+(Pipecat's default voice); British Speechify voices have not yet been verified. List
+available Speechify voices with:
+
+```sh
+curl -G https://api.speechify.ai/v1/voices \
+  -H "Authorization: Bearer $SPEECHIFY_API_KEY" \
+  -d locale=en \
+  -d model=simba-3.2
+```
+
+For ElevenLabs, set `TTS_VOICE` to a voice ID from the ElevenLabs voice library, for
+example:
+
+```dotenv
+TTS_PROVIDER=elevenlabs
+TTS_VOICE=your-elevenlabs-voice-id
+ELEVENLABS_MODEL=eleven_v4_turbo
+```
+
+The default ElevenLabs model is `eleven_v4_turbo`. ElevenLabs documentation describes
+this model for the Text-to-Dialogue WebSocket; if the standard stream-input endpoint
+rejects it, set `ELEVENLABS_MODEL=eleven_flash_v2_5`.
 
 ## Browser web call
 
@@ -58,9 +92,11 @@ Twilio credentials are optional for local WebRTC and must never be committed.
 Each session writes `transcript.jsonl`, `intake.json`, `tasks.json`, and `metrics.json` to
 `voice/runs/<call_id>/`. That directory is ignored by Git. Call-level metrics include
 VAD-stop-to-first-bot-speaking and Smart-Turn-end-to-first-bot-speaking latency for each
-turn, Pipecat service latency and usage measurements, and estimated cost. Deepgram
-streaming STT cost is based on the full call duration because the audio stream stays open
-for the call; measured STT audio seconds are retained as informational usage data.
+turn, selected STT/TTS providers and LLM model, Pipecat service latency and usage
+measurements, and estimated cost. STT cost is based on the full call duration because the
+stream/session stays open for the call; measured STT audio seconds are retained as
+informational usage data. TTS cost uses synthesized characters and LLM cost uses the
+selected model's token rates.
 
 ```sh
 uv run python -m inbound_voice.report runs

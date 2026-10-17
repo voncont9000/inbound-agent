@@ -70,16 +70,110 @@ def test_stt_cost_uses_call_duration_not_measured_usage() -> None:
             "prices": {
                 "deepgram_stt_per_minute": {"value": 0.006},
                 "deepgram_tts_per_1000_characters": {"value": None},
-                "llm_input_per_1m_tokens": {"value": 0.3},
-                "llm_output_per_1m_tokens": {"value": 2.5},
+                "llm_models": {
+                    "google/gemini-2.5-flash": {
+                        "input_per_1m_tokens": {"value": 0.3},
+                        "output_per_1m_tokens": {"value": 2.5},
+                    }
+                },
                 "twilio_uk_inbound_per_minute": {"value": None},
             },
         },
     )
 
-    assert cost["components"]["deepgram_stt"] == 0.012
-    assert cost["components"]["deepgram_tts"] is None
+    assert cost["components"]["stt"] == 0.012
+    assert cost["components"]["tts"] is None
     assert cost["components"]["llm_input"] is None
     assert cost["components"]["twilio"] is None
     assert cost["total"] == 0.012
     assert "twilio" in cost["unknown_components"]
+
+
+def test_provider_specific_costs_use_selected_rates() -> None:
+    from pathlib import Path
+
+    from inbound_voice.metrics import load_price_table
+
+    prices = load_price_table(Path(__file__).resolve().parents[1] / "config" / "prices.yaml")
+    cost = calculate_cost(
+        {
+            "transport": "webrtc",
+            "call_duration_seconds": 120,
+            "providers": {
+                "stt": "assemblyai",
+                "tts": "speechify",
+                "llm_model": "google/gemini-2.5-flash",
+            },
+            "usage": {
+                "stt_audio_seconds": 999,
+                "tts_characters": 1000,
+                "llm_input_tokens": 1000,
+                "llm_output_tokens": 1000,
+            },
+        },
+        prices,
+    )
+
+    assert cost["components"]["stt"] == pytest.approx(0.015)
+    assert cost["components"]["tts"] == 0.01
+    assert cost["components"]["llm_input"] == 0.0003
+    assert cost["components"]["llm_output"] == 0.0025
+    assert cost["components"]["twilio"] == 0.0
+
+
+def test_legacy_metrics_default_to_deepgram_and_gemini_flash() -> None:
+    from pathlib import Path
+
+    from inbound_voice.metrics import load_price_table
+
+    prices = load_price_table(Path(__file__).resolve().parents[1] / "config" / "prices.yaml")
+    cost = calculate_cost(
+        {
+            "transport": "twilio",
+            "call_duration_seconds": 60,
+            "usage": {
+                "tts_characters": 1000,
+                "llm_input_tokens": 1_000_000,
+                "llm_output_tokens": 1_000_000,
+            },
+        },
+        prices,
+    )
+
+    assert cost["components"] == {
+        "stt": 0.0048,
+        "tts": 0.03,
+        "llm_input": 0.3,
+        "llm_output": 2.5,
+        "twilio": 0.01,
+    }
+    assert cost["unknown_components"] == []
+
+
+def test_unknown_llm_model_has_unknown_llm_components() -> None:
+    from pathlib import Path
+
+    from inbound_voice.metrics import load_price_table
+
+    prices = load_price_table(Path(__file__).resolve().parents[1] / "config" / "prices.yaml")
+    cost = calculate_cost(
+        {
+            "transport": "webrtc",
+            "call_duration_seconds": 60,
+            "providers": {
+                "stt": "assemblyai",
+                "tts": "speechify",
+                "llm_model": "example/unknown-model",
+            },
+            "usage": {
+                "tts_characters": 1000,
+                "llm_input_tokens": 1000,
+                "llm_output_tokens": 1000,
+            },
+        },
+        prices,
+    )
+
+    assert cost["components"]["llm_input"] is None
+    assert cost["components"]["llm_output"] is None
+    assert cost["unknown_components"] == ["llm_input", "llm_output"]

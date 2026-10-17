@@ -42,6 +42,9 @@ def collect_report(runs_dir: str | Path, prices_path: str | Path) -> list[dict[s
 def print_report(calls: list[dict[str, Any]]) -> None:
     headings = (
         "CALL",
+        "STT",
+        "TTS",
+        "LLM MODEL",
         "DURATION",
         "TURNS",
         "VAD P50",
@@ -56,10 +59,14 @@ def print_report(calls: list[dict[str, Any]]) -> None:
     for call in calls:
         summary = call.get("turn_latency_summary", {})
         turn_end_summary = call.get("turn_end_latency_summary", {})
+        providers = call.get("providers") or {}
         cost = call["cost"]
         rows.append(
             (
                 str(call["call_id"]),
+                str(providers.get("stt") or "deepgram"),
+                str(providers.get("tts") or "deepgram"),
+                str(providers.get("llm_model") or "google/gemini-2.5-flash"),
                 _seconds(call.get("call_duration_seconds")),
                 str(summary.get("turn_count", len(call.get("turns", [])))),
                 _seconds(summary.get("p50_seconds")),

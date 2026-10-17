@@ -26,6 +26,12 @@ def test_report_cli_on_fixture_runs(tmp_path) -> None:
                     "p95_seconds": 0.3,
                     "max_seconds": 0.3,
                 },
+                "providers": {
+                    "stt": "assemblyai",
+                    "tts": "speechify",
+                    "tts_voice": None,
+                    "llm_model": "google/gemini-2.5-flash-lite",
+                },
                 "usage": {
                     "stt_audio_seconds": 60,
                     "tts_characters": 1000,
@@ -54,3 +60,9 @@ def test_report_cli_on_fixture_runs(tmp_path) -> None:
     assert "0.800s" in output
     assert "0.300s" in output
     assert "USD" in output
+    assert "STT" in output
+    assert "TTS" in output
+    assert "LLM MODEL" in output
+    assert "assemblyai" in output
+    assert "speechify" in output
+    assert "google/gemini-2.5-flash-lite" in output

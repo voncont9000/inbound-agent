@@ -2,6 +2,7 @@ import os
 import uuid
 from pathlib import Path
 
+import aiohttp
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -18,8 +19,6 @@ from pipecat.processors.frame_processor import FrameDirection
 from pipecat.runner.run import main
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
-from pipecat.services.deepgram.stt import DeepgramSTTService
-from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.services.llm_service import FunctionCallParams
 from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.transports.base_transport import TransportParams
@@ -31,24 +30,12 @@ from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from inbound_voice.config import load_firm_config
 from inbound_voice.metrics import CallMetricsObserver
 from inbound_voice.prompts import render_system_prompt
+from inbound_voice.providers import create_stt, create_tts, resolve_providers
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
 
 ROOT = Path(__file__).resolve().parent
 FIRM_CONFIG = ROOT / "config" / "demo_firm.yaml"
-KEYTERMS = [
-    "conveyancing",
-    "freehold",
-    "leasehold",
-    "ACAS",
-    "tribunal",
-    "remortgage",
-    "completion",
-    "exchange",
-    "solicitor",
-    "redundancy",
-    "settlement agreement",
-]
 
 
 def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
@@ -74,75 +61,79 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
 
 
 async def run_bot(transport: object, telephony: bool = False) -> None:
+    providers = resolve_providers(os.environ)
+    llm_model = os.getenv("LLM_MODEL", "google/gemini-2.5-flash")
     call_id = str(uuid.uuid4())
     sink = LocalFilesCallSink(ROOT / "runs", call_id)
-    metrics_observer = CallMetricsObserver(sink, telephony=telephony)
+    metrics_observer = CallMetricsObserver(
+        sink,
+        telephony=telephony,
+        providers={
+            "stt": providers.stt,
+            "tts": providers.tts,
+            "tts_voice": providers.tts_voice,
+            "llm_model": llm_model,
+        },
+    )
     call_tools = CallTools(sink)
     firm = load_firm_config(FIRM_CONFIG)
 
-    stt = DeepgramSTTService(
-        api_key=os.environ["DEEPGRAM_API_KEY"],
-        settings=DeepgramSTTService.Settings(
-            model="nova-3",
-            language="en-GB",
-            keyterm=KEYTERMS,
-        ),
-    )
-    llm = OpenRouterLLMService(
-        api_key=os.environ["OPENROUTER_API_KEY"],
-        settings=OpenRouterLLMService.Settings(
-            model=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"),
-            system_instruction=render_system_prompt(firm),
-            temperature=0.2,
-        ),
-    )
-    tts = DeepgramTTSService(
-        api_key=os.environ["DEEPGRAM_API_KEY"],
-        settings=DeepgramTTSService.Settings(voice=os.getenv("TTS_VOICE", "aura-2-pandora-en")),
-    )
-    context = LLMContext(tools=create_function_schemas(call_tools))
-    context_aggregators = LLMContextAggregatorPair(
-        context,
-        user_params=LLMUserAggregatorParams(
-            vad_analyzer=SileroVADAnalyzer(),
-            user_turn_strategies=UserTurnStrategies(
-                start=[VADUserTurnStartStrategy(enable_interruptions=True)],
-                stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())],
+    async with aiohttp.ClientSession() as session:
+        stt = create_stt(providers, os.environ)
+        llm = OpenRouterLLMService(
+            api_key=os.environ["OPENROUTER_API_KEY"],
+            settings=OpenRouterLLMService.Settings(
+                model=llm_model,
+                system_instruction=render_system_prompt(firm),
+                temperature=0.2,
             ),
-        ),
-    )
-    pipeline = Pipeline(
-        [
-            transport.input(),
-            stt,
-            context_aggregators.user(),
-            llm,
-            tts,
-            transport.output(),
-            context_aggregators.assistant(),
-        ]
-    )
-    task = PipelineTask(
-        pipeline,
-        params=PipelineParams(
-            enable_metrics=True,
-            enable_usage_metrics=True,
-        ),
-        observers=[metrics_observer],
-    )
+        )
+        tts = create_tts(providers, os.environ, session)
+        context = LLMContext(tools=create_function_schemas(call_tools))
+        context_aggregators = LLMContextAggregatorPair(
+            context,
+            user_params=LLMUserAggregatorParams(
+                vad_analyzer=SileroVADAnalyzer(),
+                user_turn_strategies=UserTurnStrategies(
+                    start=[VADUserTurnStartStrategy(enable_interruptions=True)],
+                    stop=[
+                        TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())
+                    ],
+                ),
+            ),
+        )
+        pipeline = Pipeline(
+            [
+                transport.input(),
+                stt,
+                context_aggregators.user(),
+                llm,
+                tts,
+                transport.output(),
+                context_aggregators.assistant(),
+            ]
+        )
+        task = PipelineTask(
+            pipeline,
+            params=PipelineParams(
+                enable_metrics=True,
+                enable_usage_metrics=True,
+            ),
+            observers=[metrics_observer],
+        )
 
-    @transport.event_handler("on_client_connected")
-    async def on_client_connected(_transport: object, _client: object) -> None:
-        await task.queue_frame(LLMRunFrame())
+        @transport.event_handler("on_client_connected")
+        async def on_client_connected(_transport: object, _client: object) -> None:
+            await task.queue_frame(LLMRunFrame())
 
-    @transport.event_handler("on_client_disconnected")
-    async def on_client_disconnected(_transport: object, _client: object) -> None:
-        await task.cancel()
+        @transport.event_handler("on_client_disconnected")
+        async def on_client_disconnected(_transport: object, _client: object) -> None:
+            await task.cancel()
 
-    try:
-        await PipelineRunner().run(task)
-    finally:
-        metrics_observer.persist()
+        try:
+            await PipelineRunner().run(task)
+        finally:
+            metrics_observer.persist()
 
 
 async def bot(runner_args: RunnerArguments) -> None:

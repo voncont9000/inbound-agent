@@ -1,5 +1,6 @@
 import math
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -111,10 +112,16 @@ class TurnLatencyTracker:
 class CallMetricsObserver(BaseObserver):
     """Observe Pipecat frame flow and write call-level latency and usage metrics."""
 
-    def __init__(self, sink: CallSink, telephony: bool = False) -> None:
+    def __init__(
+        self,
+        sink: CallSink,
+        telephony: bool = False,
+        providers: Mapping[str, str | None] | None = None,
+    ) -> None:
         super().__init__(observe_every_push=False)
         self.sink = sink
         self.telephony = telephony
+        self.providers = dict(providers or {})
         self.latency = TurnLatencyTracker()
         self._seen_broadcast_frame_ids: set[int] = set()
         self.service_metrics: list[dict[str, Any]] = []
@@ -237,6 +244,7 @@ class CallMetricsObserver(BaseObserver):
             "call_id": self.sink.call_id,
             "transport": "twilio" if self.telephony else "webrtc",
             "call_duration_seconds": max(0.0, time.monotonic() - self.started_at),
+            "providers": self.providers,
             "turns": self.latency.turns,
             "turn_latency_summary": self.latency.summary(),
             "turn_end_latency_summary": self.latency.turn_end_summary(),
@@ -257,6 +265,11 @@ def load_price_table(path: str | Path) -> dict[str, Any]:
 def calculate_cost(metrics: dict[str, Any], price_table: dict[str, Any]) -> dict[str, Any]:
     prices = price_table.get("prices", price_table)
     usage = metrics.get("usage", {})
+    providers = metrics.get("providers") or {}
+    stt_provider = providers.get("stt", "deepgram")
+    tts_provider = providers.get("tts", "deepgram")
+    llm_model = providers.get("llm_model", "google/gemini-2.5-flash")
+    llm_prices = prices.get("llm_models", {}).get(llm_model, {})
     transport = metrics.get("transport")
     twilio_cost = (
         _priced_cost(
@@ -270,24 +283,24 @@ def calculate_cost(metrics: dict[str, Any], price_table: dict[str, Any]) -> dict
         else None
     )
     components = {
-        "deepgram_stt": _priced_cost(
+        "stt": _priced_cost(
             metrics.get("call_duration_seconds"),
-            prices.get("deepgram_stt_per_minute", {}).get("value"),
+            prices.get(f"{stt_provider}_stt_per_minute", {}).get("value"),
             divisor=60,
         ),
-        "deepgram_tts": _priced_cost(
+        "tts": _priced_cost(
             usage.get("tts_characters"),
-            prices.get("deepgram_tts_per_1000_characters", {}).get("value"),
+            prices.get(f"{tts_provider}_tts_per_1000_characters", {}).get("value"),
             divisor=1000,
         ),
         "llm_input": _priced_cost(
             usage.get("llm_input_tokens"),
-            prices.get("llm_input_per_1m_tokens", {}).get("value"),
+            llm_prices.get("input_per_1m_tokens", {}).get("value"),
             divisor=1_000_000,
         ),
         "llm_output": _priced_cost(
             usage.get("llm_output_tokens"),
-            prices.get("llm_output_per_1m_tokens", {}).get("value"),
+            llm_prices.get("output_per_1m_tokens", {}).get("value"),
             divisor=1_000_000,
         ),
         "twilio": twilio_cost,

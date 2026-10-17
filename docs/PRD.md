@@ -122,7 +122,7 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 
 ## 9. Proposed architecture (v1)
 - **Backend:** TypeScript (Node) API plus workers. Postgres with pgvector for data and RAG. Redis for realtime session state. A durable job queue for email and WhatsApp runs.
-- **Voice gateway:** a separate realtime service handling telephony media streams (Twilio Media Streams / SIP). Pluggable STT (e.g. Deepgram/Soniox), LLM (OpenAI/Anthropic), TTS (ElevenLabs/Cartesia). Evaluate a framework (e.g. Pipecat/LiveKit Agents) against a custom build in a spike.
+- **Voice gateway:** a separate realtime service handling telephony media streams (Twilio Media Streams / SIP). M0 provider candidates are AssemblyAI, Soniox or Deepgram for STT; OpenRouter for the LLM; and Speechify, ElevenLabs or Deepgram for TTS. Evaluate a framework (e.g. Pipecat/LiveKit Agents) against a custom build in a spike.
 - **Channel adapters:** Gmail (Pub/Sub watch plus History API), WhatsApp Cloud API webhooks, telephony. All channels normalise into one `Conversation`/`Message` model and one agent runtime with shared tools.
 - **Frontend:** React web app (assistant setup, inbox, contacts, knowledge, analytics).
 
