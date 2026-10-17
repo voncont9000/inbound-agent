@@ -24,6 +24,8 @@ VOICE_ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = VOICE_ROOT / "runs"
 RESULTS_DIR = Path(__file__).with_name("results")
 RUNNER_URL = "http://127.0.0.1:7860"
+DEFAULT_SPEECHIFY_VOICE = "beatrice_32"
+DEFAULT_ELEVENLABS_VOICE = "MzqUf1HbJ8UmQ0wUsx2p"
 API_KEY_NAMES = (
     "OPENROUTER_API_KEY",
     "ASSEMBLYAI_API_KEY",
@@ -33,7 +35,10 @@ API_KEY_NAMES = (
     "DEEPGRAM_API_KEY",
 )
 PROVIDER_ERROR = re.compile(
-    r"\b(401|403)\b|unauthorized|forbidden|authenticationerror|invalid[_ ]api[_ ]key|"
+    r"(?:(?:http(?:/\d(?:\.\d)?)?(?:\s+(?:status(?:\s+code)?|code))?|"
+    r"status(?:\s+code)?|response(?:\s+(?:status|code))?|error(?:\s+code)?)"
+    r"\s*[=:]?\s*(?<![\d.:])\b(?:400|401|403|429|5\d\d)\b)|"
+    r"unauthorized|forbidden|authenticationerror|invalid[_ ]api[_ ]key|"
     r"model.{0,40}(not found|unsupported)|voice.{0,40}(not found|invalid)",
     re.IGNORECASE,
 )
@@ -53,15 +58,28 @@ async def _read_runner_output(
         print(text, end="", flush=True)
 
 
+def _configure_tts_voice(
+    process_env: dict[str, str],
+    tts: str,
+    speechify_voice: str | None = None,
+    elevenlabs_voice: str | None = None,
+) -> None:
+    if tts == "speechify":
+        process_env["TTS_VOICE"] = speechify_voice or DEFAULT_SPEECHIFY_VOICE
+    elif tts == "elevenlabs":
+        process_env["TTS_VOICE"] = elevenlabs_voice or DEFAULT_ELEVENLABS_VOICE
+
+
 async def _start_runner(
     stt: str,
     tts: str,
+    speechify_voice: str | None = None,
+    elevenlabs_voice: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
     process_env["STT_PROVIDER"] = stt
     process_env["TTS_PROVIDER"] = tts
-    if tts == "speechify":
-        process_env.pop("TTS_VOICE", None)
+    _configure_tts_voice(process_env, tts, speechify_voice, elevenlabs_voice)
     process = await asyncio.create_subprocess_exec(
         "uv",
         "run",
@@ -185,6 +203,8 @@ async def run_matrix(
     tts_providers: Sequence[str],
     scenario_names: Sequence[str],
     repetitions: Sequence[int],
+    speechify_voice: str | None = None,
+    elevenlabs_voice: str | None = None,
 ) -> Path:
     from eval.synth_callers import load_scenarios
 
@@ -204,7 +224,9 @@ async def run_matrix(
     for stt in dict.fromkeys(stt_providers):
         for tts in dict.fromkeys(tts_providers):
             print(f"\n=== Starting runner for STT={stt}, TTS={tts} ===")
-            process, output_task, output_lines = await _start_runner(stt, tts)
+            process, output_task, output_lines = await _start_runner(
+                stt, tts, speechify_voice, elevenlabs_voice
+            )
             try:
                 for scenario_name in scenario_names:
                     for repetition in repetitions:
@@ -294,6 +316,8 @@ def main() -> None:
     parser.add_argument("--tts", nargs="+", choices=TTS_PROVIDERS, required=True)
     parser.add_argument("--scenario", nargs="+", required=True)
     parser.add_argument("--reps", nargs="+", type=int, required=True)
+    parser.add_argument("--speechify-voice")
+    parser.add_argument("--elevenlabs-voice")
     arguments = parser.parse_args()
     asyncio.run(
         run_matrix(
@@ -301,6 +325,8 @@ def main() -> None:
             arguments.tts,
             arguments.scenario,
             arguments.reps,
+            arguments.speechify_voice,
+            arguments.elevenlabs_voice,
         )
     )
 

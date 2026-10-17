@@ -27,6 +27,10 @@ SCENARIO = {
 def test_score_call_uses_fixture_transcript_intake_tasks_and_metrics(tmp_path) -> None:
     run_dir = tmp_path / "fixture-call"
     shutil.copytree(FIXTURE, run_dir)
+    metrics_path = run_dir / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics["providers"]["tts_voice"] = "voice-123"
+    metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
 
     result = score_call(run_dir, SCENARIO)
 
@@ -44,6 +48,7 @@ def test_score_call_uses_fixture_transcript_intake_tasks_and_metrics(tmp_path) -
     assert result["stt_ttfb_median_seconds"] == 0.2
     assert result["tts_ttfb_median_seconds"] == 0.15
     assert result["ended_via_end_call"]
+    assert result["tts_voice"] == "voice-123"
     assert result["estimated_cost"]["components"]["stt"] == pytest.approx(0.015)
 
 
@@ -52,6 +57,7 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
         {
             "stt": "assemblyai",
             "tts": "speechify",
+            "tts_voice": "beatrice_32",
             "scenario": "employment",
             "rep": 1,
             "checks_passed": 4,
@@ -64,6 +70,7 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
         {
             "stt": "assemblyai",
             "tts": "speechify",
+            "tts_voice": "beatrice_32",
             "scenario": "employment",
             "rep": 2,
             "checks_passed": 5,
@@ -83,6 +90,8 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
     assert aggregate["checks_passed"] == 9
     assert aggregate["checks_total"] == 10
     assert aggregate["mean_cost"] == 0.09
+    assert "Voice" in summary
+    assert "beatrice_32" in summary
     assert "| Aggregate " in summary
     assert "9/10" in summary
 

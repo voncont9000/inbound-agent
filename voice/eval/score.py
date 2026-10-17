@@ -70,6 +70,7 @@ def score_call(
     price_table = prices if prices is not None else load_price_table(PRICES_PATH)
     cost = calculate_cost(metrics, price_table)
     service_metrics = metrics.get("service_metrics", [])
+    provider_metadata = metrics.get("providers") or {}
     stt_ttfb = _ttfb_median(service_metrics, "stt")
     tts_ttfb = _ttfb_median(service_metrics, "tts")
 
@@ -89,6 +90,7 @@ def score_call(
         "call_duration_seconds": metrics.get("call_duration_seconds"),
         "estimated_cost": cost,
         "ended_via_end_call": "end_call" in task_types,
+        "tts_voice": provider_metadata.get("tts_voice"),
     }
 
 
@@ -138,6 +140,7 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
         "Kind",
         "STT",
         "TTS",
+        "Voice",
         "Scenario",
         "Rep",
         "Checks",
@@ -162,6 +165,7 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 "Call",
                 stt,
                 tts,
+                str(call.get("tts_voice") or "—"),
                 call.get("scenario", "—"),
                 str(call.get("rep", "—")),
                 f"{call.get('checks_passed', 0)}/{call.get('checks_total', 0)}",
@@ -184,6 +188,16 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 "Aggregate",
                 stt,
                 tts,
+                ", ".join(
+                    sorted(
+                        {
+                            str(call["tts_voice"])
+                            for call in combination_calls
+                            if call.get("tts_voice")
+                        }
+                    )
+                )
+                or "—",
                 "all",
                 "—",
                 f"{aggregate['checks_passed']}/{aggregate['checks_total']}",

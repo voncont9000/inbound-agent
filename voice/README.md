@@ -36,13 +36,24 @@ curl -G https://api.speechify.ai/v1/voices \
   -d model=simba-3.2
 ```
 
-For ElevenLabs, set `TTS_VOICE` to a voice ID from the ElevenLabs voice library, for
-example. The suggested verified voice is Alice (`Xb7hH8MSUJpSbSDYk0k2`), a British RP
-voice that has synthesized successfully with `eleven_v4_turbo`:
+For ElevenLabs, set `TTS_VOICE` to a voice ID. The suggested shared-library voice is
+Katie X — Clear British Customer Support (`MzqUf1HbJ8UmQ0wUsx2p`); built-in Alice
+(`Xb7hH8MSUJpSbSDYk0k2`), a British RP voice, is an alternative. Find personal voices
+with `GET /v2/voices` or search shared British conversational voices with
+`GET /v1/shared-voices?language=en&accent=british&use_cases=conversational`:
+
+```sh
+curl -H "xi-api-key: $ELEVENLABS_API_KEY" https://api.elevenlabs.io/v2/voices
+curl -G https://api.elevenlabs.io/v1/shared-voices \
+  -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  -d language=en \
+  -d accent=british \
+  -d use_cases=conversational
+```
 
 ```dotenv
 TTS_PROVIDER=elevenlabs
-TTS_VOICE=Xb7hH8MSUJpSbSDYk0k2
+TTS_VOICE=MzqUf1HbJ8UmQ0wUsx2p
 ELEVENLABS_MODEL=eleven_v4_turbo
 ```
 
@@ -136,6 +147,9 @@ against the scenario checks. `results.json` and the per-call plus aggregate `sum
 are written under `eval/results/<UTC timestamp>/`; call artefacts, including `bot_audio.wav`
 and `caller_timeline.json`, are copied into `runs/<call_id>/`.
 Select multiple providers, scenarios, or repetitions by listing values after each option.
+The matrix defaults to Speechify `beatrice_32` and ElevenLabs Katie X
+(`MzqUf1HbJ8UmQ0wUsx2p`); override them with `--speechify-voice` and
+`--elevenlabs-voice`.
 
 Caller audio is synthetic TTS, band-limited to 8 kHz and upsampled for WebRTC; it is not a
 substitute for real UK callers or representative real-world speech.

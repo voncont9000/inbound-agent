@@ -45,8 +45,11 @@ The provider-specific Pipecat service construction is isolated in
 | STT | Deepgram | Nova-3, `en-GB`, legal keyterms | `DEEPGRAM_API_KEY` |
 | LLM | OpenRouter | `LLM_MODEL`, default `google/gemini-2.5-flash` | `OPENROUTER_API_KEY` |
 | TTS | Speechify | Simba 3.2 | `SPEECHIFY_API_KEY`; optional `TTS_VOICE`, default `beatrice_32` (en-GB) |
-| TTS | ElevenLabs | `ELEVENLABS_MODEL`, default `eleven_v4_turbo` | `ELEVENLABS_API_KEY`; required `TTS_VOICE` ID |
+| TTS | ElevenLabs | `ELEVENLABS_MODEL`, default `eleven_v4_turbo` | `ELEVENLABS_API_KEY`; required `TTS_VOICE` ID; suggested Katie X `MzqUf1HbJ8UmQ0wUsx2p`, built-in Alice alternative `Xb7hH8MSUJpSbSDYk0k2` |
 | TTS | Deepgram | Aura-2 | `DEEPGRAM_API_KEY`; optional `TTS_VOICE`, default `aura-2-pandora-en` |
+
+ElevenLabs voices can be listed with `GET /v2/voices`; shared British conversational
+voices can be searched with `GET /v1/shared-voices?language=en&accent=british&use_cases=conversational`.
 
 - **Speech providers** use separate API keys, except Deepgram uses one key for either
   selected side. `OPENROUTER_API_KEY` is always required.
@@ -136,6 +139,15 @@ p50 **1.21 s**; **4/12** checks; estimated cost **$0.029**. `end_call` fired, bu
 `save_intake` still did not: `intake.json` had no practice area or fields, and no urgent
 task was recorded. Four of eight turns had a ~2.2-second VAD-stop-to-turn-end gap,
 down from ~3.2 seconds in the first run.
+
+### Third scripted smoke call (2026-10-17)
+
+The next AssemblyAI + Speechify employment run scored **8/12**. Tool-call logging showed
+six `save_intake` calls, all successful, and the call recorded `urgent`, `callback`, and
+`end_call` tasks. Headline VAD-stop-to-audio latency was p50 **3.05 s** / p95 **5.03 s**;
+turn-end-to-audio p50 was **1.87 s**, up from about **1.15 s** because tool-call turns
+need a second LLM round trip. The caller's name was still misheard as “Mac Alistair,” and
+the email was captured as `yvonne.mcallister`.
 
 The harness plays scripted utterances in a fixed order regardless of the agent's question,
 so a caller's next answer can be misaligned with what the agent asked.
