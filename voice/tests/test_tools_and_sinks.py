@@ -21,6 +21,7 @@ def test_tool_handlers_write_call_files(tmp_path) -> None:
     sink = LocalFilesCallSink(tmp_path, "test-call")
     assert {path.name for path in sink.directory.iterdir()} == {
         "transcript.jsonl",
+        "tool_calls.jsonl",
         "intake.json",
         "tasks.json",
         "metrics.json",
@@ -54,6 +55,30 @@ def test_tool_handlers_write_call_files(tmp_path) -> None:
     ]
     transcript = (sink.directory / "transcript.jsonl").read_text().splitlines()
     assert json.loads(transcript[0])["text"] == "I need help with a purchase."
+
+
+def test_dispatch_logs_invalid_and_valid_save_intake_calls(tmp_path) -> None:
+    sink = LocalFilesCallSink(tmp_path, "logged-tool-calls")
+    tools = CallTools(sink)
+
+    invalid = tools.dispatch(
+        "save_intake", {"practice_area": "employment", "fields": {"issue_type": "wrong"}}
+    )
+    valid = tools.dispatch(
+        "save_intake", {"practice_area": "employment", "fields": {"issue_type": "dismissal"}}
+    )
+
+    entries = [
+        json.loads(line) for line in (sink.directory / "tool_calls.jsonl").read_text().splitlines()
+    ]
+    assert len(entries) == 2
+    assert [entry["name"] for entry in entries] == ["save_intake", "save_intake"]
+    assert entries[0]["arguments"]["fields"]["issue_type"] == "wrong"
+    assert entries[1]["arguments"]["fields"]["issue_type"] == "dismissal"
+    assert [entry["result"]["ok"] for entry in entries] == [False, True]
+    assert invalid["ok"] is False
+    assert valid["ok"] is True
+    assert all("timestamp" in entry for entry in entries)
 
 
 def test_invalid_intake_errors_are_returned_for_reask(tmp_path) -> None:

@@ -95,8 +95,9 @@ Twilio credentials are optional for local WebRTC and must never be committed.
 
 ## Call outputs and report
 
-Each session writes `transcript.jsonl`, `intake.json`, `tasks.json`, and `metrics.json` to
-`voice/runs/<call_id>/`. That directory is ignored by Git. Call-level metrics include
+Each session writes `transcript.jsonl`, `intake.json`, `tasks.json`, `tool_calls.jsonl`, and
+`metrics.json` to `voice/runs/<call_id>/`. That directory is ignored by Git. Call-level
+metrics include
 VAD-stop-to-first-bot-speaking and Smart-Turn-end-to-first-bot-speaking latency for each
 turn, selected STT/TTS providers and LLM model, Pipecat service latency and usage
 measurements, and estimated cost. STT cost is based on the full call duration because the

@@ -9,6 +9,10 @@ class CallSink(Protocol):
 
     def append_transcript(self, role: str, text: str, timestamp: str | None = None) -> None: ...
 
+    def append_tool_call(
+        self, name: str, arguments: dict[str, Any], result: dict[str, Any]
+    ) -> None: ...
+
     def save_intake(self, intake: dict[str, Any]) -> None: ...
 
     def append_task(self, task_type: str, details: dict[str, Any]) -> None: ...
@@ -22,6 +26,7 @@ class LocalFilesCallSink:
         self.directory = Path(runs_dir) / call_id
         self.directory.mkdir(parents=True, exist_ok=True)
         (self.directory / "transcript.jsonl").touch(exist_ok=True)
+        (self.directory / "tool_calls.jsonl").touch(exist_ok=True)
         self._write_json(
             "intake.json", {"practice_area": None, "fields": {}, "conflict_check": "pending"}
         )
@@ -36,6 +41,18 @@ class LocalFilesCallSink:
         }
         with (self.directory / "transcript.jsonl").open("a", encoding="utf-8") as transcript:
             transcript.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    def append_tool_call(
+        self, name: str, arguments: dict[str, Any], result: dict[str, Any]
+    ) -> None:
+        entry = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "name": name,
+            "arguments": arguments,
+            "result": result,
+        }
+        with (self.directory / "tool_calls.jsonl").open("a", encoding="utf-8") as tool_calls:
+            tool_calls.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
 
     def save_intake(self, intake: dict[str, Any]) -> None:
         self._write_json("intake.json", intake)

@@ -19,6 +19,8 @@ def test_demo_firm_config_and_prompt_rules() -> None:
     assert "log_complaint" in prompt
     assert "call 999" in prompt
     assert "Today is 2026-10-17" in prompt
-    assert "save_intake as soon as the caller confirms" in prompt
+    assert "save_intake as soon as the caller gives each intake detail" in prompt
+    assert "do not wait for confirmation" in prompt
+    assert "call save_intake again with" in prompt
     assert "Before calling request_callback" in prompt
     assert "After saying goodbye, call end_call in the same turn" in prompt

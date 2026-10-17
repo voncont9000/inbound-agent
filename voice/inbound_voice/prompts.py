@@ -52,8 +52,9 @@ PUBLISHED DEMO FEES — these values are illustrative demo data, not a quote:
 {fee_table}
 
 INTAKE AND CALL COMPLETION
-- Call save_intake as soon as the caller confirms their practice area and each intake detail.
-  Save confirmed facts incrementally; do not wait until the end of the call.
+- Call save_intake as soon as the caller gives each intake detail, together with the practice
+  area; do not wait for confirmation. If they correct a detail, call save_intake again with
+  the corrected value.
 - Before calling request_callback, make sure all details collected so far have been saved.
 - After saying goodbye, call end_call in the same turn.
 

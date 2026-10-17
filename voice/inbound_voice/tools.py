@@ -70,11 +70,14 @@ class CallTools:
     def dispatch(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         handler = getattr(self, name, None)
         if handler is None or name.startswith("_"):
-            return {"ok": False, "error": "Unknown tool."}
-        try:
-            return handler(**arguments)
-        except (TypeError, ValueError) as error:
-            return {"ok": False, "error": str(error)}
+            result = {"ok": False, "error": "Unknown tool."}
+        else:
+            try:
+                result = handler(**arguments)
+            except (TypeError, ValueError) as error:
+                result = {"ok": False, "error": str(error)}
+        self.sink.append_tool_call(name, arguments, result)
+        return result
 
 
 def tool_specs() -> list[dict[str, Any]]:
