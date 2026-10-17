@@ -2,6 +2,7 @@ import asyncio
 import importlib.util
 from pathlib import Path
 
+import pytest
 from pipecat.frames.frames import EndWorkerFrame
 from pipecat.processors.frame_processor import FrameDirection
 
@@ -13,6 +14,13 @@ BOT_SPEC = importlib.util.spec_from_file_location("voice_bot", BOT_PATH)
 assert BOT_SPEC is not None and BOT_SPEC.loader is not None
 BOT_MODULE = importlib.util.module_from_spec(BOT_SPEC)
 BOT_SPEC.loader.exec_module(BOT_MODULE)
+
+
+def test_smart_turn_stop_secs_parses_default_and_override() -> None:
+    assert BOT_MODULE.smart_turn_stop_secs({}) == 2.0
+    assert BOT_MODULE.smart_turn_stop_secs({"SMART_TURN_STOP_SECS": "1.5"}) == 1.5
+    with pytest.raises(ValueError, match="SMART_TURN_STOP_SECS"):
+        BOT_MODULE.smart_turn_stop_secs({"SMART_TURN_STOP_SECS": "0"})
 
 
 def test_end_call_sends_end_worker_after_tool_result(tmp_path) -> None:

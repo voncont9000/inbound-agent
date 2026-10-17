@@ -72,6 +72,10 @@ tools. Intake is validated against separate conveyancing and employment Pydantic
 Employment unfair-dismissal deadlines are calculated in code from the effective
 termination date and flagged urgent at 28 days or less.
 
+`SMART_TURN_STOP_SECS` controls Pipecat's silence fallback when Smart Turn marks an
+utterance incomplete; it defaults to `2.0` seconds. The first scripted smoke call used
+Pipecat's 3-second default on four of eight turns, adding about 3.2 seconds before turn end.
+
 ## Latency and cost
 
 The latency target is **p95 ≤ 1.5 seconds** from when the caller stopped speaking (VAD stop time
@@ -113,6 +117,28 @@ Speechify ≈ $0.09/call incl. Twilio; Soniox is the cheaper STT fallback; Eleve
 the premium voice (~$0.135/call with AssemblyAI). Sources: humannessindex.vapi.ai,
 artificialanalysis.ai/text-to-speech/leaderboard/provider-voice, benchmarks.coval.ai,
 livekit.com/benchmarks/latency.
+
+## Scripted A/B calls
+
+### First scripted smoke call (2026-10-17)
+
+AssemblyAI + Speechify, employment scenario: headline VAD-stop-to-audio p50 **3.40 s** /
+p95 **5.12 s**; turn-end-to-audio p50 **1.15 s**; **4/12** checks; estimated cost
+**$0.033**. The agent did not call `end_call` and never called `save_intake`, leaving
+`intake.json` empty and preventing the deadline urgency check from running.
+
+### Post-fix scripted smoke call (2026-10-17)
+
+After adding the generated intake schema, explicit tool-use instructions, and a
+`SMART_TURN_STOP_SECS=2.0` default, the same AssemblyAI + Speechify employment scenario
+reported headline VAD-stop-to-audio p50 **2.45 s** / p95 **3.99 s**; turn-end-to-audio
+p50 **1.21 s**; **4/12** checks; estimated cost **$0.029**. `end_call` fired, but
+`save_intake` still did not: `intake.json` had no practice area or fields, and no urgent
+task was recorded. Four of eight turns had a ~2.2-second VAD-stop-to-turn-end gap,
+down from ~3.2 seconds in the first run.
+
+The harness plays scripted utterances in a fixed order regardless of the agent's question,
+so a caller's next answer can be misaligned with what the agent asked.
 
 ## Deferred
 

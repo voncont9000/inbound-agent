@@ -1,4 +1,7 @@
-from typing import Any
+import types
+from datetime import date
+from typing import Any, Union, get_args, get_origin
+from typing import Literal as TypingLiteral
 
 from pydantic import ValidationError
 
@@ -75,6 +78,7 @@ class CallTools:
 
 
 def tool_specs() -> list[dict[str, Any]]:
+    fields_description = _intake_fields_description()
     return [
         {
             "name": "save_intake",
@@ -87,7 +91,7 @@ def tool_specs() -> list[dict[str, Any]]:
                     "type": "string",
                     "enum": ["conveyancing", "employment"],
                 },
-                "fields": {"type": "object", "description": "Fields for the chosen intake preset."},
+                "fields": {"type": "object", "description": fields_description},
             },
             "required": ["practice_area", "fields"],
         },
@@ -119,3 +123,51 @@ def tool_specs() -> list[dict[str, Any]]:
             "required": [],
         },
     ]
+
+
+def _intake_fields_description() -> str:
+    lines = ["Fields by practice area:"]
+    for practice_area, model in PRESETS.items():
+        lines.append(f"{practice_area}:")
+        lines.extend(
+            f"- {name}: {_format_field_type(field.annotation)}"
+            for name, field in model.model_fields.items()
+        )
+    lines.extend(
+        [
+            "Dates must use ISO YYYY-MM-DD format.",
+            "Booleans must be true or false.",
+            "Fields merge across calls; pass only new or corrected fields.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _format_field_type(annotation: Any) -> str:
+    origin = get_origin(annotation)
+    arguments = get_args(annotation)
+    if origin is TypingLiteral:
+        choices = ", ".join(repr(choice) for choice in arguments)
+        return f"Literal[{choices}]"
+    if origin in (Union, types.UnionType):
+        non_null_arguments = [argument for argument in arguments if argument is not type(None)]
+        if len(non_null_arguments) == 1:
+            return _format_field_type(non_null_arguments[0])
+        return " | ".join(_format_field_type(argument) for argument in non_null_arguments)
+    if origin is list:
+        return f"list[{_format_field_type(arguments[0])}]"
+    if origin is dict:
+        return f"dict[{_format_field_type(arguments[0])}, {_format_field_type(arguments[1])}]"
+    if annotation is str:
+        return "string"
+    if annotation is bool:
+        return "boolean"
+    if annotation is date:
+        return "date"
+    if annotation is int:
+        return "integer"
+    if annotation is float:
+        return "number"
+    if getattr(annotation, "__name__", None) == "EmailStr":
+        return "string (email)"
+    return getattr(annotation, "__name__", str(annotation))

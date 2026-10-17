@@ -37,17 +37,24 @@ curl -G https://api.speechify.ai/v1/voices \
 ```
 
 For ElevenLabs, set `TTS_VOICE` to a voice ID from the ElevenLabs voice library, for
-example:
+example. The suggested verified voice is Alice (`Xb7hH8MSUJpSbSDYk0k2`), a British RP
+voice that has synthesized successfully with `eleven_v4_turbo`:
 
 ```dotenv
 TTS_PROVIDER=elevenlabs
-TTS_VOICE=your-elevenlabs-voice-id
+TTS_VOICE=Xb7hH8MSUJpSbSDYk0k2
 ELEVENLABS_MODEL=eleven_v4_turbo
 ```
 
 The default ElevenLabs model is `eleven_v4_turbo`. ElevenLabs documentation describes
 this model for the Text-to-Dialogue WebSocket; if the standard stream-input endpoint
 rejects it, set `ELEVENLABS_MODEL=eleven_flash_v2_5`.
+
+## Turn-taking
+
+`SMART_TURN_STOP_SECS` defaults to `2.0` seconds. Pipecat uses this silence timeout when
+Smart Turn judges an utterance incomplete; the first scripted smoke call fell back to its
+3-second default on four of eight turns, adding about 3.2 seconds before turn end.
 
 ## Browser web call
 

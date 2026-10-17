@@ -1,9 +1,12 @@
+import math
 import os
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
 import aiohttp
 from pipecat.adapters.schemas.function_schema import FunctionSchema
+from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import EndWorkerFrame, LLMRunFrame
@@ -36,6 +39,16 @@ from inbound_voice.tools import CallTools, tool_specs
 
 ROOT = Path(__file__).resolve().parent
 FIRM_CONFIG = ROOT / "config" / "demo_firm.yaml"
+
+
+def smart_turn_stop_secs(env: Mapping[str, str]) -> float:
+    try:
+        stop_secs = float(env.get("SMART_TURN_STOP_SECS", "2.0").strip())
+    except ValueError as error:
+        raise ValueError("SMART_TURN_STOP_SECS must be a positive number.") from error
+    if not math.isfinite(stop_secs) or stop_secs <= 0:
+        raise ValueError("SMART_TURN_STOP_SECS must be a positive number.")
+    return stop_secs
 
 
 def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
@@ -97,7 +110,11 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
                 user_turn_strategies=UserTurnStrategies(
                     start=[VADUserTurnStartStrategy(enable_interruptions=True)],
                     stop=[
-                        TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())
+                        TurnAnalyzerUserTurnStopStrategy(
+                            turn_analyzer=LocalSmartTurnAnalyzerV3(
+                                params=SmartTurnParams(stop_secs=smart_turn_stop_secs(os.environ))
+                            )
+                        )
                     ],
                 ),
             ),
