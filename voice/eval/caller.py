@@ -465,7 +465,11 @@ async def run_call(
                     if server_disconnected.is_set():
                         break
                     audio_path = utterance_audio_path(
-                        audio_dir, scenario_name, index, utterances[index]
+                        audio_dir,
+                        scenario_name,
+                        index,
+                        utterances[index],
+                        scenario["caller_voice"],
                     )
                     if not audio_path.exists():
                         raise FileNotFoundError(f"Missing synthesized caller audio: {audio_path}")

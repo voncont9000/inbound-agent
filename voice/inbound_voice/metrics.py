@@ -58,6 +58,14 @@ class TurnLatencyTracker:
                 timestamp if timestamp is not None else time.monotonic()
             )
 
+    def number_hold_started(self, timestamp: float | None = None) -> None:
+        stopped_at = timestamp if timestamp is not None else time.monotonic()
+        if self._pending is None:
+            self._pending = self._new_pending_turn()
+        vad_stopped_at = self._pending["vad_user_stopped_speaking_at"]
+        if vad_stopped_at is None or vad_stopped_at > stopped_at:
+            self._pending["vad_user_stopped_speaking_at"] = stopped_at
+
     def user_stopped_speaking(self, timestamp: float | None = None) -> None:
         if self._pending is None or self._pending["user_stopped_speaking_at"] is not None:
             self._pending = self._new_pending_turn()
@@ -261,8 +269,10 @@ class CallMetricsObserver(BaseObserver):
         self._save()
 
     def start_number_hold(self) -> dict[str, Any]:
+        now = time.monotonic()
+        self.latency.number_hold_started(now)
         record = {
-            "number_hold_started": max(0.0, time.monotonic() - self.started_at),
+            "number_hold_started": max(0.0, now - self.started_at),
             "resumed": False,
             "held_secs": None,
         }

@@ -72,7 +72,7 @@ scenarios:
       - "Great. Is there parking at your office?"
       - "And do you handle probate as well?"
       - "One more thing, do you offer a discount for NHS workers?"
-      - "My name is Daniel Okafor, and my number is 07700 900 | pause 1.4 | 456."
+      - "My name is Daniel Okafor, and my number is oh seven seven oh oh, nine oh oh | pause 1.4 | four five six."
       - "No, that's everything, thanks. Bye."
       - "Yes, that's all correct. Thanks, bye."
     assistant_checks:

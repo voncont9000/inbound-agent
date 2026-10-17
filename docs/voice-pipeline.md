@@ -114,6 +114,10 @@ and the evaluation `caller_timeline.json`, including whether the caller resumed 
 elapsed hold time. Latency remains measured from the final caller stop after resumed speech,
 or includes the full hold when the caller does not resume.
 
+The hold strategy subclasses `TurnAnalyzerUserTurnStopStrategy` and relies on its private
+fields (`_text`, `_turn_complete`, `_transcript_finalized`, `_timeout_task`,
+`_wait_for_transcript`), so re-test it on Pipecat upgrades.
+
 ## Hybrid intake and provenance
 
 `confirm_critical_fields` accepts only configured critical fields, validates each service's

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import hashlib
 import io
 import math
 import os
@@ -57,10 +58,12 @@ def utterance_audio_path(
     scenario_name: str,
     index: int,
     utterance: str,
+    caller_voice: str = "",
 ) -> Path:
     _, pauses = split_paused_utterance(utterance)
     suffix = "-paused" if pauses else ""
-    return Path(audio_dir) / scenario_name / f"{index}{suffix}.wav"
+    digest = hashlib.sha256(f"{caller_voice}\0{utterance}".encode()).hexdigest()[:12]
+    return Path(audio_dir) / scenario_name / f"{index}{suffix}-{digest}.wav"
 
 
 def combine_segment_wavs(segment_wavs: list[bytes], pauses: list[float]) -> bytes:
@@ -180,7 +183,7 @@ async def synthesize_scenarios(
         caller_voice = scenario["caller_voice"]
         targets[name] = []
         for index, utterance in enumerate(scenario["utterances"]):
-            path = utterance_audio_path(root, name, index, utterance)
+            path = utterance_audio_path(root, name, index, utterance, caller_voice)
             targets[name].append(path)
             if not path.exists():
                 parts, pauses = split_paused_utterance(utterance)

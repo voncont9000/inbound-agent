@@ -28,7 +28,19 @@ def test_split_paused_utterance_and_selects_distinct_audio_cache_path(tmp_path) 
 
     assert parts == ["My number is 07700 900", "456."]
     assert pauses == [1.4]
-    assert utterance_audio_path(tmp_path, "knowledge_check", 4, utterance).name == "4-paused.wav"
+    path = utterance_audio_path(tmp_path, "knowledge_check", 4, utterance, "catriona")
+    assert path.name.startswith("4-paused-")
+    assert (
+        utterance_audio_path(
+            tmp_path,
+            "knowledge_check",
+            4,
+            "My number is 07700 900456.",
+            "catriona",
+        )
+        != path
+    )
+    assert utterance_audio_path(tmp_path, "knowledge_check", 4, utterance, "other-voice") != path
     assert split_paused_utterance("Hello there.") == (["Hello there."], [])
 
 

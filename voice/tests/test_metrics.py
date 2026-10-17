@@ -59,6 +59,21 @@ def test_turn_latency_stats_summarize_both_stop_events() -> None:
     )
 
 
+def test_number_hold_start_includes_full_wait_when_vad_stop_is_later() -> None:
+    tracker = TurnLatencyTracker()
+    tracker.user_started_speaking()
+    tracker.vad_user_stopped_speaking(10.3)
+    tracker.number_hold_started(10.0)
+    tracker.user_stopped_speaking(12.0)
+
+    turn = tracker.first_bot_audio(12.5)
+
+    assert turn is not None
+    assert turn["vad_user_stopped_speaking_at"] == 10.0
+    assert turn["seconds"] == pytest.approx(2.5)
+    assert turn["turn_end_to_audio_seconds"] == pytest.approx(0.5)
+
+
 def test_stt_cost_uses_call_duration_not_measured_usage() -> None:
     cost = calculate_cost(
         {

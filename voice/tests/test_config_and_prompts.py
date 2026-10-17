@@ -43,9 +43,21 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "Offer a callback at most once" not in prompt
     assert "Offer to pass unanswered questions to the team." in prompt
     assert "Be honest when the business is closed." in prompt
-    assert "Recognize urgency immediately" in prompt
-    assert "After the caller confirms the final readback, say goodbye." in prompt
+    assert (
+        "If the caller describes something urgent, acknowledge it and tell them the team will "
+        "treat it as urgent."
+    ) in " ".join(prompt.split())
+    assert "When the caller is ready to finish, say goodbye." in " ".join(prompt.split())
     assert "Do not read back other details." in prompt
+    assert (
+        "If anyone is in immediate danger, tell them to call 999 now. Treat a hearing or arrest "
+        "today, distress, or an imminent deadline as urgent; the team is alerted after the call."
+    ) in prompt
+    assert (
+        "For employment termination dates, the system calculates the tribunal deadline. Do not "
+        "calculate or reassure callers about legal time limits, and offer a callback."
+    ) in prompt
+    assert "do not separately flag the configured deadline" not in prompt
     assert "No live actions are enabled." not in prompt
     assert "end_call" not in prompt
 
@@ -77,6 +89,16 @@ def test_prompt_only_mentions_enabled_actions() -> None:
     prompt = render_system_prompt(assistant)
 
     assert "end_call" not in prompt
+    assert "flag_urgent" not in prompt
+
+    assistant = assistant.model_copy(update={"live_actions": ["flag_urgent"]})
+    prompt = render_system_prompt(assistant)
+
+    assert "Use flag_urgent when appropriate." in prompt
+    assert "Do not call flag_urgent solely for this configured deadline." in prompt
+
+    assistant = assistant.model_copy(update={"live_actions": []})
+    prompt = render_system_prompt(assistant)
     assert "flag_urgent" not in prompt
 
 

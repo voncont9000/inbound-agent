@@ -168,6 +168,9 @@ def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
     }
     assert scenarios["employment"]["caller_id"] == "07700900456"
     assert scenarios["employment"]["utterances"][2] == "Yes, that's fine."
+    employment_utterances = " ".join(scenarios["employment"]["utterances"]).casefold()
+    assert "my mobile" not in employment_utterances
+    assert "07700900123" not in employment_utterances
     assert "email_readback" in scenarios["employment"]["assistant_checks"]
     assert scenarios["conveyancing"]["assistant_not_matches"] == "(?i)call ?back"
     assert "knowledge_check" not in {"employment", "conveyancing", "idle_check"}
