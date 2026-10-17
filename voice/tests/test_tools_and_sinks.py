@@ -9,7 +9,7 @@ from inbound_voice.tools import DEFAULT_CONFIG_PATH, CallTools, tool_specs
 def test_tool_specs_include_only_enabled_actions_and_no_save_intake() -> None:
     names = {spec["name"] for spec in tool_specs()}
 
-    assert "confirm_critical_fields" in names
+    assert names == {"end_call"}
     assert "save_intake" not in names
 
 
@@ -71,6 +71,8 @@ def test_dispatch_logs_enabled_actions_and_rejects_disabled_actions(tmp_path) ->
     assert valid["ok"] is True
     assert [entry["name"] for entry in entries] == ["flag_urgent", "request_callback"]
     assert [entry["result"]["ok"] for entry in entries] == [False, True]
+    task = json.loads((sink.directory / "tasks.json").read_text())[0]
+    assert task["source"] == "live"
 
 
 def test_deadline_rule_flags_urgent_once_per_rule_and_value(tmp_path) -> None:
@@ -86,6 +88,7 @@ def test_deadline_rule_flags_urgent_once_per_rule_and_value(tmp_path) -> None:
     assert first["ok"] is True
     tasks = json.loads((sink.directory / "tasks.json").read_text())
     assert [task["type"] for task in tasks] == ["urgent"]
+    assert tasks[0]["source"] == "live"
 
 
 def test_flag_urgent_and_deadline_rule_deduplicate_same_date(tmp_path) -> None:
@@ -109,6 +112,7 @@ def test_flag_urgent_and_deadline_rule_deduplicate_same_date(tmp_path) -> None:
     assert len(tasks) == 1
     assert tasks[0]["rule"] == 1
     assert tasks[0]["value"] == termination_date.isoformat()
+    assert tasks[0]["source"] == "live"
 
 
 def test_keyword_and_deadline_rules_keep_independent_urgent_tasks(tmp_path) -> None:
@@ -139,3 +143,4 @@ def test_keyword_urgency_rule_flags_once_per_rule(tmp_path) -> None:
     assert repeated == []
     assert len(tasks) == 1
     assert tasks[0]["matched_phrase"] == "hearing today"
+    assert tasks[0]["source"] == "live"

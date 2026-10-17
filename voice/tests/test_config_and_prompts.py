@@ -26,14 +26,17 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "call 999" in prompt
     assert "Today is 2026-10-17" in prompt
     assert "termination_date" in prompt
-    assert "confirm_critical_fields" in prompt
+    assert assistant.live_actions == ["end_call"]
+    assert "confirm_critical_fields" not in prompt
     assert "Speak British English." in prompt
     assert "acknowledge them briefly and continue" in prompt
     assert "Never ask the same question twice in a row" in " ".join(prompt.split())
     assert "return to it once before the end" in prompt
     assert "read back all collected, unconfirmed critical details in one sentence" in prompt
     assert "Read back names, phone numbers, email addresses and dates" in prompt
-    assert "Do not call flag_urgent solely for this configured deadline" in prompt
+    assert "ask the caller to confirm them" in prompt
+    assert "Do not call a tool to confirm critical fields" in prompt
+    assert "creates an urgent task after the call" in prompt
     assert "Collect other details conversationally" in prompt
     assert "end_call" in prompt
 
@@ -48,6 +51,15 @@ def test_prompt_only_mentions_enabled_actions() -> None:
     assert "confirm_critical_fields" not in prompt
     assert "request_callback" not in prompt
     assert "flag_urgent" not in prompt
+    assert "Read back names, phone numbers, email addresses and dates" in prompt
+    assert "Do not call a tool to confirm critical fields" in prompt
+
+    assistant = assistant.model_copy(
+        update={"live_actions": ["confirm_critical_fields", "end_call"]}
+    )
+    prompt = render_system_prompt(assistant)
+    assert "confirm_critical_fields" in prompt
+    assert "Do not call a tool to confirm critical fields" not in prompt
 
     assistant = assistant.model_copy(update={"live_actions": []})
     prompt = render_system_prompt(assistant)

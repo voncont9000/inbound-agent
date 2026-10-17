@@ -69,5 +69,5 @@ urgency_rules:
     minus_days: 1
     urgent_within_days: 28
     reason: "Employment tribunal time limit may be within 28 days."
-live_actions: [confirm_critical_fields, flag_urgent, request_callback, log_complaint, end_call]
+live_actions: [end_call]
 review_confidence_threshold: 0.7

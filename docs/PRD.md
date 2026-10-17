@@ -60,8 +60,8 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-A6: Abilities you can toggle in v1: look up/create contact, create task, book appointment (Google Calendar), write/read Google Sheets, send email. Later: transfer/forward call, send WhatsApp from a call, web search, webhooks/custom tools.
 - FR-A7: Test console: browser web call (voice) and simulated email/WhatsApp threads. Test conversations are marked as such.
 - FR-A8: Versioned config with an unsaved-changes indicator and rollback.
-- FR-A9: Assistant templates define services, typed intake fields, critical fields, urgency rules, live actions, and a review-confidence threshold. Businesses can override template defaults; law firms are the first template.
-- FR-A10: Hybrid intake confirms only configured critical fields live and extracts remaining fields after the conversation. Store live and post-call values with provenance and confidence, merge without erasing either source, and send conflicts, invalid values, or low-confidence fields to a human review queue.
+- FR-A9: Assistant templates define services, typed intake fields, critical fields, urgency rules, configurable live actions, and a review-confidence threshold. Businesses can override template defaults; law firms are the first template. In v1, deadline urgency, callback requests, and complaints create post-call tasks; keyword urgency rules continue to run live on caller-final transcripts.
+- FR-A10: Hybrid intake confirms configured critical fields live only when that action is enabled, and extracts remaining fields after the conversation. Store caller-affirmed readbacks and live/post-call values with provenance and confidence, merge without erasing either source, and send conflicts, invalid values, or low-confidence fields to a human review queue.
 - FR-A11: Merged intake facts map to customer context-graph facts with their source conversation, evidence, confidence, and history; corrections supersede rather than erase prior values (see [context-graph.md](./context-graph.md)).
 
 ### 7.2 Phone (STT/TTS)

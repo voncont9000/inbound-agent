@@ -23,6 +23,16 @@ def test_smart_turn_stop_secs_parses_default_and_override() -> None:
         BOT_MODULE.smart_turn_stop_secs({"SMART_TURN_STOP_SECS": "0"})
 
 
+def test_goodbye_fallback_decision_is_pure() -> None:
+    decide = BOT_MODULE.should_fallback_end_call
+
+    assert decide("That's everything, thank you.", "Goodbye.")
+    assert decide("Thank you, bye.", "Bye for now.")
+    assert not decide("I have another question.", "Goodbye.")
+    assert not decide("That's all.", "I can help with anything else.")
+    assert not decide("Goodbye.", "Bye.", end_call_received=True)
+
+
 def test_end_call_sends_end_worker_after_tool_result(tmp_path) -> None:
     events = []
 

@@ -6,6 +6,39 @@ import pytest
 
 from eval.score import aggregate_calls, render_summary, score_call
 
+
+def test_latency_breakdown_aligns_turns_with_service_metrics() -> None:
+    from eval.score import _latency_breakdown_medians
+
+    result = _latency_breakdown_medians(
+        [
+            {
+                "vad_user_stopped_speaking_at": 1.5,
+                "user_stopped_speaking_at": 2.0,
+                "first_bot_audio_at": 3.0,
+            }
+        ],
+        [
+            {
+                "processor": "LLMService",
+                "kind": "ttfb",
+                "model": "gemini-test",
+                "monotonic_timestamp": 2.2,
+            },
+            {
+                "processor": "TTSService",
+                "kind": "ttfa",
+                "model": "speechify-test",
+                "monotonic_timestamp": 2.7,
+            },
+        ],
+    )
+
+    assert result["caller_stop_to_turn_end_seconds"] == 0.5
+    assert result["turn_end_to_llm_first_token_seconds"] == pytest.approx(0.2)
+    assert result["llm_first_token_to_tts_first_audio_seconds"] == pytest.approx(0.5)
+
+
 FIXTURE = Path(__file__).parent / "fixtures" / "eval-call"
 SCENARIO = {
     "transcript_checks": {
@@ -48,6 +81,7 @@ def test_score_call_uses_fixture_transcript_intake_tasks_and_metrics(tmp_path) -
     assert result["checks_total"] == 9
     assert result["stt_ttfb_median_seconds"] == 0.2
     assert result["tts_ttfb_median_seconds"] == 0.15
+    assert result["llm_ttfb_median_seconds"] is None
     assert result["ended_via_end_call"]
     assert result["tts_voice"] == "voice-123"
     assert result["llm"] == "openrouter"
@@ -104,6 +138,9 @@ def test_aggregate_calls_and_summary_use_requested_latency_and_check_stats() -> 
     assert "Voice" in summary
     assert "Intake live / post / merged" in summary
     assert "Review" in summary
+    assert "Task sources" in summary
+    assert "Smart turn stop" in summary
+    assert "LLM TTFB median" in summary
     assert "beatrice_32" in summary
     assert "| Aggregate " in summary
     assert "9/10" in summary

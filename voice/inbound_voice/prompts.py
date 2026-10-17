@@ -36,7 +36,7 @@ def render_system_prompt(config: AssistantConfig, today: date | None = None) -> 
     urgency_instruction = (
         "Recognize urgency immediately and flag it using flag_urgent"
         if "flag_urgent" in config.live_actions
-        else "Recognize urgency immediately"
+        else "Recognize urgency immediately; keyword urgency rules are logged from caller finals"
     )
     deadline_instructions = []
     for rule in config.urgency_rules:
@@ -54,7 +54,13 @@ def render_system_prompt(config: AssistantConfig, today: date | None = None) -> 
         label = field.label if field else rule.field
         deadline_instructions.append(
             f"- The configured deadline rule handles {label} for {rule.service} "
-            f"and flags qualifying dates within {rule.urgent_within_days} days once confirmed."
+            + (
+                f"and flags qualifying dates within {rule.urgent_within_days} days once "
+                "confirmed live."
+                if "confirm_critical_fields" in config.live_actions
+                else f"and creates an urgent task after the call for qualifying dates within "
+                f"{rule.urgent_within_days} days."
+            )
         )
         if "flag_urgent" in config.live_actions:
             deadline_instructions[-1] += (
@@ -65,8 +71,8 @@ def render_system_prompt(config: AssistantConfig, today: date | None = None) -> 
         "acknowledge it, move on, and return to it once before the end.\n"
         "- Read back names, phone numbers, email addresses and dates to confirm them.\n"
         "- When the caller wants to finish or says goodbye, read back all collected, "
-        "unconfirmed critical details in one sentence and wait for confirmation. Do not "
-        "invent values for details the caller has not provided."
+        "unconfirmed critical details in one sentence, ask the caller to confirm them, and "
+        "wait for confirmation. Do not invent values for details the caller has not provided."
         if has_critical_fields
         else ""
     )
@@ -76,6 +82,11 @@ def render_system_prompt(config: AssistantConfig, today: date | None = None) -> 
             final_readback += (
                 "\n- If the caller confirms any values, call confirm_critical_fields with "
                 "only those confirmed critical fields."
+            )
+        else:
+            final_readback += (
+                "\n- Do not call a tool to confirm critical fields; they are captured after "
+                "the call."
             )
     end_call_instruction = ""
     if "end_call" in config.live_actions:

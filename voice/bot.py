@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import os
+import re
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -12,7 +13,16 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import EndWorkerFrame, LLMRunFrame
+from pipecat.frames.frames import (
+    BotStoppedSpeakingFrame,
+    EndWorkerFrame,
+    LLMRunFrame,
+    TranscriptionFrame,
+    TTSTextFrame,
+    UserStartedSpeakingFrame,
+    VADUserStartedSpeakingFrame,
+)
+from pipecat.observers.base_observer import BaseObserver
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -36,6 +46,7 @@ from inbound_voice.config import load_assistant_config
 from inbound_voice.extraction import (
     DEFAULT_EXTRACTION_MODEL,
     build_intake_artifacts,
+    build_post_call_tasks,
     extract_intake,
 )
 from inbound_voice.metrics import CallMetricsObserver
@@ -47,6 +58,88 @@ from inbound_voice.tools import CallTools, tool_specs
 ROOT = Path(__file__).resolve().parent
 ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
 EXTRACTION_TIMEOUT_SECONDS = 60
+HANGUP_FALLBACK_SECONDS = 1.5
+CLOSING_PHRASE = re.compile(
+    r"\b(?:goodbye|bye|that['’]s all|that['’]s everything|thank you,\s*bye)\b",
+    re.IGNORECASE,
+)
+ASSISTANT_GOODBYE = re.compile(r"\b(?:goodbye|bye)\b", re.IGNORECASE)
+
+
+def should_fallback_end_call(
+    caller_text: str,
+    assistant_text: str,
+    *,
+    end_call_received: bool = False,
+) -> bool:
+    return (
+        not end_call_received
+        and CLOSING_PHRASE.search(caller_text) is not None
+        and ASSISTANT_GOODBYE.search(assistant_text) is not None
+    )
+
+
+class GoodbyeHangupFallback(BaseObserver):
+    def __init__(
+        self,
+        sink: LocalFilesCallSink,
+        call_tools: CallTools,
+        push_end_worker: Any,
+        delay_seconds: float = HANGUP_FALLBACK_SECONDS,
+    ) -> None:
+        super().__init__(observe_every_push=False)
+        self.sink = sink
+        self.call_tools = call_tools
+        self.push_end_worker = push_end_worker
+        self.delay_seconds = delay_seconds
+        self.last_caller_final = ""
+        self.assistant_text: list[str] = []
+        self.pending: asyncio.Task[None] | None = None
+        self._generation = 0
+
+    async def on_push_frame(self, data: Any) -> None:
+        frame = data.frame
+        if isinstance(frame, TranscriptionFrame) and getattr(frame, "finalized", True):
+            self.last_caller_final = frame.text
+            self.assistant_text.clear()
+        elif isinstance(frame, TTSTextFrame):
+            self.assistant_text.append(frame.text)
+        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
+            self.last_caller_final = ""
+            self._cancel_pending()
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            assistant_text = " ".join(self.assistant_text)
+            self.assistant_text.clear()
+            if should_fallback_end_call(
+                self.last_caller_final,
+                assistant_text,
+                end_call_received=self.call_tools.end_call_requested,
+            ):
+                self._schedule()
+
+    def close(self) -> None:
+        self._cancel_pending()
+
+    def _cancel_pending(self) -> None:
+        self._generation += 1
+        if self.pending is not None:
+            self.pending.cancel()
+            self.pending = None
+
+    def _schedule(self) -> None:
+        self._cancel_pending()
+        generation = self._generation
+        self.pending = asyncio.create_task(self._finish_after_delay(generation))
+
+    async def _finish_after_delay(self, generation: int) -> None:
+        try:
+            await asyncio.sleep(self.delay_seconds)
+        except asyncio.CancelledError:
+            return
+        if generation != self._generation or self.call_tools.end_call_requested:
+            return
+        self.sink.append_task("end_call", {"source": "fallback"})
+        await self.push_end_worker()
 
 
 def smart_turn_stop_secs(env: Mapping[str, str]) -> float:
@@ -133,13 +226,19 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
                 context_aggregators.assistant(),
             ]
         )
+        task: PipelineTask
+
+        async def push_end_worker() -> None:
+            await task.queue_frame(EndWorkerFrame())
+
+        hangup_fallback = GoodbyeHangupFallback(sink, call_tools, push_end_worker)
         task = PipelineTask(
             pipeline,
             params=PipelineParams(
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[metrics_observer],
+            observers=[metrics_observer, hangup_fallback],
         )
 
         @transport.event_handler("on_client_connected")
@@ -153,6 +252,7 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
         try:
             await PipelineRunner().run(task)
         finally:
+            hangup_fallback.close()
             await finalize_call_intake(sink, assistant, metrics_observer, os.environ)
             metrics_observer.persist()
 
@@ -211,6 +311,13 @@ async def finalize_call_intake(
         }
 
     post_call, merged = build_intake_artifacts(live, result, assistant)
+    tasks_path = sink.directory / "tasks.json"
+    existing_tasks = (
+        json.loads(tasks_path.read_text(encoding="utf-8")) if tasks_path.exists() else []
+    )
+    for task in build_post_call_tasks(post_call, merged, assistant, existing_tasks):
+        task_details = {key: value for key, value in task.items() if key != "type"}
+        sink.append_task(task["type"], task_details)
     sink.save_post_call_intake(post_call)
     sink.save_intake(merged)
     metrics_observer.record_extraction(model, result["status"], result.get("usage"))

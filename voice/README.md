@@ -118,6 +118,39 @@ WebSocket service.
 Smart Turn judges an utterance incomplete; the first scripted smoke call fell back to its
 3-second default on four of eight turns, adding about 3.2 seconds before turn end.
 
+The evaluation runner accepts `--smart-turn-stop-secs` to set and record this value for
+each runner; compare settings with `uv run python -m eval.run_matrix --smart-turn-stop-secs
+1.0 ...`.
+
+The template enables only `end_call` as a live action by default. Other actions can be
+enabled per assistant. Caller-final keyword urgency rules remain live regardless of action
+settings; configured date-deadline checks, callback requests, and complaints also become
+post-call tasks from extraction. If caller and assistant exchange a goodbye but no
+`end_call` tool arrives, the bot ends the call 1.5 seconds after speaking finishes unless
+the caller starts speaking again.
+
+The baseline turn-stage medians at a 2-second Smart Turn setting were: employment —
+caller stop→turn-end **2.200 s**, turn-end→LLM first token **0.276 s**, LLM first
+token→TTS first audio **0.399 s**; conveyancing — **0.305 s**, **0.170 s**, and
+**0.309 s** respectively. These were one call per scenario; matrix summaries now include
+the stage medians and LLM TTFB.
+The evaluation runner accepts `--smart-turn-stop-secs` to set and record this value for
+each runner; compare settings with `uv run python -m eval.run_matrix --smart-turn-stop-secs
+1.0 ...`.
+
+The template enables only `end_call` as a live action by default. Other actions can be
+enabled per assistant. Caller-final keyword urgency rules remain live regardless of action
+settings; configured date-deadline checks, callback requests, and complaints also become
+post-call tasks from extraction. If the caller and assistant exchange a goodbye but no
+`end_call` tool arrives, the bot ends the call 1.5 seconds after speaking finishes unless
+the caller starts speaking again.
+
+The baseline turn-stage medians at a 2-second Smart Turn setting were: employment —
+caller stop→turn-end **2.200 s**, turn-end→LLM first token **0.276 s**, LLM first
+token→TTS first audio **0.399 s**; conveyancing — **0.305 s**, **0.170 s**, and
+**0.309 s** respectively. These were one call per scenario; matrix summaries now include
+the stage medians and LLM TTFB.
+
 ## Browser web call
 
 ```sh

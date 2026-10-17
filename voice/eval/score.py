@@ -69,6 +69,16 @@ def score_call(
     provider_metadata = metrics.get("providers") or {}
     stt_ttfb = _ttfb_median(service_metrics, "stt")
     tts_ttfb = _ttfb_median(service_metrics, "tts")
+    llm_ttfb = _ttfb_median(service_metrics, "llm")
+    end_call_task = next(
+        (task for task in tasks if isinstance(task, dict) and task.get("type") == "end_call"),
+        None,
+    )
+    task_sources = {}
+    for task in tasks:
+        if isinstance(task, dict):
+            source = task.get("source", "legacy")
+            task_sources[source] = task_sources.get(source, 0) + 1
 
     return {
         "call_id": metrics.get("call_id", directory.name),
@@ -83,12 +93,20 @@ def score_call(
         "checks_total": len(checks),
         "turn_latency_summary": metrics.get("turn_latency_summary", {}),
         "turn_end_latency_summary": metrics.get("turn_end_latency_summary", {}),
+        "latency_breakdown_medians": _latency_breakdown_medians(
+            metrics.get("turns", []), service_metrics
+        ),
         "stt_ttfb_median_seconds": stt_ttfb,
         "tts_ttfb_median_seconds": tts_ttfb,
+        "llm_ttfb_median_seconds": llm_ttfb,
         "interruptions": metrics.get("interruption_count", metrics.get("interruptions")),
         "call_duration_seconds": metrics.get("call_duration_seconds"),
         "estimated_cost": cost,
         "ended_via_end_call": "end_call" in task_types,
+        "end_call_source": (
+            end_call_task.get("source") or "tool" if end_call_task is not None else None
+        ),
+        "task_sources": task_sources,
         "tts_voice": provider_metadata.get("tts_voice"),
         "llm": provider_metadata.get("llm"),
         "llm_model": provider_metadata.get("llm_model"),
@@ -117,12 +135,60 @@ def _ttfb_median(service_metrics: list[dict[str, Any]], kind: str) -> float | No
         processor = str(metric.get("processor", "")).lower()
         if service_marker not in processor:
             continue
+        if metric.get("model", "not-recorded") is None:
+            continue
+        if kind == "llm" and metric.get("kind") != "ttfb":
+            continue
         value = metric.get("ttfb_seconds")
         if value is None and metric.get("kind") == "ttfb":
             value = metric.get("seconds")
         if value is not None:
             values.append(float(value))
     return statistics.median(values) if values else None
+
+
+def _latency_breakdown_medians(
+    turns: list[dict[str, Any]], service_metrics: list[dict[str, Any]]
+) -> dict[str, float | None]:
+    stages: dict[str, list[float]] = {
+        "caller_stop_to_turn_end_seconds": [],
+        "turn_end_to_llm_first_token_seconds": [],
+        "llm_first_token_to_tts_first_audio_seconds": [],
+    }
+    llm_events = sorted(
+        float(metric["monotonic_timestamp"])
+        for metric in service_metrics
+        if "llmservice" in str(metric.get("processor", "")).lower()
+        and metric.get("kind") == "ttfb"
+        and metric.get("model") is not None
+        and metric.get("monotonic_timestamp") is not None
+    )
+    tts_events = sorted(
+        float(metric["monotonic_timestamp"])
+        for metric in service_metrics
+        if "ttsservice" in str(metric.get("processor", "")).lower()
+        and metric.get("kind") == "ttfa"
+        and metric.get("model") is not None
+        and metric.get("monotonic_timestamp") is not None
+    )
+    for turn in turns:
+        turn_end = turn.get("user_stopped_speaking_at")
+        audio_at = turn.get("first_bot_audio_at")
+        caller_stop = turn.get("vad_user_stopped_speaking_at")
+        if turn_end is None or audio_at is None:
+            continue
+        if caller_stop is not None:
+            stages["caller_stop_to_turn_end_seconds"].append(
+                max(0.0, float(turn_end) - float(caller_stop))
+            )
+        llm_at = next((event for event in llm_events if turn_end <= event <= audio_at), None)
+        if llm_at is None:
+            continue
+        stages["turn_end_to_llm_first_token_seconds"].append(float(llm_at - turn_end))
+        tts_at = next((event for event in tts_events if llm_at <= event <= audio_at + 0.25), None)
+        if tts_at is not None:
+            stages["llm_first_token_to_tts_first_audio_seconds"].append(float(tts_at - llm_at))
+    return {name: statistics.median(values) if values else None for name, values in stages.items()}
 
 
 def aggregate_calls(calls: list[dict[str, Any]]) -> dict[str, Any]:
@@ -160,19 +226,25 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
         "Voice",
         "Scenario",
         "Rep",
+        "Smart turn stop",
         "Checks",
         "Intake live / post / merged",
         "Review",
+        "Task sources",
         "p50 latency",
         "p95 latency max",
         "turn-end p50",
         "turn-end p95",
+        "Caller stop→turn-end median",
+        "Turn-end→LLM median",
+        "LLM→TTS first audio median",
+        "LLM TTFB median",
         "STT TTFB median",
         "TTS TTFB median",
         "Interruptions",
         "Duration",
         "Mean/total cost",
-        "end_call",
+        "End mode",
     )
     rows = []
     grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
@@ -190,6 +262,7 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 str(call.get("tts_voice") or "—"),
                 call.get("scenario", "—"),
                 str(call.get("rep", "—")),
+                _seconds(call.get("smart_turn_stop_secs")),
                 f"{call.get('checks_passed', 0)}/{call.get('checks_total', 0)}",
                 " · ".join(
                     _check_count(call.get(key, {}))
@@ -200,16 +273,31 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                     )
                 ),
                 str(len(call.get("needs_review", []))),
+                _task_sources(call.get("task_sources", {})),
                 _seconds(call.get("turn_latency_summary", {}).get("p50_seconds")),
                 _seconds(call.get("turn_latency_summary", {}).get("p95_seconds")),
                 _seconds(call.get("turn_end_latency_summary", {}).get("p50_seconds")),
                 _seconds(call.get("turn_end_latency_summary", {}).get("p95_seconds")),
+                _seconds(
+                    call.get("latency_breakdown_medians", {}).get("caller_stop_to_turn_end_seconds")
+                ),
+                _seconds(
+                    call.get("latency_breakdown_medians", {}).get(
+                        "turn_end_to_llm_first_token_seconds"
+                    )
+                ),
+                _seconds(
+                    call.get("latency_breakdown_medians", {}).get(
+                        "llm_first_token_to_tts_first_audio_seconds"
+                    )
+                ),
+                _seconds(call.get("llm_ttfb_median_seconds")),
                 _seconds(call.get("stt_ttfb_median_seconds")),
                 _seconds(call.get("tts_ttfb_median_seconds")),
                 _value(call.get("interruptions")),
                 _seconds(call.get("call_duration_seconds")),
                 _cost(call),
-                str(bool(call.get("ended_via_end_call"))),
+                _end_mode(call),
             )
         )
     for (stt, tts, llm, llm_model), combination_calls in grouped.items():
@@ -232,6 +320,7 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                 or "—",
                 "all",
                 "—",
+                "—",
                 f"{aggregate['checks_passed']}/{aggregate['checks_total']}",
                 " · ".join(
                     _aggregate_check_count(combination_calls, key)
@@ -242,8 +331,13 @@ def render_summary(calls: list[dict[str, Any]]) -> str:
                     )
                 ),
                 str(sum(len(call.get("needs_review", [])) for call in combination_calls)),
+                _aggregate_task_sources(combination_calls),
                 _seconds(aggregate["median_p50_latency_seconds"]),
                 _seconds(aggregate["max_p95_latency_seconds"]),
+                "—",
+                "—",
+                "—",
+                "—",
                 "—",
                 "—",
                 "—",
@@ -314,6 +408,27 @@ def _llm_label(provider: Any, model: Any) -> str:
     if model == "—":
         return str(provider)
     return f"{provider} ({model})"
+
+
+def _task_sources(sources: dict[str, int]) -> str:
+    return " · ".join(f"{source}:{count}" for source, count in sorted(sources.items())) or "—"
+
+
+def _aggregate_task_sources(calls: list[dict[str, Any]]) -> str:
+    totals: dict[str, int] = {}
+    for call in calls:
+        for source, count in call.get("task_sources", {}).items():
+            totals[source] = totals.get(source, 0) + count
+    return _task_sources(totals)
+
+
+def _end_mode(call: dict[str, Any]) -> str:
+    source = call.get("end_call_source")
+    if source == "fallback":
+        return "fallback"
+    if source in {"live", "tool"} or (source is None and call.get("ended_via_end_call")):
+        return "tool"
+    return "none"
 
 
 def _cost(call: dict[str, Any]) -> str:

@@ -1,10 +1,12 @@
 import asyncio
 import json
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 from inbound_voice.config import load_assistant_config
 from inbound_voice.extraction import (
     _extraction_schema,
+    build_post_call_tasks,
     extract_intake,
     merge_intake,
     reextract_run,
@@ -34,7 +36,18 @@ class FakeClient:
 
 def _response(fields):
     return SimpleNamespace(
-        text=json.dumps({"service": "employment", "fields": fields}),
+        text=json.dumps(
+            {
+                "service": "employment",
+                "fields": fields,
+                "callback_requested": {
+                    "requested": True,
+                    "reason": "Discuss my case",
+                    "preferred_time": "tomorrow morning",
+                },
+                "complaint": {"made": True, "summary": "Delay returning a call"},
+            }
+        ),
         usage_metadata=SimpleNamespace(prompt_token_count=100, candidates_token_count=25),
     )
 
@@ -76,8 +89,16 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
         "value": "not-an-email",
         "confidence": 0.0,
         "evidence": "My email is not-an-email.",
+        "confirmed_by_caller": False,
         "invalid": True,
     }
+    assert result["fields"]["caller_name"]["confirmed_by_caller"] is False
+    assert result["callback_requested"] == {
+        "requested": True,
+        "reason": "Discuss my case",
+        "preferred_time": "tomorrow morning",
+    }
+    assert result["complaint"] == {"made": True, "summary": "Delay returning a call"}
     assert result["usage"] == {"input_tokens": 100, "output_tokens": 25}
     generation_config = client.models.arguments["config"]
     assert generation_config["response_mime_type"] == "application/json"
@@ -88,6 +109,12 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
     assert schema["properties"]["fields"]["items"]["properties"]["name"]["enum"] == sorted(
         {field.name for service in config.services.values() for field in service.fields}
     )
+    item_properties = schema["properties"]["fields"]["items"]["properties"]
+    assert {"type": "array", "items": {"type": "string"}} in item_properties["value"]["anyOf"]
+    assert item_properties["confirmed_by_caller"]["type"] == "boolean"
+    assert "callback_requested" in schema["properties"]
+    assert "complaint" in schema["properties"]
+    assert '"2026-08-10: dismissed"' in client.models.arguments["contents"]
     assert schema == _extraction_schema(config)
     assert "1. caller:" in client.models.arguments["contents"]
 
@@ -100,6 +127,7 @@ def test_extraction_can_be_skipped_or_fail_without_raising() -> None:
     )
 
     assert skipped["status"] == "skipped"
+    assert skipped["callback_requested"]["requested"] is False
     assert failed["status"] == "failed"
     assert "offline" in failed["error"]
 
@@ -244,6 +272,75 @@ def test_merge_intake_flags_low_confidence_and_invalid_fields() -> None:
 
     assert result["needs_review"] == ["caller_name", "email"]
     assert result["fields"]["email"]["invalid"] is True
+
+
+def test_post_call_only_confirmed_field_gets_confirmed_status() -> None:
+    config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    service_model = build_service_model(config.services["employment"])
+
+    result = merge_intake(
+        {"service": None, "fields": {}},
+        {
+            "service": "employment",
+            "fields": {
+                "caller_name": {
+                    "value": "Alex Smith",
+                    "confidence": 0.9,
+                    "evidence": "My name is Alex Smith.",
+                    "confirmed_by_caller": True,
+                }
+            },
+        },
+        service_model,
+        0.7,
+    )
+
+    assert result["fields"]["caller_name"]["status"] == "filled_confirmed"
+    assert result["fields"]["caller_name"]["confirmed_by_caller"] is True
+
+
+def test_post_call_tasks_use_merged_deadlines_and_sources() -> None:
+    config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    deadline_date = (date.today() - timedelta(days=70)).isoformat()
+    post_call = {
+        "callback_requested": {"requested": True, "reason": "Discuss options"},
+        "complaint": {"made": True, "summary": "No response"},
+    }
+    merged = {
+        "service": "employment",
+        "fields": {"termination_date": {"value": deadline_date}},
+    }
+
+    tasks = build_post_call_tasks(post_call, merged, config)
+
+    assert [task["type"] for task in tasks] == ["urgent", "callback", "complaint"]
+    assert all(task["source"] == "post_call" for task in tasks)
+    assert tasks[0]["value"] == deadline_date
+    assert build_post_call_tasks(
+        post_call,
+        merged,
+        config,
+        [{"type": "urgent", "rule": 1, "value": deadline_date, "source": "live"}],
+    ) == [
+        {
+            "type": "callback",
+            "reason": "Discuss options",
+            "preferred_time": None,
+            "source": "post_call",
+        },
+        {"type": "complaint", "summary": "No response", "source": "post_call"},
+    ]
+
+
+def test_key_dates_is_a_list_of_strings() -> None:
+    config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    service_model = build_service_model(config.services["employment"])
+
+    validated = service_model.model_validate(
+        {"key_dates": ["2026-08-10: dismissed", "2026-08-12: appeal"]}
+    )
+
+    assert validated.key_dates == ["2026-08-10: dismissed", "2026-08-12: appeal"]
 
 
 def test_merge_intake_normalizes_phone_numbers() -> None:

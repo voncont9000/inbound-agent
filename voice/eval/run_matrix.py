@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import re
 import shutil
@@ -82,12 +83,14 @@ async def _start_runner(
     llm: str,
     speechify_voice: str | None = None,
     elevenlabs_voice: str | None = None,
+    smart_turn_stop_secs: float = 2.0,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
     process_env["STT_PROVIDER"] = stt
     process_env["TTS_PROVIDER"] = tts
     _configure_tts_voice(process_env, tts, speechify_voice, elevenlabs_voice)
     _configure_llm_provider(process_env, llm)
+    process_env["SMART_TURN_STOP_SECS"] = str(smart_turn_stop_secs)
     process = await asyncio.create_subprocess_exec(
         "uv",
         "run",
@@ -231,6 +234,7 @@ async def run_matrix(
     speechify_voice: str | None = None,
     elevenlabs_voice: str | None = None,
     llm_providers: Sequence[str] = ("google",),
+    smart_turn_stop_secs: float = 2.0,
 ) -> Path:
     from eval.synth_callers import load_scenarios
 
@@ -240,6 +244,8 @@ async def run_matrix(
         raise ValueError(f"Unknown scenario(s): {', '.join(unknown_scenarios)}")
     if not repetitions or any(rep < 1 for rep in repetitions):
         raise ValueError("Each repetition count must be a positive integer.")
+    if not math.isfinite(smart_turn_stop_secs) or smart_turn_stop_secs <= 0:
+        raise ValueError("--smart-turn-stop-secs must be a positive number.")
     await synthesize_scenarios(list(dict.fromkeys(scenario_names)))
 
     results_dir = _create_results_dir()
@@ -252,7 +258,7 @@ async def run_matrix(
             for llm in dict.fromkeys(llm_providers):
                 print(f"\n=== Starting runner for STT={stt}, TTS={tts}, LLM={llm} ===")
                 process, output_task, output_lines = await _start_runner(
-                    stt, tts, llm, speechify_voice, elevenlabs_voice
+                    stt, tts, llm, speechify_voice, elevenlabs_voice, smart_turn_stop_secs
                 )
                 try:
                     for scenario_name in scenario_names:
@@ -292,6 +298,7 @@ async def run_matrix(
                                     ),
                                     "scenario": scenario_name,
                                     "rep": repetition,
+                                    "smart_turn_stop_secs": smart_turn_stop_secs,
                                     "caller_error": timeline.get("error"),
                                     "caller_timeline_path": (
                                         str(run_dir / "caller_timeline.json")
@@ -325,6 +332,7 @@ async def run_matrix(
 
     results = {
         "created_at": datetime.now(UTC).isoformat(),
+        "smart_turn_stop_secs": smart_turn_stop_secs,
         "calls": calls,
         "provider_errors": provider_errors,
         "caller_errors": caller_errors,
@@ -357,6 +365,7 @@ def main() -> None:
     parser.add_argument("--reps", nargs="+", type=int, required=True)
     parser.add_argument("--speechify-voice")
     parser.add_argument("--elevenlabs-voice")
+    parser.add_argument("--smart-turn-stop-secs", type=float, default=2.0)
     arguments = parser.parse_args()
     asyncio.run(
         run_matrix(
@@ -367,6 +376,7 @@ def main() -> None:
             arguments.speechify_voice,
             arguments.elevenlabs_voice,
             arguments.llm,
+            arguments.smart_turn_stop_secs,
         )
     )
 

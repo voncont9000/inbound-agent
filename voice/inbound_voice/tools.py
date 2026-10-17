@@ -31,6 +31,7 @@ class CallTools:
         self.live_intake: dict[str, Any] = {"service": None, "fields": {}}
         self._deadline_tasks: set[tuple[int, str]] = set()
         self._keyword_rules_triggered: set[int] = set()
+        self.end_call_requested = False
 
     def confirm_critical_fields(self, service: str, fields: dict[str, Any]) -> dict[str, Any]:
         service_config = self.config.services.get(service)
@@ -75,7 +76,7 @@ class CallTools:
             key = (index, value)
             if days_left <= rule.urgent_within_days and key not in self._deadline_tasks:
                 self._deadline_tasks.add(key)
-                self.sink.append_task(
+                self._append_live_task(
                     "urgent",
                     {
                         "reason": f"{rule.reason} Calculated deadline is {days_left} days away.",
@@ -102,7 +103,7 @@ class CallTools:
                 continue
             self._keyword_rules_triggered.add(index)
             reason = rule.reason.replace("{phrase}", phrase)
-            self.sink.append_task(
+            self._append_live_task(
                 "urgent",
                 {"reason": reason, "matched_phrase": phrase, "rule": index},
             )
@@ -118,7 +119,7 @@ class CallTools:
                 if key in self._deadline_tasks:
                     continue
                 self._deadline_tasks.add(key)
-                self.sink.append_task(
+                self._append_live_task(
                     "urgent",
                     {"reason": reason, "rule": index, "value": value},
                 )
@@ -129,7 +130,7 @@ class CallTools:
                 else "Urgent deadline follow-up already flagged."
             )
             return {"ok": True, "status": status}
-        self.sink.append_task("urgent", {"reason": reason})
+        self._append_live_task("urgent", {"reason": reason})
         return {"ok": True, "status": "Urgent follow-up flagged."}
 
     def _matching_deadline_mentions(self, reason: str) -> list[tuple[int, str]]:
@@ -164,16 +165,20 @@ class CallTools:
         return matches
 
     def log_complaint(self, summary: str) -> dict[str, Any]:
-        self.sink.append_task("complaint", {"summary": summary})
+        self._append_live_task("complaint", {"summary": summary})
         return {"ok": True, "status": "Complaint logged for the complaints handler."}
 
     def request_callback(self, reason: str, preferred_time: str | None = None) -> dict[str, Any]:
-        self.sink.append_task("callback", {"reason": reason, "preferred_time": preferred_time})
+        self._append_live_task("callback", {"reason": reason, "preferred_time": preferred_time})
         return {"ok": True, "status": "Callback request logged."}
 
     def end_call(self) -> dict[str, Any]:
-        self.sink.append_task("end_call", {})
+        self.end_call_requested = True
+        self._append_live_task("end_call", {})
         return {"ok": True, "status": "The call may now end."}
+
+    def _append_live_task(self, task_type: str, details: dict[str, Any]) -> None:
+        self.sink.append_task(task_type, {**details, "source": "live"})
 
     def dispatch(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name not in self.config.live_actions:

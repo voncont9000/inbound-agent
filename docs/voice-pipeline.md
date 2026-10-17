@@ -93,11 +93,14 @@ waits for confirmation, then invokes the enabled confirmation and end-call actio
 order. The prompt discloses AI use, prevents legal advice and client-status disclosure,
 constrains prices to the demo fee table, and directs danger, urgency, complaints, and
 callback requests to explicit tools. Intake models are built dynamically from configured
-service field specs. Only configured live actions are exposed; critical values are
-confirmed during the call and other fields are extracted after it. Employment
-unfair-dismissal deadlines are an example of a template-configured date rule, calculated
-in code and flagged urgent at 28 days or less. Caller-final transcripts are checked
-against configured keyword rules.
+service field specs. Only configured live actions are exposed. The law-firm template
+defaults to `end_call` only; confirmation, manual urgency, callback, and complaint actions
+remain opt-in. When live confirmation is disabled, the assistant still reads back critical
+values and asks the caller to confirm without calling a tool. Caller-final transcripts are
+always checked against configured keyword urgency rules. In v1, date-deadline escalation,
+callback requests, and complaints are post-call tasks; the employment unfair-dismissal
+deadline rule is calculated from merged intake in code. Live tasks use source `live` and
+post-call tasks use `post_call`.
 
 ## Hybrid intake and provenance
 
@@ -117,15 +120,36 @@ rewrites `intake.post_call.json` and `intake.json`, and updates extraction usage
 
 `intake.post_call.json` retains extracted values, confidence, and caller evidence quotes.
 Merged `intake.json` assigns each value a status (`agreed`, `live_only`, `filled`,
-`conflict`, or `corrected`) and retains both source values. Conflicts, invalid coercions,
-and confidence below the assistant's review threshold are listed in `needs_review`.
+`filled_confirmed`, `conflict`, or `corrected`) and retains both source values, including
+whether the caller affirmed a readback. Conflicts, invalid coercions, and confidence below
+the assistant's review threshold are listed in `needs_review`. The extractor also creates
+post-call callback and complaint tasks and checks merged dates against configured deadline
+rules, deduplicating any live task for the same rule and value.
 Extraction usage and estimated cost are separate from live-call LLM metrics. The merged
 values and provenance are intended to map to customer context-graph facts; see
 [`context-graph.md`](context-graph.md).
 
+If the last caller final and the assistant's following turn both contain goodbye language,
+but no `end_call` tool arrives, a fallback queues `EndWorkerFrame` 1.5 seconds after
+`BotStoppedSpeaking`. New caller speech cancels the timer. The resulting end task is tagged
+with source `fallback`.
+
 `SMART_TURN_STOP_SECS` controls Pipecat's silence fallback when Smart Turn marks an
 utterance incomplete; it defaults to `2.0` seconds. The first scripted smoke call used
 Pipecat's 3-second default on four of eight turns, adding about 3.2 seconds before turn end.
+The matrix runner accepts `--smart-turn-stop-secs`, sets it for each runner, and records the
+value in JSON results and summary rows. Its summary reports caller-stop→turn-end,
+turn-end→LLM-first-token, LLM-first-token→TTS-first-audio medians, and LLM TTFB.
+
+At the 2.0-second setting, baseline stage medians were:
+
+| Scenario | Caller stop→turn-end | Turn-end→LLM first token | LLM first token→TTS first audio |
+|---|---:|---:|---:|
+| Employment (8 turns) | 2.200 s | 0.276 s | 0.399 s |
+| Conveyancing (7 turns) | 0.305 s | 0.170 s | 0.309 s |
+
+These are one baseline call per scenario, not a p95 guarantee. Lower endpointing settings
+must be evaluated for interruption/cut-off risk as well as latency.
 
 ## Latency and cost
 

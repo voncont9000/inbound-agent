@@ -220,6 +220,7 @@ class CallMetricsObserver(BaseObserver):
                     "model": getattr(metric, "model", None),
                     "seconds": seconds,
                     "timestamp": time.time(),
+                    "monotonic_timestamp": time.monotonic(),
                 }
                 if isinstance(metric, TTFAMetricsData):
                     record["ttfb_seconds"] = metric.ttfb

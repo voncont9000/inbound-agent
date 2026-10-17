@@ -6,18 +6,25 @@ import json
 import math
 import os
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from inbound_voice.config import AssistantConfig, load_assistant_config
+from inbound_voice.config import (
+    AssistantConfig,
+    DateDeadlineUrgencyRule,
+    load_assistant_config,
+)
+from inbound_voice.intake import days_until_deadline
 from inbound_voice.metrics import calculate_cost, load_price_table
 
 VOICE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = VOICE_ROOT / "config" / "assistants" / "demo_firm.yaml"
 DEFAULT_EXTRACTION_MODEL = "gemini-3.8-flash"
+EMPTY_CALLBACK_REQUEST = {"requested": False, "reason": None, "preferred_time": None}
+EMPTY_COMPLAINT = {"made": False, "summary": None}
 
 
 async def extract_intake(
@@ -33,6 +40,8 @@ async def extract_intake(
             "service": live_intake.get("service"),
             "model": model,
             "fields": {},
+            "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
+            "complaint": EMPTY_COMPLAINT.copy(),
             "usage": {"input_tokens": 0, "output_tokens": 0},
         }
     try:
@@ -71,6 +80,7 @@ async def extract_intake(
                 "value": value,
                 "confidence": confidence,
                 "evidence": str(item.get("evidence", "")),
+                "confirmed_by_caller": bool(item.get("confirmed_by_caller", False)),
                 **({"invalid": True} if invalid else {}),
             }
         return {
@@ -78,6 +88,8 @@ async def extract_intake(
             "service": service_name,
             "model": model,
             "fields": fields,
+            "callback_requested": _callback_request(parsed.get("callback_requested")),
+            "complaint": _complaint(parsed.get("complaint")),
             "usage": _usage(response),
         }
     except Exception as error:
@@ -86,6 +98,8 @@ async def extract_intake(
             "service": live_intake.get("service"),
             "model": model,
             "fields": {},
+            "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
+            "complaint": EMPTY_COMPLAINT.copy(),
             "usage": {"input_tokens": 0, "output_tokens": 0},
             "error": f"{type(error).__name__}: {error}",
         }
@@ -124,6 +138,7 @@ def merge_intake(
                 "value": post_value,
                 "confidence": post_entry.get("confidence", 0),
                 "evidence": post_entry.get("evidence", ""),
+                "confirmed_by_caller": bool(post_entry.get("confirmed_by_caller", False)),
             }
 
         confidence = 0.0
@@ -152,7 +167,9 @@ def merge_intake(
             confidence = 0.95
         else:
             value = post_value
-            status = "filled"
+            status = (
+                "filled_confirmed" if post_entry.get("confirmed_by_caller", False) else "filled"
+            )
             confidence = float(post_entry.get("confidence", 0))
 
         review = status == "conflict" or invalid or confidence < threshold
@@ -161,6 +178,9 @@ def merge_intake(
             "status": status,
             "confidence": confidence,
             "needs_review": review,
+            "confirmed_by_caller": bool(
+                post_entry and post_entry.get("confirmed_by_caller", False)
+            ),
             "sources": sources,
         }
         if alternative is not None:
@@ -184,6 +204,8 @@ def build_intake_artifacts(
         "service": service_name,
         "model": result.get("model", ""),
         "fields": result.get("fields", {}),
+        "callback_requested": _callback_request(result.get("callback_requested")),
+        "complaint": _complaint(result.get("complaint")),
     }
     service_model = (
         _service_model(config.services[service_name]) if service_name in config.services else None
@@ -208,6 +230,85 @@ def build_intake_artifacts(
     if result.get("error"):
         merged["extraction_error"] = result["error"]
     return post_call, merged
+
+
+def build_post_call_tasks(
+    post_call: dict[str, Any],
+    merged: dict[str, Any],
+    config: AssistantConfig,
+    existing_tasks: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    tasks = existing_tasks or []
+    generated = []
+    service_name = merged.get("service")
+    fields = merged.get("fields", {})
+    for index, rule in enumerate(config.urgency_rules):
+        if not isinstance(rule, DateDeadlineUrgencyRule) or rule.service != service_name:
+            continue
+        entry = fields.get(rule.field, {})
+        value = entry.get("value") if isinstance(entry, dict) else None
+        if not value:
+            continue
+        try:
+            days_left = days_until_deadline(
+                date.fromisoformat(str(value)), rule.add_months, rule.minus_days
+            )
+        except ValueError:
+            continue
+        if days_left > rule.urgent_within_days:
+            continue
+        if any(
+            task.get("type") == "urgent"
+            and task.get("rule") == index
+            and task.get("value") == value
+            for task in [*tasks, *generated]
+        ):
+            continue
+        generated.append(
+            {
+                "type": "urgent",
+                "reason": f"{rule.reason} Calculated deadline is {days_left} days away.",
+                "rule": index,
+                "value": value,
+                "source": "post_call",
+            }
+        )
+
+    callback = _callback_request(post_call.get("callback_requested"))
+    if callback["requested"] and not any(task.get("type") == "callback" for task in tasks):
+        generated.append(
+            {
+                "type": "callback",
+                "reason": callback["reason"] or "Caller requested a callback.",
+                "preferred_time": callback["preferred_time"],
+                "source": "post_call",
+            }
+        )
+
+    complaint = _complaint(post_call.get("complaint"))
+    if complaint["made"] and not any(task.get("type") == "complaint" for task in tasks):
+        generated.append(
+            {
+                "type": "complaint",
+                "summary": complaint["summary"] or "Caller reported a complaint.",
+                "source": "post_call",
+            }
+        )
+    return generated
+
+
+def _callback_request(value: Any) -> dict[str, Any]:
+    value = value if isinstance(value, dict) else {}
+    return {
+        "requested": bool(value.get("requested", False)),
+        "reason": value.get("reason"),
+        "preferred_time": value.get("preferred_time"),
+    }
+
+
+def _complaint(value: Any) -> dict[str, Any]:
+    value = value if isinstance(value, dict) else {}
+    return {"made": bool(value.get("made", False)), "summary": value.get("summary")}
 
 
 async def reextract_run(
@@ -243,6 +344,13 @@ async def reextract_run(
     post_call, merged = build_intake_artifacts(live_intake, result, config)
     _write_json(directory / "intake.post_call.json", post_call)
     _write_json(directory / "intake.json", merged)
+    tasks_path = directory / "tasks.json"
+    tasks = json.loads(tasks_path.read_text(encoding="utf-8")) if tasks_path.exists() else []
+    tasks.extend(
+        {"created_at": datetime.now(UTC).isoformat(), **task}
+        for task in build_post_call_tasks(post_call, merged, config, tasks)
+    )
+    _write_json(tasks_path, tasks)
 
     metrics_path = directory / "metrics.json"
     estimated_cost = None
@@ -299,16 +407,48 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "enum": field_names},
-                        "value": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                        "value": {
+                            "anyOf": [
+                                {"type": "string"},
+                                {"type": "array", "items": {"type": "string"}},
+                                {"type": "null"},
+                            ]
+                        },
                         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                         "evidence": {"type": "string"},
+                        "confirmed_by_caller": {"type": "boolean"},
                     },
-                    "required": ["name", "value", "confidence", "evidence"],
+                    "required": [
+                        "name",
+                        "value",
+                        "confidence",
+                        "evidence",
+                        "confirmed_by_caller",
+                    ],
                     "additionalProperties": False,
                 },
             },
+            "callback_requested": {
+                "type": "object",
+                "properties": {
+                    "requested": {"type": "boolean"},
+                    "reason": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "preferred_time": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                },
+                "required": ["requested", "reason", "preferred_time"],
+                "additionalProperties": False,
+            },
+            "complaint": {
+                "type": "object",
+                "properties": {
+                    "made": {"type": "boolean"},
+                    "summary": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                },
+                "required": ["made", "summary"],
+                "additionalProperties": False,
+            },
         },
-        "required": ["service", "fields"],
+        "required": ["service", "fields", "callback_requested", "complaint"],
         "additionalProperties": False,
     }
 
@@ -331,10 +471,15 @@ def _extraction_prompt(
                 f"- {field.name} ({field.label}; type={field.type}{choices}): {field.description}"
             )
         services.append(f"{name} ({service.label}):\n" + "\n".join(field_lines))
-    return f"""Extract intake facts from this call.
+    return f"""Extract intake facts and requested post-call actions from this call.
 Use only facts stated by the caller. Return null for facts not stated. Dates must be ISO
 YYYY-MM-DD using today's date ({date.today().isoformat()}) to resolve relative dates.
 Evidence must be an exact quote from the caller's transcript.
+For list fields such as key_dates, return a list of strings such as "2026-08-10: dismissed".
+Set confirmed_by_caller true only when the assistant read that value back and the caller
+affirmed it. Set callback_requested.requested only when the caller asked for a callback;
+include the reason and preferred time if stated. Set complaint.made only when the caller
+made a complaint, and summarize it briefly.
 
 Confirmed live values:
 {json.dumps(live_intake, ensure_ascii=False)}
