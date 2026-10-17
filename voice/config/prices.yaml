@@ -32,7 +32,7 @@ prices:
     checked: "2026-10-17"
     details: "Flash/Turbo API rate $0.04 per 1,000 characters; Artificial Analysis lists Eleven v4 Turbo at $40/1M. Non-turbo eleven_v4 is $0.08 and is not used."
   llm_models:
-    gemini-2.5-flash:
+    gemini-3.5-flash-lite:
       input_per_1m_tokens:
         value: 0.3
         source: https://ai.google.dev/gemini-api/docs/pricing
@@ -43,17 +43,50 @@ prices:
         source: https://ai.google.dev/gemini-api/docs/pricing
         checked: "2026-10-17"
         details: "Paid tier, output including thinking tokens, USD per 1M tokens."
+    gemini-3.1-flash-lite:
+      input_per_1m_tokens:
+        value: 0.25
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, text input, USD per 1M tokens."
+      output_per_1m_tokens:
+        value: 1.5
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, output including thinking tokens, USD per 1M tokens."
+    gemini-3.8-flash:
+      input_per_1m_tokens:
+        value: 0.75
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, text input, USD per 1M tokens; price increases to $1.50 on 2027-01-01."
+      output_per_1m_tokens:
+        value: 3.75
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, output including thinking tokens, USD per 1M tokens; price increases to $7.50 on 2027-01-01."
+    gemini-2.5-flash:
+      input_per_1m_tokens:
+        value: 0.3
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, text input, USD per 1M tokens; unavailable to new API keys."
+      output_per_1m_tokens:
+        value: 2.5
+        source: https://ai.google.dev/gemini-api/docs/pricing
+        checked: "2026-10-17"
+        details: "Paid tier, output including thinking tokens, USD per 1M tokens; unavailable to new API keys."
     gemini-2.5-flash-lite:
       input_per_1m_tokens:
         value: 0.1
         source: https://ai.google.dev/gemini-api/docs/pricing
         checked: "2026-10-17"
-        details: "Paid tier, text input, USD per 1M tokens."
+        details: "Paid tier, text input, USD per 1M tokens; unavailable to new API keys."
       output_per_1m_tokens:
         value: 0.4
         source: https://ai.google.dev/gemini-api/docs/pricing
         checked: "2026-10-17"
-        details: "Paid tier, output including thinking tokens, USD per 1M tokens."
+        details: "Paid tier, output including thinking tokens, USD per 1M tokens; unavailable to new API keys."
     google/gemini-2.5-flash:
       input_per_1m_tokens:
         value: 0.3

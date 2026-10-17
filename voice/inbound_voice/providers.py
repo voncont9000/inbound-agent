@@ -16,7 +16,7 @@ STT_PROVIDERS = ("assemblyai", "soniox", "deepgram")
 TTS_PROVIDERS = ("speechify", "elevenlabs", "deepgram")
 LLM_PROVIDERS = ("google", "openrouter")
 LLM_DEFAULT_MODELS = {
-    "google": "gemini-2.5-flash",
+    "google": "gemini-3.5-flash-lite",
     "openrouter": "google/gemini-2.5-flash",
 }
 ELEVENLABS_HTTP_ONLY_MODELS = frozenset({"eleven_v4_turbo"})
@@ -161,13 +161,18 @@ def create_llm(
     system_instruction: str,
 ):
     if providers.llm == "google":
+        if providers.llm_model.startswith("gemini-2.5"):
+            thinking = GoogleThinkingConfig(thinking_budget=0)
+        else:
+            thinking_level = env.get("LLM_THINKING_LEVEL", "minimal").strip() or "minimal"
+            thinking = GoogleThinkingConfig(thinking_level=thinking_level)
         return GoogleLLMService(
             api_key=env["GOOGLE_API_KEY"],
             settings=GoogleLLMService.Settings(
                 model=providers.llm_model,
                 system_instruction=system_instruction,
                 temperature=0.2,
-                thinking=GoogleThinkingConfig(thinking_budget=0),
+                thinking=thinking,
             ),
         )
     if providers.llm == "openrouter":

@@ -24,6 +24,7 @@ FRAME_SAMPLES = WEBRTC_SAMPLE_RATE // 50
 SPEECH_ENERGY_THRESHOLD = 250.0
 SILENCE_SECONDS = 1.2
 TURN_TIMEOUT_SECONDS = 25
+MAX_AGENT_TURN_SECONDS = 90
 FINAL_CALL_TIMEOUT_SECONDS = 15
 
 
@@ -103,6 +104,7 @@ class AgentAudioRecorder:
         self._condition = asyncio.Condition()
         self._sample_chunks: list[bytes] = []
         self._completed_speeches = 0
+        self._started_speeches = 0
         self._speaking: dict[str, Any] | None = None
         self._last_active_at: float | None = None
         self.ended = asyncio.Event()
@@ -145,6 +147,9 @@ class AgentAudioRecorder:
                     "silence_detected_at_seconds": None,
                 }
                 self._timeline["agent_speech"].append(self._speaking)
+                self._started_speeches += 1
+                async with self._condition:
+                    self._condition.notify_all()
             self._last_active_at = now
         elif (
             self._speaking is not None
@@ -164,14 +169,38 @@ class AgentAudioRecorder:
             self._completed_speeches += 1
             self._condition.notify_all()
 
-    async def wait_for_speech_after(self, previous_count: int, timeout: float) -> None:
+    async def wait_for_speech_after(
+        self,
+        previous_count: int,
+        start_timeout: float,
+        max_turn_timeout: float = MAX_AGENT_TURN_SECONDS,
+    ) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max_turn_timeout
         async with self._condition:
-            await asyncio.wait_for(
-                self._condition.wait_for(
-                    lambda: self._completed_speeches > previous_count or self.ended.is_set()
-                ),
-                timeout=timeout,
-            )
+            try:
+                await asyncio.wait_for(
+                    self._condition.wait_for(
+                        lambda: self._started_speeches > previous_count or self.ended.is_set()
+                    ),
+                    timeout=min(start_timeout, max_turn_timeout),
+                )
+            except TimeoutError as error:
+                raise TimeoutError("Timed out waiting for agent speech to start.") from error
+            if self._completed_speeches <= previous_count:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    raise TimeoutError("Timed out waiting for agent speech to complete.")
+                try:
+                    await asyncio.wait_for(
+                        self._condition.wait_for(
+                            lambda: self._completed_speeches > previous_count
+                            or self.ended.is_set()
+                        ),
+                        timeout=remaining,
+                    )
+                except TimeoutError as error:
+                    raise TimeoutError("Timed out waiting for agent speech to complete.") from error
         if self._completed_speeches <= previous_count:
             raise TimeoutError("No completed agent speech was detected.")
 
@@ -286,7 +315,9 @@ async def run_call(
             await _connect(peer, base_url, session)
             try:
                 await asyncio.wait_for(audio_track_event.wait(), timeout=TURN_TIMEOUT_SECONDS)
-                await recorder.wait_for_speech_after(0, TURN_TIMEOUT_SECONDS)
+                await recorder.wait_for_speech_after(
+                    0, TURN_TIMEOUT_SECONDS, MAX_AGENT_TURN_SECONDS
+                )
             except TimeoutError as error:
                 raise TimeoutError("Timed out waiting for the agent's greeting.") from error
 
@@ -310,7 +341,7 @@ async def run_call(
                 if index < len(utterances) - 1:
                     try:
                         await recorder.wait_for_speech_after(
-                            previous_speeches, TURN_TIMEOUT_SECONDS
+                            previous_speeches, TURN_TIMEOUT_SECONDS, MAX_AGENT_TURN_SECONDS
                         )
                     except TimeoutError as error:
                         raise TimeoutError(

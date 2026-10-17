@@ -24,12 +24,16 @@ Deepgram. The demo firm, fees, and price table are illustrative.
 Change `STT_PROVIDER` and `TTS_PROVIDER` in `.env`, then restart the runner to A/B providers.
 Supported STT values are `assemblyai`, `soniox`, and `deepgram`; supported TTS values are
 `speechify`, `elevenlabs`, and `deepgram`. `LLM_PROVIDER` defaults to `google`; the optional
-`openrouter` provider remains available. `LLM_MODEL` defaults to `gemini-2.5-flash` for Google
+`openrouter` provider remains available. `LLM_MODEL` defaults to `gemini-3.5-flash-lite` for Google
 and `google/gemini-2.5-flash` for OpenRouter.
 
-Google's Gemini 2.5 Flash uses `thinking_budget=0` to disable dynamic thinking and reduce
-response latency. The paid-tier text rates are $0.30 input / $2.50 output per 1M tokens for
-Flash and $0.10 / $0.40 for Flash-Lite, from Google's
+Google Gemini 2.5 models explicitly disable thinking with `thinking_budget=0`; other Gemini
+models use `LLM_THINKING_LEVEL` (default `minimal`). Gemini 2.5 Flash and Flash-Lite are
+unavailable to new API keys. Gemini 3.8 Flash rejects `minimal`; use a supported level such
+as `low`. Google's free tier may use prompts and responses to improve its products, so use
+the paid tier for client data. Paid-tier text prices per 1M input/output tokens are
+$0.30/$2.50 for 3.5 Flash-Lite, $0.25/$1.50 for 3.1 Flash-Lite, and $0.75/$3.75 for 3.8
+Flash (scheduled to increase to $1.50/$7.50 on 2027-01-01), from the official
 [Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing).
 
 `TTS_VOICE` is optional for Speechify and Deepgram. Speechify defaults to `beatrice_32`

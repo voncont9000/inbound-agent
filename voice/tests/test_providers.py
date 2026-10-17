@@ -43,7 +43,7 @@ def test_provider_defaults_and_normalization() -> None:
         tts_voice=None,
         elevenlabs_model="eleven_v4_turbo",
         llm="google",
-        llm_model="gemini-2.5-flash",
+        llm_model="gemini-3.5-flash-lite",
     )
     normalized = resolve_providers(
         _environment(STT_PROVIDER=" SONIOX ", TTS_PROVIDER=" DEEPGRAM ", TTS_VOICE=" voice ")
@@ -163,9 +163,15 @@ def test_create_llm() -> None:
     google = create_llm(resolve_providers(google_env), google_env, "system prompt")
 
     assert isinstance(google, GoogleLLMService)
-    assert google._settings.model == "gemini-2.5-flash"
+    assert google._settings.model == "gemini-3.5-flash-lite"
     assert google._settings.system_instruction == "system prompt"
-    assert google._settings.thinking.thinking_budget == 0
+    assert google._settings.thinking.thinking_level == "minimal"
+
+    legacy_google_env = _environment(LLM_MODEL="gemini-2.5-flash")
+    legacy_google = create_llm(
+        resolve_providers(legacy_google_env), legacy_google_env, "system prompt"
+    )
+    assert legacy_google._settings.thinking.thinking_budget == 0
 
     openrouter_env = _environment(LLM_PROVIDER="openrouter")
     openrouter = create_llm(resolve_providers(openrouter_env), openrouter_env, "system prompt")
