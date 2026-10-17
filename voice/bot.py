@@ -29,7 +29,7 @@ from pipecat.turns.user_start import VADUserTurnStartStrategy
 from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
-from inbound_voice.config import load_firm_config
+from inbound_voice.config import load_assistant_config
 from inbound_voice.metrics import CallMetricsObserver
 from inbound_voice.prompts import render_system_prompt
 from inbound_voice.providers import create_llm, create_stt, create_tts, resolve_providers
@@ -37,7 +37,7 @@ from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
 
 ROOT = Path(__file__).resolve().parent
-FIRM_CONFIG = ROOT / "config" / "demo_firm.yaml"
+ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
 
 
 def smart_turn_stop_secs(env: Mapping[str, str]) -> float:
@@ -52,7 +52,7 @@ def smart_turn_stop_secs(env: Mapping[str, str]) -> float:
 
 def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
     schemas = []
-    for spec in tool_specs():
+    for spec in tool_specs(call_tools.config):
 
         async def handler(params: FunctionCallParams, tool_name: str = spec["name"]) -> None:
             result = call_tools.dispatch(tool_name, params.arguments)
@@ -87,12 +87,13 @@ async def run_bot(transport: object, telephony: bool = False) -> None:
             "llm_model": providers.llm_model,
         },
     )
-    call_tools = CallTools(sink)
-    firm = load_firm_config(FIRM_CONFIG)
+    assistant_path = Path(os.environ.get("ASSISTANT_CONFIG", str(ASSISTANT_CONFIG)))
+    assistant = load_assistant_config(assistant_path)
+    call_tools = CallTools(sink, assistant)
 
     async with aiohttp.ClientSession() as session:
         stt = create_stt(providers, os.environ)
-        llm = create_llm(providers, os.environ, render_system_prompt(firm))
+        llm = create_llm(providers, os.environ, render_system_prompt(assistant))
         tts = create_tts(providers, os.environ, session)
         context = LLMContext(tools=create_function_schemas(call_tools))
         context_aggregators = LLMContextAggregatorPair(

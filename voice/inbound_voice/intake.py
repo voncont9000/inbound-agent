@@ -1,76 +1,57 @@
 import calendar
 from datetime import date, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, create_model
 
-Funding = Literal["private", "legal_expenses_insurance", "legal_aid", "no_win_no_fee"]
-ContactPreference = Literal["phone", "email"]
-TransactionType = Literal["purchase", "sale", "both", "remortgage"]
-Tenure = Literal["freehold", "leasehold", "shared_ownership"]
-EmploymentIssue = Literal[
-    "dismissal", "redundancy", "discrimination", "settlement_agreement", "grievance"
-]
+from inbound_voice.config import FieldSpec, ServiceConfig
 
 
-class IntakeBase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    caller_name: str | None = None
-    phone: str | None = None
-    email: EmailStr | None = None
-    funding: Funding | None = None
-    contact_preference: ContactPreference | None = None
-    other_parties: list[str] = Field(default_factory=list)
-
-    @field_validator("caller_name", "phone")
-    @classmethod
-    def strip_optional_text(cls, value: str | None) -> str | None:
-        return value.strip() if value else value
+def _strip(value: str) -> str:
+    return value.strip()
 
 
-class ConveyancingIntake(IntakeBase):
-    transaction_type: TransactionType | None = None
-    property_address: str | None = None
-    postcode: str | None = None
-    price: str | None = None
-    tenure: Tenure | None = None
-    new_build: bool | None = None
-    mortgage: bool | None = None
-    lender: str | None = None
-    first_time_buyer: bool | None = None
-    chain_status: str | None = None
-    estate_agent: str | None = None
-    target_exchange_date: date | None = None
-    target_completion_date: date | None = None
-    other_side_solicitor: str | None = None
+def _annotation_for(field: FieldSpec):
+    if field.type == "email":
+        return EmailStr
+    if field.type == "phone":
+        return Annotated[str, AfterValidator(_strip)]
+    if field.type == "date":
+        return date
+    if field.type == "boolean":
+        return bool
+    if field.type == "integer":
+        return int
+    if field.type == "number":
+        return float
+    if field.type == "enum":
+        return Literal[tuple(field.choices or [])]
+    if field.type == "list":
+        return list[str]
+    return str
 
 
-class EmploymentIntake(IntakeBase):
-    issue_type: EmploymentIssue | None = None
-    employer_name: str | None = None
-    job_title: str | None = None
-    length_of_service: str | None = None
-    termination_date: date | None = None
-    last_act_complained_of: date | None = None
-    acas_early_conciliation_started: bool | None = None
-    key_dates: dict[str, date] = Field(default_factory=dict)
+def build_service_model(service: ServiceConfig) -> type[BaseModel]:
+    definitions = {field.name: (_annotation_for(field) | None, None) for field in service.fields}
+    return create_model(
+        f"{service.label.replace(' ', '')}Intake",
+        __config__=ConfigDict(extra="forbid"),
+        **definitions,
+    )
 
 
-PRESETS: dict[str, type[IntakeBase]] = {
-    "conveyancing": ConveyancingIntake,
-    "employment": EmploymentIntake,
-}
-
-
-def unfair_dismissal_deadline(termination_date: date) -> date:
-    """Return three calendar months less one day after the effective termination date."""
-    month_index = termination_date.month - 1 + 3
-    year = termination_date.year + month_index // 12
+def deadline_from(start: date, add_months: int, minus_days: int) -> date:
+    month_index = start.month - 1 + add_months
+    year = start.year + month_index // 12
     month = month_index % 12 + 1
-    day = min(termination_date.day, calendar.monthrange(year, month)[1])
-    return date(year, month, day) - timedelta(days=1)
+    day = min(start.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day) - timedelta(days=minus_days)
 
 
-def days_until_unfair_dismissal_deadline(termination_date: date, today: date | None = None) -> int:
-    return (unfair_dismissal_deadline(termination_date) - (today or date.today())).days
+def days_until_deadline(
+    start: date,
+    add_months: int,
+    minus_days: int,
+    today: date | None = None,
+) -> int:
+    return (deadline_from(start, add_months, minus_days) - (today or date.today())).days

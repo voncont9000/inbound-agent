@@ -1,50 +1,62 @@
-import types
 from datetime import date
-from typing import Any, Union, get_args, get_origin
-from typing import Literal as TypingLiteral
+from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
-from inbound_voice.intake import (
-    PRESETS,
-    EmploymentIntake,
-    days_until_unfair_dismissal_deadline,
-)
+from inbound_voice.config import AssistantConfig, DateDeadlineUrgencyRule, load_assistant_config
+from inbound_voice.intake import build_service_model, days_until_deadline
 from inbound_voice.sinks import CallSink
+
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "assistants" / "demo_firm.yaml"
 
 
 class CallTools:
-    def __init__(self, sink: CallSink) -> None:
+    def __init__(self, sink: CallSink, config: AssistantConfig | None = None) -> None:
         self.sink = sink
+        self.config = config or load_assistant_config(DEFAULT_CONFIG_PATH)
+        self.models = {
+            name: build_service_model(service) for name, service in self.config.services.items()
+        }
         self.intake: dict[str, Any] = {}
+        self._deadline_tasks: set[tuple[int, str]] = set()
 
-    def save_intake(self, practice_area: str, fields: dict[str, Any]) -> dict[str, Any]:
-        model = PRESETS.get(practice_area)
+    def save_intake(self, service: str, fields: dict[str, Any]) -> dict[str, Any]:
+        model = self.models.get(service)
         if model is None:
             return {
                 "ok": False,
-                "errors": [{"field": "practice_area", "message": "Unknown practice area."}],
+                "errors": [{"field": "service", "message": "Unknown service."}],
             }
-        previous = self.intake.get(practice_area, {})
+        previous = self.intake.get(service, {})
         try:
             validated = model.model_validate({**previous, **fields})
         except ValidationError as error:
             return {"ok": False, "errors": error.errors(include_url=False)}
 
         data = validated.model_dump(mode="json", exclude_unset=False)
-        self.intake[practice_area] = data
+        self.intake[service] = data
         output_data = data.copy()
-        if isinstance(validated, EmploymentIntake) and validated.termination_date:
-            days_left = days_until_unfair_dismissal_deadline(validated.termination_date)
-            output_data["unfair_dismissal_days_remaining"] = days_left
-            if days_left <= 28 and data["termination_date"] != previous.get("termination_date"):
-                self.flag_urgent(
-                    f"Employment termination date recorded; unfair dismissal deadline "
-                    f"calculated as {days_left} days away."
+        for index, rule in enumerate(self.config.urgency_rules):
+            if (
+                isinstance(rule, DateDeadlineUrgencyRule)
+                and rule.service == service
+                and data.get(rule.field)
+                and data[rule.field] != previous.get(rule.field)
+            ):
+                days_left = days_until_deadline(
+                    date.fromisoformat(data[rule.field]),
+                    rule.add_months,
+                    rule.minus_days,
                 )
+                if days_left <= rule.urgent_within_days:
+                    key = (index, data[rule.field])
+                    if key not in self._deadline_tasks:
+                        self._deadline_tasks.add(key)
+                        self.flag_urgent(f"{rule.reason} Calculated deadline is {days_left} days away.")
         self.sink.save_intake(
             {
-                "practice_area": practice_area,
+                "service": service,
                 "fields": output_data,
                 "conflict_check": "pending",
             }
@@ -80,97 +92,62 @@ class CallTools:
         return result
 
 
-def tool_specs() -> list[dict[str, Any]]:
-    fields_description = _intake_fields_description()
-    return [
-        {
-            "name": "save_intake",
-            "description": (
-                "Save validated intake fields. Practice area must be conveyancing or employment. "
-                "If validation fails, ask the caller to correct the returned fields."
-            ),
-            "properties": {
-                "practice_area": {
-                    "type": "string",
-                    "enum": ["conveyancing", "employment"],
-                },
-                "fields": {"type": "object", "description": fields_description},
-            },
-            "required": ["practice_area", "fields"],
-        },
-        {
-            "name": "flag_urgent",
+def tool_specs(config: AssistantConfig | None = None) -> list[dict[str, Any]]:
+    assistant = config or load_assistant_config(DEFAULT_CONFIG_PATH)
+    action_specs = {
+        "flag_urgent": {
             "description": "Immediately flag danger, distress, or a time-critical issue.",
             "properties": {"reason": {"type": "string"}},
             "required": ["reason"],
         },
-        {
-            "name": "log_complaint",
-            "description": "Log a complaint for the firm's complaints handler.",
+        "log_complaint": {
+            "description": "Log a complaint for the business complaints handler.",
             "properties": {"summary": {"type": "string"}},
             "required": ["summary"],
         },
-        {
-            "name": "request_callback",
-            "description": "Request a solicitor or staff callback.",
+        "request_callback": {
+            "description": "Request a staff callback.",
             "properties": {
                 "reason": {"type": "string"},
                 "preferred_time": {"type": "string"},
             },
             "required": ["reason"],
         },
-        {
-            "name": "end_call",
+        "end_call": {
             "description": "End the call after the caller's needs have been handled.",
             "properties": {},
             "required": [],
         },
+    }
+    return [
+        {
+            "name": "save_intake",
+            "description": "Save validated fields for one configured service.",
+            "properties": {
+                "service": {"type": "string", "enum": list(assistant.services)},
+                "fields": {
+                    "type": "object",
+                    "description": _intake_fields_description(assistant),
+                },
+            },
+            "required": ["service", "fields"],
+        },
+        *[
+            {"name": name, **action_specs[name]}
+            for name in assistant.live_actions
+            if name in action_specs
+        ],
     ]
 
 
-def _intake_fields_description() -> str:
-    lines = ["Fields by practice area:"]
-    for practice_area, model in PRESETS.items():
-        lines.append(f"{practice_area}:")
+def _intake_fields_description(config: AssistantConfig) -> str:
+    lines = ["Fields by service:"]
+    for service_name, service in config.services.items():
+        lines.append(f"{service_name}:")
         lines.extend(
-            f"- {name}: {_format_field_type(field.annotation)}"
-            for name, field in model.model_fields.items()
+            f"- {field.name}: {field.type}"
+            + (f" choices: {', '.join(field.choices)}" if field.choices else "")
+            for field in service.fields
         )
-    lines.extend(
-        [
-            "Dates must use ISO YYYY-MM-DD format.",
-            "Booleans must be true or false.",
-            "Fields merge across calls; pass only new or corrected fields.",
-        ]
-    )
+    lines.extend(["Dates must use ISO YYYY-MM-DD format.", "Fields merge across calls."])
     return "\n".join(lines)
-
-
-def _format_field_type(annotation: Any) -> str:
-    origin = get_origin(annotation)
-    arguments = get_args(annotation)
-    if origin is TypingLiteral:
-        choices = ", ".join(repr(choice) for choice in arguments)
-        return f"Literal[{choices}]"
-    if origin in (Union, types.UnionType):
-        non_null_arguments = [argument for argument in arguments if argument is not type(None)]
-        if len(non_null_arguments) == 1:
-            return _format_field_type(non_null_arguments[0])
-        return " | ".join(_format_field_type(argument) for argument in non_null_arguments)
-    if origin is list:
-        return f"list[{_format_field_type(arguments[0])}]"
-    if origin is dict:
-        return f"dict[{_format_field_type(arguments[0])}, {_format_field_type(arguments[1])}]"
-    if annotation is str:
-        return "string"
-    if annotation is bool:
-        return "boolean"
-    if annotation is date:
-        return "date"
-    if annotation is int:
-        return "integer"
-    if annotation is float:
-        return "number"
-    if getattr(annotation, "__name__", None) == "EmailStr":
-        return "string (email)"
-    return getattr(annotation, "__name__", str(annotation))

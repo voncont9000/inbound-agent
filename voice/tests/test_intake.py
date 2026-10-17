@@ -1,51 +1,49 @@
 from datetime import date
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+from inbound_voice.config import load_assistant_config
 from inbound_voice.intake import (
-    ConveyancingIntake,
-    EmploymentIntake,
-    days_until_unfair_dismissal_deadline,
-    unfair_dismissal_deadline,
+    build_service_model,
+    days_until_deadline,
+    deadline_from,
 )
 
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "assistants" / "demo_firm.yaml"
 
-def test_valid_conveyancing_intake() -> None:
-    intake = ConveyancingIntake.model_validate(
+
+def test_dynamic_conveyancing_model_validates_field_types() -> None:
+    config = load_assistant_config(CONFIG_PATH)
+    model = build_service_model(config.services["conveyancing"])
+    intake = model.model_validate(
         {
             "caller_name": "A. Caller",
-            "phone": "+44 7700 900123",
+            "phone": " +44 7700 900123 ",
             "email": "caller@example.com",
             "transaction_type": "purchase",
-            "property_address": "10 High Street",
-            "postcode": "SW1A 1AA",
-            "price": "£350,000",
-            "tenure": "leasehold",
-            "new_build": False,
-            "mortgage": True,
-            "lender": "Example Bank",
-            "first_time_buyer": True,
-            "chain_status": "No chain",
-            "estate_agent": "Example Estate Agents",
             "target_exchange_date": "2026-12-01",
-            "target_completion_date": "2026-12-15",
-            "other_side_solicitor": "Example Legal",
         }
     )
     assert intake.transaction_type == "purchase"
     assert intake.target_exchange_date == date(2026, 12, 1)
+    assert intake.phone == "+44 7700 900123"
 
 
-def test_invalid_conveyancing_enums_and_extra_fields() -> None:
+def test_dynamic_service_model_rejects_invalid_enum_and_extra_fields() -> None:
+    config = load_assistant_config(CONFIG_PATH)
+    model = build_service_model(config.services["conveyancing"])
     with pytest.raises(ValidationError):
-        ConveyancingIntake.model_validate(
+        model.model_validate(
             {"transaction_type": "transfer", "unknown": "not allowed"}
         )
 
 
-def test_valid_employment_intake() -> None:
-    intake = EmploymentIntake.model_validate(
+def test_dynamic_employment_model_validates_dates_and_enum() -> None:
+    config = load_assistant_config(CONFIG_PATH)
+    model = build_service_model(config.services["employment"])
+    intake = model.model_validate(
         {
             "caller_name": "B. Caller",
             "funding": "private",
@@ -63,9 +61,11 @@ def test_valid_employment_intake() -> None:
     assert intake.issue_type == "dismissal"
 
 
-def test_invalid_employment_fields() -> None:
+def test_dynamic_model_rejects_invalid_employment_fields() -> None:
+    config = load_assistant_config(CONFIG_PATH)
+    model = build_service_model(config.services["employment"])
     with pytest.raises(ValidationError):
-        EmploymentIntake.model_validate(
+        model.model_validate(
             {"issue_type": "pay dispute", "acas_early_conciliation_started": "maybe"}
         )
 
@@ -78,9 +78,14 @@ def test_invalid_employment_fields() -> None:
         (date(2025, 11, 30), date(2026, 2, 27)),
     ],
 )
-def test_unfair_dismissal_deadline_month_end(termination_date: date, expected: date) -> None:
-    assert unfair_dismissal_deadline(termination_date) == expected
+def test_generic_deadline_month_end(termination_date: date, expected: date) -> None:
+    assert deadline_from(termination_date, add_months=3, minus_days=1) == expected
 
 
 def test_days_until_deadline() -> None:
-    assert days_until_unfair_dismissal_deadline(date(2026, 1, 1), today=date(2026, 3, 20)) == 11
+    assert (
+        days_until_deadline(
+            date(2026, 1, 1), add_months=3, minus_days=1, today=date(2026, 3, 20)
+        )
+        == 11
+    )

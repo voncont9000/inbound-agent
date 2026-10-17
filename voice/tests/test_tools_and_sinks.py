@@ -5,14 +5,14 @@ from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
 
 
-def test_save_intake_tool_describes_preset_fields_and_choices() -> None:
+def test_save_intake_tool_describes_configured_service_fields_and_choices() -> None:
     specification = next(spec for spec in tool_specs() if spec["name"] == "save_intake")
     description = specification["properties"]["fields"]["description"]
 
     assert "termination_date: date" in description
     assert "acas_early_conciliation_started: boolean" in description
     assert "postcode: string" in description
-    assert "'redundancy'" in description
+    assert "redundancy" in description
     assert "Dates must use ISO YYYY-MM-DD" in description
     assert "Fields merge across calls" in description
 
@@ -62,10 +62,10 @@ def test_dispatch_logs_invalid_and_valid_save_intake_calls(tmp_path) -> None:
     tools = CallTools(sink)
 
     invalid = tools.dispatch(
-        "save_intake", {"practice_area": "employment", "fields": {"issue_type": "wrong"}}
+        "save_intake", {"service": "employment", "fields": {"issue_type": "wrong"}}
     )
     valid = tools.dispatch(
-        "save_intake", {"practice_area": "employment", "fields": {"issue_type": "dismissal"}}
+        "save_intake", {"service": "employment", "fields": {"issue_type": "dismissal"}}
     )
 
     entries = [
