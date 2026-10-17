@@ -57,9 +57,11 @@ TTS_VOICE=MzqUf1HbJ8UmQ0wUsx2p
 ELEVENLABS_MODEL=eleven_v4_turbo
 ```
 
-The default ElevenLabs model is `eleven_v4_turbo`. ElevenLabs documentation describes
-this model for the Text-to-Dialogue WebSocket; if the standard stream-input endpoint
-rejects it, set `ELEVENLABS_MODEL=eleven_flash_v2_5`.
+The default ElevenLabs model is `eleven_v4_turbo`. Pipecat's WebSocket
+`multi-stream-input` endpoint rejects this model with HTTP 400, so the bot uses Pipecat's
+HTTP streaming service for it. `eleven_flash_v2_5` uses the WebSocket service. The HTTP
+service selects PCM output using the pipeline's audio output sample rate, matching the
+WebSocket service.
 
 ## Turn-taking
 

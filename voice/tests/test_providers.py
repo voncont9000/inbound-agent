@@ -5,7 +5,7 @@ import pytest
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
-from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
+from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService, ElevenLabsTTSService
 from pipecat.services.soniox.stt import SonioxSTTService
 from pipecat.services.speechify.tts import SpeechifyHttpTTSService
 
@@ -106,28 +106,34 @@ def test_create_stt(provider: str, expected_type: type) -> None:
 
 
 def test_create_tts() -> None:
-    async def create_services() -> tuple[object, object, object]:
+    async def create_services() -> tuple[object, object, object, object]:
         async with aiohttp.ClientSession() as session:
             services = []
-            for provider, voice in (
-                ("speechify", None),
-                ("elevenlabs", "elevenlabs-voice-id"),
-                ("deepgram", None),
+            for provider, voice, model in (
+                ("speechify", None, None),
+                ("elevenlabs", "elevenlabs-voice-id", None),
+                ("deepgram", None, None),
+                ("elevenlabs", "elevenlabs-voice-id", "eleven_flash_v2_5"),
             ):
                 environment = _environment(TTS_PROVIDER=provider)
                 if voice:
                     environment["TTS_VOICE"] = voice
+                if model:
+                    environment["ELEVENLABS_MODEL"] = model
                 providers = resolve_providers(environment)
                 services.append(create_tts(providers, environment, session))
             return tuple(services)
 
-    speechify, elevenlabs, deepgram = asyncio.run(create_services())
+    speechify, elevenlabs, deepgram, elevenlabs_flash = asyncio.run(create_services())
 
     assert isinstance(speechify, SpeechifyHttpTTSService)
     assert speechify._settings.model == "simba-3.2"
     assert speechify._settings.voice == "beatrice_32"
-    assert isinstance(elevenlabs, ElevenLabsTTSService)
+    assert isinstance(elevenlabs, ElevenLabsHttpTTSService)
     assert elevenlabs._settings.model == "eleven_v4_turbo"
     assert elevenlabs._settings.voice == "elevenlabs-voice-id"
+    assert isinstance(elevenlabs_flash, ElevenLabsTTSService)
+    assert elevenlabs_flash._settings.model == "eleven_flash_v2_5"
+    assert elevenlabs_flash._settings.voice == "elevenlabs-voice-id"
     assert isinstance(deepgram, DeepgramTTSService)
     assert deepgram._settings.voice == "aura-2-pandora-en"

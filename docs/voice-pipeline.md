@@ -48,6 +48,11 @@ The provider-specific Pipecat service construction is isolated in
 | TTS | ElevenLabs | `ELEVENLABS_MODEL`, default `eleven_v4_turbo` | `ELEVENLABS_API_KEY`; required `TTS_VOICE` ID; suggested Katie X `MzqUf1HbJ8UmQ0wUsx2p`, built-in Alice alternative `Xb7hH8MSUJpSbSDYk0k2` |
 | TTS | Deepgram | Aura-2 | `DEEPGRAM_API_KEY`; optional `TTS_VOICE`, default `aura-2-pandora-en` |
 
+Pipecat's ElevenLabs WebSocket `multi-stream-input` endpoint rejects
+`eleven_v4_turbo` with HTTP 400, so that model uses the HTTP streaming service instead;
+`eleven_flash_v2_5` uses the WebSocket service. The HTTP service selects PCM output from
+the pipeline's audio output sample rate, matching the WebSocket service.
+
 ElevenLabs voices can be listed with `GET /v2/voices`; shared British conversational
 voices can be searched with `GET /v1/shared-voices?language=en&accent=british&use_cases=conversational`.
 
@@ -148,6 +153,14 @@ six `save_intake` calls, all successful, and the call recorded `urgent`, `callba
 turn-end-to-audio p50 was **1.87 s**, up from about **1.15 s** because tool-call turns
 need a second LLM round trip. The caller's name was still misheard as “Mac Alistair,” and
 the email was captured as `yvonne.mcallister`.
+
+### Soniox + ElevenLabs Flash v2.5 conveyancing smoke (2026-10-17)
+
+The Soniox + ElevenLabs Flash v2.5 conveyancing run scored **11/13**. Headline latency
+was p50 **2.20 s** / p95 **2.74 s**, with turn-end-to-audio p50 **1.90 s** and TTS
+TTFB **0.165 s**. Estimated cost was about **$0.058**; this uses the single ElevenLabs
+list rate in `voice/config/prices.yaml`. Flash v2.5-specific pricing has not been
+verified and may differ.
 
 The harness plays scripted utterances in a fixed order regardless of the agent's question,
 so a caller's next answer can be misaligned with what the agent asked.

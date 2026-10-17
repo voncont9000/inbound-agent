@@ -5,13 +5,14 @@ import aiohttp
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
-from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
+from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService, ElevenLabsTTSService
 from pipecat.services.soniox.stt import SonioxContextObject, SonioxSTTService
 from pipecat.services.speechify.tts import SpeechifyHttpTTSService
 from pipecat.transcriptions.language import Language
 
 STT_PROVIDERS = ("assemblyai", "soniox", "deepgram")
 TTS_PROVIDERS = ("speechify", "elevenlabs", "deepgram")
+ELEVENLABS_HTTP_ONLY_MODELS = frozenset({"eleven_v4_turbo"})
 
 KEYTERMS = [
     "conveyancing",
@@ -114,6 +115,15 @@ def create_tts(
             ),
         )
     if providers.tts == "elevenlabs":
+        if providers.elevenlabs_model in ELEVENLABS_HTTP_ONLY_MODELS:
+            return ElevenLabsHttpTTSService(
+                api_key=env["ELEVENLABS_API_KEY"],
+                aiohttp_session=aiohttp_session,
+                settings=ElevenLabsHttpTTSService.Settings(
+                    model=providers.elevenlabs_model,
+                    voice=providers.tts_voice,
+                ),
+            )
         return ElevenLabsTTSService(
             api_key=env["ELEVENLABS_API_KEY"],
             settings=ElevenLabsTTSService.Settings(
