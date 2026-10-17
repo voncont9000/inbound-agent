@@ -66,6 +66,7 @@ ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
 EXTRACTION_TIMEOUT_SECONDS = 60
 GOODBYE_HANGUP_SECONDS = 1.5
 IDLE_PROMPT_DEFAULT_SECONDS = 8.0
+SMART_TURN_STOP_DEFAULT_SECS = 0.7
 IDLE_PROMPT_TEXT = "Are you still there?"
 IDLE_GOODBYE_TEXT = "I'll end the call now. Thank you for calling. Goodbye."
 CLOSING_PHRASE = re.compile(
@@ -264,7 +265,9 @@ class IdleHangupObserver(BaseObserver):
 
 def smart_turn_stop_secs(env: Mapping[str, str]) -> float:
     try:
-        stop_secs = float(env.get("SMART_TURN_STOP_SECS", "0.7").strip())
+        stop_secs = float(
+            env.get("SMART_TURN_STOP_SECS", str(SMART_TURN_STOP_DEFAULT_SECS)).strip()
+        )
     except ValueError as error:
         raise ValueError("SMART_TURN_STOP_SECS must be a positive number.") from error
     if not math.isfinite(stop_secs) or stop_secs <= 0:

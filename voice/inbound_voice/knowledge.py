@@ -290,7 +290,7 @@ def read_document(path: str | Path) -> tuple[str, str]:
 def read_files(paths: list[str | Path]) -> list[dict[str, Any]]:
     records = []
     for path in paths:
-        source = str(path)
+        source = f"file:{Path(path).name}"
         try:
             text, title = read_document(path)
             status = "ok" if text.strip() else "empty"

@@ -531,6 +531,11 @@ def _extraction_prompt(
         "answer from business knowledge (it declined, said it would pass it on, or gave no "
         "answer). Evidence must be an exact quote from the caller."
     )
+    callback_requested_instruction = (
+        "Set callback_requested.requested true only when the caller explicitly asks "
+        "for a callback or says yes to an offer of one. "
+        "An assistant offer without caller agreement is false."
+    )
     return f"""Extract intake facts and requested post-call actions from this call.
 Use only facts stated by the caller. Return null for facts not stated. Dates must be ISO
 YYYY-MM-DD using today's date ({date.today().isoformat()}) to resolve relative dates.
@@ -540,9 +545,9 @@ When the caller spells a value, preserve that spelling. For caller_name, when an
 local part clearly matches the caller's name, use its spelling (for example,
 "siobhan.mcallister@" means "Siobhan McAllister").
 Set confirmed_by_caller true only when the assistant read that value back and the caller
-affirmed it. Set callback_requested.requested only when the caller asked for a callback;
-include the reason and preferred time if stated. Set complaint.made only when the caller
-made a complaint, and summarize it briefly.
+affirmed it. {callback_requested_instruction}
+Include the reason and preferred time if stated. Set complaint.made only when the
+caller made a complaint, and summarize it briefly.
 {unanswered_questions_instruction}
 
 Confirmed live values:

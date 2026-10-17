@@ -192,15 +192,18 @@ def test_import_writes_chunks_manifest_digest_usage_and_cost(tmp_path) -> None:
     assert manifest["digest_usage"] == {"input_tokens": 100, "output_tokens": 20}
     assert manifest["digest_cost"]["currency"] == "USD"
     assert manifest["digest_cost"]["amount"] is not None
+    assert manifest["sources"][0]["source"] == f"file:{source.name}"
     assert manifest["sources"][0]["chars"] == len("Remortgage fixed fee is £595 plus VAT.")
     assert manifest["sources"][0]["status"] == "ok"
     assert manifest["sources"][0]["fetched_at"]
     assert manifest["sources"][0]["errors"] == []
-    assert chunks[0]["source"] == str(source)
+    assert str(tmp_path) not in json.dumps(manifest, ensure_ascii=False)
+    assert chunks[0]["source"] == f"file:{source.name}"
     assert chunks[0]["title"] == source.name
     assert chunks[0]["chunk_index"] == 0
     assert len(chunks[0]["sha256"]) == 64
     assert "text/plain" == client.models.arguments["config"]["response_mime_type"]
     assert "response_json_schema" not in client.models.arguments["config"]
-    assert "### Source:" in client.models.arguments["contents"]
+    assert f"### Source: file:{source.name}\n" in client.models.arguments["contents"]
+    assert str(source) not in client.models.arguments["contents"]
     assert (output_dir / "digest.md").is_file()

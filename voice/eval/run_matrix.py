@@ -18,6 +18,7 @@ from typing import Any
 
 import aiohttp
 
+from bot import SMART_TURN_STOP_DEFAULT_SECS
 from eval.caller import run_call
 from eval.score import render_summary, score_call
 from eval.synth_callers import AUDIO_DIR, synthesize_scenarios
@@ -85,7 +86,7 @@ async def _start_runner(
     llm: str,
     speechify_voice: str | None = None,
     elevenlabs_voice: str | None = None,
-    smart_turn_stop_secs: float = 2.0,
+    smart_turn_stop_secs: float = SMART_TURN_STOP_DEFAULT_SECS,
     knowledge_digest_path: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
@@ -239,7 +240,7 @@ async def run_matrix(
     speechify_voice: str | None = None,
     elevenlabs_voice: str | None = None,
     llm_providers: Sequence[str] = ("google",),
-    smart_turn_stop_secs: float = 2.0,
+    smart_turn_stop_secs: float = SMART_TURN_STOP_DEFAULT_SECS,
     knowledge_digest_path: str | None = None,
 ) -> Path:
     from eval.synth_callers import load_scenarios
@@ -368,7 +369,7 @@ async def run_matrix(
     return results_dir
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run scripted voice-provider A/B calls.")
     parser.add_argument("--stt", nargs="+", choices=STT_PROVIDERS, required=True)
     parser.add_argument("--tts", nargs="+", choices=TTS_PROVIDERS, required=True)
@@ -377,8 +378,17 @@ def main() -> None:
     parser.add_argument("--reps", nargs="+", type=int, required=True)
     parser.add_argument("--speechify-voice")
     parser.add_argument("--elevenlabs-voice")
-    parser.add_argument("--smart-turn-stop-secs", type=float, default=2.0)
+    parser.add_argument(
+        "--smart-turn-stop-secs",
+        type=float,
+        default=SMART_TURN_STOP_DEFAULT_SECS,
+    )
     parser.add_argument("--knowledge-fixture", action="store_true")
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     arguments = parser.parse_args()
     if not arguments.knowledge_fixture:
         asyncio.run(
