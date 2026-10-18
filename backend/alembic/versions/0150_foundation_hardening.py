@@ -1,6 +1,6 @@
 """Harden cross-tenant lookup and tenant references.
 
-Revision ID: 0101
+Revision ID: 0150
 Revises: 0100
 """
 
@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0101"
+revision = "0150"
 down_revision = "0100"
 branch_labels = None
 depends_on = None
@@ -144,15 +144,28 @@ def upgrade() -> None:
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'inbound_lookup') THEN
                 CREATE ROLE inbound_lookup NOLOGIN NOBYPASSRLS;
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'inbound_job_claimer') THEN
+                CREATE ROLE inbound_job_claimer NOLOGIN NOBYPASSRLS;
+            END IF;
         END
         $$;
         """
     )
-    op.execute("GRANT SELECT ON channel_connections, memberships, users TO inbound_lookup")
+    op.execute(
+        "GRANT SELECT ON channel_connections, memberships, users, conversations TO inbound_lookup"
+    )
+    op.execute("GRANT SELECT, UPDATE ON jobs TO inbound_job_claimer")
     op.execute(
         "CREATE POLICY lookup_read ON channel_connections FOR SELECT TO inbound_lookup USING (true)"
     )
     op.execute("CREATE POLICY lookup_read ON memberships FOR SELECT TO inbound_lookup USING (true)")
+    op.execute(
+        "CREATE POLICY lookup_read ON conversations FOR SELECT TO inbound_lookup USING (true)"
+    )
+    op.execute(
+        "CREATE POLICY job_claim ON jobs FOR ALL TO inbound_job_claimer "
+        "USING (true) WITH CHECK (true)"
+    )
 
     for table_name in _REFERENCED_TABLES:
         op.create_unique_constraint(f"uq_{table_name}_tenant_id", table_name, ["tenant_id", "id"])
@@ -169,10 +182,15 @@ def upgrade() -> None:
         )
 
     op.execute("GRANT inbound_lookup TO CURRENT_USER")
+    op.execute("GRANT inbound_job_claimer TO CURRENT_USER")
     op.execute("GRANT CREATE ON SCHEMA public TO inbound_lookup")
+    op.execute("GRANT CREATE ON SCHEMA public TO inbound_job_claimer")
     op.execute("ALTER FUNCTION resolve_channel(channel_kind, text) OWNER TO inbound_lookup")
     op.execute("ALTER FUNCTION lookup_user_memberships(citext) OWNER TO inbound_lookup")
+    op.execute("ALTER FUNCTION conversation_tenant(uuid) OWNER TO inbound_lookup")
+    op.execute("ALTER FUNCTION claim_next_job(integer) OWNER TO inbound_job_claimer")
     op.execute("REVOKE CREATE ON SCHEMA public FROM inbound_lookup")
+    op.execute("REVOKE CREATE ON SCHEMA public FROM inbound_job_claimer")
 
 
 def downgrade() -> None:
@@ -193,9 +211,20 @@ def downgrade() -> None:
 
     op.execute("ALTER FUNCTION resolve_channel(channel_kind, text) OWNER TO CURRENT_USER")
     op.execute("ALTER FUNCTION lookup_user_memberships(citext) OWNER TO CURRENT_USER")
+    op.execute("ALTER FUNCTION conversation_tenant(uuid) OWNER TO CURRENT_USER")
+    op.execute("ALTER FUNCTION claim_next_job(integer) OWNER TO CURRENT_USER")
     op.execute("REVOKE CREATE ON SCHEMA public FROM inbound_lookup")
+    op.execute("REVOKE CREATE ON SCHEMA public FROM inbound_job_claimer")
     op.execute("REVOKE inbound_lookup FROM CURRENT_USER")
+    op.execute("REVOKE inbound_job_claimer FROM CURRENT_USER")
     op.execute("DROP POLICY lookup_read ON channel_connections")
     op.execute("DROP POLICY lookup_read ON memberships")
-    op.execute("REVOKE SELECT ON channel_connections, memberships, users FROM inbound_lookup")
+    op.execute("DROP POLICY lookup_read ON conversations")
+    op.execute("DROP POLICY job_claim ON jobs")
+    op.execute(
+        "REVOKE SELECT ON channel_connections, memberships, users, "
+        "conversations FROM inbound_lookup"
+    )
+    op.execute("REVOKE SELECT, UPDATE ON jobs FROM inbound_job_claimer")
+    op.execute("DROP ROLE IF EXISTS inbound_job_claimer")
     op.execute("DROP ROLE IF EXISTS inbound_lookup")
