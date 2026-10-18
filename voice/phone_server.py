@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -34,6 +35,7 @@ VOICE_ROOT = Path(__file__).resolve().parent
 
 def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
     app = FastAPI()
+    app.state.accepted_call_sids = set()
 
     @app.get("/healthz")
     async def healthz() -> dict[str, bool]:
@@ -64,11 +66,14 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
         )
         stream_parameters = {"To": params.get("To", ""), "From": params.get("From", "")}
         if auth_token:
+            issued_at = int(time.time())
+            stream_parameters["StreamIssuedAt"] = str(issued_at)
             stream_parameters["StreamToken"] = stream_token(
                 auth_token,
                 params.get("CallSid", ""),
                 stream_parameters["To"],
                 stream_parameters["From"],
+                issued_at,
             )
         twiml = build_stream_twiml(
             f"{ws_url}/twilio/ws",
@@ -90,11 +95,17 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
                 start.call_sid,
                 start.custom_parameters.get("To", ""),
                 start.custom_parameters.get("From", ""),
+                start.custom_parameters.get("StreamIssuedAt", ""),
                 start.custom_parameters.get("StreamToken", ""),
             ):
                 logger.warning("Rejected Twilio media stream with invalid StreamToken.")
                 await websocket.close(code=1008)
                 return
+            if start.call_sid in app.state.accepted_call_sids:
+                logger.warning("Rejected duplicate Twilio media stream for an accepted call.")
+                await websocket.close(code=1008)
+                return
+            app.state.accepted_call_sids.add(start.call_sid)
             caller_id = resolve_caller_id({"start": start_payload}, env, telephony=True)
             prepared = await prepare_call(
                 env,

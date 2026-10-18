@@ -3,9 +3,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import time
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
 from dataclasses import dataclass
+
+STREAM_TOKEN_MAX_AGE_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -33,20 +36,36 @@ def validate_signature(
     return hmac.compare_digest(compute_signature(auth_token, url, params), signature)
 
 
-def stream_token(auth_token: str, call_sid: str, to_number: str, from_number: str) -> str:
-    message = f"{call_sid}\n{to_number}\n{from_number}"
+def stream_token(
+    auth_token: str,
+    call_sid: str,
+    to: str,
+    from_: str,
+    issued_at: int,
+) -> str:
+    message = f"{call_sid}\n{to}\n{from_}\n{issued_at}"
     return hmac.new(auth_token.encode(), message.encode(), hashlib.sha256).hexdigest()
 
 
 def verify_stream_token(
     auth_token: str,
     call_sid: str,
-    to_number: str,
-    from_number: str,
+    to: str,
+    from_: str,
+    issued_at: str,
     token: str,
+    now: float | None = None,
+    max_age: int = STREAM_TOKEN_MAX_AGE_SECONDS,
 ) -> bool:
+    try:
+        issued_at_seconds = int(issued_at)
+    except (TypeError, ValueError):
+        return False
+    current_time = time.time() if now is None else now
+    if issued_at_seconds < current_time - max_age or issued_at_seconds > current_time + 30:
+        return False
     return hmac.compare_digest(
-        stream_token(auth_token, call_sid, to_number, from_number),
+        stream_token(auth_token, call_sid, to, from_, issued_at_seconds),
         token,
     )
 

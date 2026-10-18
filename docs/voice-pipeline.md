@@ -380,9 +380,11 @@ Start and report requests retry up to five times on transport errors, timeouts, 
 attempt; it does not add retry latency before the greeting.
 
 If the report cannot be delivered, one atomic JSON record is written to `VOICE_SPOOL_DIR`
-(default `voice/spool/`) using the external call ID as its filename. The spool stores the
-call start, report, conversation ID when available, last error, and spool timestamp; it
-never stores the service token. Retry delivery with:
+(default `voice/spool/`). Safe external call IDs become filenames directly; other IDs use
+`call.<first-16-hex-of-sha256>.json` so untrusted values cannot escape the directory or
+collide with safe IDs. The spool stores the call start, report, conversation ID when
+available, last error, and spool timestamp; it never stores the service token. Retry
+delivery with:
 
 ```sh
 uv run python -m inbound_voice.api_client resend [--spool-dir DIR]
@@ -410,10 +412,13 @@ WebSocket at `/twilio/ws`. Set `TWILIO_AUTH_TOKEN` to validate `X-Twilio-Signatu
 generated `wss://` stream URL use the public origin. Without `PUBLIC_BASE_URL`, the server
 honors `X-Forwarded-Proto` and `X-Forwarded-Host`. Signature validation is skipped with a
 warning when no auth token is configured; production deployments must configure it.
-With the token configured, the webhook adds a `StreamToken` HMAC-SHA256 parameter bound to
-the Twilio Call SID and the `To`/`From` numbers. The media-stream WebSocket verifies it
-before preparing a call and closes unauthorized streams with code 1008. Without the token,
-both webhook signature and stream-token validation are skipped for local development.
+With the token configured, the webhook adds `StreamToken` and `StreamIssuedAt` custom
+parameters. The HMAC-SHA256 token binds the Twilio Call SID, `To`/`From` numbers, and
+issue time. Streams expire after 120 seconds, allow at most 30 seconds of clock skew into
+the future, and each Call SID can be accepted only once per server process. The media-stream
+WebSocket checks these before preparing a call and closes unauthorized or replayed streams
+with code 1008. Without the token, webhook signature and stream-token validation are
+skipped for local development.
 `TWILIO_ACCOUNT_SID` plus `TWILIO_AUTH_TOKEN` enable REST hang-up. Without both, the
 WebSocket is closed when the pipeline ends.
 

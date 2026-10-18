@@ -166,14 +166,22 @@ def test_spool_hashes_unsafe_external_call_ids_into_spool_directory(tmp_path: Pa
         spool_dir=tmp_path,
         sleep=_async_noop,
     )
-    external_call_ids = ("../../evil", "a/b")
+    slash_id = "a/b"
+    slash_digest = hashlib.sha256(slash_id.encode("utf-8")).hexdigest()[:16]
+    safe_id_with_old_hashed_name = f"call-{slash_digest}"
+    external_call_ids = ("../../evil", slash_id, safe_id_with_old_hashed_name)
 
     for external_call_id in external_call_ids:
         call_start = _call_start().model_copy(update={"external_call_id": external_call_id})
         report = _report().model_copy(update={"external_call_id": external_call_id})
         client._spool(call_start, report, None, "API unavailable")
         digest = hashlib.sha256(external_call_id.encode("utf-8")).hexdigest()[:16]
-        spool_file = tmp_path / f"call-{digest}.json"
+        filename = (
+            external_call_id
+            if external_call_id == safe_id_with_old_hashed_name
+            else f"call.{digest}"
+        )
+        spool_file = tmp_path / f"{filename}.json"
 
         assert spool_file.exists()
         assert spool_file.parent.resolve() == tmp_path.resolve()
@@ -182,7 +190,9 @@ def test_spool_hashes_unsafe_external_call_ids_into_spool_directory(tmp_path: Pa
             == external_call_id
         )
 
-    assert len(list(tmp_path.glob("*.json"))) == 2
+    assert len(list(tmp_path.glob("*.json"))) == 3
+    assert (tmp_path / f"call.{slash_digest}.json").exists()
+    assert (tmp_path / f"{safe_id_with_old_hashed_name}.json").exists()
 
 
 @pytest.mark.asyncio

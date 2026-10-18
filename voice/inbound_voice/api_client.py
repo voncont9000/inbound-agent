@@ -208,7 +208,7 @@ class VoiceApiClient:
             filename = external_call_id
         else:
             digest = hashlib.sha256(external_call_id.encode("utf-8")).hexdigest()[:16]
-            filename = f"call-{digest}"
+            filename = f"call.{digest}"
         path = self.spool_dir / f"{filename}.json"
         payload = {
             "conversation_id": str(conversation_id) if conversation_id else None,
