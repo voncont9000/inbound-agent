@@ -1,5 +1,115 @@
 {
   "$defs": {
+    "AppointmentType": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "pattern": "^[a-z0-9_]+$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "exclusiveMinimum": 0,
+          "maximum": 480,
+          "title": "Duration Minutes",
+          "type": "integer"
+        },
+        "when_to_use": {
+          "title": "When To Use",
+          "type": "string"
+        },
+        "location_or_link": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Or Link"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "duration_minutes",
+        "when_to_use"
+      ],
+      "title": "AppointmentType",
+      "type": "object"
+    },
+    "BookingConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "calendar_id": {
+          "default": "primary",
+          "title": "Calendar Id",
+          "type": "string"
+        },
+        "appointment_types": {
+          "items": {
+            "$ref": "#/$defs/AppointmentType"
+          },
+          "minItems": 1,
+          "title": "Appointment Types",
+          "type": "array"
+        },
+        "min_notice_hours": {
+          "default": 2,
+          "minimum": 0,
+          "title": "Min Notice Hours",
+          "type": "integer"
+        },
+        "horizon_days": {
+          "default": 14,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Horizon Days",
+          "type": "integer"
+        },
+        "buffer_minutes": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Buffer Minutes",
+          "type": "integer"
+        },
+        "max_slots_offered": {
+          "default": 3,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Max Slots Offered",
+          "type": "integer"
+        },
+        "slot_step_minutes": {
+          "default": 30,
+          "maximum": 240,
+          "minimum": 5,
+          "title": "Slot Step Minutes",
+          "type": "integer"
+        },
+        "send_updates": {
+          "default": "all",
+          "enum": [
+            "all",
+            "externalOnly",
+            "none"
+          ],
+          "title": "Send Updates",
+          "type": "string"
+        }
+      },
+      "required": [
+        "appointment_types"
+      ],
+      "title": "BookingConfig",
+      "type": "object"
+    },
     "DateDeadlineUrgencyRule": {
       "additionalProperties": false,
       "properties": {
@@ -412,12 +522,25 @@
           "flag_urgent",
           "request_callback",
           "log_complaint",
-          "end_call"
+          "end_call",
+          "check_availability",
+          "book_appointment"
         ],
         "type": "string"
       },
       "title": "Live Actions",
       "type": "array"
+    },
+    "booking": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BookingConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "review_confidence_threshold": {
       "default": 0.7,

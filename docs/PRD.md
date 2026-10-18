@@ -113,7 +113,7 @@ FR-E7 suggested rules are explicitly out of scope for this implementation.
 
 ### 7.8 Integrations and tools
 **v1**
-- FR-T1: **Calendar** (Google Calendar first, Outlook later): availability lookup for configured fee earners or consultation slots, create/reschedule/cancel event, confirmation by email. Booking rules per tenant (consultation types, durations, buffers, paid or free initial consultation).
+- FR-T1: **Calendar** (Google Calendar first, Outlook later): live availability lookup and confirmed appointment booking for configured appointment types. Google Calendar events are created only after the caller or WhatsApp customer chooses and confirms an offered slot; per-assistant configuration defines durations, notice, horizon, buffers, and attendee updates. Rescheduling, cancellation, and confirmation email remain future work.
 - FR-T2: **Google Sheets**: (a) append one row per conversation with the extraction fields (intake log) to a sheet the firm picks; (b) read lookup tables (e.g. fee list, fee earners per practice area, office hours) as knowledge. OAuth, least-privilege scopes (`drive.file` where possible).
 - FR-T3: **Email** actions: send a confirmation or summary email to the caller (from the connected Gmail mailbox, using templates), and notify staff by email.
 

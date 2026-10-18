@@ -52,7 +52,11 @@ export const handlers = [
     "*/api/channels/gmail/mode",
     () => HttpResponse.json<{ mode: "off" | "fake" | "google" }>({ mode: "fake" }),
   ),
-  http.post<{ id: string }, never, { url: string }>(
+  http.get<never, never, { mode: "off" | "fake" | "google" }>(
+    "*/api/calendar/mode",
+    () => HttpResponse.json<{ mode: "off" | "fake" | "google" }>({ mode: "fake" }),
+  ),
+  http.post<{ id: string }, Schemas["GmailOAuthStartRequest"], { url: string }>(
     "*/api/assistants/:id/channels/gmail/oauth-start",
     ({ params }) =>
       HttpResponse.json<{ url: string }>({

@@ -27,4 +27,27 @@ describe("validateAssistantConfig", () => {
     expect(errors["urgency_rules.1.field"]).toMatch(/date field/);
     expect(errors["urgency_rules.1.minus_days"]).toBeDefined();
   });
+
+  it("validates booking appointment keys, durations, and limits without coupling live actions", () => {
+    const config = structuredClone(tenantFixtures[0].assistants[0].config);
+    config.booking = {
+      calendar_id: "primary",
+      appointment_types: [
+        { key: "initial_consultation", label: "Consultation", duration_minutes: 30, when_to_use: "New callers" },
+        { key: "initial_consultation", label: "Follow-up", duration_minutes: 481, when_to_use: "Existing callers" },
+      ],
+      min_notice_hours: 2,
+      horizon_days: 14,
+      buffer_minutes: 15,
+      max_slots_offered: 3,
+      slot_step_minutes: 30,
+      send_updates: "all",
+    };
+    const errors = validateAssistantConfig(config);
+
+    expect(errors["booking.appointment_types.1.key"]).toMatch(/unique/);
+    expect(errors["booking.appointment_types.1.duration_minutes"]).toMatch(/480/);
+    expect(errors["booking.appointment_types.0.key"]).toBeUndefined();
+    expect(config.live_actions).not.toContain("book_appointment");
+  });
 });

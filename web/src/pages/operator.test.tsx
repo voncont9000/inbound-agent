@@ -85,6 +85,55 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", putListener);
   }, 15000);
 
+  it("configures an appointment type and saves booking settings", async () => {
+    const user = userEvent.setup();
+    let savedConfig: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { savedConfig = (body as { config: Record<string, unknown> }).config; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    const duration = screen.getByLabelText("Duration (minutes)");
+    await user.clear(duration);
+    await user.type(duration, "45");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(savedConfig).toBeDefined());
+
+    expect(savedConfig?.booking).toMatchObject({
+      calendar_id: "primary",
+      appointment_types: [{ key: "consultation", duration_minutes: 45 }],
+    });
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("requests Calendar OAuth scopes and warns when the calendar is disconnected", async () => {
+    const user = userEvent.setup();
+    let oauthFeatures: string[] | undefined;
+    server.use(
+      http.get("*/api/channels/gmail/mode", () => HttpResponse.json({ mode: "google" })),
+      http.get("*/api/calendar/mode", () => HttpResponse.json({ mode: "google" })),
+      http.post<{ id: string }, Schemas["GmailOAuthStartRequest"], Schemas["HTTPValidationError"]>(
+        "*/api/assistants/:id/channels/gmail/oauth-start",
+        async ({ request }) => {
+          oauthFeatures = (await request.json() as Schemas["GmailOAuthStartRequest"]).features;
+          return HttpResponse.json<Schemas["HTTPValidationError"]>({
+            detail: [{ loc: ["body"], msg: "OAuth unavailable", type: "value_error" }],
+          }, { status: 503 });
+        },
+      ),
+    );
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/calendar is disconnected/i);
+    await user.click(screen.getByRole("button", { name: "Connect Calendar" }));
+    await waitFor(() => expect(oauthFeatures).toEqual(["calendar"]));
+  });
+
   it("rejects duplicate contact keys without overwriting a contact", async () => {
     const user = userEvent.setup();
     const contacts = mockDb.tenants[0].assistants[0].config.contacts;
@@ -211,6 +260,28 @@ describe("operator workflows", () => {
     ));
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
     expect(await screen.findByText("Draft in Gmail")).toBeInTheDocument();
+  });
+
+  it("shows booking details from conversation metrics", async () => {
+    const conversation = structuredClone(mockDb.tenants[0].conversations[0]);
+    conversation.metrics = {
+      ...conversation.metrics,
+      booking: {
+        appointment_type: "consultation",
+        label: "Consultation",
+        text: "Tuesday 2 June at 10:00",
+        status: "booked",
+        event_link: "https://calendar.example/event",
+      },
+    };
+    server.use(http.get<{ id: string }, never, Schemas["ConversationDetailResponse"]>(
+      "*/api/conversations/:id",
+      () => HttpResponse.json<Schemas["ConversationDetailResponse"]>(conversation),
+    ));
+    renderApp(`/conversations/${conversationId}`, { loggedIn: true });
+    expect(await screen.findByRole("heading", { name: "Appointment booking" })).toBeInTheDocument();
+    expect(screen.getByText("Tuesday 2 June at 10:00")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Calendar event" })).toHaveAttribute("href", "https://calendar.example/event");
   });
 
   it("sends task filters to the server", async () => {

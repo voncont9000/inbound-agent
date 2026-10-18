@@ -82,6 +82,12 @@ spoken first. Client disconnects cancel the pipeline task. The `end_call` tool r
 result before sending `EndWorkerFrame` upstream, allowing the spoken goodbye to finish before
 the pipeline ends.
 
+When booking is enabled for a routed phone or tokenized web call, Calendar availability is
+prefetched while route lookup completes. The booking tools are exposed only when the assistant
+has booking configuration, the route reports Calendar availability, and the relevant live
+action is enabled. Voice booking uses cached prefetched results when possible and records
+tool round-trip timings in call metrics.
+
 ## Turn-taking and safeguards
 
 Silero VAD detects speech activity and Pipecat's local Smart Turn v3 analyzer predicts
