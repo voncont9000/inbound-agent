@@ -179,6 +179,15 @@ template- and prompt-driven and vertical-neutral.
   available under Advanced.
 - FR-S6: A persistent **Test call / Test chat** control on every assistant page.
 
+*Status (FR-S1–S4, FR-S6):* built in the web app. Settings live at `/assistants/:id/settings/:tab`
+(`general`, `rules`, `knowledge`, `abilities`, `channels`, `advanced`); `/assistants/:id/settings`
+and the old `/assistants/:id/knowledge` page redirect to these tabs. One **Save changes** button saves the whole config
+from any tab, and tabs that have validation errors show a count. Knowledge sources and the digest still save on their own.
+Ability cards switch the matching live actions on or off (booking: `check_availability` and
+`book_appointment`; forwarding: `transfer_call`). Keys are generated in the browser
+(`web/src/lib/keys.ts`) and match the backend key patterns. Saved keys never change. Post-action
+keys are generated the same way. Voice selection on General (FR-S8) is not built here. Rule presets (FR-S13) go into the slot marked in `web/src/components/settings/RulesTab.tsx`.
+
 **Website-based setup**
 - FR-S7: Creating an assistant asks for business name, website URL and template. The website is crawled
   and an LLM drafts company info, FAQs, opening hours, price list and suggested services. The business

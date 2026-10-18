@@ -259,8 +259,8 @@ The operator UI is in `web/`, built with React, TypeScript, React Query, and pla
 |---|---|
 | `/login`, `/signup` | Cookie-session authentication and account creation |
 | `/assistants` | Assistant list and template-based setup |
-| `/assistants/:id/settings` | Configuration editor and version comparison |
-| `/assistants/:id/knowledge` | Sources, import jobs, digest, and FAQ editing |
+| `/assistants/:id/settings/:tab` | Tabbed configuration editor (General, Rules, Knowledge, Abilities, Channels, Advanced) with one save for the whole config, version comparison, and a Test call control on every tab |
+| `/assistants/:id/settings`, `/assistants/:id/knowledge` | Redirect to the General and Knowledge tabs (the Knowledge tab holds sources, import jobs, digest, FAQs, office hours, price list and contacts) |
 | `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
 | `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
 | `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |
