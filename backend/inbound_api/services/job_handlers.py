@@ -1,5 +1,5 @@
+import logging
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import UUID
 
 import httpx
@@ -29,9 +29,12 @@ from inbound_api.models import (
 )
 from inbound_api.services import files_cleanup as _files_cleanup  # noqa: F401
 from inbound_api.services import knowledge_import as knowledge_import_service  # noqa: F401
+from inbound_api.services.assistant_context import load_assistant_route
 from inbound_api.services.conversation_results import persist_extracted_results
 from inbound_api.services.knowledge_import import make_genai_client
 from inbound_api.settings import get_settings
+
+LOGGER = logging.getLogger(__name__)
 
 
 @register("graph_ingest")
@@ -68,6 +71,17 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
     if not inbound_messages:
         return
     latest_inbound = inbound_messages[-1]
+    assistant_after_latest_inbound = await session.scalar(
+        select(Message.id)
+        .where(
+            Message.conversation_id == conversation_id,
+            Message.role == MessageRole.ASSISTANT,
+            tuple_(Message.ts, Message.id) > tuple_(latest_inbound.ts, latest_inbound.id),
+        )
+        .limit(1)
+    )
+    if assistant_after_latest_inbound is not None:
+        return
     thread = list(
         await session.scalars(
             select(Message)
@@ -100,9 +114,39 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
         return
     if not settings.google_api_key:
         raise PermanentJobError("GOOGLE_API_KEY is not configured")
-    config = AssistantConfig.model_validate(assistant.config)
-    business_context = render_business_context(config, channel="whatsapp")
-    known_phone = (conversation.metrics or {}).get("from_number") or ""
+    metrics = conversation.metrics or {}
+    known_phone = metrics.get("from_number") or ""
+    wa_id = metrics.get("whatsapp_wa_id")
+    route = await load_assistant_route(
+        conversation.tenant_id,
+        conversation.assistant_id,
+        caller_phone=known_phone,
+        whatsapp_id=wa_id,
+        source="whatsapp",
+        include_context_card=True,
+    )
+    config = route.config
+    if route.digest is not None:
+        config = config.model_copy(
+            update={
+                "knowledge": config.knowledge.model_copy(update={"digest_content": route.digest})
+            }
+        )
+    business_context = render_business_context(
+        config,
+        context_card=route.context_card,
+        channel="whatsapp",
+    )
+    has_prior_assistant_reply = any(item.role == MessageRole.ASSISTANT for item in thread)
+    disclosure_rule = (
+        "- This is a later reply. Do not disclose again that you are an AI assistant."
+        if has_prior_assistant_reply
+        else (
+            f"- In this first reply only, include one short clause disclosing that you are "
+            f"the AI assistant for {config.business_name}, exactly once. Do not use the spoken "
+            "call greeting."
+        )
+    )
     history = "\n".join(
         f"{'Customer' if item.role == MessageRole.CALLER else 'Assistant'}: {item.text}"
         for item in thread
@@ -113,8 +157,12 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
         "- Reply in plain text, briefly, with no markdown.\n"
         "- Treat this as a continuing message thread, not a phone call; do not add a generic "
         "call greeting.\n"
+        "- The configured spoken greeting is for phone calls only. Do not reuse, quote, or "
+        "paraphrase it in WhatsApp; write a fresh text reply.\n"
+        "- Do not say 'How can I help?' when the customer has already stated what they need.\n"
         "- Reply only to the latest customer message in one concise message, with at most one "
         "question mark.\n"
+        f"{disclosure_rule}\n"
         f"- The customer's phone number is already known: {known_phone}. Never ask for or "
         "confirm a phone number; if business rules call for a callback, use this number.\n"
         "- Never mention being a draft.\n"
@@ -139,11 +187,20 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
         "llm_output_tokens": getattr(usage_metadata, "candidates_token_count", 0) or 0,
     }
     model = settings.text_agent_model
-    price_path = Path(__file__).resolve().parents[3] / "voice" / "config" / "prices.yaml"
-    cost = calculate_cost(
-        {"usage": usage, "providers": {"llm_model": model}},
-        load_price_table(price_path),
-    )
+    try:
+        price_table = load_price_table(settings.price_table_path)
+    except Exception:
+        LOGGER.warning(
+            "Could not load WhatsApp price table at %s; recording cost as unknown",
+            settings.price_table_path,
+            exc_info=True,
+        )
+        cost = None
+    else:
+        cost = calculate_cost(
+            {"usage": usage, "providers": {"llm_model": model}},
+            price_table,
+        )
     sender = sender_from_settings(settings)
     phone_number_id = (conversation.metrics or {}).get("whatsapp_phone_number_id")
     wa_id = (conversation.metrics or {}).get("whatsapp_wa_id")
@@ -158,13 +215,14 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
                 f"WhatsApp Graph API rejected the message ({status})"
             ) from error
         raise
+    sent_at = datetime.now(UTC)
     session.add(
         Message(
             tenant_id=conversation.tenant_id,
             conversation_id=conversation.id,
             role=MessageRole.ASSISTANT,
             text=reply,
-            ts=now,
+            ts=sent_at,
             external_id=external_id,
             meta={"model": model, "usage": usage, "cost": cost},
         )

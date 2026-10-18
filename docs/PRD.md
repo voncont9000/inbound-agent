@@ -175,7 +175,8 @@ See [context-graph.md](./context-graph.md) for research and design.
 
 **WhatsApp implementation status (2026-10-16):** the first backend text-channel slice supports
 manual phone-number-ID connections, signed webhooks, 24-hour free-form replies, shared prompt
-rendering/extraction, and a fake-mode simulator. Embedded signup, approved templates, media
+rendering with the latest knowledge digest and contact context, first-reply AI disclosure,
+shared extraction, and a fake-mode simulator. Embedded signup, approved templates, media
 download, voice notes, takeover, and per-connection tokens remain planned work.
 
 ## 11. Decisions

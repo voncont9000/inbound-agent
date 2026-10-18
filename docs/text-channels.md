@@ -8,10 +8,13 @@ enqueues a durable reply job. Duplicate webhook deliveries are acknowledged with
 creating another message or job.
 
 The text agent renders the assistant's editable business prompt, policies, prices, hours,
-services, fields, and knowledge from the same shared core as voice. Generic WhatsApp rules
-keep replies plain-text and concise. The assistant's business behavior remains controlled by
-its template and editable configuration; channel code does not add vertical-specific offers.
+services, fields, the latest knowledge digest, and a lookup-only contact context card from the
+same shared core as voice. Its first reply discloses that it is the business's AI assistant;
+later replies do not repeat the disclosure or copy the spoken call greeting. Generic WhatsApp
+rules keep replies plain-text and concise. The assistant's business behavior remains controlled
+by its template and editable configuration; channel code does not add vertical-specific offers.
 Burst messages are coalesced so only the latest inbound message in a thread triggers a reply.
+Retries skip a send when an assistant message already follows the latest inbound message.
 After a quiet period, extraction runs over the thread and persists the summary, intake,
 follow-up tasks, knowledge gaps, and contact-graph ingestion.
 
@@ -30,6 +33,7 @@ Backend environment variables:
 | `EXTRACTION_MODEL` | `gemini-3.8-flash` |
 | `MESSAGE_EXTRACT_DELAY_SECONDS` | `120` |
 | `FAKE_OUTBOX_PATH` | `backend/var/whatsapp-outbox.jsonl` |
+| `PRICE_TABLE_PATH` | Repository `voice/config/prices.yaml`; missing files leave message cost unknown |
 | `GOOGLE_API_KEY` | Required by the text-agent and extraction jobs |
 
 The Graph base URL pins the sender to Graph API **v26.0** (the latest release we selected
@@ -52,9 +56,13 @@ uv run --directory backend python -m inbound_api.channels.simulate whatsapp \
 
 ## Session window and current limits
 
-An active WhatsApp conversation for a contact is reused while its last message is less than
-24 hours old. After that it is completed and a new conversation is created. Replies outside
-Meta's 24-hour customer-service window are not sent; the inbox receives a
+An active WhatsApp conversation is scoped to the receiving phone-number ID and contact `wa_id`;
+it is reused while its last message is less than 24 hours old. After that it is completed and a
+new conversation is created. Each inbound message uses its UTC, microsecond-resolution server
+receipt time for message ordering and records it in `received_at`; the original Meta timestamp
+is retained separately. Assistant message timestamps record the send time for received-to-sent
+latency.
+Replies outside Meta's 24-hour customer-service window are not sent; the inbox receives a
 `whatsapp_template_needed` task instead. Approved template sends are not implemented yet.
 
 Media is not downloaded or transcribed. Non-text messages are stored as placeholders such as

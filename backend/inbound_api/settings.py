@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     extraction_model: str = "gemini-3.8-flash"
     message_extract_delay_seconds: int = 120
     fake_outbox_path: Path = BACKEND_ROOT / "var" / "whatsapp-outbox.jsonl"
+    price_table_path: Path = (
+        Path(__file__).resolve().parents[2] / "voice" / "config" / "prices.yaml"
+    )
     session_ttl_hours: int = 336
     session_cookie_secure: bool = True
     allowed_origins: list[str] = ["http://localhost:5173"]
@@ -55,6 +58,12 @@ class Settings(BaseSettings):
     @field_validator("fake_outbox_path", mode="before")
     @classmethod
     def resolve_fake_outbox_path(cls, value: str | Path) -> Path:
+        path = Path(value)
+        return path if path.is_absolute() else BACKEND_ROOT.parent / path
+
+    @field_validator("price_table_path", mode="before")
+    @classmethod
+    def resolve_price_table_path(cls, value: str | Path) -> Path:
         path = Path(value)
         return path if path.is_absolute() else BACKEND_ROOT.parent / path
 

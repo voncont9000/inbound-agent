@@ -47,6 +47,7 @@ async def verify_whatsapp_webhook(
 
 @router.post("/whatsapp")
 async def receive_whatsapp_webhook(request: Request) -> dict[str, bool]:
+    received_at = datetime.now(UTC)
     settings = get_settings()
     if not settings.whatsapp_app_secret:
         raise HTTPException(status_code=503, detail="WhatsApp webhook is not configured")
@@ -66,20 +67,42 @@ async def receive_whatsapp_webhook(request: Request) -> dict[str, bool]:
         payload = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return {"ok": True}
-    for entry in payload.get("entry", []):
-        for change in entry.get("changes", []):
-            value = change.get("value", {})
-            metadata = value.get("metadata", {})
-            phone_number_id = metadata.get("phone_number_id")
-            if not phone_number_id:
+    if not isinstance(payload, dict):
+        return {"ok": True}
+    entries = payload.get("entry")
+    if not isinstance(entries, list):
+        return {"ok": True}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        changes = entry.get("changes")
+        if not isinstance(changes, list):
+            continue
+        for change in changes:
+            if not isinstance(change, dict):
                 continue
-            contacts = {
-                item.get("wa_id"): item.get("profile", {}).get("name")
-                for item in value.get("contacts", [])
-                if item.get("wa_id")
-            }
-            messages = value.get("messages", [])
-            if not messages:
+            value = change.get("value")
+            if not isinstance(value, dict):
+                continue
+            metadata = value.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+            phone_number_id = metadata.get("phone_number_id")
+            if not isinstance(phone_number_id, str) or not phone_number_id:
+                continue
+            contacts = {}
+            raw_contacts = value.get("contacts")
+            if isinstance(raw_contacts, list):
+                for item in raw_contacts:
+                    if not isinstance(item, dict):
+                        continue
+                    wa_id = item.get("wa_id")
+                    profile = item.get("profile")
+                    if isinstance(wa_id, str) and isinstance(profile, dict):
+                        name = profile.get("name")
+                        contacts[wa_id] = name if isinstance(name, str) else None
+            messages = value.get("messages")
+            if not isinstance(messages, list) or not messages:
                 continue
             async with session_factory() as session:
                 route = (
@@ -96,13 +119,17 @@ async def receive_whatsapp_webhook(request: Request) -> dict[str, bool]:
                 continue
             tenant_id, assistant_id, connection_id = route
             for message in messages:
+                if not isinstance(message, dict):
+                    continue
+                sender_id = message.get("from")
                 await _store_inbound_message(
                     tenant_id=tenant_id,
                     assistant_id=assistant_id,
                     connection_id=connection_id,
                     phone_number_id=phone_number_id,
                     message=message,
-                    contact_name=contacts.get(message.get("from")),
+                    contact_name=contacts.get(sender_id) if isinstance(sender_id, str) else None,
+                    received_at=received_at,
                 )
     return {"ok": True}
 
@@ -115,14 +142,21 @@ async def _store_inbound_message(
     phone_number_id: str,
     message: dict,
     contact_name: str | None,
+    received_at: datetime | None = None,
 ) -> None:
     wamid = message.get("id")
     wa_id = message.get("from")
     if not isinstance(wamid, str) or not wamid or not isinstance(wa_id, str) or not wa_id:
         return
-    timestamp = _message_timestamp(message.get("timestamp"))
+    provider_timestamp = _message_timestamp(message.get("timestamp"))
+    message_received_at = (received_at or provider_timestamp).astimezone(UTC)
     message_type = str(message.get("type") or "unknown")
-    body = message.get("text", {}).get("body") if message_type == "text" else None
+    text_content = message.get("text")
+    body = (
+        text_content.get("body")
+        if message_type == "text" and isinstance(text_content, dict)
+        else None
+    )
     if not isinstance(body, str):
         body = _PLACEHOLDERS.get(message_type, f"[{message_type}]")
     try:
@@ -141,7 +175,7 @@ async def _store_inbound_message(
             .where(
                 Conversation.channel == ConversationChannel.WHATSAPP,
                 Conversation.status == ConversationStatus.ACTIVE,
-                Conversation.external_ref.like(f"wa:{wa_id}:%"),
+                Conversation.external_ref.like(f"wa:{phone_number_id}:{wa_id}:%"),
             )
             .order_by(Conversation.started_at.desc(), Conversation.id.desc())
             .limit(1)
@@ -155,18 +189,21 @@ async def _store_inbound_message(
                 .order_by(Message.ts.desc(), Message.id.desc())
                 .limit(1)
             )
-            if timestamp - (last_message_at or conversation.started_at) >= WHATSAPP_WINDOW:
+            if (
+                message_received_at - (last_message_at or conversation.started_at)
+                >= WHATSAPP_WINDOW
+            ):
                 conversation.status = ConversationStatus.COMPLETED
-                conversation.ended_at = timestamp
+                conversation.ended_at = message_received_at
                 conversation = None
         if conversation is None:
             conversation = Conversation(
                 tenant_id=tenant_id,
                 assistant_id=assistant_id,
                 channel=ConversationChannel.WHATSAPP,
-                external_ref=f"wa:{wa_id}:{wamid}",
+                external_ref=f"wa:{phone_number_id}:{wa_id}:{wamid}",
                 status=ConversationStatus.ACTIVE,
-                started_at=timestamp,
+                started_at=message_received_at,
                 metrics={
                     "from_number": phone,
                     "whatsapp_wa_id": wa_id,
@@ -191,9 +228,15 @@ async def _store_inbound_message(
             conversation_id=conversation.id,
             role=MessageRole.CALLER,
             text=body,
-            ts=timestamp,
+            ts=message_received_at,
             external_id=wamid,
-            meta={"type": message_type, "wa_id": wa_id, "contact_name": contact_name},
+            meta={
+                "type": message_type,
+                "wa_id": wa_id,
+                "contact_name": contact_name,
+                "provider_timestamp": provider_timestamp.isoformat(timespec="microseconds"),
+                "received_at": message_received_at.isoformat(timespec="microseconds"),
+            },
         )
         try:
             async with session.begin_nested():

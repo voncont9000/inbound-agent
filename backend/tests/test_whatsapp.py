@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from inbound_core.config import AssistantConfig
 from sqlalchemy import select
 
 from inbound_api import graph
@@ -14,6 +15,7 @@ from inbound_api.db import tenant_session
 from inbound_api.jobs import PermanentJobError
 from inbound_api.models import (
     Conversation,
+    KnowledgeDigest,
     Task,
     TaskStatus,
 )
@@ -153,6 +155,55 @@ async def test_whatsapp_verification_signature_and_unknown_number(api_client, mo
 
 
 @pytest.mark.asyncio
+async def test_malformed_whatsapp_payload_shapes_are_ignored(api_client, monkeypatch):
+    from inbound_api.routers import webhooks
+
+    monkeypatch.setattr(
+        webhooks,
+        "get_settings",
+        lambda: SimpleNamespace(whatsapp_app_secret="app-secret"),
+    )
+    malformed_payloads = [
+        [],
+        {"entry": {}},
+        {"entry": [None, {"changes": {}}, {"changes": [None, {"value": []}]}]},
+        {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "value": {
+                                "metadata": [],
+                                "contacts": {},
+                                "messages": [
+                                    None,
+                                    ["not-a-message"],
+                                    {
+                                        "id": "wamid.malformed",
+                                        "from": "447700900123",
+                                        "type": "text",
+                                        "text": [],
+                                    },
+                                ],
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+    ]
+    for payload in malformed_payloads:
+        body = json.dumps(payload).encode()
+        signature = hmac.new(b"app-secret", body, hashlib.sha256).hexdigest()
+        response = await api_client.post(
+            "/webhooks/whatsapp",
+            content=body,
+            headers={"X-Hub-Signature-256": f"sha256={signature}"},
+        )
+        assert response.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_whatsapp_wamid_deduplication_and_24_hour_rollover(graph_env):
     tenant_id = graph_env["tenant_id"]
     assistant_id = graph_env["assistant_id"]
@@ -186,8 +237,8 @@ async def test_whatsapp_wamid_deduplication_and_24_hour_rollover(graph_env):
     )
     assert len(conversations) == 2
     assert conversations[0][0] == "completed"
-    assert conversations[0][1] == "wa:447700900123:wamid.first"
-    assert conversations[1][1] == "wa:447700900123:wamid.next"
+    assert conversations[0][1] == "wa:123456:447700900123:wamid.first"
+    assert conversations[1][1] == "wa:123456:447700900123:wamid.next"
     assert (
         graph_env["execute"](
             "SELECT count(*) FROM messages WHERE tenant_id = %s AND external_id = 'wamid.first'",
@@ -202,6 +253,107 @@ async def test_whatsapp_wamid_deduplication_and_24_hour_rollover(graph_env):
         )[0][0]
         == 2
     )
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_conversations_are_scoped_to_receiving_number(graph_env):
+    tenant_id = graph_env["tenant_id"]
+    assistant_id = graph_env["assistant_id"]
+    received_at = datetime.now(UTC).replace(microsecond=123456)
+    conversation_ids = []
+    for phone_number_id, wamid in (
+        ("123456", "wamid.number-one"),
+        ("654321", "wamid.number-two"),
+    ):
+        await _store_inbound_message(
+            tenant_id=tenant_id,
+            assistant_id=assistant_id,
+            connection_id=uuid4(),
+            phone_number_id=phone_number_id,
+            message={
+                "id": wamid,
+                "from": "447700900123",
+                "timestamp": str(int(received_at.timestamp())),
+                "type": "text",
+                "text": {"body": "Hello"},
+            },
+            contact_name="Alex",
+            received_at=received_at,
+        )
+        conversation_ids.append(
+            graph_env["execute"](
+                "SELECT conversation_id FROM messages WHERE tenant_id = %s AND external_id = %s",
+                (tenant_id, wamid),
+            )[0][0]
+        )
+    assert conversation_ids[0] != conversation_ids[1]
+    refs = graph_env["execute"](
+        "SELECT external_ref FROM conversations WHERE tenant_id = %s "
+        "AND id = ANY(%s) ORDER BY external_ref",
+        (tenant_id, conversation_ids),
+    )
+    assert refs == [
+        ("wa:123456:447700900123:wamid.number-one",),
+        ("wa:654321:447700900123:wamid.number-two",),
+    ]
+    inbound_meta = graph_env["execute"](
+        "SELECT ts, meta->>'received_at', meta->>'provider_timestamp' FROM messages "
+        "WHERE tenant_id = %s AND external_id = 'wamid.number-one'",
+        (tenant_id,),
+    )[0]
+    assert inbound_meta[0] == received_at
+    assert inbound_meta[1].endswith(".123456+00:00")
+    assert inbound_meta[2].endswith(".000000+00:00")
+
+
+@pytest.mark.asyncio
+async def test_shared_assistant_route_loads_digest_and_whatsapp_context(graph_env, monkeypatch):
+    from inbound_api.services import assistant_context
+
+    tenant_id = graph_env["tenant_id"]
+    assistant_id = graph_env["assistant_id"]
+    graph_env["execute"](
+        "UPDATE assistants SET config = %s::jsonb WHERE id = %s",
+        (json.dumps(_assistant_config()), assistant_id),
+    )
+    async with tenant_session(tenant_id) as session:
+        session.add(
+            KnowledgeDigest(
+                tenant_id=tenant_id,
+                assistant_id=assistant_id,
+                content="The remortgage fee is £595.",
+            )
+        )
+
+    resolved: dict = {}
+    person_id = uuid4()
+
+    async def resolve_person(_session, **kwargs):
+        resolved.update(kwargs)
+        return person_id
+
+    async def build_context_card(_session, resolved_person):
+        assert resolved_person == person_id
+        return "Returning client context."
+
+    monkeypatch.setattr(assistant_context.graph, "resolve_person", resolve_person)
+    monkeypatch.setattr(assistant_context.graph, "build_context_card", build_context_card)
+    route = await assistant_context.load_assistant_route(
+        tenant_id,
+        assistant_id,
+        caller_phone="+447700900123",
+        whatsapp_id="447700900123",
+        source="whatsapp",
+        include_context_card=True,
+    )
+    assert route.digest == "The remortgage fee is £595."
+    assert route.context_card == "Returning client context."
+    assert resolved == {
+        "phone": "+447700900123",
+        "email": None,
+        "whatsapp_id": "447700900123",
+        "source": "whatsapp",
+    }
 
 
 @pytest.mark.asyncio
@@ -289,7 +441,7 @@ async def test_whatsapp_identity_links_to_prior_phone_conversation(graph_env):
         (
             whatsapp_id,
             "whatsapp",
-            "wa:447700900123:wamid.identity",
+            "wa:123456:447700900123:wamid.identity",
             {"from_number": "+447700900123", "whatsapp_wa_id": "447700900123"},
         ),
     ):
@@ -346,7 +498,9 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
     )
     async with tenant_session(tenant_id) as session:
         conversation = await session.scalar(
-            select(Conversation).where(Conversation.external_ref == "wa:447700900123:wamid.results")
+            select(Conversation).where(
+                Conversation.external_ref == "wa:123456:447700900123:wamid.results"
+            )
         )
         await persist_extracted_results(
             session,
@@ -366,7 +520,9 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
         old_task.status = TaskStatus.DONE
     async with tenant_session(tenant_id) as session:
         conversation = await session.scalar(
-            select(Conversation).where(Conversation.external_ref == "wa:447700900123:wamid.results")
+            select(Conversation).where(
+                Conversation.external_ref == "wa:123456:447700900123:wamid.results"
+            )
         )
         await persist_extracted_results(
             session,
@@ -383,14 +539,16 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
     assert set(
         graph_env["execute"](
             "SELECT version FROM intakes WHERE tenant_id = %s AND conversation_id = "
-            "(SELECT id FROM conversations WHERE external_ref = 'wa:447700900123:wamid.results')",
+            "(SELECT id FROM conversations WHERE "
+            "external_ref = 'wa:123456:447700900123:wamid.results')",
             (tenant_id,),
         )
     ) == {("live",), ("post_call",), ("merged",)}
     assert set(
         graph_env["execute"](
             "SELECT status, payload->>'note' FROM tasks WHERE tenant_id = %s AND conversation_id = "
-            "(SELECT id FROM conversations WHERE external_ref = 'wa:447700900123:wamid.results')",
+            "(SELECT id FROM conversations WHERE "
+            "external_ref = 'wa:123456:447700900123:wamid.results')",
             (tenant_id,),
         )
     ) == {("done", "old"), ("open", "new")}
@@ -403,14 +561,14 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
     )
     assert graph_env["execute"](
         "SELECT summary FROM conversations WHERE tenant_id = %s AND external_ref = "
-        "'wa:447700900123:wamid.results'",
+        "'wa:123456:447700900123:wamid.results'",
         (tenant_id,),
     ) == [("Second summary",)]
 
 
 @pytest.mark.asyncio
 async def test_message_reply_coalesces_burst_and_persists_fake_send(
-    graph_env, monkeypatch, tmp_path
+    graph_env, monkeypatch, tmp_path, caplog
 ):
     from inbound_api.services import job_handlers
 
@@ -425,10 +583,23 @@ async def test_message_reply_coalesces_burst_and_persists_fake_send(
         whatsapp_mode="fake",
         fake_outbox_path=tmp_path / "outbox.jsonl",
         message_extract_delay_seconds=120,
+        price_table_path=tmp_path / "missing-prices.yaml",
     )
     monkeypatch.setattr(job_handlers, "get_settings", lambda: settings)
     prompts: list[str] = []
     _fake_genai(monkeypatch, job_handlers, prompts)
+    route_config = AssistantConfig.model_validate(_assistant_config())
+    route_calls: list[dict] = []
+
+    async def load_route(*args, **kwargs):
+        route_calls.append(kwargs)
+        return SimpleNamespace(
+            config=route_config,
+            digest="The remortgage fee is £595.",
+            context_card="Returning client context.",
+        )
+
+    monkeypatch.setattr(job_handlers, "load_assistant_route", load_route)
     first_ts = datetime.now(UTC).replace(microsecond=0) - timedelta(seconds=3)
     first_message_id, conversation_id = await _insert_test_message(
         graph_env, first_ts, "wamid.burst.first"
@@ -450,6 +621,11 @@ async def test_message_reply_coalesces_burst_and_persists_fake_send(
             session,
             {"conversation_id": str(conversation_id), "message_id": str(second_message_id)},
         )
+    async with tenant_session(tenant_id) as session:
+        await job_handlers.message_reply(
+            session,
+            {"conversation_id": str(conversation_id), "message_id": str(second_message_id)},
+        )
 
     outbox = [json.loads(line) for line in settings.fake_outbox_path.read_text().splitlines()]
     assert len(outbox) == 1
@@ -457,12 +633,21 @@ async def test_message_reply_coalesces_burst_and_persists_fake_send(
     assert "Shared Prompt Business" in prompts[0]
     assert "WHATSAPP MESSAGE RULES" in prompts[0]
     assert "447700900123" in prompts[0]
+    assert "The remortgage fee is £595." in prompts[0]
+    assert "Returning client context." in prompts[0]
+    assert "first reply only" in prompts[0]
+    assert "Do not reuse, quote, or paraphrase it" in prompts[0]
+    assert "How can I help?" in prompts[0]
     assert "callback offer" not in prompts[0].lower()
+    assert route_calls[0]["caller_phone"] == "+447700900123"
+    assert route_calls[0]["whatsapp_id"] == "447700900123"
+    assert route_calls[0]["source"] == "whatsapp"
+    assert "missing-prices.yaml" in caplog.text
     assert graph_env["execute"](
-        "SELECT role, external_id, meta->>'model' FROM messages "
+        "SELECT role, external_id, meta->>'model', meta->>'cost' FROM messages "
         "WHERE tenant_id = %s AND external_id = %s",
         (tenant_id, outbox[0]["id"]),
-    ) == [("assistant", outbox[0]["id"], "gemini-3.5-flash-lite")]
+    ) == [("assistant", outbox[0]["id"], "gemini-3.5-flash-lite", None)]
     assert (
         graph_env["execute"](
             "SELECT count(*) FROM jobs WHERE tenant_id = %s AND kind = 'message_extract'",
@@ -470,6 +655,22 @@ async def test_message_reply_coalesces_burst_and_persists_fake_send(
         )[0][0]
         == 1
     )
+
+    third_message_id, third_conversation_id = await _insert_test_message(
+        graph_env,
+        datetime.now(UTC) + timedelta(seconds=1),
+        "wamid.burst.third",
+    )
+    assert third_conversation_id == conversation_id
+    async with tenant_session(tenant_id) as session:
+        await job_handlers.message_reply(
+            session,
+            {"conversation_id": str(conversation_id), "message_id": str(third_message_id)},
+        )
+    assert len(prompts) == 2
+    assert "later reply" in prompts[1]
+    assert "first reply only" not in prompts[1]
+    assert len(settings.fake_outbox_path.read_text().splitlines()) == 2
 
 
 @pytest.mark.asyncio
@@ -531,6 +732,7 @@ async def test_sender_errors_are_classified_for_retry(
         whatsapp_access_token="test-token",
         fake_outbox_path=tmp_path / "unused.jsonl",
         message_extract_delay_seconds=120,
+        price_table_path=tmp_path / "prices.yaml",
     )
     monkeypatch.setattr(job_handlers, "get_settings", lambda: settings)
     _fake_genai(monkeypatch, job_handlers, [])

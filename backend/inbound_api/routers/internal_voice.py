@@ -4,18 +4,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from inbound_core.call_report import RouteResponse
-from inbound_core.config import AssistantConfig
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from inbound_api import graph
 from inbound_api.db import session_factory, tenant_session
 from inbound_api.models import (
-    Assistant,
     Conversation,
     ConversationChannel,
     ConversationStatus,
-    KnowledgeDigest,
 )
 from inbound_api.schemas import (
     CallReportAccepted,
@@ -23,6 +20,7 @@ from inbound_api.schemas import (
     CallStartRequest,
     ConversationCreatedResponse,
 )
+from inbound_api.services.assistant_context import load_assistant_route
 from inbound_api.services.conversation_results import persist_voice_report
 from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
@@ -66,7 +64,7 @@ async def route_call(
             caller_phone = normalise_phone(from_number, strict=False)
         except ValueError:
             pass
-    return await _load_assistant_route(
+    return await load_assistant_route(
         tenant_id,
         assistant_id,
         caller_phone=caller_phone,
@@ -84,52 +82,11 @@ async def route_web_call(token: str = Query(...)) -> RouteResponse:
         tenant_id, assistant_id = verify_web_call_token(token)
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid web call token") from None
-    return await _load_assistant_route(
+    return await load_assistant_route(
         tenant_id,
         assistant_id,
         caller_phone=None,
         include_context_card=False,
-    )
-
-
-async def _load_assistant_route(
-    tenant_id: UUID,
-    assistant_id: UUID,
-    *,
-    caller_phone: str | None,
-    include_context_card: bool,
-) -> RouteResponse:
-    async with tenant_session(tenant_id) as session:
-        assistant = await session.get(Assistant, assistant_id)
-        if assistant is None:
-            raise HTTPException(status_code=404, detail="Unknown number")
-        config = AssistantConfig.model_validate(assistant.config)
-        digest = await session.scalar(
-            select(KnowledgeDigest.content)
-            .where(KnowledgeDigest.assistant_id == assistant_id)
-            .order_by(KnowledgeDigest.created_at.desc(), KnowledgeDigest.id.desc())
-            .limit(1)
-        )
-        context_card = None
-        if include_context_card:
-            try:
-                async with session.begin_nested():
-                    person = await graph.resolve_person(
-                        session, phone=caller_phone, email=None, source="phone"
-                    )
-                    if person:
-                        context_card = await graph.build_context_card(session, person)
-            except NotImplementedError:
-                context_card = None
-            except Exception:
-                LOGGER.warning("Could not build caller context card", exc_info=True)
-                context_card = None
-    return RouteResponse(
-        tenant_id=tenant_id,
-        assistant_id=assistant_id,
-        config=config,
-        digest=digest,
-        context_card=context_card,
     )
 
 

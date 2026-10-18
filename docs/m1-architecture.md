@@ -179,10 +179,14 @@ All internal voice routes require `X-Service-Token`, checked against `VOICE_SERV
 `GET` and `POST /webhooks/whatsapp` verify Meta subscription and raw-body signatures. The
 webhook resolves an active phone-number ID through a SECURITY DEFINER lookup owned by the
 restricted `inbound_lookup` role, stores inbound `wamid`s with a tenant-scoped unique index,
-and enqueues the shared text-agent jobs. Replies use the editable assistant business context
-and a Gemini model, then persist the returned Graph message ID and usage/cost. Extraction
-reuses the core intake pipeline and shared conversation-results persistence; Graph ingest
-links the WhatsApp `wa_id` and E.164 phone identity to the same contact.
+and enqueues the shared text-agent jobs. Replies use the editable assistant business context,
+latest knowledge digest, and lookup-only contact context card from the shared routing service,
+then persist the returned Graph message ID and usage/cost. The first reply discloses the AI
+assistant once; later replies omit it. Conversation identity includes both the receiving number
+ID and sender `wa_id`. Inbound records carry server receipt timestamps and retries skip a send
+already persisted after the latest inbound message. Extraction reuses the core intake pipeline
+and shared conversation-results persistence; Graph ingest links the WhatsApp `wa_id` and E.164
+phone identity to the same contact.
 
 Conversations stay active for the 24-hour customer-service window. The reply job coalesces
 bursts, while post-call-style extraction waits for the configured quiet period. Outside the
