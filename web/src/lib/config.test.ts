@@ -4,11 +4,11 @@ import { validateAssistantConfig } from "./config";
 
 describe("validateAssistantConfig", () => {
   it("accepts the configured demo assistant", () => {
-    expect(validateAssistantConfig(tenantFixtures[0].assistant.config)).toEqual({});
+    expect(validateAssistantConfig(tenantFixtures[0].assistants[0].config)).toEqual({});
   });
 
   it("reports duplicate names and invalid enum choices at dotted paths", () => {
-    const config = structuredClone(tenantFixtures[0].assistant.config);
+    const config = structuredClone(tenantFixtures[0].assistants[0].config);
     config.services.boiler_repair.fields[1].name = "caller_name";
     config.services.boiler_repair.fields[4].choices = [];
     const errors = validateAssistantConfig(config);
@@ -17,7 +17,7 @@ describe("validateAssistantConfig", () => {
   });
 
   it("checks office hours and date deadlines", () => {
-    const config = structuredClone(tenantFixtures[0].assistant.config);
+    const config = structuredClone(tenantFixtures[0].assistants[0].config);
     config.office_hours.days = [];
     config.office_hours.closes = "07:00";
     config.urgency_rules[1] = { type: "date_deadline", service: "boiler_repair", field: "caller_name", add_months: 0, minus_days: -1, urgent_within_days: 0, reason: "Invalid date rule." };

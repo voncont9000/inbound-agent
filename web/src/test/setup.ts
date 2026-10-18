@@ -8,7 +8,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   cleanup();
   server.resetHandlers();
-  localStorage.clear();
+  if (typeof localStorage !== "undefined") localStorage.clear();
   resetMockDb();
 });
 afterAll(() => server.close());
