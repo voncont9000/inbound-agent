@@ -4,6 +4,7 @@ import hashlib
 import logging
 import re
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
@@ -87,6 +88,13 @@ class _SameHostRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(request, file, code, message, headers, new_url)
 
 
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(
+        self, request: Request, file: Any, code: int, message: str, headers: Any, new_url: str
+    ) -> Request | None:
+        return None
+
+
 class _RequestPacer:
     def __init__(self, delay_seconds: float) -> None:
         self.delay_seconds = delay_seconds
@@ -115,20 +123,82 @@ def _fetch(url: str, opener: Any, pacer: _RequestPacer) -> tuple[bytes, Any, str
         return response.read(), response.headers, response.geturl()
 
 
-def _robots_parser(start_url: str, opener: Any, pacer: _RequestPacer) -> RobotFileParser:
+def _fetch_checked(
+    url: str,
+    *,
+    allowed_host: str,
+    robots: RobotFileParser | None,
+    pacer: _RequestPacer,
+    allow_url: Callable[[str], bool],
+) -> tuple[bytes, Any, str]:
+    current_url = url
+    opener = build_opener(_NoRedirectHandler())
+    for redirects in range(6):
+        parts = urlsplit(current_url)
+        if not allow_url(current_url):
+            raise ValueError(f"URL blocked by safety policy: {current_url}")
+        if (
+            parts.scheme not in {"http", "https"}
+            or not parts.hostname
+            or parts.hostname.casefold() != allowed_host
+        ):
+            raise ValueError("Cross-host or non-HTTP redirect blocked.")
+        if robots is not None and not robots.can_fetch(USER_AGENT, current_url):
+            raise ValueError(f"Redirect disallowed by robots.txt: {current_url}")
+        pacer.wait()
+        request = Request(current_url, headers={"User-Agent": USER_AGENT})
+        try:
+            response = opener.open(request, timeout=20)
+        except HTTPError as error:
+            if error.code not in {301, 302, 303, 307, 308}:
+                raise
+            response = error
+        with response:
+            status = response.getcode()
+            if status not in {301, 302, 303, 307, 308}:
+                return response.read(), response.headers, current_url
+            location = response.headers.get("Location")
+            if not location:
+                raise ValueError(f"Redirect from {current_url} did not include a location.")
+            if redirects == 5:
+                raise ValueError("Maximum redirects exceeded.")
+            current_url = urljoin(current_url, location)
+    raise ValueError("Maximum redirects exceeded.")
+
+
+def _robots_parser(
+    start_url: str,
+    opener: Any,
+    pacer: _RequestPacer,
+    *,
+    allow_url: Callable[[str], bool] | None = None,
+) -> RobotFileParser:
     parts = urlsplit(start_url)
     robots_url = urlunsplit((parts.scheme, parts.netloc, "/robots.txt", "", ""))
     parser = RobotFileParser(robots_url)
     try:
-        body, _, _ = _fetch(robots_url, opener, pacer)
+        if allow_url is None:
+            body, _, _ = _fetch(robots_url, opener, pacer)
+        else:
+            body, _, _ = _fetch_checked(
+                robots_url,
+                allowed_host=(parts.hostname or "").casefold(),
+                robots=None,
+                pacer=pacer,
+                allow_url=allow_url,
+            )
         parser.parse(body.decode("utf-8", errors="replace").splitlines())
     except HTTPError as error:
         if error.code == 404:
             parser.parse([])
+        elif allow_url is not None:
+            raise
         else:
             LOGGER.warning("Could not read robots.txt at %s: %s", robots_url, error)
             parser.parse(["User-agent: *", "Disallow: /"])
     except (OSError, URLError, TimeoutError) as error:
+        if allow_url is not None:
+            raise
         LOGGER.warning("Could not read robots.txt at %s: %s", robots_url, error)
         parser.parse(["User-agent: *", "Disallow: /"])
     return parser
@@ -149,6 +219,8 @@ def crawl_websites(
     urls: list[str],
     max_pages: int = 50,
     request_delay: float = REQUEST_DELAY_SECONDS,
+    *,
+    allow_url: Callable[[str], bool] | None = None,
 ) -> list[dict[str, Any]]:
     if max_pages < 1:
         raise ValueError("max_pages must be at least 1.")
@@ -167,9 +239,22 @@ def crawl_websites(
             )
             continue
         allowed_host = start.hostname.casefold()
-        opener = build_opener(_SameHostRedirectHandler(allowed_host))
-        robots = _robots_parser(start_url, opener, pacer)
-        opener = build_opener(_SameHostRedirectHandler(allowed_host, robots))
+        if allow_url is None:
+            opener = build_opener(_SameHostRedirectHandler(allowed_host))
+            robots = _robots_parser(start_url, opener, pacer)
+            opener = build_opener(_SameHostRedirectHandler(allowed_host, robots))
+        else:
+            try:
+                robots = _robots_parser(start_url, None, pacer, allow_url=allow_url)
+            except Exception as error:
+                records.append(
+                    _source_record(
+                        start_url,
+                        "error",
+                        error=f"{type(error).__name__}: {error}",
+                    )
+                )
+                continue
         queue = [_normalise_url(start_url)]
 
         while queue and page_requests < max_pages:
@@ -177,6 +262,11 @@ def crawl_websites(
             if url in visited:
                 continue
             visited.add(url)
+            if allow_url is not None and not allow_url(url):
+                records.append(
+                    _source_record(url, "error", error=f"URL blocked by safety policy: {url}")
+                )
+                continue
             if not robots.can_fetch(USER_AGENT, url):
                 records.append(
                     _source_record(url, "robots_disallowed", error="Disallowed by robots.txt.")
@@ -184,7 +274,16 @@ def crawl_websites(
                 continue
             page_requests += 1
             try:
-                body, headers, final_url = _fetch(url, opener, pacer)
+                if allow_url is None:
+                    body, headers, final_url = _fetch(url, opener, pacer)
+                else:
+                    body, headers, final_url = _fetch_checked(
+                        url,
+                        allowed_host=allowed_host,
+                        robots=robots,
+                        pacer=pacer,
+                        allow_url=allow_url,
+                    )
                 if (urlsplit(final_url).hostname or "").casefold() != allowed_host:
                     raise ValueError("Cross-host redirect blocked.")
                 content_type = headers.get_content_type().lower()

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api import graph
 from inbound_api.jobs import register
+from inbound_api.services import files_cleanup as _files_cleanup  # noqa: F401
 from inbound_api.services import knowledge_import as knowledge_import_service  # noqa: F401
 
 

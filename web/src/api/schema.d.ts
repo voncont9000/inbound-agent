@@ -2073,6 +2073,20 @@ export interface operations {
                     "application/json": components["schemas"]["KnowledgeSourceResponse"];
                 };
             };
+            /** @description Content-Length is required for multipart uploads */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Knowledge upload is too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {

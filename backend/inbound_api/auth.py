@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.db import session_factory, tenant_session
 from inbound_api.models import MembershipRole, User, UserSession
+from inbound_api.settings import get_settings
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,25 @@ def _request_token(request: Request) -> str | None:
     return request.cookies.get("inbound_session")
 
 
+def enforce_request_origin(request: Request, *, always: bool = False) -> None:
+    authorization = request.headers.get("authorization", "")
+    scheme = authorization.partition(" ")[0].casefold()
+    if not always and (scheme == "bearer" or not request.cookies.get("inbound_session")):
+        return
+    settings = get_settings()
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in settings.allowed_origins:
+        raise HTTPException(status_code=403, detail="Origin is not allowed")
+    if origin is None and request.headers.get("sec-fetch-site", "").casefold() in {
+        "cross-site",
+        "same-site",
+    }:
+        raise HTTPException(status_code=403, detail="Cross-site request is not allowed")
+
+
 async def current_user(request: Request, session: AsyncSession = _DB_SESSION_DEPENDENCY) -> User:
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        enforce_request_origin(request)
     token = _request_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")

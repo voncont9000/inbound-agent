@@ -3424,6 +3424,12 @@
             },
             "description": "Successful Response"
           },
+          "411": {
+            "description": "Content-Length is required for multipart uploads"
+          },
+          "413": {
+            "description": "Knowledge upload is too large"
+          },
           "422": {
             "content": {
               "application/json": {
