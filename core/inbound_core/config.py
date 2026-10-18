@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 class OfficeHours(BaseModel):
@@ -110,6 +110,74 @@ class KnowledgeConfig(BaseModel):
     digest_content: str | None = Field(default=None, exclude=True)
 
 
+PostActionEvent = Literal[
+    "conversation_completed",
+    "urgent",
+    "callback_requested",
+    "needs_human",
+    "complaint",
+]
+
+
+class PostActionTrigger(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    events: list[PostActionEvent] = Field(min_length=1)
+    channels: list[Literal["phone", "web", "gmail", "whatsapp"]] = Field(default_factory=list)
+    services: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def deduplicate_events(self) -> PostActionTrigger:
+        self.events = list(dict.fromkeys(self.events))
+        return self
+
+
+class PostActionBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    enabled: bool = True
+    trigger: PostActionTrigger
+
+
+class EmailCustomerAction(PostActionBase):
+    kind: Literal["email_customer"]
+    subject_template: str = Field(min_length=1)
+    body_template: str = Field(min_length=1)
+
+
+class NotifyStaffAction(PostActionBase):
+    kind: Literal["notify_staff"]
+    to: list[EmailStr] = Field(min_length=1)
+    subject_template: str = Field(min_length=1)
+    body_template: str = Field(min_length=1)
+
+
+class SheetColumn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    header: str = Field(min_length=1)
+    value_template: str
+
+
+class SheetsRowAction(PostActionBase):
+    kind: Literal["sheets_row"]
+    spreadsheet_id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
+    sheet_name: str = Field(default="Sheet1", min_length=1)
+    columns: list[SheetColumn] = Field(min_length=1)
+
+
+class WebhookAction(PostActionBase):
+    kind: Literal["webhook"]
+    url: AnyHttpUrl
+
+
+PostAction = Annotated[
+    EmailCustomerAction | NotifyStaffAction | SheetsRowAction | WebhookAction,
+    Field(discriminator="kind"),
+]
+
+
 UrgencyRule = Annotated[
     KeywordUrgencyRule | DateDeadlineUrgencyRule,
     Field(discriminator="type"),
@@ -130,6 +198,7 @@ class AssistantConfig(BaseModel):
     contacts: dict[str, str]
     services: dict[str, ServiceConfig]
     urgency_rules: list[UrgencyRule]
+    post_actions: list[PostAction] = Field(default_factory=list)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     live_actions: list[
         Literal[
@@ -141,6 +210,21 @@ class AssistantConfig(BaseModel):
         ]
     ]
     review_confidence_threshold: float = Field(default=0.7, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_post_actions(self) -> AssistantConfig:
+        keys = [action.key for action in self.post_actions]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Post-action keys must be unique.")
+        service_keys = set(self.services)
+        for action in self.post_actions:
+            unknown = set(action.trigger.services) - service_keys
+            if unknown:
+                raise ValueError(
+                    f"Post-action {action.key!r} references unknown service(s): "
+                    f"{', '.join(sorted(unknown))}."
+                )
+        return self
 
 
 def assistant_config_json_schema() -> dict[str, Any]:

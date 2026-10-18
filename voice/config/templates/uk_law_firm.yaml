@@ -90,4 +90,22 @@ urgency_rules:
     urgent_within_days: 28
     reason: "Employment tribunal time limit may be within 28 days."
 live_actions: []
+post_actions: []
+# Example actions can be configured per assistant:
+# post_actions:
+#   - kind: notify_staff
+#     key: urgent_staff_alert
+#     enabled: true
+#     trigger:
+#       events: [urgent, complaint]
+#     to: [team@example.com]
+#     subject_template: "Customer needs attention: {{ contact.name }}"
+#     body_template: "Review conversation {{ conversation.link }}."
+#   - kind: email_customer
+#     key: customer_confirmation
+#     enabled: true
+#     trigger:
+#       events: [conversation_completed]
+#     subject_template: "Thanks for contacting {{ business_name }}"
+#     body_template: "We have received your enquiry."
 review_confidence_threshold: 0.7
