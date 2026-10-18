@@ -26,6 +26,17 @@ function isHttpUrl(value: string) {
   try { const parsed = new URL(value); return parsed.protocol === "http:" || parsed.protocol === "https:"; } catch { return false; }
 }
 
+function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
+  const result = structuredClone(config);
+  Object.values(result.services).forEach((service) => service.fields.forEach((field) => {
+    if (field.choices) field.choices = field.choices.map((choice) => choice.trim()).filter(Boolean);
+  }));
+  result.urgency_rules.forEach((rule) => {
+    if (rule.type === "keyword") rule.phrases = rule.phrases.map((phrase) => phrase.trim()).filter(Boolean);
+  });
+  return result;
+}
+
 export function AssistantsPage() {
   const navigate = useNavigate();
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -87,12 +98,19 @@ export function AssistantSettingsPage() {
   const [assistantName, setAssistantName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serviceKeyErrors, setServiceKeyErrors] = useState<Record<string, string>>({});
+  const [contactKeyErrors, setContactKeyErrors] = useState<Record<string, string>>({});
+  const [choiceText, setChoiceText] = useState<Record<string, string>>({});
+  const [phraseText, setPhraseText] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState("");
   const [selectedVersion, setSelectedVersion] = useState("");
   useEffect(() => {
     if (!assistantQuery.data) return;
     setConfig(structuredClone(assistantQuery.data.config));
     setAssistantName(assistantQuery.data.name);
+    setServiceKeyErrors({});
+    setContactKeyErrors({});
+    setChoiceText({});
+    setPhraseText({});
   }, [assistantQuery.data]);
 
   const readbackOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "readback", "enum"], ["off", "email", "critical"]), [schemaQuery.data]);
@@ -107,6 +125,10 @@ export function AssistantSettingsPage() {
       setConfig(structuredClone(assistant.config));
       setAssistantName(assistant.name);
       setErrors({});
+      setServiceKeyErrors({});
+      setContactKeyErrors({});
+      setChoiceText({});
+      setPhraseText({});
       setSaveMessage(`Saved version ${assistant.version}`);
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["assistant", id] }), queryClient.invalidateQueries({ queryKey: ["assistant-versions", id] })]);
     },
@@ -120,7 +142,7 @@ export function AssistantSettingsPage() {
   if (assistantQuery.isLoading || !config) return <main className="page" id="main-content"><LoadingState /></main>;
   const baseline = assistantQuery.data!;
   const clientErrors = validateAssistantConfig(config);
-  const allErrors = { ...clientErrors, ...serverErrors, ...serviceKeyErrors };
+  const allErrors = { ...clientErrors, ...serverErrors, ...serviceKeyErrors, ...contactKeyErrors };
   const isDirty = JSON.stringify(config) !== JSON.stringify(baseline.config) || assistantName !== baseline.name;
   const update = (change: (draft: AssistantConfig) => void) => {
     setConfig((current) => {
@@ -148,15 +170,15 @@ export function AssistantSettingsPage() {
   function saveConfig(event: FormEvent) {
     event.preventDefault();
     if (!config) return;
-    const currentConfig = config;
-    const validation = validateAssistantConfig(currentConfig);
+    const payloadConfig = prepareConfigForSave(config);
+    const validation = validateAssistantConfig(payloadConfig);
     setErrors(validation);
     setSaveMessage("");
-    if (Object.keys(validation).length) {
+    if (Object.keys(validation).length || Object.keys(serviceKeyErrors).length || Object.keys(contactKeyErrors).length) {
       document.querySelector<HTMLElement>(".error-summary a")?.focus();
       return;
     }
-    save.mutate({ name: assistantName, template: baseline.template, config: currentConfig });
+    save.mutate({ name: assistantName, template: baseline.template, config: payloadConfig });
   }
 
   const chosen = versionsQuery.data?.items.find(({ id: versionId }) => versionId === selectedVersion);
@@ -210,15 +232,36 @@ export function AssistantSettingsPage() {
           </div>
           {config.services[serviceKey].fields.map((field, fieldIndex) => <div className="inline-editor" key={`${serviceKey}-${fieldIndex}`}>
             <div className="form-grid">
-              <Field path={`services.${serviceKey}.fields.${fieldIndex}.name`} label="Field name" error={allErrors[`services.${serviceKey}.fields.${fieldIndex}.name`]}>{(fieldId, describedBy) => <input id={fieldId} value={field.name} {...inputProps(`services.${serviceKey}.fields.${fieldIndex}.name`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.services[serviceKey].fields[fieldIndex].name = event.target.value; })} />}</Field>
+              <Field path={`services.${serviceKey}.fields.${fieldIndex}.name`} label="Field name" error={allErrors[`services.${serviceKey}.fields.${fieldIndex}.name`]}>{(fieldId, describedBy) => <input id={fieldId} value={field.name} {...inputProps(`services.${serviceKey}.fields.${fieldIndex}.name`)} aria-describedby={describedBy} onChange={(event) => {
+                const nextName = event.target.value;
+                update((draft) => {
+                  const fieldToRename = draft.services[serviceKey].fields[fieldIndex];
+                  const previousName = fieldToRename.name;
+                  fieldToRename.name = nextName;
+                  draft.urgency_rules.forEach((rule) => {
+                    if (rule.type === "date_deadline" && rule.service === serviceKey && rule.field === previousName) rule.field = nextName;
+                  });
+                });
+              }} />}</Field>
               <Field path={`services.${serviceKey}.fields.${fieldIndex}.label`} label="Field label" error={allErrors[`services.${serviceKey}.fields.${fieldIndex}.label`]}>{(fieldId, describedBy) => <input id={fieldId} value={field.label} {...inputProps(`services.${serviceKey}.fields.${fieldIndex}.label`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.services[serviceKey].fields[fieldIndex].label = event.target.value; })} />}</Field>
-              <Field path={`services.${serviceKey}.fields.${fieldIndex}.type`} label="Field type" error={allErrors[`services.${serviceKey}.fields.${fieldIndex}.type`]}>{(fieldId, describedBy) => <select id={fieldId} value={field.type} {...inputProps(`services.${serviceKey}.fields.${fieldIndex}.type`)} aria-describedby={describedBy} onChange={(event) => update((draft) => {
-                const item = draft.services[serviceKey].fields[fieldIndex];
-                item.type = event.target.value as FieldSpec["type"];
-                if (item.type !== "enum") delete item.choices;
-                else item.choices = [];
-              })}>{typeOptions.map((type) => <option key={type} value={type}>{type}</option>)}</select>}</Field>
-              {field.type === "enum" && <Field path={`services.${serviceKey}.fields.${fieldIndex}.choices`} label="Choices" error={allErrors[`services.${serviceKey}.fields.${fieldIndex}.choices`]}>{(fieldId, describedBy) => <input id={fieldId} value={field.choices?.join(", ") ?? ""} {...inputProps(`services.${serviceKey}.fields.${fieldIndex}.choices`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.services[serviceKey].fields[fieldIndex].choices = event.target.value.split(",").map((choice) => choice.trim()).filter(Boolean); })} />}</Field>}
+              <Field path={`services.${serviceKey}.fields.${fieldIndex}.type`} label="Field type" error={allErrors[`services.${serviceKey}.fields.${fieldIndex}.type`]}>{(fieldId, describedBy) => <select id={fieldId} value={field.type} {...inputProps(`services.${serviceKey}.fields.${fieldIndex}.type`)} aria-describedby={describedBy} onChange={(event) => {
+                const path = `services.${serviceKey}.fields.${fieldIndex}.choices`;
+                setChoiceText((current) => { const next = { ...current }; delete next[path]; return next; });
+                update((draft) => {
+                  const item = draft.services[serviceKey].fields[fieldIndex];
+                  item.type = event.target.value as FieldSpec["type"];
+                  if (item.type !== "enum") delete item.choices;
+                  else item.choices = [];
+                });
+              }}>{typeOptions.map((type) => <option key={type} value={type}>{type}</option>)}</select>}</Field>
+              {field.type === "enum" && <Field path={`services.${serviceKey}.fields.${fieldIndex}.choices`} label="Choices" error={allErrors[`services.${serviceKey}.fields.${fieldIndex}.choices`]}>{(fieldId, describedBy) => {
+                const path = `services.${serviceKey}.fields.${fieldIndex}.choices`;
+                return <input id={fieldId} value={choiceText[path] ?? field.choices?.join(", ") ?? ""} {...inputProps(path)} aria-describedby={describedBy} onChange={(event) => {
+                  const value = event.target.value;
+                  setChoiceText((current) => ({ ...current, [path]: value }));
+                  update((draft) => { draft.services[serviceKey].fields[fieldIndex].choices = value.split(",").map((choice) => choice.trim()); });
+                }} />;
+              }}</Field>}
               <Field path={`services.${serviceKey}.fields.${fieldIndex}.description`} label="Description">{(fieldId) => <input id={fieldId} value={field.description} onChange={(event) => update((draft) => { draft.services[serviceKey].fields[fieldIndex].description = event.target.value; })} />}</Field>
             </div>
             <div className="button-row">
@@ -236,11 +279,24 @@ export function AssistantSettingsPage() {
       </section>
       <section className="panel stack"><h2>Urgency rules</h2>
         {config.urgency_rules.map((rule, index) => <section className="inline-editor" key={`urgency-${index}`}>
-          <Field path={`urgency_rules.${index}.type`} label="Rule type">{(fieldId) => <select id={fieldId} value={rule.type} onChange={(event) => update((draft) => {
-            draft.urgency_rules[index] = event.target.value === "keyword" ? { type: "keyword", phrases: [], reason: "" } : { type: "date_deadline", service: serviceKeys[0] ?? "", field: "", add_months: 0, minus_days: 0, urgent_within_days: 0, reason: "" };
-          })}><option value="keyword">Keyword</option><option value="date_deadline">Date deadline</option></select>}</Field>
+          <Field path={`urgency_rules.${index}.type`} label="Rule type">{(fieldId) => <select id={fieldId} value={rule.type} onChange={(event) => {
+            setPhraseText((current) => { const next = { ...current }; delete next[`urgency_rules.${index}.phrases`]; return next; });
+            update((draft) => {
+              draft.urgency_rules[index] = event.target.value === "keyword" ? { type: "keyword", phrases: [], reason: "" } : { type: "date_deadline", service: serviceKeys[0] ?? "", field: "", add_months: 0, minus_days: 0, urgent_within_days: 0, reason: "" };
+            });
+          }}><option value="keyword">Keyword</option><option value="date_deadline">Date deadline</option></select>}</Field>
           {rule.type === "keyword" ? <>
-            <Field path={`urgency_rules.${index}.phrases`} label="Phrases (comma or newline separated)" error={allErrors[`urgency_rules.${index}.phrases`]}>{(fieldId, describedBy) => <textarea id={fieldId} value={rule.phrases.join(", ")} {...inputProps(`urgency_rules.${index}.phrases`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { const current = draft.urgency_rules[index]; if (current?.type === "keyword") current.phrases = event.target.value.split(/,|\n/).map((item) => item.trim()).filter(Boolean); })} />}</Field>
+            <Field path={`urgency_rules.${index}.phrases`} label="Phrases (comma or newline separated)" error={allErrors[`urgency_rules.${index}.phrases`]}>{(fieldId, describedBy) => {
+              const path = `urgency_rules.${index}.phrases`;
+              return <textarea id={fieldId} value={phraseText[path] ?? rule.phrases.join(", ")} {...inputProps(path)} aria-describedby={describedBy} onChange={(event) => {
+                const value = event.target.value;
+                setPhraseText((current) => ({ ...current, [path]: value }));
+                update((draft) => {
+                  const current = draft.urgency_rules[index];
+                  if (current?.type === "keyword") current.phrases = value.split(/,|\n/).map((item) => item.trim());
+                });
+              }} />;
+            }}</Field>
             <Field path={`urgency_rules.${index}.reason`} label="Reason" error={allErrors[`urgency_rules.${index}.reason`]}>{(fieldId, describedBy) => <input id={fieldId} value={rule.reason} {...inputProps(`urgency_rules.${index}.reason`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { const current = draft.urgency_rules[index]; if (current?.type === "keyword") current.reason = event.target.value; })} />}</Field>
           </> : <>
             <div className="form-grid">
@@ -250,7 +306,7 @@ export function AssistantSettingsPage() {
             {(["add_months", "minus_days", "urgent_within_days"] as const).map((key) => <Field key={key} path={`urgency_rules.${index}.${key}`} label={key.replaceAll("_", " ")} error={allErrors[`urgency_rules.${index}.${key}`]}>{(fieldId, describedBy) => <input id={fieldId} type="number" min="0" step="1" value={rule[key]} {...inputProps(`urgency_rules.${index}.${key}`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { const current = draft.urgency_rules[index]; if (current?.type === "date_deadline") current[key] = Number(event.target.value); })} />}</Field>)}
             <Field path={`urgency_rules.${index}.reason`} label="Reason" error={allErrors[`urgency_rules.${index}.reason`]}>{(fieldId, describedBy) => <input id={fieldId} value={rule.reason} {...inputProps(`urgency_rules.${index}.reason`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { const current = draft.urgency_rules[index]; if (current?.type === "date_deadline") current.reason = event.target.value; })} />}</Field>
           </>}
-          <button type="button" onClick={() => update((draft) => { draft.urgency_rules.splice(index, 1); })}>Remove urgency rule</button>
+          <button type="button" onClick={() => { setPhraseText({}); update((draft) => { draft.urgency_rules.splice(index, 1); }); }}>Remove urgency rule</button>
         </section>)}
         <button type="button" onClick={() => update((draft) => { draft.urgency_rules.push({ type: "keyword", phrases: [], reason: "" }); })}>Add urgency rule</button>
       </section>
@@ -276,7 +332,20 @@ export function AssistantSettingsPage() {
       </section>
       <section className="panel stack"><h2>Contacts</h2>
         {Object.entries(config.contacts).map(([key, value], index) => <div className="form-grid" key={`${key}-${index}`}>
-          <Field path={`contacts.${key}.key`} label="Contact key">{(fieldId) => <input id={fieldId} value={key} onChange={(event) => update((draft) => { const values = Object.entries(draft.contacts); values[index] = [event.target.value, values[index][1]]; draft.contacts = Object.fromEntries(values); })} />}</Field>
+          <Field path={`contacts.${key}.key`} label="Contact key" error={allErrors[`contacts.${key}.key`]}>{(fieldId, describedBy) => <input id={fieldId} value={key} {...inputProps(`contacts.${key}.key`)} aria-describedby={describedBy} onChange={(event) => {
+            const nextKey = event.target.value;
+            const path = `contacts.${key}.key`;
+            if (nextKey !== key && nextKey in config.contacts) {
+              setContactKeyErrors((current) => ({ ...current, [path]: "Contact keys must be unique." }));
+              return;
+            }
+            setContactKeyErrors((current) => { const next = { ...current }; delete next[path]; return next; });
+            update((draft) => {
+              const values = Object.entries(draft.contacts);
+              values[index] = [nextKey, values[index][1]];
+              draft.contacts = Object.fromEntries(values);
+            });
+          }} />}</Field>
           <Field path={`contacts.${key}.value`} label="Contact value">{(fieldId) => <input id={fieldId} value={value} onChange={(event) => update((draft) => { draft.contacts[key] = event.target.value; })} />}</Field>
           <button type="button" onClick={() => update((draft) => { delete draft.contacts[key]; })}>Remove contact</button>
         </div>)}

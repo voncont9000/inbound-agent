@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 import type { Schemas } from "../api/client";
+import type { paths } from "../api/schema";
 import { validateAssistantConfig } from "../lib/config";
 import { authUser, templates } from "./fixtures";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
@@ -10,6 +11,13 @@ const isoNow = () => new Date().toISOString();
 const requestJson = async <T>(request: Request) => (await request.json()) as T;
 type ApiErrorResponse = { detail: string } | Schemas["HTTPValidationError"];
 type ApiResponse<T> = T | ApiErrorResponse;
+type KnowledgeSourceJsonBody = paths["/assistants/{assistant_id}/knowledge/sources"]["post"]["requestBody"]["content"]["application/json"];
+type KnowledgeSourceMultipartBody = paths["/assistants/{assistant_id}/knowledge/sources"]["post"]["requestBody"]["content"]["multipart/form-data"];
+type KnowledgeSourceRequestBody = KnowledgeSourceJsonBody | KnowledgeSourceMultipartBody;
+
+function findAssistant(tenant: TenantFixture, id: string) {
+  return tenant.assistants.find((assistant) => assistant.id === id);
+}
 
 function toConversationSummary(detail: Schemas["ConversationDetailResponse"]): Schemas["ConversationSummary"] {
   return {
@@ -58,8 +66,31 @@ export const handlers = [
     const tenantId = `10000000-0000-4000-8000-${String(mockDb.memberships.length + 1).padStart(12, "0")}`;
     const assistantId = `20000000-0000-4000-8000-${String(mockDb.tenants.length + 1).padStart(12, "0")}`;
     const tenant = { id: tenantId, name: body.tenant_name, role: "owner" as const };
-    const assistant = { ...structuredClone(templateTenant.assistant), id: assistantId, name: `${body.tenant_name} assistant`, template: "blank", config: { ...structuredClone(templateTenant.assistant.config), business_name: body.tenant_name, services: {}, urgency_rules: [], policies: [], price_list: [], contacts: {}, knowledge: { faqs: [], max_digest_chars: 24000 } } };
-    const fixture: TenantFixture = { ...structuredClone(templateTenant), tenant, assistant, conversations: [], contacts: [], gaps: [], tasks: [], sources: [], versions: [], digest: { ...templateTenant.digest, id: `${assistantId}-digest`, assistant_id: assistantId, content: "" } };
+    const templateAssistant = templateTenant.assistants[0];
+    const assistant: Schemas["AssistantResponse"] = {
+      ...structuredClone(templateAssistant),
+      id: assistantId,
+      name: `${body.tenant_name} assistant`,
+      template: "blank",
+      config: { ...structuredClone(templateAssistant.config), business_name: body.tenant_name, services: {}, urgency_rules: [], policies: [], price_list: [], contacts: {}, knowledge: { faqs: [], max_digest_chars: 24000 } },
+    };
+    const createdAt = isoNow();
+    const fixture: TenantFixture = {
+      ...structuredClone(templateTenant),
+      tenant,
+      assistants: [assistant],
+      assistantData: {
+        [assistantId]: {
+          versions: [{ id: `${assistantId}-version-1`, version: 1, config: assistant.config, created_by: authUser.id, created_at: createdAt }],
+          sources: [],
+          digest: { ...templateTenant.assistantData[templateAssistant.id].digest, id: `${assistantId}-digest`, assistant_id: assistantId, content: "", created_at: createdAt },
+        },
+      },
+      conversations: [],
+      contacts: [],
+      gaps: [],
+      tasks: [],
+    };
     mockDb.tenants.push(fixture);
     mockDb.memberships.push(tenant);
     mockDb.user = { id: authUser.id, email: body.email, display_name: body.display_name };
@@ -76,36 +107,70 @@ export const handlers = [
     if (!mockDb.loggedIn) return HttpResponse.json<ApiErrorResponse>({ detail: "Not authenticated" }, { status: 401 });
     return HttpResponse.json<Schemas["MeResponse"]>({ user: mockDb.user, tenant: mockDb.memberships.find(({ id }) => id === selectedTenantId(request)) ?? mockDb.memberships[0] });
   }),
-  http.get<never, never, Schemas["AssistantListResponse"]>("*/api/assistants", ({ request }) => HttpResponse.json<Schemas["AssistantListResponse"]>({ items: [selectedTenant(request).assistant] })),
+  http.get<never, never, Schemas["AssistantListResponse"]>("*/api/assistants", ({ request }) => HttpResponse.json<Schemas["AssistantListResponse"]>({ items: selectedTenant(request).assistants })),
   http.post<never, Schemas["AssistantCreate"], ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistants", async ({ request }) => {
     const body = await requestJson<Schemas["AssistantCreate"]>(request);
     const tenant = selectedTenant(request);
-    const assistant: Schemas["AssistantResponse"] = { ...tenant.assistant, id: crypto.randomUUID(), name: body.name, template: body.template ?? null, config: body.config, version: 1, created_at: isoNow(), updated_at: isoNow() };
-    tenant.assistant = assistant;
-    tenant.versions = [{ id: `${assistant.id}-version-1`, version: 1, config: assistant.config, created_by: authUser.id, created_at: isoNow() }];
+    const baseAssistant = tenant.assistants[0];
+    const id = crypto.randomUUID();
+    const createdAt = isoNow();
+    const assistant: Schemas["AssistantResponse"] = {
+      ...structuredClone(baseAssistant),
+      id,
+      name: body.name,
+      template: body.template ?? null,
+      config: structuredClone(body.config),
+      version: 1,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+    const baseState = tenant.assistantData[baseAssistant.id];
+    tenant.assistants.push(assistant);
+    tenant.assistantData[id] = {
+      versions: [{ id: `${id}-version-1`, version: 1, config: assistant.config, created_by: authUser.id, created_at: createdAt }],
+      sources: [],
+      digest: { ...baseState.digest, id: `${id}-digest`, assistant_id: id, content: "", created_at: createdAt },
+    };
     return HttpResponse.json<Schemas["AssistantResponse"]>(assistant, { status: 201 });
   }),
   http.get<{ id: string }, never, ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistants/:id", ({ request, params }) => {
-    const assistant = selectedTenant(request).assistant;
-    return assistant.id === params.id ? HttpResponse.json<Schemas["AssistantResponse"]>(assistant) : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    const assistant = findAssistant(selectedTenant(request), String(params.id));
+    return assistant ? HttpResponse.json<Schemas["AssistantResponse"]>(assistant) : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
   }),
   http.put<{ id: string }, Schemas["AssistantUpdate"], ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistants/:id", async ({ request, params }) => {
     const body = await requestJson<Schemas["AssistantUpdate"]>(request);
     const tenant = selectedTenant(request);
-    if (tenant.assistant.id !== params.id) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    const assistantIndex = tenant.assistants.findIndex(({ id }) => id === params.id);
+    const currentAssistant = tenant.assistants[assistantIndex];
+    const state = tenant.assistantData[String(params.id)];
+    if (!currentAssistant || !state) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
     const errors = validateAssistantConfig(body.config);
     if (Object.keys(errors).length) {
       return HttpResponse.json<Schemas["HTTPValidationError"]>({ detail: Object.entries(errors).map(([path, msg]) => ({ loc: ["body", "config", ...path.split(".").map((part) => /^\d+$/.test(part) ? Number(part) : part)], msg, type: "value_error" })) }, { status: 422 });
     }
-    const updated = { ...tenant.assistant, name: body.name ?? tenant.assistant.name, template: body.template ?? tenant.assistant.template, config: body.config, version: tenant.assistant.version + 1, updated_at: isoNow() };
-    tenant.assistant = updated;
-    tenant.versions.push({ id: `${updated.id}-version-${updated.version}`, version: updated.version, config: structuredClone(updated.config), created_by: authUser.id, created_at: updated.updated_at });
+    const updated = { ...currentAssistant, name: body.name ?? currentAssistant.name, template: body.template ?? currentAssistant.template, config: body.config, version: currentAssistant.version + 1, updated_at: isoNow() };
+    tenant.assistants[assistantIndex] = updated;
+    state.versions.push({ id: `${updated.id}-version-${updated.version}`, version: updated.version, config: structuredClone(updated.config), created_by: authUser.id, created_at: updated.updated_at });
     return HttpResponse.json<Schemas["AssistantResponse"]>(updated);
   }),
-  http.get<{ id: string }, never, Schemas["AssistantVersionsResponse"]>("*/api/assistants/:id/versions", ({ request }) => HttpResponse.json<Schemas["AssistantVersionsResponse"]>({ items: selectedTenant(request).versions })),
-  http.get<{ id: string }, never, Schemas["KnowledgeSourcesResponse"]>("*/api/assistants/:id/knowledge/sources", ({ request }) => HttpResponse.json<Schemas["KnowledgeSourcesResponse"]>({ items: selectedTenant(request).sources })),
-  http.post<{ id: string }, Schemas["KnowledgeSourceCreate"] | { file: string }, ApiResponse<Schemas["KnowledgeSourceResponse"]>>("*/api/assistants/:id/knowledge/sources", async ({ request, params }) => {
+  http.get<{ id: string }, never, ApiResponse<Schemas["AssistantVersionsResponse"]>>("*/api/assistants/:id/versions", ({ request, params }) => {
     const tenant = selectedTenant(request);
+    const state = tenant.assistantData[String(params.id)];
+    return findAssistant(tenant, String(params.id)) && state
+      ? HttpResponse.json<Schemas["AssistantVersionsResponse"]>({ items: state.versions })
+      : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+  }),
+  http.get<{ id: string }, never, ApiResponse<Schemas["KnowledgeSourcesResponse"]>>("*/api/assistants/:id/knowledge/sources", ({ request, params }) => {
+    const tenant = selectedTenant(request);
+    const state = tenant.assistantData[String(params.id)];
+    return findAssistant(tenant, String(params.id)) && state
+      ? HttpResponse.json<Schemas["KnowledgeSourcesResponse"]>({ items: state.sources })
+      : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+  }),
+  http.post<{ id: string }, KnowledgeSourceRequestBody, ApiResponse<Schemas["KnowledgeSourceResponse"]>>("*/api/assistants/:id/knowledge/sources", async ({ request, params }) => {
+    const tenant = selectedTenant(request);
+    const state = tenant.assistantData[String(params.id)];
+    if (!findAssistant(tenant, String(params.id)) || !state) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
     const form = request.headers.get("content-type")?.includes("multipart/form-data");
     let kind: "url" | "file" = "url";
     let uri = "";
@@ -114,14 +179,16 @@ export const handlers = [
       const file = data.get("file");
       if (file && typeof file !== "string") { kind = "file"; uri = file.name; }
     } else {
-      const body = await requestJson<Schemas["KnowledgeSourceCreate"]>(request);
+      const body = await requestJson<KnowledgeSourceJsonBody>(request);
       uri = body.uri;
     }
     const source: Schemas["KnowledgeSourceResponse"] = { id: crypto.randomUUID(), assistant_id: String(params.id), kind, uri, status: "pending", manifest: {}, fetched_at: null, created_at: isoNow() };
-    tenant.sources.push(source);
+    state.sources.push(source);
     return HttpResponse.json<Schemas["KnowledgeSourceResponse"]>(source, { status: 201 });
   }),
-  http.post<{ id: string }, never, Schemas["JobResponse"]>("*/api/assistants/:id/knowledge/import", ({ request, params }) => {
+  http.post<{ id: string }, never, ApiResponse<Schemas["JobResponse"]>>("*/api/assistants/:id/knowledge/import", ({ request, params }) => {
+    const tenant = selectedTenant(request);
+    if (!findAssistant(tenant, String(params.id)) || !tenant.assistantData[String(params.id)]) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
     const id = crypto.randomUUID();
     const job: Schemas["JobResponse"] = { id, kind: "knowledge_import", status: "queued", payload: { assistant_id: params.id }, result: null, error: null, attempts: 0, run_after: isoNow(), created_at: isoNow() };
     mockDb.jobs[id] = { tenantId: selectedTenantId(request), assistantId: String(params.id), polls: 0, job };
@@ -135,17 +202,27 @@ export const handlers = [
     entry.job = { ...entry.job, status, attempts: entry.polls, ...(status === "succeeded" ? { result: { imported: entry.assistantId } } : {}) };
     if (status === "succeeded") {
       const tenant = mockDb.tenants.find(({ tenant: { id } }) => id === entry.tenantId);
-      tenant?.sources.forEach((source) => { source.status = "succeeded"; source.fetched_at = isoNow(); });
-      if (tenant) tenant.digest = { ...tenant.digest, content: `${tenant.digest.content}\n\nKnowledge import completed.`, created_at: isoNow() };
+      const assistant = tenant?.assistants.find(({ id }) => id === entry.assistantId);
+      const state = assistant ? tenant?.assistantData[assistant.id] : undefined;
+      state?.sources.forEach((source) => { source.status = "succeeded"; source.fetched_at = isoNow(); });
+      if (state) state.digest = { ...state.digest, content: `${state.digest.content}\n\nKnowledge import completed.`, created_at: isoNow() };
     }
     return HttpResponse.json<Schemas["JobResponse"]>(entry.job);
   }),
-  http.get<{ id: string }, never, Schemas["KnowledgeDigestResponse"]>("*/api/assistants/:id/knowledge/digest", ({ request }) => HttpResponse.json<Schemas["KnowledgeDigestResponse"]>(selectedTenant(request).digest)),
-  http.put<{ id: string }, Schemas["KnowledgeDigestUpdate"], Schemas["KnowledgeDigestResponse"]>("*/api/assistants/:id/knowledge/digest", async ({ request }) => {
+  http.get<{ id: string }, never, ApiResponse<Schemas["KnowledgeDigestResponse"]>>("*/api/assistants/:id/knowledge/digest", ({ request, params }) => {
+    const tenant = selectedTenant(request);
+    const digest = tenant.assistantData[String(params.id)]?.digest;
+    return findAssistant(tenant, String(params.id)) && digest
+      ? HttpResponse.json<Schemas["KnowledgeDigestResponse"]>(digest)
+      : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+  }),
+  http.put<{ id: string }, Schemas["KnowledgeDigestUpdate"], ApiResponse<Schemas["KnowledgeDigestResponse"]>>("*/api/assistants/:id/knowledge/digest", async ({ request, params }) => {
     const body = await requestJson<Schemas["KnowledgeDigestUpdate"]>(request);
     const tenant = selectedTenant(request);
-    tenant.digest = { ...tenant.digest, content: body.content, created_at: isoNow() };
-    return HttpResponse.json<Schemas["KnowledgeDigestResponse"]>(tenant.digest);
+    const state = tenant.assistantData[String(params.id)];
+    if (!findAssistant(tenant, String(params.id)) || !state) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    state.digest = { ...state.digest, content: body.content, created_at: isoNow() };
+    return HttpResponse.json<Schemas["KnowledgeDigestResponse"]>(state.digest);
   }),
   http.get<never, never, Schemas["ConversationListResponse"]>("*/api/conversations", ({ request }) => {
     const tenant = selectedTenant(request);
