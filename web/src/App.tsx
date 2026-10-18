@@ -3,7 +3,7 @@ import shell from "./components/AppShell.module.css";
 import { RequireAuth } from "./auth/RequireAuth";
 import { useAuth } from "./auth/AuthProvider";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
-import { AssistantsPage, AssistantKnowledgePage, AssistantSettingsPage } from "./pages/AssistantPages";
+import { AssistantsPage, AssistantSettingsPage, AssistantSettingsRedirect } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
 
 function AppShell() {
@@ -35,7 +35,6 @@ function AppShell() {
         </header>
         {assistantArea && <nav className="subnav page" aria-label="Assistant sections">
           <NavLink to={`/assistants/${assistantId}/settings`}>Settings</NavLink>
-          <NavLink to={`/assistants/${assistantId}/knowledge`}>Knowledge</NavLink>
         </nav>}
         <Outlet />
       </div>
@@ -54,8 +53,9 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/inbox" replace />} />
             <Route path="/assistants" element={<AssistantsPage />} />
-            <Route path="/assistants/:id/settings" element={<AssistantSettingsPage />} />
-            <Route path="/assistants/:id/knowledge" element={<AssistantKnowledgePage />} />
+            <Route path="/assistants/:id/settings" element={<AssistantSettingsRedirect />} />
+            <Route path="/assistants/:id/settings/:tab" element={<AssistantSettingsPage />} />
+            <Route path="/assistants/:id/knowledge" element={<AssistantSettingsRedirect tab="knowledge" />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/conversations/:id" element={<ConversationPage />} />
             <Route path="/contacts" element={<ContactsPage />} />
