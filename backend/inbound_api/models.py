@@ -544,6 +544,7 @@ class Job(UUIDPrimaryKeyMixin, TenantMixin, Base):
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error: Mapped[str | None] = mapped_column(Text)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sql_text("0"))
+    lease_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     run_after: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

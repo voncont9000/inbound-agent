@@ -1,4 +1,6 @@
 import asyncio
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -6,6 +8,7 @@ from inbound_core.knowledge import (
     build_chunks,
     build_manifest,
     chunk_text,
+    crawl_websites,
     generate_digest,
     read_files,
     truncate_digest_at_section_boundary,
@@ -75,3 +78,42 @@ def test_chunking_and_section_boundary_truncation() -> None:
     )
     assert truncated is True
     assert digest == "## Services\nShort."
+
+
+def test_crawler_checks_redirect_hops_before_fetching() -> None:
+    requested: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            requested.append(self.path)
+            if self.path == "/robots.txt":
+                body = b"User-agent: *\n"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+            else:
+                body = b""
+                self.send_response(302)
+                self.send_header("Location", "/private")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format: str, *_args) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        root = f"http://127.0.0.1:{server.server_port}/"
+        records = crawl_websites(
+            [root],
+            request_delay=0,
+            allow_url=lambda url: not url.endswith("/private"),
+        )
+        assert "/private" not in requested
+        assert any(record["status"] == "error" for record in records)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()

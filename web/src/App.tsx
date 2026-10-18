@@ -1,48 +1,71 @@
-import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { routes } from "./routes";
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import shell from "./components/AppShell.module.css";
+import { RequireAuth } from "./auth/RequireAuth";
+import { useAuth } from "./auth/AuthProvider";
+import { LoginPage, SignupPage } from "./pages/AuthPages";
+import { AssistantsPage, AssistantKnowledgePage, AssistantSettingsPage } from "./pages/AssistantPages";
+import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
 
-function RouteIndex() {
-  return (
-    <main>
-      <p className="eyebrow">M1 foundation</p>
-      <h1>Inbound workspace</h1>
-      <p className="intro">Shared route contracts for the next platform agents.</p>
-      <ul className="route-list">
-        {routes.map((route) => (
-          <li key={route.path}>
-            <Link to={route.path}>
-              <span>{route.label}</span>
-              <code>{route.path}</code>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </main>
-  );
-}
-
-function Placeholder() {
+function AppShell() {
+  const { user, memberships, selectedTenant, setSelectedTenant, logout } = useAuth();
   const location = useLocation();
+  const assistantArea = location.pathname.startsWith("/assistants/");
+  const assistantId = location.pathname.split("/")[2];
   return (
-    <main>
-      <p className="eyebrow">M1 foundation</p>
-      <h1>Page reserved for the web app agent</h1>
-      <p className="intro">
-        <code>{location.pathname}</code>
-      </p>
-      <Link to="/">View all planned routes</Link>
-    </main>
+    <div className={shell.frame}>
+      <aside className={shell.sidebar}>
+        <Link className={shell.brand} to="/inbox">Inbound operator</Link>
+        <nav className={shell.navigation} aria-label="Main navigation">
+          <NavLink to="/inbox">Inbox</NavLink>
+          <NavLink to="/contacts">Contacts</NavLink>
+          <NavLink to="/tasks">Tasks</NavLink>
+          <NavLink to="/knowledge-gaps">Knowledge gaps</NavLink>
+          <NavLink to="/assistants">Assistants</NavLink>
+        </nav>
+      </aside>
+      <div className={shell.mainArea}>
+        <header className={shell.topbar}>
+          {memberships.length > 1 && <label>Workspace
+            <select aria-label="Workspace" value={selectedTenant} onChange={(event) => setSelectedTenant(event.target.value)}>
+              {memberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.name}</option>)}
+            </select>
+          </label>}
+          <span>{user?.display_name}</span>
+          <button type="button" onClick={() => void logout()}>Log out</button>
+        </header>
+        {assistantArea && <nav className="subnav page" aria-label="Assistant sections">
+          <NavLink to={`/assistants/${assistantId}/settings`}>Settings</NavLink>
+          <NavLink to={`/assistants/${assistantId}/knowledge`}>Knowledge</NavLink>
+        </nav>}
+        <Outlet />
+      </div>
+    </div>
   );
 }
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<RouteIndex />} />
-      {routes.map((route) => (
-        <Route key={route.path} path={route.path} element={<Placeholder />} />
-      ))}
-      <Route path="*" element={<RouteIndex />} />
-    </Routes>
+    <>
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<AppShell />}>
+            <Route path="/" element={<Navigate to="/inbox" replace />} />
+            <Route path="/assistants" element={<AssistantsPage />} />
+            <Route path="/assistants/:id/settings" element={<AssistantSettingsPage />} />
+            <Route path="/assistants/:id/knowledge" element={<AssistantKnowledgePage />} />
+            <Route path="/inbox" element={<InboxPage />} />
+            <Route path="/conversations/:id" element={<ConversationPage />} />
+            <Route path="/contacts" element={<ContactsPage />} />
+            <Route path="/contacts/:id" element={<ContactPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/knowledge-gaps" element={<KnowledgeGapsPage />} />
+          </Route>
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

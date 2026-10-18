@@ -74,7 +74,9 @@ reviews retain previous values and record reviewer, timestamp, note, and provena
 
 Call reports and knowledge imports enqueue durable jobs inside their write transaction.
 The worker claims one job through the `claim_next_job` security-definer function using
-`FOR UPDATE SKIP LOCKED`; a lease expiry makes a crashed worker's job reclaimable.
+`FOR UPDATE SKIP LOCKED`. Each claim receives a lease token; a heartbeat extends the
+lease while the handler runs, and token-guarded updates prevent stale workers from
+committing results after a reclaim.
 Transient failures retry with exponential backoff up to `JOB_MAX_ATTEMPTS`. Permanent
 errors, unimplemented handlers, and exhausted retries are marked failed.
 
@@ -85,7 +87,20 @@ Run the worker with `uv run --directory backend python -m inbound_api.worker`.
 The shared crawler, document readers, chunking, digest prompt, and manifest logic live in
 `core/inbound_core/knowledge.py`; voice retains its CLI-compatible wrapper. Tenant uploads
 are stored under `UPLOAD_DIR` (default `backend/var/uploads`) with relative paths in source
-manifests. Digest generation requires `GOOGLE_API_KEY`.
+manifests and are removed by a tenant-scoped cleanup job when an assistant is deleted.
+Missing upload directories are treated as already cleaned; other filesystem errors trigger
+the normal job retry policy. Failed-source manifest updates are skipped after a job loses
+its lease.
+Failed refreshes retain existing chunks and their prior fetch timestamp. A partial refresh
+builds the digest from fresh content and retained chunks; a refresh with no usable fresh
+content fails without replacing the latest digest. URL sources and redirect hops are
+resolved and checked to block private and otherwise non-public IP addresses. Set
+`KNOWLEDGE_ALLOW_PRIVATE_URLS=true` only for trusted local development.
+
+Session cookies are Secure by default. Cookie-authenticated writes validate `Origin`
+against `ALLOWED_ORIGINS` (default `http://localhost:5173`); without an Origin, requests
+marked `same-site` or `cross-site` are rejected. Bearer and internal service-token requests
+are exempt.
 
 ## Internal voice API
 
@@ -94,7 +109,8 @@ are idempotent by channel and external call ID; report retries do not duplicate 
 records or graph jobs after completion. `conversation_tenant` is the narrow security-
 definer lookup used to route reports into the correct tenant session.
 
-Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `UPLOAD_DIR`,
+Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `ALLOWED_ORIGINS`,
+`KNOWLEDGE_ALLOW_PRIVATE_URLS`, `UPLOAD_DIR`,
 `MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
 `KNOWLEDGE_REQUEST_DELAY`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
 `JOB_LEASE_SECONDS`, and `WORKER_POLL_SECONDS`.
@@ -139,4 +155,31 @@ make test
 make lint
 ```
 
-The compose database is Postgres 16 with pgvector and remains available for local agents. Start the API separately with `docker compose up backend` or `uv run --directory backend uvicorn inbound_api.main:app --reload`. Run the web app outside compose using `cd web && npm ci && npm run dev`; Vite proxies `/api` to the backend. Regenerate the frontend contract with `cd web && npm run api:types`.
+The compose database is Postgres 16 with pgvector and remains available for local agents. Start the API separately with `docker compose up backend` or `uv run --directory backend uvicorn inbound_api.main:app --reload`. Run the web app outside compose using `cd web && npm ci && npm run dev`; Vite proxies `/api` to the backend. For an all-mock operator demo, use `cd web && npm run dev:mock` (`VITE_USE_MOCKS=1`). Regenerate the frontend contract with `cd web && npm run api:types`.
+
+## Web app
+
+The operator UI is in `web/`, built with React, TypeScript, React Query, and plain CSS. Its page map is:
+
+| Route | Purpose |
+|---|---|
+| `/login`, `/signup` | Cookie-session authentication and account creation |
+| `/assistants` | Assistant list and template-based setup |
+| `/assistants/:id/settings` | Configuration editor and version comparison |
+| `/assistants/:id/knowledge` | Sources, import jobs, digest, and FAQ editing |
+| `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
+| `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
+| `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |
+
+The backend routes may return `501` while product behavior is being implemented. For local UI work and screenshots run `npm run dev:mock` (equivalent to `VITE_USE_MOCKS=1 npm run dev`); the browser-only MSW worker serves the API, and the normal `npm run dev` continues to proxy to the backend. Mock login accepts `demo@example.com` with any password except `wrong`. The first workspace is the general home-services demo; the second demonstrates a law-firm template.
+
+`src/mocks/fixtures.ts` is the typed seed dataset and `src/mocks/handlers.ts` contains the API behavior. The mock database is mutable in memory, partitioned by `X-Tenant-Id` (or the first membership when the header is absent), and resets between tests. Authentication persists only the membership ids/names/roles and selected tenant in localStorage; access tokens are never stored. `GET /me` supplies the current user and tenant. The selected workspace header is sent only when the saved membership list has multiple entries.
+
+Run frontend checks from `web/` after sourcing the repository's Node installation: `. ~/.nvm/nvm.sh && npm run lint && npm run typecheck && npm test && npm run build`. The schema drift check is `. ~/.nvm/nvm.sh && npm run api:types && git diff --exit-code -- src/api/schema.d.ts`.
+
+Current contract gaps handled in the UI:
+
+- `ConversationSummary` has neither `needs_review` nor a contact display name. Review badges are derived from a parallel `has_review=true` conversation query; contact links show `external_ref`.
+- `ConversationDetailResponse` has no review collection. The UI expects review results to be folded into merged intake fields as `status: "human"` with `sources.human`.
+- `GET /me` returns only the current tenant, not memberships. Memberships are kept from login/signup responses for workspace switching.
+- `TaskSummary` lacks `conversation_id` and `person_id`, and `GET /tasks` and `GET /knowledge-gaps` have no filters or assistant scoping. Task rows therefore cannot reliably link back to a conversation, and these queues follow the selected tenant's API response.

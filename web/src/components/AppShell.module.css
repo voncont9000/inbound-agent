@@ -1,0 +1,94 @@
+.frame {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+}
+
+.sidebar {
+  background: #153b34;
+  color: white;
+  padding: 1.4rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+
+.brand {
+  font-weight: 800;
+  color: white;
+  text-decoration: none;
+  font-size: 1.05rem;
+  padding: 0 0.6rem;
+}
+
+.navigation {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.navigation a {
+  color: #dcece6;
+  text-decoration: none;
+  border-radius: 7px;
+  padding: 0.65rem;
+}
+
+.navigation a:hover,
+.navigation a:global(.active) {
+  background: #295e53;
+  color: white;
+}
+
+.mainArea {
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  min-height: 68px;
+  padding: 0.8rem clamp(1rem, 3vw, 2.5rem);
+  background: white;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.topbar select {
+  width: auto;
+  min-width: 170px;
+}
+
+@media (max-width: 760px) {
+  .frame {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 0.8rem;
+  }
+
+  .navigation {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .navigation a {
+    white-space: nowrap;
+  }
+
+  .brand {
+    padding: 0.2rem 0.6rem;
+  }
+
+  .topbar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
