@@ -7,6 +7,7 @@ export interface MockDatabase {
   user: typeof authUser;
   memberships: typeof memberships;
   jobs: Record<string, { tenantId: string; assistantId: string; polls: number; job: Schemas["JobResponse"] }>;
+  channels: Record<string, Schemas["ChannelConnectionResponse"][]>;
 }
 
 function browserSession(): boolean {
@@ -21,6 +22,7 @@ function createDb(): MockDatabase {
     user: { ...authUser },
     memberships: JSON.parse(JSON.stringify(memberships)) as typeof memberships,
     jobs: {},
+    channels: {},
   };
 }
 

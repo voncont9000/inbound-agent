@@ -173,6 +173,11 @@ See [context-graph.md](./context-graph.md) for research and design.
 | M4 Ops | Knowledge gaps, analytics and per-answered-call billing, notifications. |
 | M5 Actions | Call transfer/forwarding, WhatsApp sends from calls, web search, webhooks, practice management integration. |
 
+**WhatsApp implementation status (2026-10-16):** the first backend text-channel slice supports
+manual phone-number-ID connections, signed webhooks, 24-hour free-form replies, shared prompt
+rendering/extraction, and a fake-mode simulator. Embedded signup, approved templates, media
+download, voice notes, takeover, and per-connection tokens remain planned work.
+
 ## 11. Decisions
 | Question | Decision (2026-10-16) |
 |---|---|

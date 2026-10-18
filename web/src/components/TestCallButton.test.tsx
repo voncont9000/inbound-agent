@@ -8,6 +8,17 @@ import { renderApp } from "../test/renderApp";
 const assistantId = "20000000-0000-4000-8000-000000000001";
 
 describe("assistant test calls", () => {
+  it("connects a WhatsApp channel using its phone number ID", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.selectOptions(screen.getByLabelText("Channel"), "whatsapp");
+    await user.type(screen.getByLabelText("WhatsApp phone_number_id"), "123456789");
+    await user.click(screen.getByRole("button", { name: "Add channel" }));
+
+    expect(await screen.findByText("123456789")).toBeInTheDocument();
+  });
+
   it("shows the generated test-call link", async () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });

@@ -72,6 +72,7 @@ def test_security_definer_functions_have_non_bypass_owners() -> None:
         ("conversation_tenant", "inbound_lookup", False, False),
         ("lookup_user_memberships", "inbound_lookup", False, False),
         ("resolve_channel", "inbound_lookup", False, False),
+        ("whatsapp_route", "inbound_lookup", False, False),
     ]
 
 

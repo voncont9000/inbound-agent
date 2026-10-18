@@ -1,6 +1,5 @@
 import hmac
 import logging
-from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -11,21 +10,12 @@ from sqlalchemy.exc import IntegrityError
 
 from inbound_api import graph
 from inbound_api.db import session_factory, tenant_session
-from inbound_api.jobs import enqueue
 from inbound_api.models import (
     Assistant,
     Conversation,
     ConversationChannel,
     ConversationStatus,
-    Intake,
-    IntakeVersion,
     KnowledgeDigest,
-    KnowledgeGap,
-    Message,
-    MessageRole,
-    Task,
-    TaskSource,
-    TaskStatus,
 )
 from inbound_api.schemas import (
     CallReportAccepted,
@@ -33,6 +23,7 @@ from inbound_api.schemas import (
     CallStartRequest,
     ConversationCreatedResponse,
 )
+from inbound_api.services.conversation_results import persist_voice_report
 from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
 from inbound_api.web_call_tokens import verify as verify_web_call_token
@@ -261,89 +252,5 @@ async def report_call(conversation_id: UUID, payload: CallReportRequest) -> Call
             raise HTTPException(status_code=409, detail="External call ID does not match")
         if conversation.status == ConversationStatus.COMPLETED:
             return CallReportAccepted(accepted=True)
-        for turn in payload.transcript:
-            session.add(
-                Message(
-                    tenant_id=tenant_id,
-                    conversation_id=conversation_id,
-                    role=MessageRole(turn.role),
-                    text=turn.text,
-                    ts=turn.timestamp,
-                    meta={},
-                )
-            )
-        intakes = [
-            (IntakeVersion.LIVE, payload.live_intake),
-            (IntakeVersion.MERGED, payload.merged_intake),
-        ]
-        if payload.post_call_intake is not None:
-            intakes.append((IntakeVersion.POST_CALL, payload.post_call_intake))
-        for version, data in intakes:
-            session.add(
-                Intake(
-                    tenant_id=tenant_id,
-                    conversation_id=conversation_id,
-                    version=version,
-                    data=data,
-                )
-            )
-        for item in payload.tasks:
-            if item.get("type") in {"knowledge_gap", "end_call"} or item.get("kind") in {
-                "knowledge_gap",
-                "end_call",
-            }:
-                continue
-            kind = item.get("type") or item.get("kind") or "task"
-            source = item.get("source")
-            if source not in {"live", "post_call"}:
-                source = "live"
-            task_payload = {
-                key: value for key, value in item.items() if key not in {"type", "kind", "source"}
-            }
-            due_at = item.get("due_at")
-            if isinstance(due_at, str):
-                try:
-                    due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
-                except ValueError:
-                    due_at = None
-            if not isinstance(due_at, datetime) or due_at.tzinfo is None:
-                due_at = None
-            session.add(
-                Task(
-                    tenant_id=tenant_id,
-                    conversation_id=conversation_id,
-                    due_at=due_at,
-                    kind=kind,
-                    status=TaskStatus.OPEN,
-                    payload=task_payload,
-                    source=TaskSource(source),
-                )
-            )
-        gaps: dict[str, str] = {}
-        for item in payload.knowledge_gaps:
-            question, evidence = item.get("question"), item.get("evidence")
-            if isinstance(question, str) and isinstance(evidence, str):
-                gaps.setdefault(question, evidence)
-        for item in payload.tasks:
-            if item.get("type") == "knowledge_gap" or item.get("kind") == "knowledge_gap":
-                question, evidence = item.get("question"), item.get("evidence")
-                if isinstance(question, str) and isinstance(evidence, str):
-                    gaps.setdefault(question, evidence)
-        for question, evidence in gaps.items():
-            session.add(
-                KnowledgeGap(
-                    tenant_id=tenant_id,
-                    assistant_id=conversation.assistant_id,
-                    conversation_id=conversation_id,
-                    question=question,
-                    evidence=evidence,
-                )
-            )
-        conversation.status = ConversationStatus.COMPLETED
-        conversation.ended_at = payload.ended_at
-        conversation.end_reason = payload.end_reason
-        conversation.summary = payload.summary
-        conversation.metrics = {**(conversation.metrics or {}), **payload.metrics}
-        conversation.estimated_cost = payload.estimated_cost
-        await enqueue(session, "graph_ingest", {"conversation_id": str(conversation_id)})
+        await persist_voice_report(session, tenant_id, conversation, payload)
     return CallReportAccepted(accepted=True)

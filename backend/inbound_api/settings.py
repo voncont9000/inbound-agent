@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +21,15 @@ class Settings(BaseSettings):
     )
     voice_service_token: str = DEFAULT_VOICE_SERVICE_TOKEN
     web_call_base_url: str | None = None
+    whatsapp_app_secret: str | None = None
+    whatsapp_verify_token: str | None = None
+    whatsapp_access_token: str | None = None
+    whatsapp_graph_base_url: str = "https://graph.facebook.com/v26.0"
+    whatsapp_mode: Literal["fake", "graph"] = "fake"
+    text_agent_model: str = "gemini-3.5-flash-lite"
+    extraction_model: str = "gemini-3.8-flash"
+    message_extract_delay_seconds: int = 120
+    fake_outbox_path: Path = BACKEND_ROOT / "var" / "whatsapp-outbox.jsonl"
     session_ttl_hours: int = 336
     session_cookie_secure: bool = True
     allowed_origins: list[str] = ["http://localhost:5173"]
@@ -42,6 +52,12 @@ class Settings(BaseSettings):
         path = Path(value)
         return path if path.is_absolute() else BACKEND_ROOT.parent / path
 
+    @field_validator("fake_outbox_path", mode="before")
+    @classmethod
+    def resolve_fake_outbox_path(cls, value: str | Path) -> Path:
+        path = Path(value)
+        return path if path.is_absolute() else BACKEND_ROOT.parent / path
+
     @model_validator(mode="after")
     def require_production_voice_service_token(self) -> "Settings":
         if self.app_env not in {"development", "test"} and (
@@ -50,6 +66,16 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 "VOICE_SERVICE_TOKEN must be non-empty and non-default outside development and test"
+            )
+        if self.app_env not in {"development", "test"} and (
+            self.whatsapp_mode != "graph"
+            or not (self.whatsapp_app_secret or "").strip()
+            or not (self.whatsapp_verify_token or "").strip()
+            or not (self.whatsapp_access_token or "").strip()
+        ):
+            raise ValueError(
+                "WhatsApp production requires graph mode, WHATSAPP_APP_SECRET, "
+                "WHATSAPP_VERIFY_TOKEN, and WHATSAPP_ACCESS_TOKEN"
             )
         return self
 

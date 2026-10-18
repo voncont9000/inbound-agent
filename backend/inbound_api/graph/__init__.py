@@ -17,6 +17,7 @@ from inbound_api.models import (
     Commitment,
     CommitmentStatus,
     Conversation,
+    ConversationChannel,
     Edge,
     Fact,
     FactStatus,
@@ -118,6 +119,7 @@ async def resolve_person(
     *,
     phone: str | None,
     email: str | None,
+    whatsapp_id: str | None = None,
     source: str,
 ) -> UUID | None:
     """Resolve an existing person from deterministic channel identities."""
@@ -125,6 +127,7 @@ async def resolve_person(
     email_normalized = normalize_email(email)
     phone_person = await _identity_person(session, IdentityType.PHONE, phone_normalized)
     email_person = await _identity_person(session, IdentityType.EMAIL, email_normalized)
+    whatsapp_person = await _identity_person(session, IdentityType.WHATSAPP, whatsapp_id)
 
     if (
         phone_person is not None
@@ -174,6 +177,8 @@ async def resolve_person(
             )
     if phone_person is not None:
         return phone_person.id
+    if whatsapp_person is not None:
+        return whatsapp_person.id
     if email_person is not None:
         return email_person.id
     return None
@@ -257,7 +262,7 @@ async def _ensure_identity(
             value_normalized=value,
             verified=False,
             confidence=confidence,
-            source="voice_call",
+            source=("whatsapp" if identity_type == IdentityType.WHATSAPP else "voice_call"),
         )
         .on_conflict_do_nothing(
             index_elements=[Identity.tenant_id, Identity.type, Identity.value_normalized]
@@ -350,6 +355,8 @@ async def ingest_conversation(session: AsyncSession, conversation_id: UUID) -> N
         None,
     )
     normalized_phone = normalize_phone(_nonempty(raw_phone))
+    whatsapp_id = (conversation.metrics or {}).get("whatsapp_wa_id")
+    whatsapp_id = whatsapp_id if isinstance(whatsapp_id, str) and whatsapp_id else None
     email_value = _field_value(fields, email_field) if email_field else None
     normalized_email = normalize_email(_nonempty(email_value))
     display_name, name_is_known = _display_name(fields, normalized_phone, normalized_email)
@@ -385,7 +392,10 @@ async def ingest_conversation(session: AsyncSession, conversation_id: UUID) -> N
             session,
             phone=normalized_phone,
             email=normalized_email,
-            source="voice_call",
+            whatsapp_id=whatsapp_id,
+            source=(
+                "whatsapp" if conversation.channel == ConversationChannel.WHATSAPP else "voice_call"
+            ),
         )
         person = (
             await session.scalar(select(Person).where(Person.id == resolved_person_id))
@@ -417,6 +427,15 @@ async def ingest_conversation(session: AsyncSession, conversation_id: UUID) -> N
         identity_type=IdentityType.PHONE,
         value=normalized_phone,
         confidence=phone_confidence,
+        conversation=conversation,
+    )
+    await _ensure_identity(
+        session,
+        tenant_id=tenant_id,
+        person_id=person.id,
+        identity_type=IdentityType.WHATSAPP,
+        value=whatsapp_id,
+        confidence=1.0,
         conversation=conversation,
     )
     await _ensure_identity(

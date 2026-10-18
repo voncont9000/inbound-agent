@@ -358,6 +358,9 @@ substitute for real UK callers or representative real-world speech.
 Call behavior belongs in each assistant's multiline `instructions` setting, not in generic
 prompt code. The `uk_law_firm` template supplies the Demo & Co behavior; the renderer adds
 identity, configured business data, knowledge, and only the mechanics enabled by settings.
+The channel-neutral business context, intake extraction, deadline calculation, and pricing
+helpers are shared through `inbound_core`; voice-only readback, caller identity, and call
+control remain in `inbound_voice`.
 Set `readback` to `off`, `email`, or `critical`. The law-firm template uses `email`.
 Email read-backs spell addresses as separate letters and spoken words such as “dot” and
 “at,” rather than punctuation symbols; common domains are spoken as words.
