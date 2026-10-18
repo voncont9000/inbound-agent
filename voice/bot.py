@@ -77,9 +77,18 @@ from inbound_voice.extraction import (
     build_post_call_tasks,
     extract_intake,
 )
+from inbound_voice.language_switch import LanguageSwitchProcessor
 from inbound_voice.metrics import CallMetricsObserver
 from inbound_voice.prompts import render_system_prompt
-from inbound_voice.providers import create_llm, create_stt, create_tts, resolve_providers
+from inbound_voice.providers import (
+    LANGUAGE_ANNOTATION_STT_PROVIDERS,
+    VoiceLanguage,
+    create_llm,
+    create_stt,
+    create_tts,
+    resolve_providers,
+    resolve_voice_language,
+)
 from inbound_voice.recording import (
     add_recording_processor,
     create_recording_processor,
@@ -766,6 +775,18 @@ async def run_bot(
     )
     sink = LocalFilesCallSink(ROOT / "runs", run_id, started_at=call_started_at)
     assistant = prepared.assistant
+    voice_language: VoiceLanguage = resolve_voice_language(assistant, providers, os.environ)
+    logger.info("Using configured voice locale {}.", voice_language.locale)
+    if (
+        voice_language.locale == "multi"
+        and providers.tts == "speechify"
+        and providers.stt not in LANGUAGE_ANNOTATION_STT_PROVIDERS
+    ):
+        logger.warning(
+            "STT provider {} does not provide language annotations; multilingual voice "
+            "switching is disabled and the configured voice locale and prompt are used.",
+            providers.stt,
+        )
     call_now = datetime.now(UTC)
     if call_transfer is None:
         call_transfer = SimulatedCallTransfer()
@@ -801,6 +822,7 @@ async def run_bot(
             "stt": providers.stt,
             "tts": providers.tts,
             "tts_voice": providers.tts_voice,
+            "language": voice_language.locale,
             "llm": providers.llm,
             "llm_model": providers.llm_model,
         },
@@ -827,6 +849,7 @@ async def run_bot(
             providers,
             os.environ,
             sample_rate=input_sample_rate,
+            voice_language=voice_language,
             extra_terms=assistant.call_settings.technical_terms,
         )
         llm = create_llm(
@@ -845,6 +868,7 @@ async def run_bot(
             os.environ,
             session,
             sample_rate=output_sample_rate,
+            voice_language=voice_language,
             speed=assistant.call_settings.speech_speed,
         )
         context = create_llm_context(
@@ -867,15 +891,18 @@ async def run_bot(
         recording_processor = (
             create_recording_processor(sink) if assistant.recording.enabled else None
         )
-        pipeline_processors = [
-            transport.input(),
-            stt,
-            context_aggregators.user(),
-            llm,
-            tts,
-            transport.output(),
-            context_aggregators.assistant(),
-        ]
+        pipeline_processors = [transport.input(), stt]
+        if voice_language.locale == "multi" and providers.tts == "speechify":
+            pipeline_processors.append(LanguageSwitchProcessor(tts))
+        pipeline_processors.extend(
+            [
+                context_aggregators.user(),
+                llm,
+                tts,
+                transport.output(),
+                context_aggregators.assistant(),
+            ]
+        )
         pipeline_processors = add_recording_processor(pipeline_processors, recording_processor)
         pipeline = Pipeline(pipeline_processors)
         task: PipelineTask

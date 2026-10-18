@@ -1,6 +1,7 @@
 from datetime import date
 
 from inbound_core.config import AssistantConfig, DateDeadlineUrgencyRule
+from inbound_core.languages import written_language_instruction
 
 
 def render_business_context(
@@ -55,7 +56,10 @@ def render_business_context(
         office_hours=hours,
     )
     heading = persona or f"You are the assistant for {config.business_name}."
-    business_context = f"""{heading}
+    language_line = (
+        f"\n{written_language_instruction(config.language)}" if channel != "phone" else ""
+    )
+    business_context = f"""{heading}{language_line}
 {instructions}
 
 TODAY'S DATE

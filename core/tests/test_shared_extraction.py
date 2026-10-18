@@ -181,3 +181,18 @@ def test_business_context_is_channel_neutral_and_includes_deadline_rules() -> No
     assert "DEADLINE INSTRUCTIONS" in prompt
     assert "after the conversation" in prompt
     assert "Speak " not in prompt
+
+
+@pytest.mark.parametrize("channel", ["whatsapp", "gmail"])
+def test_business_context_has_written_language_instruction(channel: str) -> None:
+    config = _config().model_copy(update={"language": "de-DE"})
+    prompt = render_business_context(config, channel=channel)
+
+    assert "Write in German." in prompt
+
+
+def test_multilingual_business_context_has_written_language_instruction() -> None:
+    config = _config().model_copy(update={"language": "multi"})
+    prompt = render_business_context(config, channel="whatsapp")
+
+    assert "Reply in the language the customer writes in." in prompt

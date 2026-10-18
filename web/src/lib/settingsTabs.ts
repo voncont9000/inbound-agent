@@ -24,6 +24,9 @@ export function tabForPath(path: string): SettingsTabId {
   const root = path.split(".")[0];
   if (advancedBooking.test(path)) return "advanced";
   switch (root) {
+    case "language":
+    case "voice_id":
+      return "general";
     case "policies":
       return "rules";
     case "office_hours":

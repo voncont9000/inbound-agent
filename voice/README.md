@@ -38,8 +38,8 @@ details are extracted after the call. `intake.live.json` records caller-confirme
 provenance, confidence, alternatives, and `needs_review` flags for conflicts, invalid
 values, or confidence below the configured threshold.
 
-The assistant speaks the configured `language` (the UK law-firm template uses British
-English). The prompt acknowledges volunteered details, asks critical questions naturally,
+The assistant speaks the configured `language` locale (the UK law-firm template uses
+`en-GB`). The prompt acknowledges volunteered details, asks critical questions naturally,
 returns once to unanswered critical fields, and avoids repeating the same question twice
 in a row. Before ending, it reads back collected unconfirmed critical details together and
 waits for confirmation. Enabled actions are called only when configured.
@@ -107,8 +107,24 @@ uses the Google Gemini API directly. It is skipped when `GOOGLE_API_KEY` is abse
 model setting is blank. Extraction errors are recorded without ending the call, and
 extraction tokens are priced separately from live LLM usage.
 
-`TTS_VOICE` is optional for Speechify and Deepgram. Speechify defaults to `beatrice_32`
-(a user-verified en-GB voice for Simba 3.2). List available Speechify voices with:
+`TTS_VOICE` is optional for Speechify and Deepgram. A configured assistant `voice_id` takes
+precedence over `TTS_VOICE`, which takes precedence over Speechify's `beatrice_32` default.
+Speechify uses Simba 3.2 for English and Simba 3.0 for non-English and `multi`; the default
+`en-GB` path remains Beatrice with no language override. The authenticated web picker lists
+Speechify shared voices for the selected locale through `GET /voices?locale=en-GB`, backed by
+the Speechify `/v1/voices` endpoint. Without `SPEECHIFY_API_KEY` or when Speechify is
+unavailable, the API returns a static Beatrice fallback.
+
+The supported locales are `en-GB`, `en-US`, `de-DE`, `es-ES`, `es-MX`, `fr-FR`, `it-IT`,
+`pt-BR`, and `multi`. Legacy language strings normalize when configurations load; unknown
+stored values default to `en-GB`. Soniox `multi` enables language identification across
+English, German, Spanish, French, Italian, and Portuguese. Speechify switches Simba 3.0 to
+the detected supported language when STT supplies language annotations. Missing annotations
+produce a warning and keep the configured voice. Deepgram Aura-2 maps German, Spanish,
+French, and Italian to locale voices; Portuguese and `multi` use the existing English
+Pandora fallback with a warning.
+
+For direct provider inspection, list Speechify voices with:
 
 ```sh
 curl -G https://api.speechify.ai/v1/voices \

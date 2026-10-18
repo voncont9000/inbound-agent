@@ -1,7 +1,9 @@
 import asyncio
+from pathlib import Path
 
 import aiohttp
 import pytest
+from inbound_core.config import AssistantConfig
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
@@ -18,6 +20,7 @@ from inbound_voice.providers import (
     create_stt,
     create_tts,
     resolve_providers,
+    resolve_voice_language,
 )
 
 
@@ -122,11 +125,153 @@ def test_create_stt(provider: str, expected_type: type) -> None:
         assert service._vad_force_turn_endpoint is True
         assert service._settings.model == "stt-rt-v5"
         assert service._settings.language_hints == ["en"]
+        assert service._settings.enable_language_identification is False
         assert service._settings.context.terms == terms
     else:
         assert service._settings.model == "nova-3"
         assert service._settings.language == "en-GB"
         assert service._settings.keyterm == terms
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_language"),
+    [("soniox", ["de"]), ("deepgram", "de")],
+)
+def test_stt_combines_locale_language_and_extra_terms(
+    provider: str, expected_language: str | list[str]
+) -> None:
+    environment = _environment(STT_PROVIDER=provider)
+    providers = resolve_providers(environment)
+    config = AssistantConfig.model_construct(language="de-DE")
+    voice_language = resolve_voice_language(config, providers, environment)
+    service = create_stt(
+        providers,
+        environment,
+        voice_language=voice_language,
+        extra_terms=[" Acme Clinic ", "acme clinic", "Northstar"],
+    )
+    terms = [*KEYTERMS, "Acme Clinic", "Northstar"]
+
+    if provider == "soniox":
+        assert service._settings.language_hints == expected_language
+        assert service._settings.context.terms == terms
+    else:
+        assert service._settings.language == expected_language
+        assert service._settings.keyterm == terms
+
+
+@pytest.mark.parametrize(
+    (
+        "locale",
+        "soniox_hints",
+        "deepgram_language",
+        "speechify_model",
+        "speechify_language",
+        "deepgram_voice",
+    ),
+    [
+        ("en-GB", ["en"], "en-GB", "simba-3.2", None, "aura-2-pandora-en"),
+        ("en-US", ["en"], "en-US", "simba-3.2", "en-US", "aura-2-pandora-en"),
+        ("de-DE", ["de"], "de", "simba-3.0", "de-DE", "aura-2-julius-de"),
+        ("es-ES", ["es"], "es", "simba-3.0", "es-ES", "aura-2-nestor-es"),
+        ("es-MX", ["es"], "es", "simba-3.0", "es-MX", "aura-2-estrella-es"),
+        ("fr-FR", ["fr"], "fr", "simba-3.0", "fr-FR", "aura-2-agathe-fr"),
+        ("it-IT", ["it"], "it", "simba-3.0", "it-IT", "aura-2-livia-it"),
+        ("pt-BR", ["pt"], "pt-BR", "simba-3.0", "pt-BR", "aura-2-pandora-en"),
+        (
+            "multi",
+            ["en", "de", "es", "fr", "it", "pt"],
+            "multi",
+            "simba-3.0",
+            None,
+            "aura-2-pandora-en",
+        ),
+    ],
+)
+def test_voice_language_resolves_provider_settings(
+    locale: str,
+    soniox_hints: list[str],
+    deepgram_language: str,
+    speechify_model: str,
+    speechify_language: str | None,
+    deepgram_voice: str,
+) -> None:
+    environment = _environment(STT_PROVIDER="soniox")
+    providers = resolve_providers(environment)
+    config = AssistantConfig.model_construct(language=locale)
+
+    language = resolve_voice_language(config, providers, environment)
+    stt = create_stt(providers, environment, voice_language=language)
+
+    assert [hint.value for hint in language.soniox_hints] == soniox_hints
+    assert language.soniox_language_identification is (locale == "multi")
+    assert language.deepgram_stt_language == deepgram_language
+    assert language.speechify_model == speechify_model
+    assert language.speechify_language == speechify_language
+    assert stt._settings.language_hints == soniox_hints
+    assert stt._settings.enable_language_identification is (locale == "multi")
+
+    assert language.deepgram_tts_voice == deepgram_voice
+
+
+def test_voice_id_precedence_and_localized_speechify_settings() -> None:
+    async def create_service() -> SpeechifyHttpTTSService:
+        environment = _environment(TTS_VOICE="environment-voice")
+        providers = resolve_providers(environment)
+        config = AssistantConfig.model_construct(language="de-DE", voice_id="configured-voice")
+        voice_language = resolve_voice_language(config, providers, environment)
+        async with aiohttp.ClientSession() as session:
+            return create_tts(providers, environment, session, voice_language=voice_language)
+
+    service = asyncio.run(create_service())
+
+    assert service._settings.model == "simba-3.0"
+    assert service._settings.language == "de-DE"
+    assert service._settings.voice == "configured-voice"
+
+
+@pytest.mark.parametrize(
+    ("config_voice", "environment_voice", "expected_voice"),
+    [
+        ("configured-voice", "environment-voice", "configured-voice"),
+        (None, "environment-voice", "environment-voice"),
+        (None, "", "beatrice_32"),
+    ],
+)
+def test_speechify_voice_id_precedence(
+    config_voice: str | None,
+    environment_voice: str,
+    expected_voice: str,
+) -> None:
+    environment = _environment(TTS_VOICE=environment_voice)
+    providers = resolve_providers(environment)
+    config = AssistantConfig.model_construct(language="de-DE", voice_id=config_voice)
+
+    assert resolve_voice_language(config, providers, environment).speechify_voice == expected_voice
+
+
+def test_prompt_stt_and_tts_share_the_assistant_locale() -> None:
+    from inbound_voice.config import load_assistant_config
+    from inbound_voice.prompts import render_system_prompt
+
+    config_path = Path(__file__).resolve().parents[1] / "config" / "assistants" / "demo_firm.yaml"
+    assistant = load_assistant_config(config_path)
+    assistant.language = "de-DE"
+    environment = _environment(STT_PROVIDER="soniox")
+    providers = resolve_providers(environment)
+    voice_language = resolve_voice_language(assistant, providers, environment)
+    stt = create_stt(providers, environment, voice_language=voice_language)
+
+    async def create_speechify() -> SpeechifyHttpTTSService:
+        async with aiohttp.ClientSession() as session:
+            return create_tts(providers, environment, session, voice_language=voice_language)
+
+    tts = asyncio.run(create_speechify())
+    prompt = render_system_prompt(assistant)
+
+    assert "Speak German." in prompt
+    assert stt._settings.language_hints == ["de"]
+    assert tts._settings.language == "de-DE"
 
 
 def test_create_tts() -> None:
@@ -157,6 +302,7 @@ def test_create_tts() -> None:
     assert speechify._settings.model == "simba-3.2"
     assert speechify._settings.voice == "beatrice_32"
     assert not hasattr(speechify._settings, "speed")
+    assert speechify._settings.language is None
     assert isinstance(elevenlabs, ElevenLabsHttpTTSService)
     assert elevenlabs._settings.model == "eleven_v4_turbo"
     assert elevenlabs._settings.voice == "elevenlabs-voice-id"

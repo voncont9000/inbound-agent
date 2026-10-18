@@ -860,9 +860,32 @@
   "additionalProperties": false,
   "properties": {
     "language": {
-      "default": "English",
+      "default": "en-GB",
+      "enum": [
+        "en-GB",
+        "en-US",
+        "de-DE",
+        "es-ES",
+        "es-MX",
+        "fr-FR",
+        "it-IT",
+        "pt-BR",
+        "multi"
+      ],
       "title": "Language",
       "type": "string"
+    },
+    "voice_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Voice Id"
     },
     "business_name": {
       "title": "Business Name",

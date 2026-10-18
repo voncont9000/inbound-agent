@@ -1,5 +1,5 @@
 import type { Schemas } from "../api/client";
-import type { AssistantConfig } from "../lib/config";
+import type { AssistantConfig, Locale } from "../lib/config";
 
 const ids = {
   tenants: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"],
@@ -10,6 +10,84 @@ const ids = {
 };
 const date = (day: number) => `2026-02-${String(day).padStart(2, "0")}T10:30:00Z`;
 
+const voiceLocaleOptions: Schemas["VoiceLocaleOption"][] = [
+  { code: "en-GB", label: "English (UK)", multilingual: false },
+  { code: "en-US", label: "English (US)", multilingual: false },
+  { code: "de-DE", label: "German", multilingual: false },
+  { code: "es-ES", label: "Spanish (Spain)", multilingual: false },
+  { code: "es-MX", label: "Spanish (Mexico)", multilingual: false },
+  { code: "fr-FR", label: "French", multilingual: false },
+  { code: "it-IT", label: "Italian", multilingual: false },
+  { code: "pt-BR", label: "Portuguese (Brazil)", multilingual: false },
+  { code: "multi", label: "Multilingual", multilingual: true },
+];
+
+const voiceDetails: Record<
+  Locale,
+  {
+    accent: string;
+    first: string;
+    second: string;
+    firstLocale?: string;
+    secondLocale?: string;
+  }
+> = {
+  "en-GB": { accent: "British", first: "Olive", second: "Rowan" },
+  "en-US": { accent: "American", first: "Riley", second: "Jordan" },
+  "de-DE": { accent: "German", first: "Lotte", second: "Jonas" },
+  "es-ES": { accent: "Castilian", first: "Lucía", second: "Mateo" },
+  "es-MX": { accent: "Mexican", first: "Sofía", second: "Diego" },
+  "fr-FR": { accent: "French", first: "Camille", second: "Louis" },
+  "it-IT": { accent: "Italian", first: "Giulia", second: "Luca" },
+  "pt-BR": { accent: "Brazilian", first: "Ana", second: "Rafael" },
+  multi: {
+    accent: "Multilingual",
+    first: "Ava",
+    second: "Noah",
+    firstLocale: "en-US",
+    secondLocale: "de-DE",
+  },
+};
+
+export function voiceCatalogueFor(locale: Locale): Schemas["VoiceCatalogueResponse"] {
+  const details = voiceDetails[locale];
+  return {
+    provider: "speechify",
+    locale,
+    locales: voiceLocaleOptions,
+    default_voice_id: "beatrice_32",
+    voices: [
+      {
+        id: "beatrice_32",
+        name: "Beatrice",
+        gender: "female",
+        accent: "British",
+        locale: "en-GB",
+        preview_url: null,
+        is_default: true,
+      },
+      {
+        id: `voice-${locale}-1`,
+        name: details.first,
+        gender: "female",
+        accent: details.accent,
+        locale: details.firstLocale ?? locale,
+        preview_url: `https://preview.example/${locale}-1.mp3`,
+        is_default: false,
+      },
+      {
+        id: `voice-${locale}-2`,
+        name: details.second,
+        gender: "male",
+        accent: details.accent,
+        locale: details.secondLocale ?? locale,
+        preview_url: `https://preview.example/${locale}-2.mp3`,
+        is_default: false,
+      },
+    ],
+  };
+}
+
 export const testCallResponse: Schemas["TestCallResponse"] = {
   url: "http://127.0.0.1:7862/?call_token=mock-call-token",
   expires_at: 1792320000,
@@ -17,7 +95,7 @@ export const testCallResponse: Schemas["TestCallResponse"] = {
 
 const plumbingConfig: AssistantConfig = {
   business_name: "Brightside Plumbing & Heating",
-  language: "English",
+  language: "en-GB",
   greeting: "Hello, you are speaking with Brightside. How can I help?",
   instructions: "Use clear, friendly language. Ask one question at a time and offer a callback when needed.",
   readback: "critical",
@@ -85,7 +163,7 @@ const plumbingConfig: AssistantConfig = {
 
 const lawConfig: AssistantConfig = {
   business_name: "Demo & Co Solicitors",
-  language: "British English",
+  language: "en-GB",
   greeting: "Hello, you are speaking with the AI assistant for Demo & Co Solicitors. How can I help?",
   instructions: `Use short, natural spoken sentences. Ask one question at a time.
 When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
