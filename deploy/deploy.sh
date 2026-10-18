@@ -70,6 +70,10 @@ while true; do
   sleep 5
 done
 
-curl --fail --silent --show-error --insecure "https://${DOMAIN}/api/healthz"
+curl_args=(--fail --silent --show-error)
+if [[ "$DOMAIN" == "localhost" || "$DOMAIN" == *.localhost ]]; then
+  curl_args+=(--insecure)
+fi
+curl "${curl_args[@]}" "https://${DOMAIN}/api/healthz"
 printf '\n'
 docker image prune -f

@@ -13,7 +13,7 @@ compose() {
 }
 
 usage() {
-  printf 'Usage: %s <dump> [--db NAME] [--uploads tar.gz] [--yes]\n' "$0" >&2
+  printf 'Usage: %s <dump> [--db NAME] [--uploads tar.gz] [--voice-runs tar.gz] [--yes]\n' "$0" >&2
   exit 2
 }
 
@@ -26,6 +26,7 @@ database="inbound"
 live_restore=1
 yes=0
 uploads_file=""
+voice_runs_file=""
 while (($#)); do
   case "$1" in
     --db)
@@ -37,6 +38,11 @@ while (($#)); do
     --uploads)
       (($# >= 2)) || usage
       uploads_file="$2"
+      shift 2
+      ;;
+    --voice-runs)
+      (($# >= 2)) || usage
+      voice_runs_file="$2"
       shift 2
       ;;
     --yes)
@@ -62,8 +68,16 @@ if ((!live_restore)) && [[ -n "$uploads_file" ]]; then
   printf 'Uploads can only be restored with the live database target.\n' >&2
   exit 1
 fi
+if ((!live_restore)) && [[ -n "$voice_runs_file" ]]; then
+  printf 'Voice call files can only be restored with the live database target.\n' >&2
+  exit 1
+fi
 if [[ -n "$uploads_file" && ! -f "$uploads_file" ]]; then
   printf 'Uploads archive not found: %s\n' "$uploads_file" >&2
+  exit 1
+fi
+if [[ -n "$voice_runs_file" && ! -f "$voice_runs_file" ]]; then
+  printf 'Voice runs archive not found: %s\n' "$voice_runs_file" >&2
   exit 1
 fi
 
@@ -115,6 +129,10 @@ compose exec -T db pg_restore --exit-on-error -U inbound_migrator -d "$database"
 if [[ -n "$uploads_file" ]]; then
   compose run --rm --no-deps backend sh -c \
     'mkdir -p /app/backend/var && tar -xzf - -C /app/backend/var' < "$uploads_file"
+fi
+if [[ -n "$voice_runs_file" ]]; then
+  compose run --rm --no-deps phone sh -c \
+    'mkdir -p /app/voice && tar -xzf - -C /app/voice' < "$voice_runs_file"
 fi
 
 if (( live_restore )); then

@@ -13,8 +13,8 @@ COPY voice /app/voice
 RUN uv sync --locked --no-dev \
     && groupadd --system voice-app \
     && useradd --create-home --uid 10001 --gid voice-app voice \
-    && mkdir -p /app/voice/spool \
-    && chown -R voice:voice-app /app/voice/spool
+    && mkdir -p /app/voice/spool /app/voice/runs \
+    && chown -R voice:voice-app /app/voice/spool /app/voice/runs
 ENV PATH=/opt/venv/bin:$PATH
 USER voice
 WORKDIR /app/voice

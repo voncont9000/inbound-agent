@@ -32,6 +32,11 @@ write_files:
           "max-file": "5"
         }
       }
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
 
 package_update: true
 packages:

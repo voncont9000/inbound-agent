@@ -41,6 +41,7 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    user: app
     restart: "no"
     logging: *default-logging
     working_dir: /app/backend
@@ -60,6 +61,7 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    user: app
     restart: unless-stopped
     logging: *default-logging
     working_dir: /app/backend
@@ -114,6 +116,7 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    user: app
     restart: unless-stopped
     logging: *default-logging
     working_dir: /app/backend
@@ -192,6 +195,7 @@ services:
       WEB_CALL_TO_NUMBER: ${WEB_CALL_TO_NUMBER:-}
     volumes:
       - voice-spool:/app/voice/spool
+      - voice-runs:/app/voice/runs
     depends_on:
       backend:
         condition: service_healthy
@@ -222,6 +226,9 @@ services:
       <<: *voice-environment
       WEB_CALL_TOKEN: ${WEB_CALL_TOKEN:-}
       WEB_CALL_MAX_CONCURRENT: ${WEB_CALL_MAX_CONCURRENT:-2}
+    volumes:
+      - voice-spool:/app/voice/spool
+      - voice-runs:/app/voice/runs
     depends_on:
       backend:
         condition: service_healthy
@@ -279,5 +286,6 @@ volumes:
   pg-data:
   backend-var:
   voice-spool:
+  voice-runs:
   caddy-data:
   caddy-config:

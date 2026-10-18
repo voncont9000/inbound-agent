@@ -13,5 +13,4 @@ RUN useradd --create-home --uid 1000 app \
     && mkdir -p /app/backend/var \
     && chown -R app:app /app/backend/var
 ENV PATH=/opt/venv/bin:$PATH
-USER app
 CMD ["/opt/venv/bin/uvicorn", "inbound_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

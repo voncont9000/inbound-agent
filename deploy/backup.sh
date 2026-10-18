@@ -45,8 +45,9 @@ mkdir -p "$daily_dir" "$weekly_dir"
 dump_tmp="$daily_dir/$base.dump.tmp"
 roles_tmp="$daily_dir/$base.roles.sql.tmp"
 uploads_tmp="$daily_dir/$base.uploads.tar.gz.tmp"
+voice_runs_tmp="$daily_dir/$base.voice-runs.tar.gz.tmp"
 cleanup() {
-  rm -f "$dump_tmp" "$roles_tmp" "$uploads_tmp"
+  rm -f "$dump_tmp" "$roles_tmp" "$uploads_tmp" "$voice_runs_tmp"
 }
 trap cleanup EXIT
 
@@ -55,13 +56,17 @@ compose exec -T db pg_dumpall -U inbound_migrator --roles-only --no-role-passwor
 compose exec -T backend sh -c \
   'mkdir -p /app/backend/var/uploads && tar -C /app/backend/var -czf - uploads' \
   > "$uploads_tmp"
+compose exec -T phone sh -c \
+  'mkdir -p /app/voice/runs && tar -C /app/voice -czf - runs' \
+  > "$voice_runs_tmp"
 mv "$dump_tmp" "$daily_dir/$base.dump"
 mv "$roles_tmp" "$daily_dir/$base.roles.sql"
 mv "$uploads_tmp" "$daily_dir/$base.uploads.tar.gz"
+mv "$voice_runs_tmp" "$daily_dir/$base.voice-runs.tar.gz"
 trap - EXIT
 
 if [[ "$BACKUP_WEEKLY" == "1" || "$(date +%u)" == "7" ]]; then
-  for suffix in dump roles.sql uploads.tar.gz; do
+  for suffix in dump roles.sql uploads.tar.gz voice-runs.tar.gz; do
     source_file="$daily_dir/$base.$suffix"
     weekly_file="$weekly_dir/$base.$suffix"
     ln "$source_file" "$weekly_file" 2>/dev/null || cp -f "$source_file" "$weekly_file"
@@ -76,7 +81,7 @@ prune_sets() {
       sort -r
   )
   for base_to_remove in "${sets[@]:$keep}"; do
-    for suffix in dump roles.sql uploads.tar.gz; do
+    for suffix in dump roles.sql uploads.tar.gz voice-runs.tar.gz; do
       rm -f "$directory/$base_to_remove.$suffix"
     done
   done
