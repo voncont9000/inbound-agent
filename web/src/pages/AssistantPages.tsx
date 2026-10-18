@@ -406,6 +406,17 @@ export function ChannelConnections({ assistantId }: { assistantId: string }) {
   const [kind, setKind] = useState<Schemas["ChannelConnectionCreate"]["kind"]>("phone");
   const [externalId, setExternalId] = useState("");
   const [error, setError] = useState("");
+  const gmailMode = useQuery({
+    queryKey: ["gmail-mode"],
+    queryFn: () => unwrap(api.GET("/channels/gmail/mode")),
+  });
+  const startGmailOAuth = useMutation({
+    mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/channels/gmail/oauth-start", {
+      params: { path: { assistant_id: assistantId } },
+    })),
+    onSuccess: ({ url }) => window.location.assign(url),
+    onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to connect Gmail."),
+  });
   const channels = useQuery({
     queryKey: ["assistant-channels", assistantId],
     queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/channels", { params: { path: { assistant_id: assistantId } } })),
@@ -424,22 +435,30 @@ export function ChannelConnections({ assistantId }: { assistantId: string }) {
   });
   return <section className="panel stack" aria-labelledby="assistant-channels-heading">
     <h2 id="assistant-channels-heading">Channels</h2>
-    <p className="muted">Connect a phone number, WhatsApp phone number ID, or email inbox.</p>
+    <p className="muted">Connect a phone number, WhatsApp phone number ID, or Gmail inbox.</p>
     {channels.isLoading && <LoadingState />}
     {channels.error && <ErrorState message="Channel connections could not be loaded." />}
     {channels.data?.items.map((channel) => <p key={channel.id}>{channel.kind}: <strong>{channel.external_id}</strong></p>)}
-    <form className="form-grid" onSubmit={(event) => {
+    {gmailMode.data?.mode === "google" && <div className="stack">
+      <p className="help">Gmail is draft-only. Replies are saved as drafts for review and are never sent automatically.</p>
+      <button className="button-primary" type="button" disabled={startGmailOAuth.isPending} onClick={() => startGmailOAuth.mutate()}>
+        {startGmailOAuth.isPending ? "Connecting…" : "Connect Gmail"}
+      </button>
+    </div>}
+    {gmailMode.data?.mode === "off" && <p className="help">Gmail is not enabled for this deployment.</p>}
+    {gmailMode.data?.mode !== "off" && (gmailMode.data?.mode !== "google" || kind !== "gmail") && <form className="form-grid" onSubmit={(event) => {
       event.preventDefault();
       setError("");
       add.mutate();
     }}>
       <Field path="channel-kind" label="Channel">{(fieldId) => <select id={fieldId} value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
-        <option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="gmail">Gmail</option><option value="web">Web</option>
+        <option value="phone">Phone</option><option value="whatsapp">WhatsApp</option>{gmailMode.data?.mode === "fake" && <option value="gmail">Gmail</option>}<option value="web">Web</option>
       </select>}</Field>
-      <Field path="channel-external-id" label={kind === "whatsapp" ? "WhatsApp phone_number_id" : "External ID"}>{(fieldId) => <input id={fieldId} value={externalId} onChange={(event) => setExternalId(event.target.value)} required />}</Field>
+      <Field path="channel-external-id" label={kind === "whatsapp" ? "WhatsApp phone_number_id" : kind === "gmail" ? "Mailbox email address" : "External ID"}>{(fieldId) => <input id={fieldId} value={externalId} onChange={(event) => setExternalId(event.target.value)} required />}</Field>
       <button className="button-primary" type="submit" disabled={add.isPending || !externalId.trim()}>{add.isPending ? "Adding…" : "Add channel"}</button>
-    </form>
+    </form>}
     {kind === "whatsapp" && <p className="help">Enter the phone_number_id from your Meta WhatsApp Business account.</p>}
+    {kind === "gmail" && <p className="help">Enter the mailbox email address. Drafts are created for review; mail is never sent automatically.</p>}
     {error && <p role="alert">{error}</p>}
   </section>;
 }

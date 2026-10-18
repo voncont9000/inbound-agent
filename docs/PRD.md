@@ -84,6 +84,10 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-E6: Attachments: read text-based attachments for context. Never auto-send attachments in v1.
 - FR-E7: Suggested rules generated from mailbox history, which the owner accepts or dismisses.
 
+**Implementation status:** Gmail v1 uses OAuth and is draft-only. The agent creates
+in-thread Gmail drafts for human review and never sends mail. FR-E5 style learning and
+FR-E7 suggested rules are explicitly out of scope for this implementation.
+
 ### 7.4 WhatsApp
 - FR-W1: Connect a WhatsApp Business number via Meta embedded signup (Cloud API). Support number verification and business profile editing.
 - FR-W2: Reply automatically to inbound messages within the 24-hour window. Typing indicator and read receipts.

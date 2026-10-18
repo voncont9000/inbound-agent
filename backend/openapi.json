@@ -3276,6 +3276,69 @@
         ]
       }
     },
+    "/assistants/{assistant_id}/channels/gmail/oauth-start": {
+      "post": {
+        "operationId": "gmail_oauth_start_assistants__assistant_id__channels_gmail_oauth_start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Gmail Oauth Start Assistants  Assistant Id  Channels Gmail Oauth Start Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gmail Oauth Start",
+        "tags": [
+          "gmail"
+        ]
+      }
+    },
     "/assistants/{assistant_id}/channels/{channel_id}": {
       "delete": {
         "operationId": "delete_channel_assistants__assistant_id__channels__channel_id__delete",
@@ -3888,6 +3951,36 @@
         "summary": "Signup",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/channels/gmail/mode": {
+      "get": {
+        "operationId": "gmail_mode_channels_gmail_mode_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "enum": [
+                      "off",
+                      "fake",
+                      "google"
+                    ],
+                    "type": "string"
+                  },
+                  "title": "Response Gmail Mode Channels Gmail Mode Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gmail Mode",
+        "tags": [
+          "gmail"
         ]
       }
     },
@@ -5050,6 +5143,55 @@
         ]
       }
     },
+    "/oauth/google/callback": {
+      "get": {
+        "operationId": "gmail_oauth_callback_oauth_google_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gmail Oauth Callback",
+        "tags": [
+          "gmail"
+        ]
+      }
+    },
     "/tasks": {
       "get": {
         "operationId": "list_tasks_tasks_get",
@@ -5312,6 +5454,75 @@
         "summary": "List Templates",
         "tags": [
           "assistants"
+        ]
+      }
+    },
+    "/webhooks/gmail": {
+      "post": {
+        "operationId": "receive_gmail_webhook_webhooks_gmail_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Receive Gmail Webhook Webhooks Gmail Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receive Gmail Webhook",
+        "tags": [
+          "webhooks"
         ]
       }
     },

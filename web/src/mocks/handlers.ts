@@ -48,6 +48,17 @@ function toContactSummary(detail: Schemas["ContactDetailResponse"]): Schemas["Co
 }
 
 export const handlers = [
+  http.get<never, never, { mode: "off" | "fake" | "google" }>(
+    "*/api/channels/gmail/mode",
+    () => HttpResponse.json<{ mode: "off" | "fake" | "google" }>({ mode: "fake" }),
+  ),
+  http.post<{ id: string }, never, { url: string }>(
+    "*/api/assistants/:id/channels/gmail/oauth-start",
+    ({ params }) =>
+      HttpResponse.json<{ url: string }>({
+        url: `https://accounts.google.com/o/oauth2/v2/auth?assistant=${String(params.id)}`,
+      }),
+  ),
   http.get<never, never, Record<string, unknown>>("*/api/assistant-config/schema", () =>
     HttpResponse.json<Record<string, unknown>>(assistantConfigSchema),
   ),

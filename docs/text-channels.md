@@ -65,6 +65,58 @@ latency.
 Replies outside Meta's 24-hour customer-service window are not sent; the inbox receives a
 `whatsapp_template_needed` task instead. Approved template sends are not implemented yet.
 
+## Gmail (draft only)
+
+Gmail uses Gmail History API plus Pub/Sub push notifications and periodic reconciliation.
+The worker parses full Gmail messages, skips automated/newsletter/internal mail using
+mailbox exclusions, resolves contacts by email, and classifies each thread. Enquiries
+create a threaded Gmail draft and an in-app assistant message with a “Draft in Gmail”
+badge. Needs-human messages get an `AI/Needs human` label and task; spam and unrelated
+messages are labelled and completed. **The service never sends email and never attaches
+files to a reply.** A human reviews and sends drafts.
+
+OAuth uses `openid email https://www.googleapis.com/auth/gmail.modify`. `gmail.modify`
+is a restricted Google scope, but is the narrowest single Gmail scope that supports
+reading messages/history, creating drafts, and applying labels. Production use requires
+Google restricted-scope verification and any associated security assessment required
+for the deployed application. Refresh tokens are Fernet-encrypted in
+`channel_connections.credentials_ciphertext`; they are never stored in connection
+settings or returned by the API.
+
+Deployments may set `GMAIL_MODE=off` before a Google project is available. In that mode
+the Gmail webhook returns 503, OAuth start reports that Gmail is not enabled, and queued
+Gmail sync jobs are no-ops. Production accepts `off` without Google configuration;
+`google` requires the OAuth client, Pub/Sub audience/topic/service account, and encryption
+key. Production does not allow the local `fake` mode.
+
+### Google Cloud setup
+
+1. Create a Google Cloud project and configure the OAuth consent screen.
+2. Create an OAuth client ID, register the callback URL from
+   `GOOGLE_OAUTH_REDIRECT_URL`, and configure the client ID and secret.
+3. Complete verification for the restricted `gmail.modify` scope before production use.
+4. Create a Pub/Sub topic and grant
+   `gmail-api-push@system.gserviceaccount.com` permission to publish to it.
+5. Create a push subscription targeting `POST /webhooks/gmail`, enable OIDC
+   authentication, set the token audience to `GMAIL_PUBSUB_AUDIENCE`, and configure
+   the expected service-account email in `GMAIL_PUBSUB_SERVICE_ACCOUNT`.
+6. Set the OAuth, Pub/Sub, and Fernet `CREDENTIALS_ENCRYPTION_KEY` values in backend
+   deployment secrets.
+
+The fake provider stores Gmail API `format=full` JSON under `GMAIL_FAKE_DIR`; use
+`GMAIL_PUSH_TOKEN` for simulator authentication:
+
+```sh
+uv run --directory backend python -m inbound_api.channels.simulate gmail \
+  --mailbox assistant@example.test --from "Alex <alex@example.test>" \
+  --subject "Question" --text "Could you explain the process?"
+```
+
+Text, Markdown, CSV, PDF, and DOCX attachments up to 2 MB use the existing
+knowledge-file reader and are included as context, capped at 4,000 characters each.
+Other types and larger files are ignored. Outgoing drafts never include attachments.
+FR-E5 style learning and FR-E7 suggested mailbox rules are out of scope.
+
 Media is not downloaded or transcribed. Non-text messages are stored as placeholders such as
 `[image]` or `[audio]`, with the original message type in metadata. The simulator and fake
 sender are for development; graph-mode sends use the configured Cloud API bearer token.
