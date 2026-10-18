@@ -211,7 +211,7 @@ export function AssistantSettingsPage() {
           ["needs_human", "Needs a person"],
           ["spam", "Spam"],
           ["not_relevant", "Not relevant"],
-        ] as const).map(([key, label]) => <Field key={key} path={`email_triage.${key}`} label={label}>{(fieldId) => <textarea id={fieldId} value={config.email_triage[key]} onChange={(event) => update((draft) => { draft.email_triage[key] = event.target.value; })} />}</Field>)}
+        ] as const).map(([key, label]) => <Field key={key} path={`email_triage.${key}`} label={label}>{(fieldId) => <textarea id={fieldId} value={config.email_triage?.[key] ?? ""} onChange={(event) => update((draft) => { if (draft.email_triage) draft.email_triage[key] = event.target.value; })} />}</Field>)}
       </section>
       <section className="panel stack"><h2>Policies</h2>
         {config.policies.map((policy, index) => <div className="inline-editor" key={`policy-${index}`}>
