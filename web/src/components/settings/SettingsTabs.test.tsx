@@ -41,6 +41,8 @@ describe("assistant settings tabs", () => {
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     expect(screen.getByText(/Version \d+ is up to date/)).toBeInTheDocument();
+    expect(await screen.findByLabelText("Language")).toHaveValue("en-GB");
+    expect(await screen.findByRole("radio", { name: /Beatrice/i })).toBeChecked();
     await user.type(screen.getByLabelText("Business name"), " Ltd");
     await user.click(screen.getByRole("link", { name: "Abilities" }));
     expect(screen.getByRole("switch", { name: "Calendar booking" })).not.toBeChecked();

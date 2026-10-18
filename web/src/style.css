@@ -83,6 +83,16 @@ tr:last-child td { border-bottom: 0; }
 .context-card { white-space: pre-wrap; background: #f2f5f3; padding: 1rem; border-radius: 8px; font: 0.9rem/1.5 ui-monospace, monospace; }
 .auth-card { width: min(470px, calc(100% - 2rem)); margin: 7vh auto; padding: 2rem; background: white; border: 1px solid var(--line); border-radius: 14px; }
 .check-row, .radio-row { display: flex; align-items: flex-start; gap: 0.55rem; }
+.voice-picker { display: grid; gap: 0.65rem; }
+.voice-picker-fieldset { border: 0; margin: 0; padding: 0; }
+.voice-picker-fieldset legend { font-size: 0.88rem; font-weight: 700; margin-bottom: 0.5rem; }
+.voice-picker-list { display: grid; gap: 0.65rem; }
+.voice-picker-card { align-items: center; border: 1px solid var(--line); border-radius: 0.75rem; display: flex; gap: 1rem; justify-content: space-between; padding: 0.85rem 1rem; }
+.voice-picker-card-selected { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.voice-picker-choice { align-items: flex-start; cursor: pointer; display: flex; flex: 1; gap: 0.75rem; }
+.voice-picker-copy { display: grid; gap: 0.2rem; }
+.voice-picker-copy > span { color: var(--muted); font-size: 0.88rem; }
+.voice-picker-preview { min-width: 5rem; }
 .inline-editor { display: grid; gap: 0.8rem; padding: 1rem; border: 1px solid var(--line); border-radius: 8px; margin: 0.7rem 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 code { color: #58796f; font-size: 0.9em; }
