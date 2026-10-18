@@ -162,6 +162,7 @@ class AssistantConfig(BaseModel):
         ]
     ]
     transfer_targets: list[TransferTarget] = Field(default_factory=list)
+    transfer_handoff_message: str = "I'm putting you through now, please hold."
     transfer_failed_message: str = (
         "Sorry, nobody is available to take your call right now. Someone will call you back "
         "as soon as possible. Goodbye."

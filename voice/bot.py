@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
 from loguru import logger
@@ -22,7 +22,6 @@ from pipecat.frames.frames import (
     EndWorkerFrame,
     FunctionCallResultProperties,
     LLMRunFrame,
-    LLMTextFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
     TTSTextFrame,
@@ -113,10 +112,9 @@ def should_goodbye_detected_end_call(
 class BotSpeechTracker(BaseObserver):
     def __init__(self) -> None:
         super().__init__(observe_every_push=False)
-        self.pending = False
         self.speaking = False
+        self.started_count = 0
         self.last_stopped_at: float | None = None
-        self._quiet_since: float | None = time.monotonic()
         self._seen_speaking_frame_siblings: set[frozenset[Any]] = set()
 
     async def on_push_frame(self, data: Any) -> None:
@@ -126,32 +124,54 @@ class BotSpeechTracker(BaseObserver):
             if sibling_ids in self._seen_speaking_frame_siblings:
                 return
             self._seen_speaking_frame_siblings.add(sibling_ids)
-        if isinstance(frame, (LLMTextFrame, TTSTextFrame)):
-            self.pending = True
-            self._quiet_since = None
-        elif isinstance(frame, BotStartedSpeakingFrame):
+        if isinstance(frame, BotStartedSpeakingFrame):
             self.speaking = True
-            self._quiet_since = None
+            self.started_count += 1
+            self.last_stopped_at = None
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self.speaking = False
-            self.pending = False
             self.last_stopped_at = time.monotonic()
-            self._quiet_since = self.last_stopped_at
 
-    async def wait_until_quiet(self, quiet_secs: float = 0.5, max_secs: float = 8.0) -> None:
+    async def wait_until_quiet(self, quiet_secs: float = 0.3, max_secs: float = 6.0) -> None:
         quiet_secs = max(0.0, quiet_secs)
-        deadline = time.monotonic() + max(0.0, max_secs)
+        started_at = time.monotonic()
+        deadline = started_at + max(0.0, max_secs)
         while True:
             now = time.monotonic()
-            if not self.speaking and not self.pending:
-                if self._quiet_since is None:
-                    self._quiet_since = now
-                if now - self._quiet_since >= quiet_secs:
+            if not self.speaking:
+                quiet_since = self.last_stopped_at
+                if quiet_since is None:
+                    quiet_since = started_at
+                if now - quiet_since >= quiet_secs:
                     return
-            else:
-                self._quiet_since = None
             if now >= deadline:
                 return
+            await asyncio.sleep(min(0.05, deadline - now))
+
+    async def wait_for_utterance(
+        self,
+        after_count: int,
+        start_timeout: float = 2.0,
+        max_secs: float = 4.0,
+        grace_secs: float = 0.2,
+    ) -> Literal["spoken", "no_start", "timeout"]:
+        start_deadline = time.monotonic() + max(0.0, start_timeout)
+        while self.started_count <= after_count:
+            now = time.monotonic()
+            if now >= start_deadline:
+                return "no_start"
+            await asyncio.sleep(min(0.05, start_deadline - now))
+
+        utterance_started_at = time.monotonic()
+        deadline = utterance_started_at + max(0.0, max_secs)
+        grace_secs = max(0.0, grace_secs)
+        while True:
+            now = time.monotonic()
+            if not self.speaking and self.last_stopped_at is not None:
+                if now - self.last_stopped_at >= grace_secs:
+                    return "spoken"
+            if now >= deadline:
+                return "timeout"
             await asyncio.sleep(min(0.05, deadline - now))
 
 
@@ -507,7 +527,17 @@ def create_function_schemas(
                 request = call_tools.transfer_request
                 if request is not None:
                     if speech_tracker is not None:
-                        await speech_tracker.wait_until_quiet()
+                        if speech_tracker.speaking:
+                            await speech_tracker.wait_until_quiet()
+                        count = speech_tracker.started_count
+                    else:
+                        count = 0
+                    await params.llm.push_frame(
+                        TTSSpeakFrame(call_tools.config.transfer_handoff_message)
+                    )
+                    if speech_tracker is not None:
+                        speech_result = await speech_tracker.wait_for_utterance(count)
+                        logger.info("Transfer handoff speech result: {}", speech_result)
                     try:
                         start = await transfer.start(request.target, request.reason)
                     except Exception as error:

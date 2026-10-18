@@ -59,6 +59,7 @@ const plumbingConfig: AssistantConfig = {
   ], max_digest_chars: 24000 },
   live_actions: ["flag_urgent"],
   transfer_targets: [],
+  transfer_handoff_message: "I'm putting you through now, please hold.",
   transfer_failed_message: "Sorry, nobody is available to take your call right now.",
   review_confidence_threshold: 0.7,
 };
@@ -162,6 +163,7 @@ in response.`,
   transfer_targets: [
     { key: "duty_solicitor", label: "Duty solicitor", phone: "+447700900123", when_to_use: "The caller explicitly asks to speak to a person now.", office_hours_only: false },
   ],
+  transfer_handoff_message: "I'm putting you through now, please hold.",
   transfer_failed_message: "Sorry, nobody is available to take your call right now.",
   review_confidence_threshold: 0.7,
 };

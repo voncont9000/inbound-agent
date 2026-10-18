@@ -32,6 +32,9 @@ describe("operator workflows", () => {
     await user.type(phone, "+447700900123");
     await user.type(screen.getByLabelText("When to use"), "The caller asks for a person.");
     await user.click(screen.getByRole("checkbox", { name: /transfer call/i }));
+    const handoffMessage = screen.getByLabelText("Handoff message");
+    await user.clear(handoffMessage);
+    await user.type(handoffMessage, "A colleague will speak with you shortly.");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(capturedBody).toBeDefined());
@@ -48,6 +51,9 @@ describe("operator workflows", () => {
     expect(savedConfig.live_actions).toContain("transfer_call");
     expect(savedConfig.transfer_failed_message).toBe(
       "Sorry, nobody is available to take your call right now.",
+    );
+    expect(savedConfig.transfer_handoff_message).toBe(
+      "A colleague will speak with you shortly.",
     );
     server.events.removeListener("request:start", listener);
   }, 15000);

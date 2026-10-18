@@ -93,6 +93,11 @@
             "title": "Transfer Failed Message",
             "type": "string"
           },
+          "transfer_handoff_message": {
+            "default": "I'm putting you through now, please hold.",
+            "title": "Transfer Handoff Message",
+            "type": "string"
+          },
           "transfer_targets": {
             "items": {
               "$ref": "#/components/schemas/TransferTarget"
@@ -226,6 +231,11 @@
           "transfer_failed_message": {
             "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
             "title": "Transfer Failed Message",
+            "type": "string"
+          },
+          "transfer_handoff_message": {
+            "default": "I'm putting you through now, please hold.",
+            "title": "Transfer Handoff Message",
             "type": "string"
           },
           "transfer_targets": {

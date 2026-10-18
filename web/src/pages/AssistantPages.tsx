@@ -346,6 +346,7 @@ export function AssistantSettingsPage() {
         </div>)}
         <button type="button" onClick={() => update((draft) => { draft.transfer_targets ??= []; draft.transfer_targets.push({ key: "", label: "", phone: "", when_to_use: "", office_hours_only: true }); })}>Add transfer target</button>
         <Field path="transfer_failed_message" label="Message when nobody answers">{(fieldId) => <textarea id={fieldId} value={config.transfer_failed_message} onChange={(event) => update((draft) => { draft.transfer_failed_message = event.target.value; })} />}</Field>
+        <Field path="transfer_handoff_message" label="Handoff message">{(fieldId) => <textarea id={fieldId} value={config.transfer_handoff_message} onChange={(event) => update((draft) => { draft.transfer_handoff_message = event.target.value; })} />}</Field>
       </section>
       <section className="panel stack"><h2>Contacts</h2>
         {Object.entries(config.contacts).map(([key, value], index) => <div className="form-grid" key={`${key}-${index}`}>

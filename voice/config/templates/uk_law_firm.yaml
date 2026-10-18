@@ -90,6 +90,8 @@ urgency_rules:
     urgent_within_days: 28
     reason: "Employment tribunal time limit may be within 28 days."
 live_actions: []
+transfer_handoff_message: "I'm putting you through now, please hold."
+transfer_failed_message: "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye."
 # Example human-transfer configuration:
 # live_actions:
 #   - transfer_call

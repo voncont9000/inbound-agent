@@ -277,8 +277,8 @@ def tool_specs(
     if transfer_targets:
         actions["transfer_call"] = {
             "description": (
-                "Transfer the caller to a person. Say one short sentence telling the caller you "
-                "are transferring them in the same response, then call this tool."
+                "Transfer the caller to a person. Call this tool straight away without announcing "
+                "the transfer; the system will tell the caller."
             ),
             "properties": {
                 "target_key": {

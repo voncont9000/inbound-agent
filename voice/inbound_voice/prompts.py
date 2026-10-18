@@ -86,8 +86,9 @@ def render_system_prompt(
                 f"- {target.label} (target_key: {target.key}): {target.when_to_use}"
                 for target in transfer_targets
             )
-            + "\n- To transfer, say one short sentence telling the caller you are transferring "
-            "them, and call transfer_call in the same response. Do not say anything else after it."
+            + "\n- When a target matches and a transfer is appropriate, call "
+            "transfer_call straight away without announcing the transfer; "
+            "the system will tell the caller."
             "\n- If no target matches, do not mention transfers."
         )
     return f"""{business_context}

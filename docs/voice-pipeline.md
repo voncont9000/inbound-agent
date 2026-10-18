@@ -499,12 +499,20 @@ half-open interval from `opens` through (but not including) `closes`. The tool a
 section appear only when the action is enabled and at least one target is available; text
 channels do not expose it.
 
-After the handoff sentence has played, the tool handler waits for speech to become quiet,
-then starts the Twilio call redirect before sending `EndWorkerFrame`. This ordering is
-required because Pipecat's FastAPI websocket transport closes the websocket when the
-pipeline ends on `EndFrame`; closing the `<Connect><Stream>` before the REST redirect would
-make Twilio hang up the call. The call-finalization path reuses the start result and waits
-for its outcome callback.
+On a successful tool call, the system speaks `transfer_handoff_message` (default:
+“I'm putting you through now, please hold.”); the model is instructed to call
+`transfer_call` without announcing the transfer. If the bot is already speaking, the
+handler waits until it has been quiet for 0.3 seconds, capped at 6 seconds, before pushing
+the handoff message. It then observes `BotStartedSpeakingFrame` and
+`BotStoppedSpeakingFrame` for the handoff: it waits up to 2 seconds for speech to start,
+then up to 4 seconds for it to stop, with a 0.2-second quiet grace period. If speech does
+not start or stop in time, transfer still proceeds and the result is logged.
+
+After that bounded wait, the handler starts the Twilio call redirect before sending
+`EndWorkerFrame`. This ordering is required because Pipecat's FastAPI websocket transport
+closes the websocket when the pipeline ends on `EndFrame`; closing the `<Connect><Stream>`
+before the REST redirect would make Twilio hang up the call. The call-finalization path
+reuses the start result and waits for its outcome callback.
 
 Phone calls use Twilio Dial TwiML, an answered callback for prompt outcome reporting, and
 the Dial action callback for the final result. Callback URLs use the configured public

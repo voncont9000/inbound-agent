@@ -695,6 +695,11 @@ export interface components {
              * @default Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.
              */
             transfer_failed_message: string;
+            /**
+             * Transfer Handoff Message
+             * @default I'm putting you through now, please hold.
+             */
+            transfer_handoff_message: string;
             /** Transfer Targets */
             transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */
@@ -748,6 +753,11 @@ export interface components {
              * @default Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.
              */
             transfer_failed_message: string;
+            /**
+             * Transfer Handoff Message
+             * @default I'm putting you through now, please hold.
+             */
+            transfer_handoff_message: string;
             /** Transfer Targets */
             transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */

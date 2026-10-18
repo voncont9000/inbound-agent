@@ -78,7 +78,8 @@ def test_transfer_tool_exposes_only_available_target_keys() -> None:
 
     assert spec["properties"]["target_key"]["enum"] == ["duty_solicitor", "weekend_duty"]
     assert spec["required"] == ["target_key", "reason"]
-    assert "same response" in spec["description"]
+    assert "without announcing the transfer" in spec["description"]
+    assert "the system will tell the caller" in spec["description"]
 
 
 def test_call_tools_validates_and_allows_only_one_pending_transfer(tmp_path) -> None:
@@ -113,7 +114,9 @@ def test_prompt_mentions_transfer_only_when_a_target_is_available() -> None:
     assert "TRANSFER TO A PERSON" in available
     assert "- Duty solicitor (target_key: duty_solicitor): " in available
     assert TARGET.when_to_use in available
-    assert "Do not say anything else after it." in available
+    assert "call transfer_call straight away without announcing the transfer" in available
+    assert "the system will tell the caller" in available
+    assert "say one short sentence" not in available.lower()
 
 
 def test_transfer_completion_records_failed_dial_and_metrics(tmp_path) -> None:
