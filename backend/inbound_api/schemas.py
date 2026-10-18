@@ -68,6 +68,8 @@ class AssistantUpdate(BaseModel):
 
 
 class AssistantResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     name: str
     template: str | None
@@ -82,6 +84,8 @@ class AssistantListResponse(BaseModel):
 
 
 class AssistantVersionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     version: int
     config: AssistantConfig
@@ -91,6 +95,28 @@ class AssistantVersionResponse(BaseModel):
 
 class AssistantVersionsResponse(BaseModel):
     items: list[AssistantVersionResponse]
+
+
+class ChannelConnectionCreate(BaseModel):
+    kind: Literal["phone", "gmail", "whatsapp", "web"]
+    external_id: str
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChannelConnectionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    assistant_id: UUID
+    kind: Literal["phone", "gmail", "whatsapp", "web"]
+    external_id: str
+    status: str
+    settings: dict[str, Any]
+    created_at: datetime
+
+
+class ChannelConnectionsResponse(BaseModel):
+    items: list[ChannelConnectionResponse]
 
 
 class KnowledgeSourceCreate(BaseModel):
@@ -104,6 +130,8 @@ class KnowledgeFileForm(BaseModel):
 
 
 class KnowledgeSourceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     assistant_id: UUID
     kind: Literal["url", "file"]
@@ -119,6 +147,8 @@ class KnowledgeSourcesResponse(BaseModel):
 
 
 class JobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     kind: str
     status: Literal["queued", "running", "succeeded", "failed"]
@@ -131,6 +161,8 @@ class JobResponse(BaseModel):
 
 
 class KnowledgeDigestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     assistant_id: UUID
     content: str
@@ -143,6 +175,8 @@ class KnowledgeDigestUpdate(BaseModel):
 
 
 class KnowledgeGapResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     assistant_id: UUID
     conversation_id: UUID
@@ -154,6 +188,7 @@ class KnowledgeGapResponse(BaseModel):
 
 class KnowledgeGapsResponse(BaseModel):
     items: list[KnowledgeGapResponse]
+    next_cursor: str | None = None
 
 
 class KnowledgeGapUpdate(BaseModel):
@@ -161,6 +196,8 @@ class KnowledgeGapUpdate(BaseModel):
 
 
 class ConversationSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     assistant_id: UUID
     person_id: UUID | None
@@ -179,6 +216,8 @@ class ConversationListResponse(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     role: Literal["caller", "assistant", "operator", "system"]
     text: str
@@ -187,11 +226,15 @@ class MessageResponse(BaseModel):
 
 
 class IntakeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     version: Literal["live", "post_call", "merged"]
     data: dict[str, Any]
 
 
 class TaskSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     kind: str
     status: Literal["open", "done", "dismissed"]
@@ -216,6 +259,8 @@ class ConversationReviewCreate(BaseModel):
 
 
 class ConversationReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     field: str
     resolved_value: Any
@@ -230,6 +275,7 @@ class TaskUpdate(BaseModel):
 
 class TaskListResponse(BaseModel):
     items: list[TaskSummary]
+    next_cursor: str | None = None
 
 
 class ContactSummary(BaseModel):
