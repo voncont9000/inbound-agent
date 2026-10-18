@@ -197,14 +197,18 @@ def test_default_rules_do_not_change_text_channel_business_context() -> None:
     old_config_payload.pop("rules")
     old_config = AssistantConfig.model_validate(old_config_payload)
 
-    prompt = render_business_context(config, channel="whatsapp")
+    prompt = render_business_context(config, today=date(2026, 1, 15), channel="whatsapp")
 
     assert old_config.rules == RulesConfig()
-    assert render_business_context(old_config, channel="whatsapp") == prompt
+    assert (
+        render_business_context(old_config, today=date(2026, 1, 15), channel="whatsapp") == prompt
+    )
     assert "CONVERSATION RULES" not in prompt
+    assert prompt == Path(__file__).with_name("business_context_main_whatsapp.txt").read_text()
     assert (
         render_business_context(
             config.model_copy(update={"rules": RulesConfig(ai_disclosure="when_asked")}),
+            today=date(2026, 1, 15),
             channel="whatsapp",
         )
         == prompt
@@ -381,3 +385,18 @@ def test_sentence_urgency_schema_and_prompt_are_omitted_without_sentence_rules()
     assert "urgency_matches" not in schema["properties"]
     assert "Urgency rules" not in prompt
     assert prompt == Path(__file__).with_name("extraction_prompt_main.txt").read_text()
+
+
+@pytest.mark.parametrize("channel", ["whatsapp", "gmail"])
+def test_business_context_has_written_language_instruction(channel: str) -> None:
+    config = _config().model_copy(update={"language": "de-DE"})
+    prompt = render_business_context(config, channel=channel)
+
+    assert "Write in German." in prompt
+
+
+def test_multilingual_business_context_has_written_language_instruction() -> None:
+    config = _config().model_copy(update={"language": "multi"})
+    prompt = render_business_context(config, channel="whatsapp")
+
+    assert "Reply in the language the customer writes in." in prompt

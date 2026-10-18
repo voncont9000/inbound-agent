@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from inbound_core.config import AssistantConfig
+from inbound_core.languages import spoken_language_instruction
 from inbound_core.prompts import render_business_context, render_deadline_instructions
 from inbound_core.transfer import available_transfer_targets
 
@@ -28,7 +29,8 @@ def render_system_prompt(
         context_card,
         channel="phone",
         persona=(
-            f"You are the telephone assistant for {config.business_name}.\nSpeak {config.language}."
+            f"You are the telephone assistant for {config.business_name}.\n"
+            f"{spoken_language_instruction(config.language)}"
         ),
         include_deadline_instructions=False,
         booking_enabled=booking_enabled,

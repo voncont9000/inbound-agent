@@ -2,7 +2,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 import aiohttp
-from inbound_core.config import PronunciationEntry
+from inbound_core.config import AssistantConfig, PronunciationEntry
+from inbound_core.languages import (
+    DEFAULT_LOCALE,
+    DEFAULT_VOICE_ID,
+    LOCALES,
+    MULTI_LANGUAGES,
+    Locale,
+)
+from loguru import logger
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
@@ -15,7 +23,16 @@ from pipecat.transcriptions.language import Language
 
 from inbound_voice.pronunciation import PronunciationTransform
 
+DEEPGRAM_TTS_VOICES = {
+    "de": "aura-2-julius-de",
+    "es-ES": "aura-2-nestor-es",
+    "es-MX": "aura-2-estrella-es",
+    "fr": "aura-2-agathe-fr",
+    "it": "aura-2-livia-it",
+}
+
 STT_PROVIDERS = ("assemblyai", "soniox", "deepgram")
+LANGUAGE_ANNOTATION_STT_PROVIDERS = frozenset(STT_PROVIDERS)
 TTS_PROVIDERS = ("speechify", "elevenlabs", "deepgram")
 LLM_PROVIDERS = ("google", "openrouter")
 LLM_DEFAULT_MODELS = {
@@ -47,6 +64,18 @@ class VoiceProviders:
     elevenlabs_model: str
     llm: str
     llm_model: str
+
+
+@dataclass(frozen=True)
+class VoiceLanguage:
+    locale: Locale
+    soniox_hints: list[Language]
+    soniox_language_identification: bool
+    deepgram_stt_language: str
+    speechify_model: str
+    speechify_language: str | None
+    speechify_voice: str
+    deepgram_tts_voice: str
 
 
 def resolve_providers(env: Mapping[str, str]) -> VoiceProviders:
@@ -87,11 +116,57 @@ def resolve_providers(env: Mapping[str, str]) -> VoiceProviders:
     )
 
 
+def resolve_voice_language(
+    config: AssistantConfig,
+    providers: VoiceProviders,
+    env: Mapping[str, str],
+) -> VoiceLanguage:
+    locale = config.language
+    locale_info = LOCALES[locale]
+    soniox_hints = (
+        [Language(language) for language in MULTI_LANGUAGES]
+        if locale == "multi"
+        else [Language(locale_info.base)]
+    )
+    deepgram_language = {
+        "en-GB": "en-GB",
+        "en-US": "en-US",
+        "pt-BR": "pt-BR",
+        "multi": "multi",
+    }.get(locale, locale_info.base)
+    speechify_language = None if locale == "en-GB" else locale_info.speechify_language
+    deepgram_voice = DEEPGRAM_TTS_VOICES.get(
+        locale,
+        DEEPGRAM_TTS_VOICES.get(locale_info.base, "aura-2-pandora-en"),
+    )
+
+    if providers.tts == "deepgram" and locale_info.base in {"pt", "multi"}:
+        logger.warning(
+            "Deepgram Aura-2 has no configured {} voice; using English fallback {}.",
+            locale,
+            deepgram_voice,
+        )
+
+    return VoiceLanguage(
+        locale=locale,
+        soniox_hints=soniox_hints,
+        soniox_language_identification=locale == "multi",
+        deepgram_stt_language=deepgram_language,
+        speechify_model=locale_info.speechify_model,
+        speechify_language=speechify_language,
+        speechify_voice=(config.voice_id or providers.tts_voice or DEFAULT_VOICE_ID),
+        deepgram_tts_voice=deepgram_voice,
+    )
+
+
 def create_stt(
     providers: VoiceProviders,
     env: Mapping[str, str],
     sample_rate: int | None = None,
+    *,
+    voice_language: VoiceLanguage | None = None,
 ):
+    voice_language = voice_language or _default_voice_language(providers, env)
     if providers.stt == "assemblyai":
         return AssemblyAISTTService(
             api_key=env["ASSEMBLYAI_API_KEY"],
@@ -107,7 +182,8 @@ def create_stt(
             sample_rate=sample_rate,
             settings=SonioxSTTService.Settings(
                 model="stt-rt-v5",
-                language_hints=[Language.EN],
+                language_hints=list(voice_language.soniox_hints),
+                enable_language_identification=voice_language.soniox_language_identification,
                 context=SonioxContextObject(terms=KEYTERMS),
             ),
         )
@@ -117,7 +193,7 @@ def create_stt(
             sample_rate=sample_rate,
             settings=DeepgramSTTService.Settings(
                 model="nova-3",
-                language="en-GB",
+                language=voice_language.deepgram_stt_language,
                 keyterm=KEYTERMS,
             ),
         )
@@ -129,19 +205,25 @@ def create_tts(
     env: Mapping[str, str],
     aiohttp_session: aiohttp.ClientSession,
     sample_rate: int | None = None,
+    *,
+    voice_language: VoiceLanguage | None = None,
     pronunciations: list[PronunciationEntry] | None = None,
 ):
+    voice_language = voice_language or _default_voice_language(providers, env)
     text_transforms = [("*", PronunciationTransform(pronunciations))] if pronunciations else None
     if providers.tts == "speechify":
+        settings = {
+            "model": voice_language.speechify_model,
+            "voice": voice_language.speechify_voice,
+        }
+        if voice_language.speechify_language is not None:
+            settings["language"] = voice_language.speechify_language
         return SpeechifyHttpTTSService(
             api_key=env["SPEECHIFY_API_KEY"],
             aiohttp_session=aiohttp_session,
             sample_rate=sample_rate,
             text_transforms=text_transforms,
-            settings=SpeechifyHttpTTSService.Settings(
-                model="simba-3.2",
-                voice=providers.tts_voice or "beatrice_32",
-            ),
+            settings=SpeechifyHttpTTSService.Settings(**settings),
         )
     if providers.tts == "elevenlabs":
         if providers.elevenlabs_model in ELEVENLABS_HTTP_ONLY_MODELS:
@@ -170,10 +252,18 @@ def create_tts(
             sample_rate=sample_rate,
             text_transforms=text_transforms,
             settings=DeepgramTTSService.Settings(
-                voice=providers.tts_voice or "aura-2-pandora-en",
+                voice=providers.tts_voice or voice_language.deepgram_tts_voice,
             ),
         )
     raise ValueError(f"Unsupported TTS provider: {providers.tts}")
+
+
+def _default_voice_language(
+    providers: VoiceProviders,
+    env: Mapping[str, str],
+) -> VoiceLanguage:
+    config = AssistantConfig.model_construct(language=DEFAULT_LOCALE)
+    return resolve_voice_language(config, providers, env)
 
 
 def create_llm(

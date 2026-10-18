@@ -778,6 +778,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/voices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Voices */
+        get: operations["list_voices_voices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/gmail": {
         parameters: {
             query?: never;
@@ -886,9 +903,10 @@ export interface components {
             knowledge?: components["schemas"]["KnowledgeConfig-Input"];
             /**
              * Language
-             * @default English
+             * @default en-GB
+             * @enum {string}
              */
-            language: string;
+            language: "en-GB" | "en-US" | "de-DE" | "es-ES" | "es-MX" | "fr-FR" | "it-IT" | "pt-BR" | "multi";
             /** Live Actions */
             live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment" | "transfer_call")[];
             office_hours: components["schemas"]["OfficeHours"];
@@ -928,6 +946,8 @@ export interface components {
             transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */
             urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"] | components["schemas"]["SentenceUrgencyRule"])[];
+            /** Voice Id */
+            voice_id?: string | null;
         };
         /** AssistantConfig */
         "AssistantConfig-Output": {
@@ -949,9 +969,10 @@ export interface components {
             knowledge?: components["schemas"]["KnowledgeConfig-Output"];
             /**
              * Language
-             * @default English
+             * @default en-GB
+             * @enum {string}
              */
-            language: string;
+            language: "en-GB" | "en-US" | "de-DE" | "es-ES" | "es-MX" | "fr-FR" | "it-IT" | "pt-BR" | "multi";
             /** Live Actions */
             live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment" | "transfer_call")[];
             office_hours: components["schemas"]["OfficeHours"];
@@ -991,6 +1012,8 @@ export interface components {
             transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */
             urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"] | components["schemas"]["SentenceUrgencyRule"])[];
+            /** Voice Id */
+            voice_id?: string | null;
         };
         /** AssistantCreate */
         AssistantCreate: {
@@ -2598,6 +2621,55 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VoiceCard */
+        VoiceCard: {
+            /** Accent */
+            accent: string;
+            /** Gender */
+            gender: string;
+            /** Id */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Locale */
+            locale: string;
+            /** Name */
+            name: string;
+            /** Preview Url */
+            preview_url: string | null;
+        };
+        /** VoiceCatalogueResponse */
+        VoiceCatalogueResponse: {
+            /** Default Voice Id */
+            default_voice_id: string;
+            /**
+             * Locale
+             * @enum {string}
+             */
+            locale: "en-GB" | "en-US" | "de-DE" | "es-ES" | "es-MX" | "fr-FR" | "it-IT" | "pt-BR" | "multi";
+            /** Locales */
+            locales: components["schemas"]["VoiceLocaleOption"][];
+            /**
+             * Provider
+             * @default speechify
+             * @constant
+             */
+            provider: "speechify";
+            /** Voices */
+            voices: components["schemas"]["VoiceCard"][];
+        };
+        /** VoiceLocaleOption */
+        VoiceLocaleOption: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "en-GB" | "en-US" | "de-DE" | "es-ES" | "es-MX" | "fr-FR" | "it-IT" | "pt-BR" | "multi";
+            /** Label */
+            label: string;
+            /** Multilingual */
+            multilingual: boolean;
         };
         /** WebhookAction */
         WebhookAction: {
@@ -4393,6 +4465,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_voices_voices_get: {
+        parameters: {
+            query?: {
+                locale?: "en-GB" | "en-US" | "de-DE" | "es-ES" | "es-MX" | "fr-FR" | "it-IT" | "pt-BR" | "multi";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceCatalogueResponse"];
                 };
             };
             /** @description Validation Error */

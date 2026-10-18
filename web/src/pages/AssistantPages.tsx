@@ -37,7 +37,7 @@ export function AssistantsPage() {
   const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => unwrap(api.GET("/templates")), enabled: showCreate });
   const create = useMutation({
     mutationFn: (input: Schemas["AssistantCreate"]) => unwrap(api.POST("/assistants", { body: input })),
-    onSuccess: (assistant) => navigate(`/assistants/${assistant.id}/settings`),
+    onSuccess: (assistant) => navigate(settingsTabPath(assistant.id)),
     onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to create assistant."),
   });
   const selected = templatesQuery.data?.find(({ name }) => name === selectedTemplate);
@@ -76,7 +76,7 @@ export function AssistantsPage() {
       <h2>{assistant.name}</h2><p>{assistant.config.business_name}</p>
       <p className="muted">{Object.values(assistant.config.services).map((service) => service.label).join(" · ")}</p>
       <div className="button-row">
-        <Link to={`/assistants/${assistant.id}/settings`}>Manage assistant</Link>
+        <Link to={settingsTabPath(assistant.id)}>Manage assistant</Link>
         <TestCallButton assistantId={assistant.id} />
       </div>
     </article>)}</div>

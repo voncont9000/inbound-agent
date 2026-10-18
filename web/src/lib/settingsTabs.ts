@@ -27,6 +27,9 @@ export function tabForPath(path: string): SettingsTabId {
   switch (root) {
     case "rules":
       return "rules";
+    case "language":
+    case "voice_id":
+      return "general";
     case "policies":
       return "rules";
     case "office_hours":

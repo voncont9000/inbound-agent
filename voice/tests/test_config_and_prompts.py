@@ -22,7 +22,7 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     prompt = render_system_prompt(assistant, today=date(2026, 10, 17))
 
     assert assistant.business_name == "Demo & Co Solicitors"
-    assert assistant.language == "British English"
+    assert assistant.language == "en-GB"
     assert set(assistant.services) == {"conveyancing", "employment"}
     assert "do I have a claim?" in assistant.email_triage.enquiry
     assert "existing clients chasing a live matter" in assistant.email_triage.needs_human
@@ -255,7 +255,7 @@ def test_assistant_language_defaults_to_english() -> None:
         }
     )
 
-    assert assistant.language == "English"
+    assert assistant.language == "en-GB"
 
 
 def test_field_spec_requires_enum_choices_and_unique_names() -> None:

@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     app_env: str = "development"
+    speechify_api_key: SecretStr | None = None
     database_url: str = (
         "postgresql+psycopg://inbound_app_login:inbound_dev_only@localhost:5432/inbound"
     )

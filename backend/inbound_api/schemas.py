@@ -4,6 +4,7 @@ from uuid import UUID
 
 from inbound_core.call_report import CallReport, CallStart, CallTransferMetrics, RouteResponse
 from inbound_core.config import AssistantConfig, PostAction
+from inbound_core.languages import Locale
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -101,6 +102,30 @@ class AssistantListResponse(BaseModel):
 class TestCallResponse(BaseModel):
     url: str
     expires_at: int
+
+
+class VoiceLocaleOption(BaseModel):
+    code: Locale
+    label: str
+    multilingual: bool
+
+
+class VoiceCard(BaseModel):
+    id: str
+    name: str
+    gender: str
+    accent: str
+    locale: str
+    preview_url: str | None
+    is_default: bool
+
+
+class VoiceCatalogueResponse(BaseModel):
+    provider: Literal["speechify"] = "speechify"
+    locale: Locale
+    locales: list[VoiceLocaleOption]
+    default_voice_id: str
+    voices: list[VoiceCard]
 
 
 class AssistantVersionResponse(BaseModel):

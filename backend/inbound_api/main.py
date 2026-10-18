@@ -16,6 +16,7 @@ from inbound_api.routers import (
     knowledge,
     post_actions,
     tasks,
+    voices,
     webhooks,
 )
 from inbound_api.schemas import KnowledgeSourceCreate
@@ -47,6 +48,7 @@ for router in (
     calendar.router,
     post_actions.router,
     dashboard.router,
+    voices.router,
 ):
     app.include_router(router)
 

@@ -14,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from inbound_core.languages import DEFAULT_LOCALE, Locale, normalize_locale
 from inbound_core.phone import normalise_phone
 
 
@@ -292,7 +293,8 @@ UrgencyRule = Annotated[
 class AssistantConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    language: str = "English"
+    language: Locale = DEFAULT_LOCALE
+    voice_id: str | None = None
     business_name: str
     greeting: str
     instructions: str = ""
@@ -327,6 +329,11 @@ class AssistantConfig(BaseModel):
     )
     email_triage: EmailTriageConfig = Field(default_factory=EmailTriageConfig)
     review_confidence_threshold: float = Field(default=0.7, ge=0, le=1)
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def normalize_language(cls, value: object) -> Locale:
+        return normalize_locale(value)
 
     @model_validator(mode="after")
     def validate_post_actions(self) -> AssistantConfig:
