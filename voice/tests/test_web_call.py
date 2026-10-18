@@ -56,6 +56,9 @@ def test_page_and_health_endpoint() -> None:
 
     assert page.status_code == 200
     assert "Use headphones so the agent doesn't hear itself." in page.text
+    assert "Embedded view: if the mic is blocked" in page.text
+    assert "open this page in a new tab" in page.text
+    assert 'target="_blank"' in page.text
     assert "AudioWorkletNode" in page.text
     assert health.status_code == 200
     assert health.json() == {"ok": True}

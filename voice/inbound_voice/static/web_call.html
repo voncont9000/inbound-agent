@@ -53,12 +53,22 @@
         <button id="start" type="button">Start call</button>
         <button id="end" type="button" disabled>End call</button>
       </div>
+      <p id="embedded-hint" class="note" hidden>
+        Embedded view: if the mic is blocked,
+        <a id="open-page" target="_blank" rel="noopener">open this page in a new tab</a>
+      </p>
       <p class="note">Use headphones so the agent doesn't hear itself.</p>
     </main>
     <script>
       const startButton = document.querySelector("#start");
       const endButton = document.querySelector("#end");
       const statusLine = document.querySelector("#status");
+      const embeddedHint = document.querySelector("#embedded-hint");
+      const openPageLink = document.querySelector("#open-page");
+      if (window.top !== window.self) {
+        openPageLink.href = location.href;
+        embeddedHint.hidden = false;
+      }
       let socket;
       let microphone;
       let captureContext;
@@ -241,7 +251,14 @@
             finishCall();
           };
         } catch (error) {
-          callError = `Call error: ${error instanceof Error ? error.message : String(error)}`;
+          if (["NotAllowedError", "SecurityError"].includes(error?.name)) {
+            callError =
+              "Microphone blocked. Open this page in its own browser tab (not embedded), then allow the microphone via the icon next to the address bar and reload.";
+          } else if (error?.name === "NotFoundError") {
+            callError = "No microphone found.";
+          } else {
+            callError = `Call error: ${error instanceof Error ? error.message : String(error)}`;
+          }
           await finishCall();
           if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
         }
