@@ -19,6 +19,7 @@ from inbound_voice.config import (
 )
 from inbound_voice.intake import build_service_model, days_until_deadline
 from inbound_voice.sinks import CallSink
+from inbound_voice.transfer import TransferStart
 
 DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "assistants" / "demo_firm.yaml"
@@ -44,6 +45,8 @@ class CallTools:
         self.now = now
         self.transfer_targets = available_transfer_targets(self.config, now)
         self.transfer_request: TransferRequest | None = None
+        self.transfer_start: TransferStart | None = None
+        self.transfer_started_at: float | None = None
         self.models = {
             name: build_service_model(service) for name, service in self.config.services.items()
         }

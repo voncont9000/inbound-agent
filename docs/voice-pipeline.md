@@ -500,6 +500,13 @@ half-open interval from `opens` through (but not including) `closes`. The tool a
 section appear only when the action is enabled and at least one target is available; text
 channels do not expose it.
 
+After the handoff sentence has played, the tool handler waits for speech to become quiet,
+then starts the Twilio call redirect before sending `EndWorkerFrame`. This ordering is
+required because Pipecat's FastAPI websocket transport closes the websocket when the
+pipeline ends on `EndFrame`; closing the `<Connect><Stream>` before the REST redirect would
+make Twilio hang up the call. The call-finalization path reuses the start result and waits
+for its outcome callback.
+
 Phone calls use Twilio Dial TwiML, an answered callback for prompt outcome reporting, and
 the Dial action callback for the final result. Callback URLs use the configured public
 base URL or forwarded request host and are signature-validated when `TWILIO_AUTH_TOKEN`

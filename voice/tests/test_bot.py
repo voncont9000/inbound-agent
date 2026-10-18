@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import json
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,7 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     EndWorkerFrame,
+    LLMTextFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
     TTSTextFrame,
@@ -357,10 +359,15 @@ def test_transfer_call_prepares_provider_before_ending_worker(tmp_path) -> None:
             events.append(("prepare",))
 
         async def start(self, target, reason):
-            raise AssertionError("Transfer starts after the pipeline ends.")
+            events.append(("start", target.key, reason))
+            return BOT_MODULE.TransferStart("dialling")
 
         async def outcome(self, timeout):
             raise AssertionError("Transfer outcome is not checked before the pipeline ends.")
+
+    class FakeTracker:
+        async def wait_until_quiet(self):
+            events.append(("quiet",))
 
     sink = LocalFilesCallSink(tmp_path, "transfer-tool-handler")
     config = CallTools(sink).config.model_copy(
@@ -380,7 +387,7 @@ def test_transfer_call_prepares_provider_before_ending_worker(tmp_path) -> None:
     call_tools = CallTools(sink, config)
     handler = next(
         schema.handler
-        for schema in BOT_MODULE.create_function_schemas(call_tools, FakeTransfer())
+        for schema in BOT_MODULE.create_function_schemas(call_tools, FakeTransfer(), FakeTracker())
         if schema.name == "transfer_call"
     )
 
@@ -389,8 +396,62 @@ def test_transfer_call_prepares_provider_before_ending_worker(tmp_path) -> None:
     assert events[0][0:2] == ("result", {"ok": True, "status": "Transferring the caller."})
     assert events[0][2].run_llm is False
     assert events[1] == ("prepare",)
-    assert isinstance(events[2][1], EndWorkerFrame)
-    assert events[2][2] is FrameDirection.UPSTREAM
+    assert events[2] == ("quiet",)
+    assert events[3] == ("start", "duty_solicitor", "Caller requests a person.")
+    assert isinstance(events[4][1], EndWorkerFrame)
+    assert events[4][2] is FrameDirection.UPSTREAM
+    assert call_tools.transfer_start == BOT_MODULE.TransferStart("dialling")
+    assert call_tools.transfer_started_at is not None
+
+
+def test_bot_speech_tracker_waits_until_pending_text_stops() -> None:
+    async def run() -> None:
+        tracker = BOT_MODULE.BotSpeechTracker()
+        await tracker.on_push_frame(SimpleNamespace(frame=LLMTextFrame(text="I am transferring.")))
+        waiting = asyncio.create_task(tracker.wait_until_quiet(quiet_secs=0.04, max_secs=0.5))
+        await asyncio.sleep(0.07)
+        assert not waiting.done()
+
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+        stopped = BotStoppedSpeakingFrame()
+        sibling = BotStoppedSpeakingFrame()
+        stopped.broadcast_sibling_id = sibling.id
+        sibling.broadcast_sibling_id = stopped.id
+        await tracker.on_push_frame(SimpleNamespace(frame=stopped))
+        stopped_at = tracker.last_stopped_at
+        await asyncio.sleep(0.01)
+        await tracker.on_push_frame(SimpleNamespace(frame=sibling))
+        assert tracker.last_stopped_at == stopped_at
+        await waiting
+        assert tracker.pending is False
+        assert tracker.speaking is False
+        assert tracker.last_stopped_at is not None
+
+    asyncio.run(run())
+
+
+def test_bot_speech_tracker_tracks_tts_text_as_pending() -> None:
+    async def run() -> None:
+        tracker = BOT_MODULE.BotSpeechTracker()
+        frame = TTSTextFrame(text="I am transferring.", aggregated_by="test")
+        await tracker.on_push_frame(SimpleNamespace(frame=frame))
+
+        assert tracker.pending is True
+
+    asyncio.run(run())
+
+
+def test_bot_speech_tracker_wait_is_bounded_by_max_secs() -> None:
+    async def run() -> None:
+        tracker = BOT_MODULE.BotSpeechTracker()
+        await tracker.on_push_frame(SimpleNamespace(frame=LLMTextFrame(text="Still pending.")))
+        started_at = time.monotonic()
+        await tracker.wait_until_quiet(quiet_secs=0.5, max_secs=0.1)
+        elapsed = time.monotonic() - started_at
+
+        assert 0.08 <= elapsed < 0.4
+
+    asyncio.run(run())
 
 
 def test_failed_transfer_tool_result_continues_llm(tmp_path) -> None:

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -155,6 +156,41 @@ def test_transfer_completion_records_failed_dial_and_metrics(tmp_path) -> None:
             and task["target_key"] == "duty_solicitor"
             for task in tasks
         )
+
+    asyncio.run(run())
+
+
+def test_transfer_completion_reuses_start_from_tool_handler(tmp_path) -> None:
+    class StoredTransfer:
+        async def start(self, target, reason):
+            raise AssertionError("A started transfer must not be started again.")
+
+        async def outcome(self, timeout):
+            assert timeout == 4
+            return "answered"
+
+        def prepare(self):
+            pass
+
+    async def run() -> None:
+        sink = LocalFilesCallSink(tmp_path, "stored-transfer")
+        metrics = CallMetricsObserver(sink, telephony=True)
+        tools = CallTools(sink, assistant_config(), now=NOW)
+        tools.transfer_call("duty_solicitor", "Caller requests a person.")
+        tools.transfer_start = TransferStart("dialling")
+        tools.transfer_started_at = time.monotonic()
+
+        result = await complete_transfer(
+            sink,
+            metrics,
+            tools,
+            StoredTransfer(),
+            {"TRANSFER_OUTCOME_WAIT_SECS": "4"},
+        )
+
+        assert result is not None
+        assert result["status"] == "answered"
+        assert result["latency_ms"] >= 0
 
     asyncio.run(run())
 
