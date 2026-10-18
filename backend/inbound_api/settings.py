@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     speechify_api_key: SecretStr | None = None
+    tts_provider: Literal["speechify", "elevenlabs", "deepgram"] = "speechify"
     database_url: str = (
         "postgresql+psycopg://inbound_app_login:inbound_dev_only@localhost:5432/inbound"
     )

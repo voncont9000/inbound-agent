@@ -107,6 +107,9 @@ export function VoicePicker({
   const catalogue = voicesQuery.data;
   if (!catalogue) return <EmptyState>No voices are available.</EmptyState>;
   const selectedVoiceId = voiceId ?? catalogue.default_voice_id;
+  const multilingualUnavailable =
+    language === "multi" &&
+    !catalogue.locales.some(({ code }) => code === "multi");
 
   return (
     <section className="voice-picker">
@@ -119,12 +122,21 @@ export function VoicePicker({
         onChange={selectLanguage}
         disabled={changingLanguage}
       >
+        {multilingualUnavailable && (
+          <option value="multi">Multilingual</option>
+        )}
         {catalogue.locales.map((locale) => (
           <option key={locale.code} value={locale.code}>
             {locale.label}
           </option>
         ))}
       </select>
+      {multilingualUnavailable && (
+        <p className="help" role="note">
+          Multilingual isn't available with the current voice service, so the
+          assistant will speak its default voice language.
+        </p>
+      )}
       <fieldset className="voice-picker-fieldset" disabled={changingLanguage}>
         <legend>Voice</legend>
         {catalogue.voices.length ? (

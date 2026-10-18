@@ -69,10 +69,21 @@ function BookingCard({ assistantId, config, saved, update, errors }: SettingsTab
   const booking = config.booking;
   const savedKeys = (saved.booking?.appointment_types ?? []).map(({ key }) => key);
   const missingActions = booking && BOOKING_ACTIONS.some((action) => !config.live_actions.includes(action));
-  return <AbilityCard id="booking" title="Calendar booking" description="Offer real open slots from your calendar and book appointments." enabled={Boolean(booking)} onToggle={(enabled) => update((draft) => {
-    draft.booking = enabled ? structuredClone(DEFAULT_BOOKING_CONFIG) : null;
-    draft.live_actions = withActions(draft.live_actions, BOOKING_ACTIONS, enabled);
-  })} status={missingActions ? <p className="help" role="note">Live booking also needs the availability and booking live actions under Advanced.</p> : undefined}>
+  return <AbilityCard id="booking" title="Calendar booking" description="Offer real open slots from your calendar and book appointments." enabled={Boolean(booking)} onToggle={(enabled) => {
+    if (
+      !enabled &&
+      booking?.appointment_types.length &&
+      !confirmRemoval(
+        `Turning off calendar booking removes its ${booking.appointment_types.length} appointment type(s). Continue?`,
+      )
+    ) {
+      return;
+    }
+    update((draft) => {
+      draft.booking = enabled ? structuredClone(DEFAULT_BOOKING_CONFIG) : null;
+      draft.live_actions = withActions(draft.live_actions, BOOKING_ACTIONS, enabled);
+    });
+  }} status={missingActions ? <p className="help" role="note">Live booking also needs the availability and booking live actions under Advanced.</p> : undefined}>
     {booking && <>
       <CalendarConnection assistantId={assistantId} />
       <h3>Appointment types</h3>

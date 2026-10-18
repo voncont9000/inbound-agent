@@ -56,8 +56,8 @@ assistant creation path, including its initial configuration version.
 
 Accepted `company_info` is stored as the assistant's knowledge digest, not in
 the assistant configuration. If a website URL is provided at completion, it is
-saved as a pending knowledge source. Import is not started automatically; the
-user can explicitly run knowledge import later.
+saved as a pending knowledge source and a knowledge import is queued
+automatically. The crawl runs in a worker after setup is complete.
 
 ## Safety and acceptance
 

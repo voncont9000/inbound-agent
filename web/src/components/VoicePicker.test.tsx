@@ -11,13 +11,14 @@ import { VoicePicker } from "./VoicePicker";
 
 function renderPicker(
   onChange: (next: { language: Locale; voiceId: string | null }) => void,
+  language: Locale = "en-GB",
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <VoicePicker language="en-GB" voiceId={null} onChange={onChange} />
+      <VoicePicker language={language} voiceId={null} onChange={onChange} />
     </QueryClientProvider>,
   );
 }
@@ -40,6 +41,38 @@ describe("VoicePicker", () => {
       language: "en-GB",
       voiceId: "voice-en-GB-1",
     });
+  });
+
+  it("omits multilingual when the catalogue does not offer it", async () => {
+    const catalogue = voiceCatalogueFor("en-GB");
+    catalogue.locales = catalogue.locales.filter(({ code }) => code !== "multi");
+    server.use(
+      http.get("*/api/voices", () => HttpResponse.json(catalogue)),
+    );
+    renderPicker(vi.fn());
+
+    expect(await screen.findByRole("radio", { name: /Beatrice/i })).toBeChecked();
+    expect(
+      screen.queryByRole("option", { name: "Multilingual" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a saved multilingual selection and explains the default voice fallback", async () => {
+    const catalogue = voiceCatalogueFor("multi");
+    catalogue.locales = catalogue.locales.filter(({ code }) => code !== "multi");
+    server.use(
+      http.get("*/api/voices", () => HttpResponse.json(catalogue)),
+    );
+    renderPicker(vi.fn(), "multi");
+
+    const language = await screen.findByLabelText("Language");
+    expect(language).toHaveValue("multi");
+    expect(screen.getByRole("option", { name: "Multilingual" })).toHaveValue(
+      "multi",
+    );
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "Multilingual isn't available with the current voice service, so the assistant will speak its default voice language.",
+    );
   });
 
   it("keeps a voice available in the new locale and resets an unavailable one", async () => {

@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -36,7 +37,11 @@ def _voice(
 
 
 @pytest.mark.asyncio
-async def test_catalogue_maps_filters_and_follows_speechify_pages() -> None:
+async def test_catalogue_maps_filters_and_follows_speechify_pages(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "inbound_api.services.voice_catalogue.get_settings",
+        lambda: SimpleNamespace(tts_provider="speechify"),
+    )
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -99,6 +104,36 @@ async def test_catalogue_maps_filters_and_follows_speechify_pages() -> None:
     assert len(response.locales) == len(LOCALES)
     assert response.locales[-1].code == "multi"
     assert response.locales[-1].multilingual is True
+
+
+@pytest.mark.asyncio
+async def test_catalogue_locale_options_follow_tts_provider_after_cache_hit(monkeypatch) -> None:
+    settings = SimpleNamespace(tts_provider="speechify")
+    monkeypatch.setattr(
+        "inbound_api.services.voice_catalogue.get_settings",
+        lambda: settings,
+    )
+    requests = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(
+            200,
+            json={"voices": [_voice("english", "en-GB")], "has_more": False},
+        )
+
+    catalogue = SpeechifyVoiceCatalogue(transport=httpx.MockTransport(handler))
+    speechify = await catalogue.get("en-GB", "fake-speechify-key")
+    settings.tts_provider = "elevenlabs"
+    elevenlabs = await catalogue.get("en-GB", "fake-speechify-key")
+    settings.tts_provider = "deepgram"
+    deepgram = await catalogue.get("en-GB", "fake-speechify-key")
+
+    assert speechify.locales[-1].code == "multi"
+    assert all(locale.code != "multi" for locale in elevenlabs.locales)
+    assert all(locale.code != "multi" for locale in deepgram.locales)
+    assert requests == 1
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,7 @@ from inbound_api.schemas import (
     VoiceCatalogueResponse,
     VoiceLocaleOption,
 )
+from inbound_api.settings import get_settings
 
 SPEECHIFY_VOICES_URL = "https://api.speechify.ai/v1/voices"
 CACHE_TTL_SECONDS = 24 * 60 * 60
@@ -201,11 +202,16 @@ class SpeechifyVoiceCatalogue:
         )
 
     def _response(self, locale: Locale, voices: list[VoiceCard]) -> VoiceCatalogueResponse:
+        available_locales = LOCALES.items()
+        if get_settings().tts_provider != "speechify":
+            available_locales = (
+                (code, info) for code, info in available_locales if code != "multi"
+            )
         return VoiceCatalogueResponse(
             locale=locale,
             locales=[
                 VoiceLocaleOption(code=code, label=info.label, multilingual=code == "multi")
-                for code, info in LOCALES.items()
+                for code, info in available_locales
             ],
             default_voice_id=DEFAULT_VOICE_ID,
             voices=voices,

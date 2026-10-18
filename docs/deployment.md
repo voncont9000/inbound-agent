@@ -103,6 +103,9 @@ external credentials and public webhook settings.
 the backend (the authenticated voice catalogue). Keep it in the protected deployment
 environment, never in frontend configuration. If it is unset or the catalogue request fails,
 the picker returns only the static Beatrice default.
+The backend also reads `TTS_PROVIDER` (default `speechify`), which Compose passes to the
+authenticated voice catalogue so it can hide multilingual when the selected TTS provider cannot
+switch languages.
 
 Validate and deploy:
 

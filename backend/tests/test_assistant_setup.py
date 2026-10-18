@@ -4,7 +4,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from inbound_api.db import tenant_session
 from inbound_api.jobs import run_next_job
@@ -275,6 +275,24 @@ async def test_complete_setup_persists_only_accepted_data_and_optional_knowledge
         source = await session.scalar(
             select(KnowledgeSource).where(KnowledgeSource.assistant_id == UUID(assistant["id"]))
         )
+        import_jobs = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT payload FROM jobs "
+                        "WHERE tenant_id = :tenant_id "
+                        "AND kind = 'knowledge_import' "
+                        "AND payload ->> 'assistant_id' = :assistant_id"
+                    ),
+                    {
+                        "tenant_id": UUID(account["tenant_id"]),
+                        "assistant_id": assistant["id"],
+                    },
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert digest is not None
     assert digest.content == "Accepted bakery summary."
     assert digest.edited_by == UUID(account["user_id"])
@@ -285,6 +303,7 @@ async def test_complete_setup_persists_only_accepted_data_and_optional_knowledge
         "pending",
         {},
     )
+    assert import_jobs == [{"assistant_id": assistant["id"]}]
 
 
 async def test_complete_setup_with_template_defaults_creates_no_knowledge_rows(
@@ -316,8 +335,27 @@ async def test_complete_setup_with_template_defaults_creates_no_knowledge_rows(
             .select_from(KnowledgeSource)
             .where(KnowledgeSource.assistant_id == assistant_id)
         )
+        import_jobs = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT payload FROM jobs "
+                        "WHERE tenant_id = :tenant_id "
+                        "AND kind = 'knowledge_import' "
+                        "AND payload ->> 'assistant_id' = :assistant_id"
+                    ),
+                    {
+                        "tenant_id": UUID(tenant_pair["first"]["tenant_id"]),
+                        "assistant_id": str(assistant_id),
+                    },
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert digest_count == 0
     assert source_count == 0
+    assert import_jobs == []
 
 
 async def test_complete_setup_rejects_invalid_website_url(tenant_pair) -> None:
