@@ -11,7 +11,7 @@ from inbound_voice.config import (
     ServiceConfig,
     load_assistant_config,
 )
-from inbound_voice.prompts import render_system_prompt
+from inbound_voice.prompts import EMAIL_SPELLING_RULE, render_system_prompt
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,6 +90,7 @@ def test_caller_context_is_inserted_only_when_nonblank() -> None:
         "When the caller gives an email address, spell it back once, letter by letter, "
         "and ask them to confirm. Do not read back other details."
     ) in prompt
+    assert EMAIL_SPELLING_RULE in prompt
     assert "Read back names, phone numbers, email addresses and dates" not in prompt
 
     assistant = assistant.model_copy(
@@ -142,6 +143,7 @@ def test_neutral_instructions_do_not_create_callback_behavior() -> None:
     assert "callback" not in prompt.casefold()
     assert "Use neutral language." in prompt
     assert "Do not read details back to the caller." in prompt
+    assert EMAIL_SPELLING_RULE not in prompt
 
 
 def test_critical_readback_renders_existing_confirmation_mechanics() -> None:
@@ -152,6 +154,7 @@ def test_critical_readback_renders_existing_confirmation_mechanics() -> None:
 
     assert "Read back names, phone numbers, email addresses and dates to confirm them." in prompt
     assert "read back all collected, unconfirmed critical details in one sentence" in prompt
+    assert EMAIL_SPELLING_RULE in prompt
 
 
 def test_caller_id_instruction_is_rendered_verbatim() -> None:

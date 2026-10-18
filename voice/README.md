@@ -348,6 +348,8 @@ Call behavior belongs in each assistant's multiline `instructions` setting, not 
 prompt code. The `uk_law_firm` template supplies the Demo & Co behavior; the renderer adds
 identity, configured business data, knowledge, and only the mechanics enabled by settings.
 Set `readback` to `off`, `email`, or `critical`. The law-firm template uses `email`.
+Email read-backs spell addresses as separate letters and spoken words such as “dot” and
+“at,” rather than punctuation symbols; common domains are spoken as words.
 
 For Twilio calls, the caller number is read from the start message's `From` custom parameter.
 Local/evaluation WebRTC calls may set `CALLER_ID_OVERRIDE`; it is test-only and must not be
