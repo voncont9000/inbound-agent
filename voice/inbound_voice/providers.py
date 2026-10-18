@@ -84,10 +84,15 @@ def resolve_providers(env: Mapping[str, str]) -> VoiceProviders:
     )
 
 
-def create_stt(providers: VoiceProviders, env: Mapping[str, str]):
+def create_stt(
+    providers: VoiceProviders,
+    env: Mapping[str, str],
+    sample_rate: int | None = None,
+):
     if providers.stt == "assemblyai":
         return AssemblyAISTTService(
             api_key=env["ASSEMBLYAI_API_KEY"],
+            sample_rate=sample_rate,
             settings=AssemblyAISTTService.Settings(
                 model="universal-3-6-pro",
                 keyterms_prompt=KEYTERMS,
@@ -96,6 +101,7 @@ def create_stt(providers: VoiceProviders, env: Mapping[str, str]):
     if providers.stt == "soniox":
         return SonioxSTTService(
             api_key=env["SONIOX_API_KEY"],
+            sample_rate=sample_rate,
             settings=SonioxSTTService.Settings(
                 model="stt-rt-v5",
                 language_hints=[Language.EN],
@@ -105,6 +111,7 @@ def create_stt(providers: VoiceProviders, env: Mapping[str, str]):
     if providers.stt == "deepgram":
         return DeepgramSTTService(
             api_key=env["DEEPGRAM_API_KEY"],
+            sample_rate=sample_rate,
             settings=DeepgramSTTService.Settings(
                 model="nova-3",
                 language="en-GB",
@@ -118,11 +125,13 @@ def create_tts(
     providers: VoiceProviders,
     env: Mapping[str, str],
     aiohttp_session: aiohttp.ClientSession,
+    sample_rate: int | None = None,
 ):
     if providers.tts == "speechify":
         return SpeechifyHttpTTSService(
             api_key=env["SPEECHIFY_API_KEY"],
             aiohttp_session=aiohttp_session,
+            sample_rate=sample_rate,
             settings=SpeechifyHttpTTSService.Settings(
                 model="simba-3.2",
                 voice=providers.tts_voice or "beatrice_32",
@@ -133,6 +142,7 @@ def create_tts(
             return ElevenLabsHttpTTSService(
                 api_key=env["ELEVENLABS_API_KEY"],
                 aiohttp_session=aiohttp_session,
+                sample_rate=sample_rate,
                 settings=ElevenLabsHttpTTSService.Settings(
                     model=providers.elevenlabs_model,
                     voice=providers.tts_voice,
@@ -140,6 +150,7 @@ def create_tts(
             )
         return ElevenLabsTTSService(
             api_key=env["ELEVENLABS_API_KEY"],
+            sample_rate=sample_rate,
             settings=ElevenLabsTTSService.Settings(
                 model=providers.elevenlabs_model,
                 voice=providers.tts_voice,
@@ -148,6 +159,7 @@ def create_tts(
     if providers.tts == "deepgram":
         return DeepgramTTSService(
             api_key=env["DEEPGRAM_API_KEY"],
+            sample_rate=sample_rate,
             settings=DeepgramTTSService.Settings(
                 voice=providers.tts_voice or "aura-2-pandora-en",
             ),
