@@ -6,10 +6,13 @@ import json
 import math
 import os
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as datetime_time
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from inbound_core.phone import normalise_phone
 from pydantic import BaseModel, ValidationError
 
 from inbound_voice.config import (
@@ -23,7 +26,12 @@ from inbound_voice.metrics import calculate_cost, load_price_table
 VOICE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = VOICE_ROOT / "config" / "assistants" / "demo_firm.yaml"
 DEFAULT_EXTRACTION_MODEL = "gemini-3.8-flash"
-EMPTY_CALLBACK_REQUEST = {"requested": False, "reason": None, "preferred_time": None}
+EMPTY_CALLBACK_REQUEST = {
+    "requested": False,
+    "reason": None,
+    "preferred_time": None,
+    "preferred_time_iso": None,
+}
 EMPTY_COMPLAINT = {"made": False, "summary": None}
 
 
@@ -33,6 +41,7 @@ async def extract_intake(
     config: AssistantConfig,
     client: Any,
     model: str,
+    call_started_at: datetime | None = None,
 ) -> dict[str, Any]:
     if client is None or not model.strip():
         return {
@@ -40,13 +49,14 @@ async def extract_intake(
             "service": live_intake.get("service"),
             "model": model,
             "fields": {},
+            "summary": None,
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
             "unanswered_questions": [],
             "usage": {"input_tokens": 0, "output_tokens": 0},
         }
     try:
-        prompt = _extraction_prompt(transcript_rows, live_intake, config)
+        prompt = _extraction_prompt(transcript_rows, live_intake, config, call_started_at)
         schema = _extraction_schema(config)
         response = await client.aio.models.generate_content(
             model=model,
@@ -88,6 +98,7 @@ async def extract_intake(
             "status": "completed",
             "service": service_name,
             "model": model,
+            "summary": _summary(parsed.get("summary")),
             "fields": fields,
             "callback_requested": _callback_request(parsed.get("callback_requested")),
             "complaint": _complaint(parsed.get("complaint")),
@@ -99,6 +110,7 @@ async def extract_intake(
             "status": "failed",
             "service": live_intake.get("service"),
             "model": model,
+            "summary": None,
             "fields": {},
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
@@ -244,20 +256,21 @@ def build_intake_artifacts(
         ),
         None,
     )
-    if caller_id and phone_field:
+    caller_number = normalise_phone(caller_id, strict=False)
+    if caller_number and phone_field:
         extracted_phone = extracted_fields.get(phone_field)
         if extracted_phone and extracted_phone.get("value"):
-            caller_digits = re.sub(r"\D", "", caller_id)
+            caller_digits = re.sub(r"\D", "", caller_number)
             stated_digits = re.sub(r"\D", "", str(extracted_phone["value"]))
             if stated_digits != caller_digits:
                 extracted_fields[phone_field] = {
                     **extracted_phone,
-                    "alternatives": [caller_id],
+                    "alternatives": [caller_number],
                     "caller_id_alternative": True,
                 }
         else:
             extracted_fields[phone_field] = {
-                "value": caller_id,
+                "value": caller_number,
                 "confidence": 1.0,
                 "evidence": "Caller ID",
                 "confirmed_by_caller": False,
@@ -266,6 +279,7 @@ def build_intake_artifacts(
     post_call = {
         "service": service_name,
         "model": result.get("model", ""),
+        "summary": _summary(result.get("summary")),
         "fields": extracted_fields,
         "callback_requested": _callback_request(result.get("callback_requested")),
         "complaint": _complaint(result.get("complaint")),
@@ -300,6 +314,8 @@ def build_post_call_tasks(
     merged: dict[str, Any],
     config: AssistantConfig,
     existing_tasks: list[dict[str, Any]] | None = None,
+    *,
+    call_ended_at: datetime | None = None,
 ) -> list[dict[str, Any]]:
     tasks = existing_tasks or []
     generated = []
@@ -344,6 +360,11 @@ def build_post_call_tasks(
                 "type": "callback",
                 "reason": callback["reason"] or "Caller requested a callback.",
                 "preferred_time": callback["preferred_time"],
+                "due_at": _callback_due_at(
+                    callback.get("preferred_time_iso"),
+                    config,
+                    call_ended_at=call_ended_at,
+                ),
                 "source": "post_call",
             }
         )
@@ -366,12 +387,110 @@ def _callback_request(value: Any) -> dict[str, Any]:
         "requested": bool(value.get("requested", False)),
         "reason": value.get("reason"),
         "preferred_time": value.get("preferred_time"),
+        "preferred_time_iso": value.get("preferred_time_iso"),
     }
 
 
 def _complaint(value: Any) -> dict[str, Any]:
     value = value if isinstance(value, dict) else {}
     return {"made": bool(value.get("made", False)), "summary": value.get("summary")}
+
+
+def _summary(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    summary = " ".join(value.split())
+    return summary or None
+
+
+def _parse_aware_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None and parsed.utcoffset() is not None else None
+
+
+def _office_schedule(
+    config: AssistantConfig,
+) -> tuple[ZoneInfo, set[int], datetime_time, datetime_time] | None:
+    office_hours = config.office_hours
+    if not office_hours.days:
+        return None
+    try:
+        timezone = ZoneInfo(office_hours.timezone or "Europe/London")
+    except ZoneInfoNotFoundError:
+        timezone = ZoneInfo("Europe/London")
+    try:
+        opens = datetime_time.fromisoformat(office_hours.opens).replace(tzinfo=None)
+        closes = datetime_time.fromisoformat(office_hours.closes).replace(tzinfo=None)
+    except ValueError:
+        return None
+    day_names = {
+        name.casefold(): index
+        for index, name in enumerate(
+            ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+        )
+    }
+    day_names.update({name[:3].casefold(): index for name, index in day_names.copy().items()})
+    days = {
+        day_names[day.strip().casefold()]
+        for day in office_hours.days
+        if day.strip().casefold() in day_names
+    }
+    if not days or opens >= closes:
+        return None
+    return timezone, days, opens, closes
+
+
+def _is_during_office_hours(
+    value: datetime,
+    schedule: tuple[ZoneInfo, set[int], datetime_time, datetime_time],
+) -> bool:
+    timezone, days, opens, closes = schedule
+    local = value.astimezone(timezone)
+    local_time = local.timetz().replace(tzinfo=None)
+    return local.weekday() in days and opens <= local_time < closes
+
+
+def _next_office_opening(
+    after: datetime,
+    schedule: tuple[ZoneInfo, set[int], datetime_time, datetime_time],
+) -> datetime | None:
+    timezone, days, opens, _ = schedule
+    local_after = after.astimezone(timezone)
+    for offset in range(8):
+        opening_date = local_after.date() + timedelta(days=offset)
+        if opening_date.weekday() not in days:
+            continue
+        opening = datetime.combine(opening_date, opens, tzinfo=timezone)
+        if opening > local_after:
+            return opening
+    return None
+
+
+def _callback_due_at(
+    preferred_time_iso: Any,
+    config: AssistantConfig,
+    *,
+    call_ended_at: datetime | None,
+) -> str | None:
+    call_end = call_ended_at or datetime.now(UTC)
+    if call_end.tzinfo is None or call_end.utcoffset() is None:
+        call_end = call_end.replace(tzinfo=UTC)
+    preferred = _parse_aware_datetime(preferred_time_iso)
+    schedule = _office_schedule(config)
+    if preferred is not None and call_end <= preferred <= call_end + timedelta(days=14):
+        if schedule is None or _is_during_office_hours(preferred, schedule):
+            return preferred.isoformat()
+        opening = _next_office_opening(preferred, schedule)
+        return opening.isoformat() if opening is not None else None
+    if schedule is None:
+        return None
+    opening = _next_office_opening(call_end, schedule)
+    return opening.isoformat() if opening is not None else None
 
 
 def _unanswered_questions(value: Any) -> list[dict[str, str]]:
@@ -424,8 +543,18 @@ async def reextract_run(
         from google import genai
 
         client = genai.Client(api_key=api_key)
+    call_times = _read_call_times(directory / "call_times.json")
+    call_started_at = _parse_aware_datetime(call_times.get("started_at"))
+    call_ended_at = _parse_aware_datetime(call_times.get("ended_at"))
     try:
-        result = await extract_intake(transcript_rows, live_intake, config, client, model)
+        result = await extract_intake(
+            transcript_rows,
+            live_intake,
+            config,
+            client,
+            model,
+            call_started_at=call_started_at,
+        )
     finally:
         if client is not None:
             await client.aio.aclose()
@@ -443,7 +572,13 @@ async def reextract_run(
     tasks.extend(
         {"created_at": datetime.now(UTC).isoformat(), **task}
         for task in [
-            *build_post_call_tasks(post_call, merged, config, tasks),
+            *build_post_call_tasks(
+                post_call,
+                merged,
+                config,
+                tasks,
+                call_ended_at=call_ended_at,
+            ),
             *build_knowledge_gap_tasks(result.get("unanswered_questions", [])),
         ]
     )
@@ -475,6 +610,14 @@ async def reextract_run(
         "estimated_cost": estimated_cost,
         "needs_review": merged["needs_review"],
     }
+
+
+def _read_call_times(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -531,10 +674,17 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
                     "requested": {"type": "boolean"},
                     "reason": {"anyOf": [{"type": "string"}, {"type": "null"}]},
                     "preferred_time": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "preferred_time_iso": {"anyOf": [{"type": "string"}, {"type": "null"}]},
                 },
-                "required": ["requested", "reason", "preferred_time"],
+                "required": [
+                    "requested",
+                    "reason",
+                    "preferred_time",
+                    "preferred_time_iso",
+                ],
                 "additionalProperties": False,
             },
+            "summary": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "complaint": {
                 "type": "object",
                 "properties": {
@@ -560,6 +710,7 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
         "required": [
             "service",
             "fields",
+            "summary",
             "callback_requested",
             "complaint",
             "unanswered_questions",
@@ -572,7 +723,15 @@ def _extraction_prompt(
     transcript_rows: list[dict[str, Any]],
     live_intake: dict[str, Any],
     config: AssistantConfig,
+    call_started_at: datetime | None = None,
 ) -> str:
+    schedule = _office_schedule(config)
+    timezone = schedule[0] if schedule is not None else ZoneInfo("Europe/London")
+    started_at = call_started_at or datetime.now(UTC)
+    if started_at.tzinfo is None or started_at.utcoffset() is None:
+        started_at = started_at.replace(tzinfo=UTC)
+    local_started_at = started_at.astimezone(timezone)
+    office_hours = config.office_hours
     transcript = "\n".join(
         f"{index}. {row.get('role', 'unknown')}: {row.get('text', '')}"
         for index, row in enumerate(transcript_rows, start=1)
@@ -595,12 +754,19 @@ def _extraction_prompt(
         "Giving a name, phone number or email is not agreement to a callback. "
         "callback_requested is true only if the caller asks for a callback or answers yes to an "
         "offer of one. "
-        "An assistant offer without caller agreement is false."
+        "An assistant offer without caller agreement is false. Keep preferred_time as the "
+        "caller's original wording. Resolve a clear preferred time into preferred_time_iso as "
+        "ISO 8601 with a UTC offset in the office-hours timezone; use null if it is unclear."
     )
     return f"""Extract intake facts and requested post-call actions from this call.
 Use only facts stated by the caller. Return null for facts not stated. Dates must be ISO
-YYYY-MM-DD using today's date ({date.today().isoformat()}) to resolve relative dates.
+YYYY-MM-DD using the call's local date
+({local_started_at.date().isoformat()}) to resolve relative dates.
 Evidence must be an exact quote from the caller's transcript.
+Call start: {local_started_at.isoformat()} ({timezone.key}).
+Office hours: {", ".join(office_hours.days)} {office_hours.opens}-{office_hours.closes}
+({office_hours.timezone}).
+Return summary as one or two neutral sentences describing the enquiry, with no advice.
 For list fields such as key_dates, return a list of strings such as "2026-08-10: dismissed".
 When the caller spells a value, preserve that spelling. For caller_name, when an email
 local part clearly matches the caller's name, use its spelling (for example,

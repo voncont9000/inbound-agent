@@ -739,6 +739,8 @@ export interface components {
             post_call_intake?: {
                 [key: string]: unknown;
             } | null;
+            /** Summary */
+            summary?: string | null;
             /** Tasks */
             tasks: {
                 [key: string]: unknown;
@@ -954,6 +956,8 @@ export interface components {
              * @enum {string}
              */
             channel: "phone" | "web" | "gmail" | "whatsapp";
+            /** Contact Name */
+            contact_name?: string | null;
             /** End Reason */
             end_reason: string | null;
             /** Ended At */
@@ -977,7 +981,10 @@ export interface components {
             metrics: {
                 [key: string]: unknown;
             };
-            /** Needs Review */
+            /**
+             * Needs Review
+             * @default false
+             */
             needs_review: boolean;
             /** Person Id */
             person_id: string | null;
@@ -1048,6 +1055,8 @@ export interface components {
              * @enum {string}
              */
             channel: "phone" | "web" | "gmail" | "whatsapp";
+            /** Contact Name */
+            contact_name?: string | null;
             /** End Reason */
             end_reason: string | null;
             /** Ended At */
@@ -1059,6 +1068,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Needs Review
+             * @default false
+             */
+            needs_review: boolean;
             /** Person Id */
             person_id: string | null;
             /**
@@ -1421,6 +1435,8 @@ export interface components {
         };
         /** MeResponse */
         MeResponse: {
+            /** Memberships */
+            memberships: components["schemas"]["TenantResponse"][];
             tenant: components["schemas"]["TenantResponse"];
             user: components["schemas"]["UserResponse"];
         };
@@ -1519,6 +1535,8 @@ export interface components {
         };
         /** TaskSummary */
         TaskSummary: {
+            /** Conversation Id */
+            conversation_id?: string | null;
             /** Due At */
             due_at: string | null;
             /**
@@ -1532,6 +1550,8 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+            /** Person Id */
+            person_id?: string | null;
             /**
              * Source
              * @enum {string}
@@ -2767,6 +2787,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: string | null;
+                kind?: string | null;
+                assistant_id?: string | null;
                 conversation_id?: string | null;
                 cursor?: string | null;
                 limit?: number;

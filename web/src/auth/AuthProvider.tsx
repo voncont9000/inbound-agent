@@ -19,20 +19,11 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function storedMemberships(): Membership[] {
-  try {
-    return JSON.parse(localStorage.getItem("inbound.memberships") ?? "[]") as Membership[];
-  } catch {
-    return [];
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [memberships, setMemberships] = useState<Membership[]>(storedMemberships);
   const [selectedTenant, setSelectedTenantState] = useState(
-    () => localStorage.getItem("inbound.tenant") ?? storedMemberships()[0]?.id ?? "",
+    () => localStorage.getItem("inbound.tenant") ?? "",
   );
   const me = useQuery({
     queryKey: ["me"],
@@ -46,10 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   async function saveAuth(response: Schemas["AuthResponse"]) {
-    const safeMemberships = response.tenants.map(({ id, name, role }) => ({ id, name, role }));
-    setMemberships(safeMemberships);
-    localStorage.setItem("inbound.memberships", JSON.stringify(safeMemberships));
-    if (safeMemberships[0]) setSelectedTenant(safeMemberships[0].id);
+    const membership = response.tenants[0];
+    if (membership) setSelectedTenant(membership.id);
     await queryClient.invalidateQueries({ queryKey: ["me"] });
   }
   async function login(email: string, password: string) {
@@ -69,7 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("inbound.memberships");
       localStorage.removeItem("inbound.tenant");
       localStorage.removeItem("inbound.mock.session");
-      setMemberships([]);
       await queryClient.clear();
       navigate("/login", { replace: true });
     }
@@ -78,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: me.data?.user,
     tenant: me.data?.tenant,
     error: me.error,
-    memberships,
+    memberships: me.data?.memberships ?? [],
     selectedTenant,
     setSelectedTenant,
     loading: me.isLoading,

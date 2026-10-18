@@ -68,14 +68,14 @@ async def _create_session(session: AsyncSession, user_id) -> str:
     return token
 
 
-async def _tenant_responses(session: AsyncSession, email: str):
+async def _tenant_responses(session: AsyncSession, email: str, user_id):
     memberships = await session.execute(
         text(
             "SELECT user_id, tenant_id, role "
             "FROM lookup_user_memberships(CAST(:email AS citext)) "
-            "ORDER BY tenant_id"
+            "WHERE user_id = :user_id ORDER BY tenant_id"
         ),
-        {"email": email},
+        {"email": email, "user_id": user_id},
     )
     rows = memberships.all()
     tenants_result = await session.execute(
@@ -155,7 +155,7 @@ async def login(
     if not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = await _create_session(session, user.id)
-    tenants = await _tenant_responses(session, user.email)
+    tenants = await _tenant_responses(session, user.email, user.id)
     await session.commit()
     _set_session_cookie(response, token)
     return AuthResponse(
@@ -189,6 +189,7 @@ async def logout(
 async def me(ctx: TenantContext = _current_tenant_dependency) -> MeResponse:
     async with session_factory() as session:
         tenant = await session.get(Tenant, ctx.tenant_id)
+        memberships = await _tenant_responses(session, ctx.user.email, ctx.user.id)
     return MeResponse(
         user={
             "id": ctx.user.id,
@@ -196,4 +197,5 @@ async def me(ctx: TenantContext = _current_tenant_dependency) -> MeResponse:
             "display_name": ctx.user.display_name,
         },
         tenant={"id": ctx.tenant_id, "name": tenant.name, "role": ctx.role.value},
+        memberships=memberships,
     )

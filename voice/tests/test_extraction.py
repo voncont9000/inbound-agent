@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 from inbound_voice.config import load_assistant_config
@@ -45,7 +45,9 @@ def _response(fields, unanswered_questions=None):
                     "requested": True,
                     "reason": "Discuss my case",
                     "preferred_time": "tomorrow morning",
+                    "preferred_time_iso": "2026-02-03T10:00:00+00:00",
                 },
+                "summary": "The caller asked about an employment dismissal.",
                 "complaint": {"made": True, "summary": "Delay returning a call"},
                 "unanswered_questions": unanswered_questions or [],
             }
@@ -92,6 +94,7 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
     )
 
     assert result["status"] == "completed"
+    assert result["summary"] == "The caller asked about an employment dismissal."
     assert result["fields"]["caller_name"]["value"] == "  Alex Smith "
     assert result["fields"]["email"] == {
         "value": "not-an-email",
@@ -105,6 +108,7 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
         "requested": True,
         "reason": "Discuss my case",
         "preferred_time": "tomorrow morning",
+        "preferred_time_iso": "2026-02-03T10:00:00+00:00",
     }
     assert result["complaint"] == {"made": True, "summary": "Delay returning a call"}
     assert result["unanswered_questions"] == [
@@ -138,6 +142,10 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
         "Giving a name, phone number or email is not agreement to a callback. "
         "callback_requested is true only if the caller asks for a callback or answers yes to an "
         "offer of one. An assistant offer without caller agreement is false."
+        in client.models.arguments["contents"]
+    )
+    assert (
+        "Resolve a clear preferred time into preferred_time_iso"
         in client.models.arguments["contents"]
     )
     assert '"2026-08-10: dismissed"' in client.models.arguments["contents"]
@@ -182,14 +190,14 @@ def test_caller_id_populates_phone_with_provenance() -> None:
     )
 
     assert post_call["fields"]["phone"] == {
-        "value": "07700900456",
+        "value": "+447700900456",
         "confidence": 1.0,
         "evidence": "Caller ID",
         "confirmed_by_caller": False,
         "source": "caller_id",
     }
     assert merged["fields"]["phone"]["status"] == "caller_id"
-    assert merged["fields"]["phone"]["value"] == "07700900456"
+    assert merged["fields"]["phone"]["value"] == "+447700900456"
     assert merged["fields"]["phone"]["confidence"] == 1.0
 
 
@@ -219,10 +227,10 @@ def test_stated_phone_overrides_caller_id_and_keeps_alternative() -> None:
     )
 
     assert post_call["fields"]["phone"]["value"] == "07700111222"
-    assert post_call["fields"]["phone"]["alternatives"] == ["07700900456"]
+    assert post_call["fields"]["phone"]["alternatives"] == ["+447700900456"]
     assert merged["fields"]["phone"]["value"] == "07700111222"
-    assert merged["fields"]["phone"]["alternatives"] == ["07700900456"]
-    assert merged["fields"]["phone"]["sources"]["caller_id"]["value"] == "07700900456"
+    assert merged["fields"]["phone"]["alternatives"] == ["+447700900456"]
+    assert merged["fields"]["phone"]["sources"]["caller_id"]["value"] == "+447700900456"
 
 
 def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, monkeypatch) -> None:
@@ -256,7 +264,7 @@ def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, mon
         encoding="utf-8",
     )
 
-    async def fake_extract_intake(transcript_rows, live_intake, config, client, model):
+    async def fake_extract_intake(transcript_rows, live_intake, config, client, model, **_kwargs):
         assert transcript_rows[0]["text"] == "I was dismissed."
         assert live_intake["service"] == "employment"
         assert client is None
@@ -404,6 +412,7 @@ def test_post_call_only_confirmed_field_gets_confirmed_status() -> None:
 
 def test_post_call_tasks_use_merged_deadlines_and_sources() -> None:
     config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    call_ended_at = datetime(2026, 2, 2, 12, tzinfo=UTC)
     deadline_date = (date.today() - timedelta(days=70)).isoformat()
     post_call = {
         "callback_requested": {"requested": True, "reason": "Discuss options"},
@@ -414,7 +423,7 @@ def test_post_call_tasks_use_merged_deadlines_and_sources() -> None:
         "fields": {"termination_date": {"value": deadline_date}},
     }
 
-    tasks = build_post_call_tasks(post_call, merged, config)
+    tasks = build_post_call_tasks(post_call, merged, config, call_ended_at=call_ended_at)
 
     assert [task["type"] for task in tasks] == ["urgent", "callback", "complaint"]
     assert all(task["source"] == "post_call" for task in tasks)
@@ -424,15 +433,54 @@ def test_post_call_tasks_use_merged_deadlines_and_sources() -> None:
         merged,
         config,
         [{"type": "urgent", "rule": 1, "value": deadline_date, "source": "live"}],
+        call_ended_at=call_ended_at,
     ) == [
         {
             "type": "callback",
             "reason": "Discuss options",
             "preferred_time": None,
+            "due_at": "2026-02-03T09:00:00+00:00",
             "source": "post_call",
         },
         {"type": "complaint", "summary": "No response", "source": "post_call"},
     ]
+
+
+def test_callback_due_at_respects_preference_hours_and_fourteen_day_window() -> None:
+    config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    ended_at = datetime(2026, 2, 2, 12, tzinfo=UTC)
+    merged = {"service": "employment", "fields": {}}
+
+    def due(preferred_time_iso: str | None, *, office_hours=True):
+        assistant = config
+        if not office_hours:
+            assistant = config.model_copy(
+                update={"office_hours": config.office_hours.model_copy(update={"days": []})}
+            )
+        tasks = build_post_call_tasks(
+            {
+                "callback_requested": {
+                    "requested": True,
+                    "reason": "Call me",
+                    "preferred_time": "tomorrow morning",
+                    "preferred_time_iso": preferred_time_iso,
+                }
+            },
+            merged,
+            assistant,
+            call_ended_at=ended_at,
+        )
+        return next(task for task in tasks if task["type"] == "callback")
+
+    assert due("2026-02-02T15:00:00+00:00")["due_at"] == "2026-02-02T15:00:00+00:00"
+    assert due("2026-02-02T11:00:00+00:00")["due_at"] == "2026-02-03T09:00:00+00:00"
+    assert due("2026-02-02T18:00:00+00:00")["due_at"] == "2026-02-03T09:00:00+00:00"
+    assert due("not-a-date")["due_at"] == "2026-02-03T09:00:00+00:00"
+    assert due("2026-03-01T10:00:00+00:00")["due_at"] == "2026-02-03T09:00:00+00:00"
+    assert due("2026-02-02T15:00:00+00:00", office_hours=False)["due_at"] == (
+        "2026-02-02T15:00:00+00:00"
+    )
+    assert due("invalid", office_hours=False)["due_at"] is None
 
 
 def test_key_dates_is_a_list_of_strings() -> None:

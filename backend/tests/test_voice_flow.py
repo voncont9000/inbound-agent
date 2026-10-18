@@ -14,6 +14,7 @@ from inbound_api.models import (
     Job,
     KnowledgeGap,
     Message,
+    Person,
     Task,
 )
 from inbound_api.services import job_handlers as _job_handlers  # noqa: F401
@@ -81,6 +82,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
         "external_call_id": "voice-flow-call",
         "ended_at": "2026-03-01T12:05:00Z",
         "end_reason": "caller_finished",
+        "summary": "The caller requested a return call about a service enquiry.",
         "transcript": [
             {
                 "role": "caller",
@@ -104,7 +106,12 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
             "needs_review": ["email"],
         },
         "tasks": [
-            {"type": "callback", "source": "live", "description": "Return the call"},
+            {
+                "type": "callback",
+                "source": "live",
+                "description": "Return the call",
+                "due_at": "2026-03-02T10:00:00Z",
+            },
             {"type": "task", "source": "post_call", "description": "Check the details"},
             {"type": "end_call", "source": "goodbye_detected"},
             {
@@ -130,12 +137,19 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert report_response.status_code == 202, report_response.text
     async with tenant_session(UUID(account["tenant_id"])) as session:
         conversation = await session.get(Conversation, UUID(conversation_id))
-        task_kinds = list(
-            await session.scalars(
-                select(Task.kind).where(Task.conversation_id == UUID(conversation_id))
-            )
+        person = Person(tenant_id=UUID(account["tenant_id"]), display_name="Caller Example")
+        session.add(person)
+        await session.flush()
+        conversation.person_id = person.id
+        persisted_tasks = list(
+            await session.scalars(select(Task).where(Task.conversation_id == UUID(conversation_id)))
         )
     assert conversation is not None
+    assistant_id = str(conversation.assistant_id)
+    assert conversation.summary == "The caller requested a return call about a service enquiry."
+    callback_task = next(task for task in persisted_tasks if task.kind == "callback")
+    assert callback_task.due_at.isoformat() == "2026-03-02T10:00:00+00:00"
+    task_kinds = [task.kind for task in persisted_tasks]
     assert conversation.metrics == {
         "from_number": "+447700900456",
         "duration_seconds": 300,
@@ -144,6 +158,18 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     first_detail_response = await client.get(f"/conversations/{conversation_id}")
     assert first_detail_response.status_code == 200, first_detail_response.text
     first_detail = first_detail_response.json()
+    assert first_detail["needs_review"] is True
+    assert first_detail["summary"] == "The caller requested a return call about a service enquiry."
+    list_item = next(
+        item
+        for item in (await client.get("/conversations?has_review=true")).json()["items"]
+        if item["id"] == conversation_id
+    )
+    assert list_item["needs_review"] is True
+    assert list_item["contact_name"] == "Caller Example"
+    contact = await client.get(f"/contacts/{person.id}")
+    assert contact.status_code == 200, contact.text
+    assert contact.json()["conversations"][0]["needs_review"] is True
     first_counts = (
         len(first_detail["messages"]),
         len(first_detail["intakes"]),
@@ -187,6 +213,11 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert conversation_id in {item["id"] for item in review_filter.json()["items"]}
     assert len((await client.get("/tasks?status=open")).json()["items"]) == 2
     assert len((await client.get("/knowledge-gaps?status=open")).json()["items"]) == 1
+    assert len((await client.get("/tasks?kind=callback")).json()["items"]) == 1
+    assert len((await client.get(f"/tasks?assistant_id={assistant_id}")).json()["items"]) == 2
+    assert (
+        len((await client.get(f"/knowledge-gaps?assistant_id={assistant_id}")).json()["items"]) == 1
+    )
 
     reviewed = await client.post(
         f"/conversations/{conversation_id}/reviews",

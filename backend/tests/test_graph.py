@@ -24,8 +24,12 @@ from inbound_api.models import (
     Fact,
     Identity,
     IdentityMergeLog,
+    Intake,
+    IntakeVersion,
     Person,
     Task,
+    TaskSource,
+    TaskStatus,
 )
 
 
@@ -355,13 +359,44 @@ async def test_context_card_and_rls_tenant_isolation(graph_env):
     )
     try:
         async with tenant_session(graph_env["tenant_id"]) as session:
+            conversation = await session.get(Conversation, conversation_id)
+            conversation.summary = None
+            session.add(
+                Intake(
+                    tenant_id=graph_env["tenant_id"],
+                    conversation_id=conversation_id,
+                    version=IntakeVersion.MERGED,
+                    data={
+                        "service": "account support",
+                        "fields": {
+                            "customer_name": {"value": "Jordan Example", "confidence": 0.9},
+                            "private_hint": {"value": "hidden", "confidence": 0.2},
+                        },
+                    },
+                )
+            )
+            for kind in ("end_call", "knowledge_gap"):
+                session.add(
+                    Task(
+                        tenant_id=graph_env["tenant_id"],
+                        person_id=person_id,
+                        conversation_id=conversation_id,
+                        kind=kind,
+                        status=TaskStatus.OPEN,
+                        payload={},
+                        source=TaskSource.LIVE,
+                    )
+                )
+        async with tenant_session(graph_env["tenant_id"]) as session:
             card = await build_context_card(session, person_id)
             assert "Jordan Example" in card
             assert "phone: +447700900126" in card
-            assert "Discussed account support" in card
+            assert "account support; customer_name: Jordan Example" in card
             assert "Call back: today" in card
             assert "customer_name: Jordan Example" in card
             assert "private_hint" not in card
+            assert "end_call" not in card
+            assert "knowledge_gap" not in card
             assert len(card) <= 3200
             assert await build_context_card(session, foreign_person_id) == ""
         async with tenant_session(foreign_tenant_id) as session:

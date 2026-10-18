@@ -55,6 +55,12 @@ def build_call_report(
         external_call_id=external_call_id,
         ended_at=ended,
         end_reason=end_reason,
+        summary=(
+            post_call_intake.get("summary")
+            if isinstance(post_call_intake, dict)
+            and isinstance(post_call_intake.get("summary"), str)
+            else None
+        ),
         transcript=turns,
         live_intake=live_intake,
         post_call_intake=post_call_intake,

@@ -2,6 +2,7 @@ import calendar
 from datetime import date, timedelta
 from typing import Annotated, Literal
 
+from inbound_core.phone import normalise_phone
 from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, create_model
 
 from inbound_voice.config import FieldSpec, ServiceConfig
@@ -11,11 +12,18 @@ def _strip(value: str) -> str:
     return value.strip()
 
 
+def _normalise_phone(value: str) -> str:
+    normalized = normalise_phone(value, strict=False)
+    if normalized is None:
+        raise ValueError("Invalid phone number")
+    return normalized
+
+
 def _annotation_for(field: FieldSpec):
     if field.type == "email":
         return EmailStr
     if field.type == "phone":
-        return Annotated[str, AfterValidator(_strip)]
+        return Annotated[str, AfterValidator(_normalise_phone)]
     if field.type == "date":
         return date
     if field.type == "boolean":

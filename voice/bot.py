@@ -6,6 +6,7 @@ import re
 import time
 import uuid
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -478,7 +479,10 @@ async def run_bot(
         )
     providers = resolve_providers(os.environ)
     run_id = str(uuid.uuid4())
-    sink = LocalFilesCallSink(ROOT / "runs", run_id)
+    call_started_at = (
+        prepared.call_start.started_at if prepared.call_start is not None else datetime.now(UTC)
+    )
+    sink = LocalFilesCallSink(ROOT / "runs", run_id, started_at=call_started_at)
     assistant = prepared.assistant
     external_call_id = (
         prepared.call_start.external_call_id
@@ -594,12 +598,16 @@ async def run_bot(
         finally:
             goodbye_hangup.close()
             idle_hangup.close()
+            call_ended_at = datetime.now(UTC)
+            sink.save_call_times(call_started_at, call_ended_at)
             await finalize_call_intake(
                 sink,
                 assistant,
                 metrics_observer,
                 os.environ,
                 caller_id=caller_id,
+                call_started_at=call_started_at,
+                call_ended_at=call_ended_at,
             )
             metrics_observer.persist()
             if prepared.api is not None and prepared.call_start is not None:
@@ -613,6 +621,7 @@ async def run_bot(
                     report = build_call_report(
                         sink.directory,
                         external_call_id,
+                        call_ended_at,
                     )
                     await prepared.api.post_report(
                         conversation_id,
@@ -629,6 +638,9 @@ async def finalize_call_intake(
     metrics_observer: CallMetricsObserver,
     env: Mapping[str, str],
     caller_id: str | None = None,
+    *,
+    call_started_at: datetime | None = None,
+    call_ended_at: datetime | None = None,
 ) -> dict[str, Any]:
     model = env.get("EXTRACTION_MODEL", DEFAULT_EXTRACTION_MODEL).strip()
     key = env.get("GOOGLE_API_KEY", "").strip()
@@ -655,7 +667,14 @@ async def finalize_call_intake(
 
             client = genai.Client(api_key=key)
         result = await asyncio.wait_for(
-            extract_intake(transcript_rows, live, assistant, client, model),
+            extract_intake(
+                transcript_rows,
+                live,
+                assistant,
+                client,
+                model,
+                call_started_at=call_started_at,
+            ),
             timeout=EXTRACTION_TIMEOUT_SECONDS,
         )
     except TimeoutError:
@@ -691,7 +710,13 @@ async def finalize_call_intake(
     gaps = {"unanswered_questions": result.get("unanswered_questions", [])}
     sink.save_knowledge_gaps(gaps)
     for task in [
-        *build_post_call_tasks(post_call, merged, assistant, existing_tasks),
+        *build_post_call_tasks(
+            post_call,
+            merged,
+            assistant,
+            existing_tasks,
+            call_ended_at=call_ended_at,
+        ),
         *build_knowledge_gap_tasks(gaps["unanswered_questions"]),
     ]:
         task_details = {key: value for key, value in task.items() if key != "type"}

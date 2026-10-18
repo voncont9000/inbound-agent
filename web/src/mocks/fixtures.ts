@@ -235,9 +235,13 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
     { version: "merged", data: { service: tenantIndex === 0 ? "boiler_repair" : "employment", fields: { caller_name: mergedCallerName, phone: { value: caller.phone, status: "agreed", confidence: 0.93, needs_review: false, confirmed_by_caller: false, sources: { live: { value: caller.phone }, post_call: { value: caller.phone, confidence: 0.93 } } }, ...(tenantIndex === 0 ? { issue: { value: "no_heating", status: "conflict", confidence: 0.61, needs_review: false, confirmed_by_caller: false, sources: { live: { value: "no_heating" }, post_call: { value: "no_hot_water", confidence: 0.61 } }, alternative: "no_hot_water" } } : {}) }, needs_review: review ? [rawName] : [] } },
   ];
   const task: Schemas["TaskSummary"] = { id: `60000000-0000-4000-8000-${String(tenantIndex * 10 + index + 1).padStart(12, "0")}`, kind: ["callback", "urgent", "quote", "knowledge_gap"][index % 4], status: index % 3 === 0 ? "done" : "open", due_at: date(index + 3), source: index % 2 === 0 ? "live" : "post_call", payload: { reason: "Follow up with the caller", summary: "Confirm next steps" } };
+  task.conversation_id = id;
+  task.person_id = person;
   return {
     id, assistant_id: ids.assistants[tenantIndex], person_id: person, channel,
     external_ref: channel === "phone" || channel === "whatsapp" ? caller.phone : caller.email,
+    contact_name: caller.name,
+    needs_review: review,
     status: (["completed", "completed", "active", "failed", "completed", "completed"] as const)[index],
     started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary,
     end_reason: index === 3 ? "connection_lost" : "caller_hangup",
@@ -246,7 +250,7 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
       { id: `${id}-m2`, role: "assistant", text: "Of course. Can I take your name and a callback number?", ts: date(index + 1), meta: {} },
       { id: `${id}-m3`, role: "caller", text: `${callerName}, and the best number is ${caller.phone}.`, ts: date(index + 1), meta: {} },
     ],
-    intakes, needs_review: review, tasks: [task],
+    intakes, tasks: [task],
     metrics: { call_duration_seconds: 185 + index * 10, providers: { stt: "mock-stt", tts: "mock-tts" }, turn_latency_summary: { p50_seconds: 0.42, p95_seconds: 0.81, max_seconds: 1.02 }, turn_end_latency_summary: { p50_seconds: 0.19, p95_seconds: 0.31, max_seconds: 0.44 }, usage: { stt_seconds: 180, tts_characters: 490 } },
     estimated_cost: { currency: "GBP", components: { stt: 0.01, tts: 0.02, llm_input: 0.01, llm_output: 0.02, twilio: 0.04, extraction: 0.005 }, total: 0.105, unknown_components: [] },
   };

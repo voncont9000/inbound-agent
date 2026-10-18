@@ -17,12 +17,15 @@ from inbound_api.graph import (
 )
 from inbound_api.graph.normalize import normalize_phone
 from inbound_api.models import (
+    Assistant,
     Commitment,
     CommitmentStatus,
     Conversation,
     Fact,
     FactStatus,
     Identity,
+    Intake,
+    IntakeVersion,
     MembershipRole,
     Person,
     Task,
@@ -42,6 +45,7 @@ from inbound_api.schemas import (
     IdentityResponse,
     TaskSummary,
 )
+from inbound_api.services.review import merged_needs_review
 
 router = APIRouter(tags=["contacts"])
 _staff = Depends(require_role(MembershipRole.STAFF))
@@ -79,7 +83,11 @@ def _contact_summary(person: Person) -> ContactSummary:
     )
 
 
-def _conversation_summary(conversation: Conversation) -> ConversationSummary:
+def _conversation_summary(
+    conversation: Conversation,
+    contact_name: str | None = None,
+    needs_review: bool = False,
+) -> ConversationSummary:
     return ConversationSummary(
         id=conversation.id,
         assistant_id=conversation.assistant_id,
@@ -91,6 +99,8 @@ def _conversation_summary(conversation: Conversation) -> ConversationSummary:
         ended_at=conversation.ended_at,
         summary=conversation.summary,
         end_reason=conversation.end_reason,
+        needs_review=needs_review,
+        contact_name=contact_name,
     )
 
 
@@ -102,6 +112,8 @@ def _task_summary(task: Task) -> TaskSummary:
         due_at=task.due_at,
         payload=task.payload,
         source=task.source.value,
+        conversation_id=task.conversation_id,
+        person_id=task.person_id,
     )
 
 
@@ -198,6 +210,24 @@ async def get_contact(
                 .limit(20)
             )
         ).all()
+        review_states: dict[UUID, bool] = {}
+        if conversations:
+            review_rows = await session.execute(
+                select(Intake.conversation_id, Intake.data, Assistant.config)
+                .join(Conversation, Conversation.id == Intake.conversation_id)
+                .join(Assistant, Assistant.id == Conversation.assistant_id)
+                .where(
+                    Intake.conversation_id.in_([conversation.id for conversation in conversations]),
+                    Intake.version == IntakeVersion.MERGED,
+                )
+            )
+            review_states = {
+                conversation_id: merged_needs_review(
+                    data,
+                    config.get("review_confidence_threshold", 0.7),
+                )
+                for conversation_id, data, config in review_rows.all()
+            }
         tasks = (
             await session.scalars(
                 select(Task)
@@ -242,7 +272,14 @@ async def get_contact(
                 )
                 for fact in facts
             ],
-            conversations=[_conversation_summary(conversation) for conversation in conversations],
+            conversations=[
+                _conversation_summary(
+                    conversation,
+                    person.display_name,
+                    review_states.get(conversation.id, False),
+                )
+                for conversation in conversations
+            ],
             open_tasks=[_task_summary(task) for task in tasks],
             open_commitments=[
                 CommitmentResponse(

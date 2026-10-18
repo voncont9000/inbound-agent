@@ -31,6 +31,8 @@ function toConversationSummary(detail: Schemas["ConversationDetailResponse"]): S
     started_at: detail.started_at,
     ended_at: detail.ended_at,
     end_reason: detail.end_reason,
+    needs_review: detail.needs_review,
+    contact_name: detail.contact_name,
   };
 }
 
@@ -105,7 +107,7 @@ export const handlers = [
   }),
   http.get<never, never, ApiResponse<Schemas["MeResponse"]>>("*/api/me", ({ request }) => {
     if (!mockDb.loggedIn) return HttpResponse.json<ApiErrorResponse>({ detail: "Not authenticated" }, { status: 401 });
-    return HttpResponse.json<Schemas["MeResponse"]>({ user: mockDb.user, tenant: mockDb.memberships.find(({ id }) => id === selectedTenantId(request)) ?? mockDb.memberships[0] });
+    return HttpResponse.json<Schemas["MeResponse"]>({ user: mockDb.user, tenant: mockDb.memberships.find(({ id }) => id === selectedTenantId(request)) ?? mockDb.memberships[0], memberships: mockDb.memberships });
   }),
   http.get<never, never, Schemas["AssistantListResponse"]>("*/api/assistants", ({ request }) => HttpResponse.json<Schemas["AssistantListResponse"]>({ items: selectedTenant(request).assistants })),
   http.post<never, Schemas["AssistantCreate"], ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistants", async ({ request }) => {
@@ -303,7 +305,20 @@ export const handlers = [
     tenant.contacts.push(split);
     return HttpResponse.json<Schemas["ContactSplitResponse"]>({ person_id: source.id, split_person_id: splitId });
   }),
-  http.get<never, never, Schemas["TaskListResponse"]>("*/api/tasks", ({ request }) => HttpResponse.json<Schemas["TaskListResponse"]>({ items: selectedTenant(request).tasks })),
+  http.get<never, never, Schemas["TaskListResponse"]>("*/api/tasks", ({ request }) => {
+    const tenant = selectedTenant(request);
+    const url = new URL(request.url);
+    const status = url.searchParams.get("status");
+    const kind = url.searchParams.get("kind");
+    const assistantId = url.searchParams.get("assistant_id");
+    return HttpResponse.json<Schemas["TaskListResponse"]>({
+      items: tenant.tasks.filter((task) =>
+        (!status || task.status === status)
+        && (!kind || task.kind === kind)
+        && (!assistantId || tenant.conversations.find((conversation) => conversation.id === task.conversation_id)?.assistant_id === assistantId),
+      ),
+    });
+  }),
   http.patch<{ id: string }, Schemas["TaskUpdate"], ApiResponse<Schemas["TaskSummary"]>>("*/api/tasks/:id", async ({ request, params }) => {
     const { status } = await requestJson<Schemas["TaskUpdate"]>(request);
     const task = selectedTenant(request).tasks.find(({ id }) => id === params.id);
@@ -311,7 +326,18 @@ export const handlers = [
     task.status = status;
     return HttpResponse.json<Schemas["TaskSummary"]>(task);
   }),
-  http.get<never, never, Schemas["KnowledgeGapsResponse"]>("*/api/knowledge-gaps", ({ request }) => HttpResponse.json<Schemas["KnowledgeGapsResponse"]>({ items: selectedTenant(request).gaps })),
+  http.get<never, never, Schemas["KnowledgeGapsResponse"]>("*/api/knowledge-gaps", ({ request }) => {
+    const tenant = selectedTenant(request);
+    const url = new URL(request.url);
+    const status = url.searchParams.get("status");
+    const assistantId = url.searchParams.get("assistant_id");
+    return HttpResponse.json<Schemas["KnowledgeGapsResponse"]>({
+      items: tenant.gaps.filter((gap) =>
+        (!status || gap.status === status)
+        && (!assistantId || gap.assistant_id === assistantId),
+      ),
+    });
+  }),
   http.patch<{ id: string }, Schemas["KnowledgeGapUpdate"], ApiResponse<Schemas["KnowledgeGapResponse"]>>("*/api/knowledge-gaps/:id", async ({ request, params }) => {
     const { status } = await requestJson<Schemas["KnowledgeGapUpdate"]>(request);
     const gap = selectedTenant(request).gaps.find(({ id }) => id === params.id);

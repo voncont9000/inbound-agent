@@ -113,6 +113,17 @@ are idempotent by channel and external call ID; report retries do not duplicate 
 records or graph jobs after completion. `conversation_tenant` is the narrow security-
 definer lookup used to route reports into the correct tenant session.
 
+Call reports may include a neutral summary and callback due time. The callback's free-text
+preference is retained while an aware `preferred_time_iso` is resolved against configured
+office hours; out-of-hours preferences move to the next opening. The inbox list returns
+`contact_name` and `needs_review` with each conversation, and task/knowledge-gap lists accept
+server-side status and assistant filters. `/me` returns only the current user's memberships.
+Human reviews are represented in the merged intake (`status: "human"` and `sources.human`),
+not by a separate review API field.
+
+The crawler validates and pins every resolved connection address, including redirect and
+robots requests, preventing a second DNS resolution from rebinding a checked public URL.
+
 Settings include `APP_ENV`, `VOICE_SERVICE_TOKEN`, `SESSION_TTL_HOURS`,
 `SESSION_COOKIE_SECURE`, `ALLOWED_ORIGINS`, `KNOWLEDGE_ALLOW_PRIVATE_URLS`, `UPLOAD_DIR`,
 `MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,

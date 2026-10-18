@@ -44,11 +44,6 @@ export function InboxPage() {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
   });
-  const reviewed = useQuery({
-    queryKey: ["conversations-needing-review", channel, status],
-    queryFn: () => unwrap(api.GET("/conversations", { params: { query: { ...conversationQuery(filters), has_review: true } } })),
-  });
-  const needsReviewIds = useMemo(() => new Set(reviewed.data?.items.map(({ id }) => id) ?? []), [reviewed.data]);
   const rows = conversations.data?.pages.flatMap(({ items }) => items) ?? [];
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -70,10 +65,10 @@ export function InboxPage() {
       {rows.map((conversation) => <tr key={conversation.id}>
         <td><Badge>{channelIcon[conversation.channel]} {conversation.channel}</Badge></td>
         <td>{conversation.status}</td>
-        <td>{conversation.person_id ? <Link to={`/contacts/${conversation.person_id}`}>{conversation.external_ref}</Link> : conversation.external_ref}</td>
+        <td>{conversation.person_id ? <Link to={`/contacts/${conversation.person_id}`}>{conversation.contact_name ?? conversation.external_ref}</Link> : conversation.contact_name ?? conversation.external_ref}</td>
         <td><Link to={`/conversations/${conversation.id}`}>{conversation.summary ?? "No summary"}</Link></td>
         <td>{formatDate(conversation.started_at)}</td>
-        <td>{needsReviewIds.has(conversation.id) ? <Badge tone="warning">Needs review</Badge> : "—"}</td>
+        <td>{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</td>
       </tr>)}
     </tbody></table></div>}
     {conversations.hasNextPage && <button type="button" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button>}
@@ -335,17 +330,25 @@ export function ContactPage() {
 
 export function TasksPage() {
   const queryClient = useQueryClient();
-  const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => unwrap(api.GET("/tasks")) });
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
+  const [assistantFilter, setAssistantFilter] = useState("all");
+  const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
+  const tasks = useQuery({
+    queryKey: ["tasks", statusFilter, kindFilter, assistantFilter],
+    queryFn: () => unwrap(api.GET("/tasks", { params: { query: {
+      status: statusFilter === "all" ? undefined : statusFilter,
+      kind: kindFilter === "all" ? undefined : kindFilter,
+      assistant_id: assistantFilter === "all" ? undefined : assistantFilter,
+    } } })),
+  });
   const update = useMutation({
     mutationFn: (input: { id: string; status: Schemas["TaskUpdate"]["status"] }) => unwrap(api.PATCH("/tasks/{task_id}", { params: { path: { task_id: input.id } }, body: { status: input.status } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["tasks"] }); },
   });
-  const kinds = [...new Set(tasks.data?.items.map(({ kind }) => kind) ?? [])];
-  const rows = (tasks.data?.items ?? []).filter((task) => (statusFilter === "all" || task.status === statusFilter) && (kindFilter === "all" || task.kind === kindFilter));
+  const rows = tasks.data?.items ?? [];
   return <main className="page" id="main-content"><p className="eyebrow">Follow-up</p><h1>Tasks</h1>
-    <div className="toolbar"><div className="field"><label htmlFor="task-status-filter">Status</label><select id="task-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{["open", "done", "dismissed"].map((status) => <option key={status}>{status}</option>)}</select></div><div className="field"><label htmlFor="task-kind-filter">Kind</label><select id="task-kind-filter" value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}><option value="all">All kinds</option>{kinds.map((kind) => <option key={kind}>{kind}</option>)}</select></div></div>
+    <div className="toolbar"><div className="field"><label htmlFor="task-status-filter">Status</label><select id="task-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{["open", "done", "dismissed"].map((status) => <option key={status}>{status}</option>)}</select></div><div className="field"><label htmlFor="task-kind-filter">Kind</label><input id="task-kind-filter" value={kindFilter === "all" ? "" : kindFilter} onChange={(event) => setKindFilter(event.target.value || "all")} placeholder="All kinds" /></div><div className="field"><label htmlFor="task-assistant-filter">Assistant</label><select id="task-assistant-filter" value={assistantFilter} onChange={(event) => setAssistantFilter(event.target.value)}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div></div>
     {tasks.isLoading && <LoadingState />}{tasks.error && <ErrorState message="Tasks could not be loaded." />}{!rows.length && !tasks.isLoading && !tasks.error && <EmptyState>No tasks match these filters.</EmptyState>}
     <div className="table-wrap"><table><thead><tr><th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id}><td>{task.kind}</td><td>{task.status}</td><td>{task.source}</td><td>{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
   </main>;
@@ -353,15 +356,23 @@ export function TasksPage() {
 
 export function KnowledgeGapsPage() {
   const queryClient = useQueryClient();
-  const gaps = useQuery({ queryKey: ["knowledge-gaps"], queryFn: () => unwrap(api.GET("/knowledge-gaps")) });
   const [filter, setFilter] = useState("open");
+  const [assistantFilter, setAssistantFilter] = useState("all");
+  const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
+  const gaps = useQuery({
+    queryKey: ["knowledge-gaps", filter, assistantFilter],
+    queryFn: () => unwrap(api.GET("/knowledge-gaps", { params: { query: {
+      status: filter === "all" ? undefined : filter,
+      assistant_id: assistantFilter === "all" ? undefined : assistantFilter,
+    } } })),
+  });
   const update = useMutation({
     mutationFn: (input: { id: string; status: Schemas["KnowledgeGapUpdate"]["status"] }) => unwrap(api.PATCH("/knowledge-gaps/{gap_id}", { params: { path: { gap_id: input.id } }, body: { status: input.status } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["knowledge-gaps"] }); },
   });
-  const rows = (gaps.data?.items ?? []).filter(({ status }) => filter === "all" || status === filter);
+  const rows = gaps.data?.items ?? [];
   return <main className="page" id="main-content"><p className="eyebrow">Knowledge</p><h1>Knowledge gaps</h1>
-    <div className="field"><label htmlFor="gap-filter">Status</label><select id="gap-filter" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All statuses</option><option value="open">Open</option><option value="answered">Answered</option><option value="dismissed">Dismissed</option></select></div>
+    <div className="toolbar"><div className="field"><label htmlFor="gap-filter">Status</label><select id="gap-filter" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All statuses</option><option value="open">Open</option><option value="answered">Answered</option><option value="dismissed">Dismissed</option></select></div><div className="field"><label htmlFor="gap-assistant-filter">Assistant</label><select id="gap-assistant-filter" value={assistantFilter} onChange={(event) => setAssistantFilter(event.target.value)}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div></div>
     {gaps.isLoading && <LoadingState />}{gaps.error && <ErrorState message="Knowledge gaps could not be loaded." />}{!rows.length && !gaps.isLoading && !gaps.error && <EmptyState>No knowledge gaps match this status.</EmptyState>}
     <div className="card-grid">{rows.map((gap) => <article className="panel stack" key={gap.id}><div className="button-row"><Badge tone={gap.status === "open" ? "warning" : "success"}>{gap.status}</Badge><span className="muted">{formatDate(gap.created_at)}</span></div><h2>{gap.question}</h2><p>{gap.evidence}</p><Link to={`/conversations/${gap.conversation_id}`}>View conversation</Link><div className="button-row">{gap.status !== "answered" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "answered" })}>Mark answered</button>}{gap.status !== "dismissed" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "dismissed" })}>Dismiss</button>}{gap.status !== "open" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "open" })}>Reopen</button>}</div></article>)}</div>
   </main>;

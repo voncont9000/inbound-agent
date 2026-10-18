@@ -25,14 +25,23 @@ class CallSink(Protocol):
 
     def save_metrics(self, metrics: dict[str, Any]) -> None: ...
 
+    def save_call_times(self, started_at: datetime, ended_at: datetime | None) -> None: ...
+
 
 class LocalFilesCallSink:
-    def __init__(self, runs_dir: str | Path, call_id: str) -> None:
+    def __init__(
+        self,
+        runs_dir: str | Path,
+        call_id: str,
+        *,
+        started_at: datetime | None = None,
+    ) -> None:
         self.call_id = call_id
         self.directory = Path(runs_dir) / call_id
         self.directory.mkdir(parents=True, exist_ok=True)
         (self.directory / "transcript.jsonl").touch(exist_ok=True)
         (self.directory / "tool_calls.jsonl").touch(exist_ok=True)
+        self.save_call_times(started_at or datetime.now(UTC), None)
         self._write_json(
             "intake.json",
             {
@@ -97,6 +106,15 @@ class LocalFilesCallSink:
 
     def save_metrics(self, metrics: dict[str, Any]) -> None:
         self._write_json("metrics.json", metrics)
+
+    def save_call_times(self, started_at: datetime, ended_at: datetime | None) -> None:
+        self._write_json(
+            "call_times.json",
+            {
+                "started_at": started_at.isoformat(),
+                "ended_at": ended_at.isoformat() if ended_at is not None else None,
+            },
+        )
 
     def _write_json(self, filename: str, data: Any) -> None:
         (self.directory / filename).write_text(
