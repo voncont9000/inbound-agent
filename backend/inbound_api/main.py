@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from inbound_api.routers import (
     assistants,
     auth,
+    calendar,
     contacts,
     conversations,
     gmail,
@@ -25,6 +26,7 @@ for router in (
     internal_voice.router,
     webhooks.router,
     gmail.router,
+    calendar.router,
 ):
     app.include_router(router)
 

@@ -19,6 +19,7 @@ def test_production_accepts_configured_voice_service_token() -> None:
         whatsapp_verify_token="configured-verify-token",
         whatsapp_access_token="configured-access-token",
         gmail_mode="off",
+        calendar_mode="off",
     )
 
     assert settings.voice_service_token == "configured-service-token"

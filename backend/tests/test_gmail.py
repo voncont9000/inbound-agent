@@ -215,6 +215,7 @@ def test_production_allows_gmail_off_without_google_settings():
         whatsapp_verify_token="verify-token",
         whatsapp_access_token="access-token",
         gmail_mode="off",
+        calendar_mode="off",
     )
     assert settings.gmail_mode == "off"
 

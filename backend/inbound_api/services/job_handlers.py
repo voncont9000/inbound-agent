@@ -1,8 +1,17 @@
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import httpx
+from google.genai import types
+from inbound_core.booking import (
+    alternatives_for,
+    format_slot_text,
+    generate_slots,
+    parse_preference,
+    select_offered_slots,
+)
 from inbound_core.config import AssistantConfig
 from inbound_core.extraction import (
     build_intake_artifacts,
@@ -31,6 +40,7 @@ from inbound_api.services import files_cleanup as _files_cleanup  # noqa: F401
 from inbound_api.services import gmail_jobs as _gmail_jobs  # noqa: F401
 from inbound_api.services import knowledge_import as knowledge_import_service  # noqa: F401
 from inbound_api.services.assistant_context import load_assistant_route
+from inbound_api.services.booking import book_slot, booking_context, fetch_busy
 from inbound_api.services.conversation_results import persist_extracted_results
 from inbound_api.services.knowledge_import import make_genai_client
 from inbound_api.settings import get_settings
@@ -133,10 +143,12 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
                 "knowledge": config.knowledge.model_copy(update={"digest_content": route.digest})
             }
         )
+    booking_ctx = await booking_context(session, conversation.assistant_id, config)
     business_context = render_business_context(
         config,
         context_card=route.context_card,
         channel="whatsapp",
+        booking_enabled=booking_ctx is not None,
     )
     has_prior_assistant_reply = any(item.role == MessageRole.ASSISTANT for item in thread)
     disclosure_rule = (
@@ -148,10 +160,12 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
             "call greeting."
         )
     )
-    history = "\n".join(
-        f"{'Customer' if item.role == MessageRole.CALLER else 'Assistant'}: {item.text}"
-        for item in thread
-    )
+    history_labels = {
+        MessageRole.CALLER: "Customer",
+        MessageRole.SYSTEM: "Note",
+        MessageRole.ASSISTANT: "Assistant",
+    }
+    history = "\n".join(f"{history_labels[item.role]}: {item.text}" for item in thread)
     prompt = (
         f"{business_context}\n\n"
         "WHATSAPP MESSAGE RULES\n"
@@ -172,21 +186,198 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
         f"CONVERSATION\n{history}\n\nAssistant:"
     )
     client = make_genai_client(settings.google_api_key)
-    try:
-        response = await client.aio.models.generate_content(
-            model=settings.text_agent_model,
-            contents=prompt,
+    tool_calls: list[dict] = []
+    tool_timings: list[dict] = []
+    usage_totals = {"llm_input_tokens": 0, "llm_output_tokens": 0}
+
+    def add_usage(item) -> None:
+        usage_metadata = getattr(item, "usage_metadata", None)
+        usage_totals["llm_input_tokens"] += getattr(usage_metadata, "prompt_token_count", 0) or 0
+        usage_totals["llm_output_tokens"] += (
+            getattr(usage_metadata, "candidates_token_count", 0) or 0
         )
+
+    try:
+        if booking_ctx is None:
+            response = await client.aio.models.generate_content(
+                model=settings.text_agent_model,
+                contents=prompt,
+            )
+        else:
+            appointment_types = booking_ctx.booking.appointment_types
+            declarations = [
+                types.FunctionDeclaration(
+                    name="check_availability",
+                    description=(
+                        "Check the diary for free appointment slots. Offer only returned slots "
+                        "and ask the customer to choose one."
+                    ),
+                    parameters=types.Schema(
+                        type="OBJECT",
+                        properties={
+                            "appointment_type": types.Schema(
+                                type="STRING",
+                                enum=[item.key for item in appointment_types],
+                                description="\n".join(
+                                    f"{item.key}: {item.label} — {item.when_to_use}"
+                                    for item in appointment_types
+                                ),
+                            ),
+                            "preference_text": types.Schema(
+                                type="STRING",
+                                description="The customer's preferred day/time in their own words.",
+                            ),
+                        },
+                        required=["appointment_type", "preference_text"],
+                    ),
+                ),
+                types.FunctionDeclaration(
+                    name="book_appointment",
+                    description=(
+                        "Book a slot the customer chose. Confirm the chosen slot before booking."
+                    ),
+                    parameters=types.Schema(
+                        type="OBJECT",
+                        properties={
+                            "slot_id": types.Schema(type="STRING"),
+                            "name": types.Schema(type="STRING"),
+                            "email": types.Schema(type="STRING"),
+                        },
+                        required=["slot_id", "name"],
+                    ),
+                ),
+            ]
+            generation_config = types.GenerateContentConfig(
+                tools=[types.Tool(function_declarations=declarations)],
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            )
+            contents = [prompt]
+            offered = {}
+            response = await client.aio.models.generate_content(
+                model=settings.text_agent_model,
+                contents=contents,
+                config=generation_config,
+            )
+            add_usage(response)
+            for _ in range(3):
+                calls = getattr(response, "function_calls", None) or []
+                if not calls:
+                    break
+                function_responses = []
+                for call in calls:
+                    started = time.perf_counter()
+                    arguments = dict(call.args or {})
+                    if call.name == "check_availability":
+                        appointment_type = arguments["appointment_type"]
+                        now_for_booking = datetime.now(UTC)
+                        _, busy, provider_ms = await fetch_busy(booking_ctx, now_for_booking)
+                        preference = arguments.get("preference_text", "")
+                        windows = (
+                            parse_preference(
+                                preference,
+                                now_for_booking,
+                                booking_ctx.timezone,
+                                booking_ctx.booking.horizon_days,
+                            )
+                            if preference.strip()
+                            else None
+                        )
+                        slots = generate_slots(
+                            config, appointment_type, busy, now_for_booking, windows
+                        )
+                        matched = True
+                        if windows is not None and not slots:
+                            slots = alternatives_for(
+                                config,
+                                appointment_type,
+                                busy,
+                                now_for_booking,
+                                windows[0].start,
+                                booking_ctx.booking.max_slots_offered,
+                            )
+                            matched = False
+                        selected = select_offered_slots(
+                            slots, booking_ctx.booking.max_slots_offered
+                        )
+                        offered.update({item.slot_id: item for item in selected})
+                        result = {
+                            "ok": True,
+                            "appointment": next(
+                                item.label
+                                for item in appointment_types
+                                if item.key == appointment_type
+                            ),
+                            "slots": [
+                                {
+                                    "slot_id": item.slot_id,
+                                    "when": format_slot_text(item, booking_ctx.timezone),
+                                }
+                                for item in selected
+                            ],
+                            "matched_preference": matched,
+                        }
+                        tool_timings.append({"name": call.name, "provider_ms": provider_ms})
+                    elif call.name == "book_appointment":
+                        slot_id = arguments["slot_id"]
+                        if slot_id not in offered:
+                            result = {
+                                "ok": False,
+                                "error": "Offer a slot from check_availability first.",
+                            }
+                        else:
+                            booked = await book_slot(
+                                session,
+                                conversation.tenant_id,
+                                conversation,
+                                booking_ctx,
+                                slot_id=slot_id,
+                                name=arguments["name"],
+                                email=arguments.get("email"),
+                                phone=known_phone,
+                            )
+                            result = booked.model_dump(mode="json")
+                            for alternative in booked.alternatives:
+                                original = offered[slot_id]
+                                offered[alternative.slot_id] = original.model_copy(
+                                    update={
+                                        "start": alternative.start,
+                                        "end": alternative.end,
+                                    }
+                                )
+                    else:
+                        result = {"ok": False, "error": "Unknown booking action."}
+                    tool_calls.append({"name": call.name, "arguments": arguments, "result": result})
+                    tool_timings.append(
+                        {
+                            "name": call.name,
+                            "round_trip_ms": round((time.perf_counter() - started) * 1000),
+                        }
+                    )
+                    function_responses.append(
+                        types.Part.from_function_response(
+                            name=call.name,
+                            response=result,
+                        )
+                    )
+                contents.extend([response.candidates[0].content, *function_responses])
+                response = await client.aio.models.generate_content(
+                    model=settings.text_agent_model,
+                    contents=contents,
+                    config=generation_config,
+                )
+                add_usage(response)
     finally:
         await client.aio.aclose()
     reply = (response.text or "").strip()
     if not reply:
         raise RuntimeError("Text agent returned an empty reply")
-    usage_metadata = getattr(response, "usage_metadata", None)
-    usage = {
-        "llm_input_tokens": getattr(usage_metadata, "prompt_token_count", 0) or 0,
-        "llm_output_tokens": getattr(usage_metadata, "candidates_token_count", 0) or 0,
-    }
+    if booking_ctx is None:
+        usage_metadata = getattr(response, "usage_metadata", None)
+        usage_totals = {
+            "llm_input_tokens": getattr(usage_metadata, "prompt_token_count", 0) or 0,
+            "llm_output_tokens": getattr(usage_metadata, "candidates_token_count", 0) or 0,
+        }
+    usage = usage_totals
     model = settings.text_agent_model
     try:
         price_table = load_price_table(settings.price_table_path)
@@ -225,7 +416,13 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
             text=reply,
             ts=sent_at,
             external_id=external_id,
-            meta={"model": model, "usage": usage, "cost": cost},
+            meta={
+                "model": model,
+                "usage": usage,
+                "cost": cost,
+                "tool_calls": tool_calls,
+                "tool_timings": tool_timings,
+            },
         )
     )
     await enqueue(

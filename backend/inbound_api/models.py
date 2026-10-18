@@ -400,6 +400,7 @@ class Commitment(UUIDPrimaryKeyMixin, TenantMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("persons.id", ondelete="CASCADE"), nullable=False
     )
     what: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str | None] = mapped_column(Text)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[CommitmentStatus] = mapped_column(
         _enum(CommitmentStatus, "commitment_status"),
@@ -408,6 +409,43 @@ class Commitment(UUIDPrimaryKeyMixin, TenantMixin, Base):
     )
     source_message_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+
+
+class CalendarBooking(UUIDPrimaryKeyMixin, TenantMixin, Base):
+    __tablename__ = "calendar_bookings"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "slot_id"),
+        Index("ix_calendar_bookings_tenant_calendar_start", "tenant_id", "calendar_id", "start_at"),
+    )
+
+    assistant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assistants.id", ondelete="CASCADE"), nullable=False
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    person_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL")
+    )
+    calendar_id: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    event_id: Mapped[str] = mapped_column(Text, nullable=False)
+    event_link: Mapped[str | None] = mapped_column(Text)
+    appointment_type: Mapped[str] = mapped_column(Text, nullable=False)
+    slot_id: Mapped[str] = mapped_column(Text, nullable=False)
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attendee_name: Mapped[str] = mapped_column(Text, nullable=False)
+    attendee_email: Mapped[str | None] = mapped_column(Text)
+    attendee_phone: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=sql_text("'booked'"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
 

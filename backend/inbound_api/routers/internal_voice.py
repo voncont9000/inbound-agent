@@ -1,8 +1,15 @@
 import hmac
 import logging
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from inbound_core.booking import (
+    AvailabilityRequest,
+    AvailabilityResponse,
+    BookRequest,
+    BookResponse,
+)
 from inbound_core.call_report import RouteResponse
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from inbound_api import graph
 from inbound_api.db import session_factory, tenant_session
 from inbound_api.models import (
+    Assistant,
     Conversation,
     ConversationChannel,
     ConversationStatus,
@@ -21,6 +29,7 @@ from inbound_api.schemas import (
     ConversationCreatedResponse,
 )
 from inbound_api.services.assistant_context import load_assistant_route
+from inbound_api.services.booking import book_slot, booking_context, fetch_busy
 from inbound_api.services.conversation_results import persist_voice_report
 from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
@@ -211,3 +220,82 @@ async def report_call(conversation_id: UUID, payload: CallReportRequest) -> Call
             return CallReportAccepted(accepted=True)
         await persist_voice_report(session, tenant_id, conversation, payload)
     return CallReportAccepted(accepted=True)
+
+
+@router.post(
+    "/availability",
+    response_model=AvailabilityResponse,
+    dependencies=[Depends(require_voice_service_token)],
+)
+async def availability(payload: AvailabilityRequest) -> AvailabilityResponse:
+    try:
+        if payload.channel == "web":
+            if not payload.web_call_token:
+                raise HTTPException(status_code=401, detail="Invalid web call token")
+            route = await route_web_call(payload.web_call_token)
+        else:
+            if not payload.to_number:
+                raise HTTPException(status_code=404, detail="Unknown number")
+            route = await route_call(payload.to_number, None)
+    except HTTPException:
+        raise
+    async with tenant_session(route.tenant_id) as session:
+        context = await booking_context(session, route.assistant_id, route.config)
+        if context is None:
+            return AvailabilityResponse(available=False, reason="booking_disabled")
+        try:
+            window, busy, provider_ms = await fetch_busy(context, datetime.now(UTC))
+        except Exception:
+            LOGGER.warning("Calendar availability lookup failed", exc_info=True)
+            return AvailabilityResponse(available=False, reason="calendar_error")
+        return AvailabilityResponse(
+            available=True,
+            timezone=context.timezone,
+            window_start=window.start,
+            window_end=window.end,
+            busy=busy,
+            fetched_at=datetime.now(UTC),
+            provider_ms=provider_ms,
+        )
+
+
+@router.post(
+    "/book",
+    response_model=BookResponse,
+    dependencies=[Depends(require_voice_service_token)],
+)
+async def book(payload: BookRequest) -> BookResponse:
+    async with session_factory() as session:
+        tenant_id = await session.scalar(
+            text("SELECT conversation_tenant(:conversation_id)"),
+            {"conversation_id": payload.conversation_id},
+        )
+    if tenant_id is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    async with tenant_session(tenant_id) as session:
+        conversation = await session.scalar(
+            select(Conversation).where(Conversation.id == payload.conversation_id).with_for_update()
+        )
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        if conversation.external_ref != payload.external_call_id:
+            raise HTTPException(status_code=409, detail="External call ID does not match")
+        assistant = await session.get(Assistant, conversation.assistant_id)
+        if assistant is None:
+            return BookResponse(status="invalid", reason="booking_disabled")
+        from inbound_core.config import AssistantConfig
+
+        config = AssistantConfig.model_validate(assistant.config)
+        context = await booking_context(session, assistant.id, config)
+        if context is None:
+            return BookResponse(status="invalid", reason="booking_disabled")
+        return await book_slot(
+            session,
+            tenant_id,
+            conversation,
+            context,
+            slot_id=payload.slot_id,
+            name=payload.name,
+            email=payload.email,
+            phone=payload.phone,
+        )

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from inbound_api import graph
 from inbound_api.db import tenant_session
 from inbound_api.models import Assistant, KnowledgeDigest
+from inbound_api.services.booking import booking_available as is_booking_available
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +36,11 @@ async def load_assistant_route(
             .limit(1)
         )
         context_card = None
+        booking_available = False
+        try:
+            booking_available = await is_booking_available(session, assistant_id, config)
+        except Exception:
+            LOGGER.warning("Could not resolve calendar booking context", exc_info=True)
         if include_context_card:
             try:
                 async with session.begin_nested():
@@ -58,4 +64,5 @@ async def load_assistant_route(
         config=config,
         digest=digest,
         context_card=context_card,
+        booking_available=booking_available,
     )

@@ -110,6 +110,36 @@ class KnowledgeConfig(BaseModel):
     digest_content: str | None = Field(default=None, exclude=True)
 
 
+class AppointmentType(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(pattern=r"^[a-z0-9_]+$")
+    label: str
+    duration_minutes: int = Field(gt=0, le=480)
+    when_to_use: str
+    location_or_link: str | None = None
+
+
+class BookingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    calendar_id: str = "primary"
+    appointment_types: list[AppointmentType] = Field(min_length=1)
+    min_notice_hours: int = Field(default=2, ge=0)
+    horizon_days: int = Field(default=14, ge=1, le=60)
+    buffer_minutes: int = Field(default=0, ge=0)
+    max_slots_offered: int = Field(default=3, ge=1, le=5)
+    slot_step_minutes: int = Field(default=30, ge=5, le=240)
+    send_updates: Literal["all", "externalOnly", "none"] = "all"
+
+    @model_validator(mode="after")
+    def validate_unique_keys(self) -> BookingConfig:
+        keys = [item.key for item in self.appointment_types]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Appointment type keys must be unique.")
+        return self
+
+
 UrgencyRule = Annotated[
     KeywordUrgencyRule | DateDeadlineUrgencyRule,
     Field(discriminator="type"),
@@ -138,8 +168,11 @@ class AssistantConfig(BaseModel):
             "request_callback",
             "log_complaint",
             "end_call",
+            "check_availability",
+            "book_appointment",
         ]
     ]
+    booking: BookingConfig | None = None
     review_confidence_threshold: float = Field(default=0.7, ge=0, le=1)
 
 

@@ -45,3 +45,4 @@ class RouteResponse(BaseModel):
     config: AssistantConfig
     digest: str | None = None
     context_card: str | None = None
+    booking_available: bool = False
