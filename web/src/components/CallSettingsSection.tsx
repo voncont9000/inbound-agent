@@ -97,7 +97,7 @@ export function CallSettingsSection({ config, update, errors }: Props) {
       <div className="form-grid">
         {numberField("max_call_minutes", "Maximum call length (minutes)", call.max_call_minutes ?? null, 1, 240, "Leave blank for no time limit.")}
         {numberField("silence_timeout_seconds", "Silence timeout (seconds)", call.silence_timeout_seconds ?? null, 0.1, 60, "Leave blank to use the existing 8-second default.")}
-        <Field path="call_settings.speech_speed" label={`Speech speed (${call.speech_speed.toFixed(1)}×)`} help="Not supported for Speechify voices." error={errors["call_settings.speech_speed"]}>
+        <Field path="call_settings.speech_speed" label={`Speech speed (${call.speech_speed.toFixed(2)}×)`} help="Not supported for Speechify voices." error={errors["call_settings.speech_speed"]}>
           {(id, describedBy) => <input id={id} type="range" min="0.7" max="1.2" step="0.05" value={call.speech_speed} aria-invalid={Boolean(errors["call_settings.speech_speed"])} aria-describedby={describedBy} onChange={(event) => setCall("speech_speed", Number(event.target.value))} />}
         </Field>
         <Field path="call_settings.interruption_sensitivity" label="Interruption sensitivity" error={errors["call_settings.interruption_sensitivity"]} help={
