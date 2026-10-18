@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.db import session_factory, tenant_session
 from inbound_api.models import MembershipRole, User, UserSession
+from inbound_api.settings import get_settings
 
 
 @dataclass(frozen=True)
@@ -28,15 +29,37 @@ async def get_db_session():
 _DB_SESSION_DEPENDENCY = Depends(get_db_session)
 
 
-def _request_token(request: Request) -> str | None:
+def _request_token_and_source(request: Request) -> tuple[str | None, str | None]:
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.casefold() == "bearer" and token.strip():
-        return token.strip()
-    return request.cookies.get("inbound_session")
+        return token.strip(), "bearer"
+    cookie_token = request.cookies.get("inbound_session")
+    return cookie_token, "cookie" if cookie_token else None
+
+
+def _request_token(request: Request) -> str | None:
+    return _request_token_and_source(request)[0]
+
+
+def enforce_request_origin(request: Request, *, always: bool = False) -> None:
+    _, auth_source = _request_token_and_source(request)
+    if not always and auth_source != "cookie":
+        return
+    settings = get_settings()
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in settings.allowed_origins:
+        raise HTTPException(status_code=403, detail="Origin is not allowed")
+    if origin is None and request.headers.get("sec-fetch-site", "").casefold() in {
+        "cross-site",
+        "same-site",
+    }:
+        raise HTTPException(status_code=403, detail="Cross-site request is not allowed")
 
 
 async def current_user(request: Request, session: AsyncSession = _DB_SESSION_DEPENDENCY) -> User:
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        enforce_request_origin(request)
     token = _request_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")

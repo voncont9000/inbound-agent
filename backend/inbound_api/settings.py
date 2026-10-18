@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     )
     voice_service_token: str = DEFAULT_VOICE_SERVICE_TOKEN
     session_ttl_hours: int = 336
-    session_cookie_secure: bool = False
+    session_cookie_secure: bool = True
+    allowed_origins: list[str] = ["http://localhost:5173"]
     upload_dir: Path = BACKEND_ROOT / "var" / "uploads"
     max_upload_bytes: int = 20 * 1024 * 1024
     templates_dir: Path = Path(__file__).resolve().parents[2] / "voice" / "config" / "templates"
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
     knowledge_model: str = "gemini-3.8-flash"
     knowledge_max_pages: int = 50
     knowledge_request_delay: float = 0.5
+    knowledge_allow_private_urls: bool = False
     job_max_attempts: int = 3
     job_retry_base_seconds: float = 10
     job_lease_seconds: int = 900

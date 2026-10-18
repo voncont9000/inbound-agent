@@ -7,7 +7,8 @@ from inbound_api.models import Job, KnowledgeGap, Task
 from inbound_api.settings import get_settings
 
 
-async def test_tenant_id_routes_and_lists_are_isolated(tenant_pair) -> None:
+async def test_tenant_id_routes_and_lists_are_isolated(tenant_pair, monkeypatch) -> None:
+    monkeypatch.setattr(get_settings(), "knowledge_allow_private_urls", True)
     first = tenant_pair["first"]
     second = tenant_pair["second"]
     owner_client = first["client"]

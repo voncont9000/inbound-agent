@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 
 from inbound_api.db import session_factory, tenant_session
 from inbound_api.jobs import HANDLERS, PermanentJobError, enqueue, run_next_job
@@ -192,6 +192,82 @@ async def test_concurrent_workers_claim_a_job_only_once(tenant_pair) -> None:
         assert invocation_count == 1
         assert job.status.value == "succeeded"
         assert job.attempts == 1
+    finally:
+        release_handler.set()
+        if first_worker is not None and not first_worker.done():
+            await first_worker
+        HANDLERS.pop(kind, None)
+
+
+async def test_slow_handler_heartbeat_prevents_reclaim(tenant_pair, monkeypatch) -> None:
+    await _drain_claimable_jobs()
+    tenant_id = UUID(tenant_pair["first"]["tenant_id"])
+    monkeypatch.setattr(get_settings(), "job_lease_seconds", 1)
+    kind = f"test.platform.heartbeat.{uuid4().hex}"
+    handler_started = asyncio.Event()
+    release_handler = asyncio.Event()
+
+    async def handler(_session, _payload):
+        handler_started.set()
+        await release_handler.wait()
+        return {"alive": True}
+
+    HANDLERS[kind] = handler
+    first_worker = None
+    try:
+        job_id = await _enqueue_test_job(tenant_id, kind)
+        first_worker = asyncio.create_task(run_next_job())
+        await asyncio.wait_for(handler_started.wait(), timeout=5)
+        await asyncio.sleep(1.2)
+        assert await run_next_job() is False
+        release_handler.set()
+        assert await first_worker is True
+        job = await _get_job(tenant_id, job_id)
+        assert job.status.value == "succeeded"
+        assert job.attempts == 1
+    finally:
+        release_handler.set()
+        if first_worker is not None and not first_worker.done():
+            await first_worker
+        HANDLERS.pop(kind, None)
+
+
+async def test_stale_worker_rolls_back_when_lease_token_changes(tenant_pair) -> None:
+    await _drain_claimable_jobs()
+    tenant_id = UUID(tenant_pair["first"]["tenant_id"])
+    kind = f"test.platform.stale.{uuid4().hex}"
+    side_effect_kind = f"{kind}.side-effect"
+    handler_started = asyncio.Event()
+    release_handler = asyncio.Event()
+
+    async def handler(session, payload):
+        await enqueue(session, side_effect_kind, {"test_id": payload["test_id"]})
+        handler_started.set()
+        await release_handler.wait()
+        return {"stale": True}
+
+    HANDLERS[kind] = handler
+    first_worker = None
+    replacement_token = uuid4()
+    try:
+        job_id = await _enqueue_test_job(tenant_id, kind)
+        first_worker = asyncio.create_task(run_next_job())
+        await asyncio.wait_for(handler_started.wait(), timeout=5)
+        async with tenant_session(tenant_id) as session:
+            await session.execute(
+                text("UPDATE jobs SET lease_token = :token WHERE id = :id"),
+                {"token": replacement_token, "id": job_id},
+            )
+        release_handler.set()
+        assert await first_worker is True
+        job = await _get_job(tenant_id, job_id)
+        assert job.status.value == "running"
+        assert job.lease_token == replacement_token
+        async with tenant_session(tenant_id) as session:
+            side_effect_count = await session.scalar(
+                select(func.count()).select_from(Job).where(Job.kind == side_effect_kind)
+            )
+        assert side_effect_count == 0
     finally:
         release_handler.set()
         if first_worker is not None and not first_worker.done():

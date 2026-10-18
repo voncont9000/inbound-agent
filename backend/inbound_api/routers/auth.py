@@ -9,7 +9,12 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from inbound_api.auth import TenantContext, current_tenant, get_db_session
+from inbound_api.auth import (
+    TenantContext,
+    current_tenant,
+    enforce_request_origin,
+    get_db_session,
+)
 from inbound_api.db import session_factory, tenant_session
 from inbound_api.models import Tenant, User, UserSession
 from inbound_api.schemas import (
@@ -90,9 +95,11 @@ async def _tenant_responses(session: AsyncSession, email: str):
 @router.post("/auth/signup", response_model=AuthResponse, status_code=201)
 async def signup(
     payload: SignupRequest,
+    request: Request,
     response: Response,
     session: AsyncSession = _db_session_dependency,
 ) -> AuthResponse:
+    enforce_request_origin(request, always=True)
     existing = await session.scalar(select(User.id).where(User.email == str(payload.email)))
     if existing is not None:
         raise HTTPException(status_code=409, detail="Email already exists")
@@ -136,9 +143,11 @@ async def signup(
 @router.post("/auth/login", response_model=AuthResponse)
 async def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     session: AsyncSession = _db_session_dependency,
 ) -> AuthResponse:
+    enforce_request_origin(request, always=True)
     user = await session.scalar(select(User).where(User.email == str(payload.email)))
     if user is None:
         verify_password(payload.password, _DUMMY_PASSWORD_HASH)
@@ -162,6 +171,7 @@ async def logout(
     response: Response,
     session: AsyncSession = _db_session_dependency,
 ) -> LogoutResponse:
+    enforce_request_origin(request)
     token = _token_from_request(request)
     if token:
         token_hash = hashlib.sha256(token.encode()).hexdigest()

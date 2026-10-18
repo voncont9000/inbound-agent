@@ -50,6 +50,41 @@ async def test_unauthenticated_request_is_rejected(api_client: AsyncClient) -> N
     assert response.status_code == 401
 
 
+async def test_csrf_checks_cookie_writes_but_allows_bearer(tenant_pair) -> None:
+    client = tenant_pair["first"]["client"]
+    template = next(
+        item for item in (await client.get("/templates")).json() if item["name"] == "uk_law_firm"
+    )
+    payload = {"name": "CSRF assistant", "template": "uk_law_firm", "config": template["config"]}
+    bad_origin = await client.post(
+        "/assistants", json=payload, headers={"Origin": "https://attacker.example"}
+    )
+    assert bad_origin.status_code == 403
+    empty_bearer = await client.post(
+        "/assistants",
+        json=payload,
+        headers={
+            "Authorization": "Bearer ",
+            "Origin": "https://attacker.example",
+        },
+    )
+    assert empty_bearer.status_code == 403
+    allowed_origin = await client.post(
+        "/assistants", json=payload, headers={"Origin": "http://localhost:5173"}
+    )
+    assert allowed_origin.status_code == 201, allowed_origin.text
+    token = client.cookies["inbound_session"]
+    bearer = await client.post(
+        "/assistants",
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Origin": "https://attacker.example",
+        },
+    )
+    assert bearer.status_code == 201, bearer.text
+
+
 async def test_tenant_selection_and_staff_role_policy(tenant_pair, owner_database_url) -> None:
     first = tenant_pair["first"]
     second = tenant_pair["second"]
