@@ -7,6 +7,8 @@ export interface MockDatabase {
   user: typeof authUser;
   memberships: typeof memberships;
   jobs: Record<string, { tenantId: string; assistantId: string; polls: number; job: Schemas["JobResponse"] }>;
+  setupDraftRequests: Schemas["AssistantSetupDraftCreate"][];
+  setupCompletions: Schemas["AssistantSetupComplete"][];
   channels: Record<string, Schemas["ChannelConnectionResponse"][]>;
   postActionSecrets: Record<string, Schemas["WebhookSecretSummary"][]>;
 }
@@ -23,6 +25,8 @@ function createDb(): MockDatabase {
     user: { ...authUser },
     memberships: JSON.parse(JSON.stringify(memberships)) as typeof memberships,
     jobs: {},
+    setupDraftRequests: [],
+    setupCompletions: [],
     channels: {},
     postActionSecrets: {},
   };

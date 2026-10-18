@@ -8,6 +8,7 @@ describe("web route contracts", () => {
       "/signup",
       "/",
       "/assistants",
+      "/assistants/new",
       "/assistants/:id/settings",
       "/assistants/:id/settings/:tab",
       "/assistants/:id/knowledge",

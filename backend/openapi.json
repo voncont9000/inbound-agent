@@ -593,6 +593,71 @@
         "title": "AssistantResponse",
         "type": "object"
       },
+      "AssistantSetupComplete": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "$ref": "#/components/schemas/SetupDraft"
+          },
+          "business_name": {
+            "minLength": 1,
+            "title": "Business Name",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          }
+        },
+        "required": [
+          "name",
+          "business_name",
+          "template"
+        ],
+        "title": "AssistantSetupComplete",
+        "type": "object"
+      },
+      "AssistantSetupDraftCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "business_name": {
+            "minLength": 1,
+            "title": "Business Name",
+            "type": "string"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          },
+          "website_url": {
+            "title": "Website Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "business_name",
+          "website_url",
+          "template"
+        ],
+        "title": "AssistantSetupDraftCreate",
+        "type": "object"
+      },
       "AssistantUpdate": {
         "properties": {
           "config": {
@@ -3681,6 +3746,76 @@
         "title": "ServiceConfig",
         "type": "object"
       },
+      "SetupDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "company_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Info"
+          },
+          "faqs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/KnowledgeFAQ"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Faqs"
+          },
+          "office_hours": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfficeHours"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price_list": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PriceItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List"
+          },
+          "services": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ServiceConfig"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Services"
+          }
+        },
+        "title": "SetupDraft",
+        "type": "object"
+      },
       "SheetColumn": {
         "additionalProperties": false,
         "properties": {
@@ -4295,6 +4430,124 @@
           }
         },
         "summary": "Assistant Config Schema",
+        "tags": [
+          "assistants"
+        ]
+      }
+    },
+    "/assistant-setup/complete": {
+      "post": {
+        "operationId": "complete_setup_assistant_setup_complete_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantSetupComplete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Setup",
+        "tags": [
+          "assistants"
+        ]
+      }
+    },
+    "/assistant-setup/drafts": {
+      "post": {
+        "operationId": "create_setup_draft_assistant_setup_drafts_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantSetupDraftCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Setup Draft",
         "tags": [
           "assistants"
         ]
