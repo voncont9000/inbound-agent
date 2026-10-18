@@ -7,4 +7,5 @@ runs/
 knowledge/
 eval/audio/
 eval/results/
+spool/
 *.egg-info/

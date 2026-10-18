@@ -51,7 +51,43 @@ export interface paths {
         /** Update Assistant */
         put: operations["update_assistant_assistants__assistant_id__put"];
         post?: never;
+        /** Delete Assistant */
+        delete: operations["delete_assistant_assistants__assistant_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Channels */
+        get: operations["list_channels_assistants__assistant_id__channels_get"];
+        put?: never;
+        /** Create Channel */
+        post: operations["create_channel_assistants__assistant_id__channels_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/channels/{channel_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Channel */
+        delete: operations["delete_channel_assistants__assistant_id__channels__channel_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -729,6 +765,56 @@ export interface components {
             /** To Number */
             to_number: string;
         };
+        /** ChannelConnectionCreate */
+        ChannelConnectionCreate: {
+            /** External Id */
+            external_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "phone" | "gmail" | "whatsapp" | "web";
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            };
+        };
+        /** ChannelConnectionResponse */
+        ChannelConnectionResponse: {
+            /**
+             * Assistant Id
+             * Format: uuid
+             */
+            assistant_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** External Id */
+            external_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "phone" | "gmail" | "whatsapp" | "web";
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+        };
+        /** ChannelConnectionsResponse */
+        ChannelConnectionsResponse: {
+            /** Items */
+            items: components["schemas"]["ChannelConnectionResponse"][];
+        };
         /** CommitmentResponse */
         CommitmentResponse: {
             /** Due At */
@@ -1260,6 +1346,8 @@ export interface components {
         KnowledgeGapsResponse: {
             /** Items */
             items: components["schemas"]["KnowledgeGapResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** KnowledgeSource */
         KnowledgeSource: {
@@ -1267,16 +1355,6 @@ export interface components {
             file?: string | null;
             /** Url */
             url?: string | null;
-        };
-        /** KnowledgeSourceCreate */
-        KnowledgeSourceCreate: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "url";
-            /** Uri */
-            uri: string;
         };
         /** KnowledgeSourceResponse */
         KnowledgeSourceResponse: {
@@ -1426,6 +1504,8 @@ export interface components {
         TaskListResponse: {
             /** Items */
             items: components["schemas"]["TaskSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** TaskSummary */
         TaskSummary: {
@@ -1537,7 +1617,9 @@ export interface operations {
     assistant_config_schema_assistant_config_schema_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1554,12 +1636,23 @@ export interface operations {
                     };
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     list_assistants_assistants_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1574,12 +1667,23 @@ export interface operations {
                     "application/json": components["schemas"]["AssistantListResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     create_assistant_assistants_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1612,7 +1716,9 @@ export interface operations {
     get_assistant_assistants__assistant_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -1643,7 +1749,9 @@ export interface operations {
     update_assistant_assistants__assistant_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -1675,10 +1783,145 @@ export interface operations {
             };
         };
     };
+    delete_assistant_assistants__assistant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_channels_assistants__assistant_id__channels_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelConnectionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_channel_assistants__assistant_id__channels_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelConnectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_channel_assistants__assistant_id__channels__channel_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_digest_assistants__assistant_id__knowledge_digest_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -1709,7 +1952,9 @@ export interface operations {
     update_digest_assistants__assistant_id__knowledge_digest_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -1744,7 +1989,9 @@ export interface operations {
     import_knowledge_assistants__assistant_id__knowledge_import_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -1775,7 +2022,9 @@ export interface operations {
     list_sources_assistants__assistant_id__knowledge_sources_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -1806,7 +2055,9 @@ export interface operations {
     create_source_assistants__assistant_id__knowledge_sources_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -1814,7 +2065,15 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["KnowledgeSourceCreate"];
+                "application/json": {
+                    /**
+                     * Kind
+                     * @constant
+                     */
+                    kind: "url";
+                    /** Uri */
+                    uri: string;
+                };
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
@@ -1845,7 +2104,9 @@ export interface operations {
     list_assistant_versions_assistants__assistant_id__versions_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 assistant_id: string;
             };
@@ -2135,7 +2396,9 @@ export interface operations {
                 cursor?: string | null;
                 limit?: number;
             };
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2164,7 +2427,9 @@ export interface operations {
     get_conversation_conversations__conversation_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 conversation_id: string;
             };
@@ -2195,7 +2460,9 @@ export interface operations {
     create_review_conversations__conversation_id__reviews_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 conversation_id: string;
             };
@@ -2336,7 +2603,9 @@ export interface operations {
     get_job_jobs__job_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 job_id: string;
             };
@@ -2366,8 +2635,15 @@ export interface operations {
     };
     list_knowledge_gaps_knowledge_gaps_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                status?: string | null;
+                assistant_id?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2382,12 +2658,23 @@ export interface operations {
                     "application/json": components["schemas"]["KnowledgeGapsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     update_knowledge_gap_knowledge_gaps__gap_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 gap_id: string;
             };
@@ -2422,7 +2709,9 @@ export interface operations {
     me_me_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2437,12 +2726,28 @@ export interface operations {
                     "application/json": components["schemas"]["MeResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     list_tasks_tasks_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                status?: string | null;
+                conversation_id?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2457,12 +2762,23 @@ export interface operations {
                     "application/json": components["schemas"]["TaskListResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     update_task_tasks__task_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 task_id: string;
             };
@@ -2497,7 +2813,9 @@ export interface operations {
     list_templates_templates_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2510,6 +2828,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

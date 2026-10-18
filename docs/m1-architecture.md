@@ -1,6 +1,6 @@
 # M1 shared foundation
 
-M1 establishes service boundaries, shared contracts, and a tenant-isolated persistence layer. Most API route behavior is staged in follow-on agents; the context graph and contacts routes are implemented in this milestone.
+M1 establishes service boundaries, shared contracts, and a tenant-isolated persistence layer. Platform API behavior, the context graph, and the `/contacts*` routes are implemented.
 
 ## Services and layout
 
@@ -37,6 +37,71 @@ Migrations use `MIGRATION_DATABASE_URL`. The API and workers use `DATABASE_URL`,
 
 The Postgres-backed job queue is designed for worker claims using `FOR UPDATE SKIP LOCKED`.
 
+## Authentication and tenancy
+
+Signup and login create opaque sessions whose SHA-256 token hashes are stored in the
+global `user_sessions` table. Browser clients receive the token in the HttpOnly
+`inbound_session` cookie (`SameSite=Lax`, configurable `Secure`); non-browser clients may
+send the same token as `Authorization: Bearer`. Sessions expire after
+`SESSION_TTL_HOURS` (336 hours by default). Logout revokes the session.
+
+Tenant-scoped API requests select their active membership with `X-Tenant-Id`. The header
+must be a UUID and the user must be a member. Without it, the API selects the user's only
+membership; users with several memberships must provide it. Owners satisfy staff access,
+but staff do not satisfy owner access.
+
+| Access | Routes |
+|---|---|
+| Staff (owner or staff) | Reads, `/me`, `/templates`, `/assistant-config/schema`, conversations, reviews, tasks, knowledge gaps, and job status |
+| Owner | Assistant writes/deletes, channel connections, knowledge sources/import/digest edits |
+| Service token | `/internal/voice/*` |
+
+## Platform API
+
+The platform API provides assistant templates, creation, listing, detail, version history,
+updates, and deletion; channel connection listing/creation/deletion; knowledge source and
+digest management; conversation listing/detail/reviews; tasks; knowledge gaps; and job
+status. Deleting an assistant with conversations returns `409`. Tenant-scoped IDs that
+are invisible under RLS return `404`.
+
+Conversation, task, and knowledge-gap lists use descending `(created_at, id)` keyset
+pagination with URL-safe base64 cursors and limits from 1 to 200. Intake review flags
+match the merge policy: non-human fields need review when explicitly flagged or when a
+numeric confidence is below the assistant's configured threshold (default `0.7`). Human
+reviews retain previous values and record reviewer, timestamp, note, and provenance.
+
+## Jobs and worker
+
+Call reports and knowledge imports enqueue durable jobs inside their write transaction.
+The worker claims one job through the `claim_next_job` security-definer function using
+`FOR UPDATE SKIP LOCKED`; a lease expiry makes a crashed worker's job reclaimable.
+Transient failures retry with exponential backoff up to `JOB_MAX_ATTEMPTS`. Permanent
+errors, unimplemented handlers, and exhausted retries are marked failed.
+
+Run the worker with `uv run --directory backend python -m inbound_api.worker`.
+
+## Knowledge import
+
+The shared crawler, document readers, chunking, digest prompt, and manifest logic live in
+`core/inbound_core/knowledge.py`; voice retains its CLI-compatible wrapper. Tenant uploads
+are stored under `UPLOAD_DIR` (default `backend/var/uploads`) with relative paths in source
+manifests. Digest generation requires `GOOGLE_API_KEY`.
+
+## Internal voice API
+
+Phone numbers are normalized to E.164 before cross-tenant channel resolution. Call starts
+are idempotent by channel and external call ID; report retries do not duplicate stored
+records or graph jobs after completion. `conversation_tenant` is the narrow security-
+definer lookup used to route reports into the correct tenant session.
+
+Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `UPLOAD_DIR`,
+`MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
+`KNOWLEDGE_REQUEST_DELAY`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
+`JOB_LEASE_SECONDS`, and `WORKER_POLL_SECONDS`.
+
+Production migration owners for `SECURITY DEFINER` functions that read RLS-protected rows
+must have `BYPASSRLS` or be superusers; local development uses the Compose migrator role.
+
 ## Context graph
 
 The graph package implements a Postgres-native, tenant-isolated contact context store. It uses the existing `persons`, `identities`, `facts`, `commitments`, `edges`, and `identity_merge_log` tables; every tenant-scoped insert gets its tenant from `current_setting('app.tenant_id', true)` inside `tenant_session`, never from request or model output.
@@ -59,12 +124,28 @@ The contacts API provides tenant-scoped list/search with cursor pagination, cont
 
 ## Voice/API lifecycle
 
-1. **Route at ring:** voice calls `GET /internal/voice/route?to=...&from=...`; the API resolves the tenant and assistant by dialled channel number and returns config, digest, and context card.
-2. **Start:** voice posts `CallStart` to `POST /internal/voice/calls`; the API returns a conversation ID.
-3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`.
+1. **Route before greeting:** voice calls `GET /internal/voice/route?to=...&from=...`; the API resolves the tenant and assistant by dialled channel number and returns config, digest, and context card. Routing is a single bounded attempt; if it fails, voice uses local YAML while keeping API reporting enabled.
+2. **Start:** after pipeline setup, voice starts `POST /internal/voice/calls` asynchronously so call setup does not block the greeting.
+3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`. Transient failures are retried; an undelivered report is atomically spooled for later resend.
 4. **Graph ingest:** the report handler stores the conversation and enqueues `graph_ingest`; the worker calls the graph seam to ingest the conversation.
 
 All internal voice routes require `X-Service-Token`, checked against `VOICE_SERVICE_TOKEN`.
+
+## Voice integration (agent D)
+
+API mode is enabled by `API_BASE_URL` and `VOICE_SERVICE_TOKEN`; web calls additionally
+need `WEB_CALL_TO_NUMBER`. Route failure falls back to `ASSISTANT_CONFIG`, and report
+delivery failures are retained under `VOICE_SPOOL_DIR` for
+`python -m inbound_voice.api_client resend`. The local call artifacts remain available
+regardless of API mode.
+
+The shared `voice/bot.py` pipeline serves browser WebRTC and phone calls. The standalone
+`voice/phone_server.py` exposes Twilio's form webhook and WebSocket media stream, validates
+Twilio signatures when configured, and can run behind a proxy with `PUBLIC_BASE_URL`.
+Twilio audio is 8 kHz G.711 μ-law at the edge and 8 kHz PCM through the phone pipeline;
+the browser pipeline retains its existing sample rates. `voice/eval/twilio_sim.py` and
+`voice/eval/fake_api.py` support local integration and evaluation through
+`eval.run_matrix --transport twilio --fake-api`.
 
 ## Local run
 

@@ -9,25 +9,36 @@ import os
 import re
 import shutil
 import signal
+import socket
 import tempfile
 import time
 from collections.abc import Sequence
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import aiohttp
+import uvicorn
+from inbound_core.call_report import RouteResponse
 
 from bot import SMART_TURN_STOP_DEFAULT_SECS
 from eval.caller import run_call
+from eval.fake_api import create_fake_api
 from eval.score import render_summary, score_call
-from eval.synth_callers import AUDIO_DIR, synthesize_scenarios
+from eval.synth_callers import AUDIO_DIR, load_scenarios, synthesize_scenarios
+from eval.twilio_sim import run_twilio_call
+from inbound_voice.config import load_assistant_config
 from inbound_voice.providers import LLM_DEFAULT_MODELS, LLM_PROVIDERS, STT_PROVIDERS, TTS_PROVIDERS
 
 VOICE_ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = VOICE_ROOT / "runs"
 RESULTS_DIR = Path(__file__).with_name("results")
 RUNNER_URL = "http://127.0.0.1:7860"
+PHONE_SERVER_URL = "http://127.0.0.1:7861"
+FAKE_API_TOKEN = "dev-token"
+FAKE_API_TO_NUMBER = "+441234567890"
 DEFAULT_SPEECHIFY_VOICE = "beatrice_32"
 DEFAULT_ELEVENLABS_VOICE = "MzqUf1HbJ8UmQ0wUsx2p"
 API_KEY_NAMES = (
@@ -38,6 +49,8 @@ API_KEY_NAMES = (
     "SPEECHIFY_API_KEY",
     "ELEVENLABS_API_KEY",
     "DEEPGRAM_API_KEY",
+    "VOICE_SERVICE_TOKEN",
+    "TWILIO_AUTH_TOKEN",
 )
 PROVIDER_ERROR = re.compile(
     r"(?:(?:http(?:/\d(?:\.\d)?)?(?:\s+(?:status(?:\s+code)?|code))?|"
@@ -95,6 +108,9 @@ async def _start_runner(
     smart_turn_stop_secs: float = SMART_TURN_STOP_DEFAULT_SECS,
     knowledge_digest_path: str | None = None,
     caller_id_override: str | None = None,
+    transport: str = "webrtc",
+    api_base_url: str | None = None,
+    service_token: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
     process_env["STT_PROVIDER"] = stt
@@ -105,10 +121,21 @@ async def _start_runner(
     if knowledge_digest_path:
         process_env["KNOWLEDGE_DIGEST_PATH"] = knowledge_digest_path
     _configure_caller_id_override(process_env, caller_id_override)
+    if api_base_url is not None and service_token is not None:
+        process_env["API_BASE_URL"] = api_base_url
+        process_env["VOICE_SERVICE_TOKEN"] = service_token
+        process_env["WEB_CALL_TO_NUMBER"] = FAKE_API_TO_NUMBER
+    if transport == "twilio":
+        process_env["TWILIO_AUTH_TOKEN"] = "test-auth-token"
+        process_env["TWILIO_ACCOUNT_SID"] = ""
+        process_env["PUBLIC_BASE_URL"] = ""
+        command = ["uv", "run", "phone_server.py", "--port", "7861"]
+        readiness_url, readiness_path = PHONE_SERVER_URL, "/healthz"
+    else:
+        command = ["uv", "run", "bot.py"]
+        readiness_url, readiness_path = RUNNER_URL, "/client/"
     process = await asyncio.create_subprocess_exec(
-        "uv",
-        "run",
-        "bot.py",
+        *command,
         cwd=VOICE_ROOT,
         env=process_env,
         stdout=asyncio.subprocess.PIPE,
@@ -119,7 +146,12 @@ async def _start_runner(
     lines: list[str] = []
     output_task = asyncio.create_task(_read_runner_output(process.stdout, process_env, lines))
     try:
-        await _wait_for_runner(process, lines)
+        await _wait_for_runner(
+            process,
+            lines,
+            base_url=readiness_url,
+            path=readiness_path,
+        )
     except Exception:
         await _stop_runner(process, output_task)
         raise
@@ -130,23 +162,89 @@ async def _wait_for_runner(
     process: asyncio.subprocess.Process,
     lines: list[str],
     timeout: float = 45,
+    *,
+    base_url: str = RUNNER_URL,
+    path: str = "/client/",
+) -> None:
+    await _wait_for_http(base_url, path, timeout, process=process, lines=lines)
+
+
+async def _wait_for_http(
+    base_url: str,
+    path: str,
+    timeout: float,
+    *,
+    process: asyncio.subprocess.Process | None = None,
+    lines: list[str] | None = None,
 ) -> None:
     deadline = time.monotonic() + timeout
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
         while time.monotonic() < deadline:
-            if process.returncode is not None:
+            if process is not None and process.returncode is not None:
                 break
             try:
-                async with session.get(f"{RUNNER_URL}/client/") as response:
+                async with session.get(f"{base_url.rstrip('/')}{path}") as response:
                     if response.status == 200:
                         return
             except (aiohttp.ClientError, TimeoutError):
                 pass
             await asyncio.sleep(0.25)
-    tail = "\n".join(lines[-30:])
-    if process.returncode is None:
-        raise TimeoutError(f"Runner did not serve /client/ within {timeout}s.\n{tail}")
-    raise RuntimeError(f"Runner exited with status {process.returncode}.\n{tail}")
+    tail = "\n".join((lines or [])[-30:])
+    if process is None or process.returncode is None:
+        raise TimeoutError(f"Service did not serve {path} within {timeout}s.\n{tail}")
+    raise RuntimeError(f"Service exited with status {process.returncode}.\n{tail}")
+
+
+@asynccontextmanager
+async def _running_fake_api(to_number: str = FAKE_API_TO_NUMBER):
+    with socket.socket() as server_socket:
+        server_socket.bind(("127.0.0.1", 0))
+        port = server_socket.getsockname()[1]
+    assistant = load_assistant_config(VOICE_ROOT / "config" / "assistants" / "demo_firm.yaml")
+    route_response = RouteResponse(
+        tenant_id=UUID("10000000-0000-0000-0000-000000000001"),
+        assistant_id=UUID("20000000-0000-0000-0000-000000000002"),
+        config=assistant,
+        digest=assistant.knowledge.digest_content,
+    )
+    app = create_fake_api(route_response, FAKE_API_TOKEN, to_number=to_number)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    task = asyncio.create_task(server.serve())
+    api_url = f"http://127.0.0.1:{port}"
+    try:
+        await _wait_for_http(api_url, "/_fake/state", 10)
+        yield api_url
+    finally:
+        server.should_exit = True
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def _fake_api_state(api_url: str) -> dict[str, Any]:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{api_url}/_fake/state",
+            headers={"X-Service-Token": FAKE_API_TOKEN},
+        ) as response:
+            response.raise_for_status()
+            return await response.json()
+
+
+async def _wait_for_fake_report(
+    api_url: str,
+    calls_before: int,
+    timeout: float = 15,
+) -> tuple[bool, str | None]:
+    deadline = time.monotonic() + timeout
+    external_call_id = None
+    while time.monotonic() < deadline:
+        state = await _fake_api_state(api_url)
+        new_calls = state["calls"][calls_before:]
+        if new_calls:
+            external_call_id = new_calls[-1]["external_call_id"]
+            if any(report["external_call_id"] == external_call_id for report in state["reports"]):
+                return True, external_call_id
+        await asyncio.sleep(0.25)
+    return False, external_call_id
 
 
 async def _stop_runner(
@@ -250,9 +348,84 @@ async def run_matrix(
     llm_providers: Sequence[str] = ("google",),
     smart_turn_stop_secs: float = SMART_TURN_STOP_DEFAULT_SECS,
     knowledge_digest_path: str | None = None,
+    transport: str = "webrtc",
+    fake_api: bool = False,
 ) -> Path:
-    from eval.synth_callers import load_scenarios
+    return await _run_matrix_with_options(
+        stt_providers,
+        tts_providers,
+        scenario_names,
+        repetitions,
+        speechify_voice,
+        elevenlabs_voice,
+        llm_providers,
+        smart_turn_stop_secs,
+        knowledge_digest_path,
+        transport=transport,
+        fake_api=fake_api,
+    )
 
+
+async def _run_matrix_with_options(
+    stt_providers: Sequence[str],
+    tts_providers: Sequence[str],
+    scenario_names: Sequence[str],
+    repetitions: Sequence[int],
+    speechify_voice: str | None,
+    elevenlabs_voice: str | None,
+    llm_providers: Sequence[str],
+    smart_turn_stop_secs: float,
+    knowledge_digest_path: str | None,
+    *,
+    transport: str,
+    fake_api: bool,
+) -> Path:
+    if transport not in {"webrtc", "twilio"}:
+        raise ValueError("transport must be 'webrtc' or 'twilio'")
+    if fake_api:
+        async with _running_fake_api() as api_base_url:
+            return await _run_matrix_calls(
+                stt_providers,
+                tts_providers,
+                scenario_names,
+                repetitions,
+                speechify_voice,
+                elevenlabs_voice,
+                llm_providers,
+                smart_turn_stop_secs,
+                knowledge_digest_path,
+                transport=transport,
+                api_base_url=api_base_url,
+            )
+    return await _run_matrix_calls(
+        stt_providers,
+        tts_providers,
+        scenario_names,
+        repetitions,
+        speechify_voice,
+        elevenlabs_voice,
+        llm_providers,
+        smart_turn_stop_secs,
+        knowledge_digest_path,
+        transport=transport,
+        api_base_url=None,
+    )
+
+
+async def _run_matrix_calls(
+    stt_providers: Sequence[str],
+    tts_providers: Sequence[str],
+    scenario_names: Sequence[str],
+    repetitions: Sequence[int],
+    speechify_voice: str | None,
+    elevenlabs_voice: str | None,
+    llm_providers: Sequence[str],
+    smart_turn_stop_secs: float,
+    knowledge_digest_path: str | None,
+    *,
+    transport: str,
+    api_base_url: str | None,
+) -> Path:
     scenarios = load_scenarios()
     unknown_scenarios = [name for name in scenario_names if name not in scenarios]
     if unknown_scenarios:
@@ -278,7 +451,9 @@ async def run_matrix(
                 try:
                     for scenario_name in scenario_names:
                         caller_id = scenarios[scenario_name].get("caller_id")
-                        if caller_id != active_caller_id:
+                        if process is None or (
+                            transport == "webrtc" and caller_id != active_caller_id
+                        ):
                             if process is not None:
                                 await _stop_runner(process, output_task)
                             print(
@@ -293,7 +468,10 @@ async def run_matrix(
                                 elevenlabs_voice,
                                 smart_turn_stop_secs,
                                 knowledge_digest_path,
-                                caller_id,
+                                caller_id if transport == "webrtc" else None,
+                                transport,
+                                api_base_url,
+                                FAKE_API_TOKEN if api_base_url is not None else None,
                             )
                             active_caller_id = caller_id
                         for repetition in repetitions:
@@ -303,12 +481,28 @@ async def run_matrix(
                                 / "calls"
                                 / f"{stt}-{tts}-{llm}-{scenario_name}-rep{repetition}"
                             )
-                            timeline = await run_call(
-                                scenario_name,
-                                scratch,
-                                base_url=RUNNER_URL,
-                                audio_dir=AUDIO_DIR,
+                            state_before = (
+                                await _fake_api_state(api_base_url)
+                                if api_base_url is not None
+                                else None
                             )
+                            if transport == "twilio":
+                                timeline = await run_twilio_call(
+                                    scenario_name,
+                                    scratch,
+                                    base_url=PHONE_SERVER_URL,
+                                    auth_token="test-auth-token",
+                                    to_number=FAKE_API_TO_NUMBER,
+                                    from_number=caller_id,
+                                    audio_dir=AUDIO_DIR,
+                                )
+                            else:
+                                timeline = await run_call(
+                                    scenario_name,
+                                    scratch,
+                                    base_url=RUNNER_URL,
+                                    audio_dir=AUDIO_DIR,
+                                )
                             run_dir = await _newest_run_dir(before)
                             if run_dir is not None:
                                 await _wait_for_extraction(run_dir)
@@ -323,8 +517,20 @@ async def run_matrix(
                                         json.dumps(timeline, indent=2, ensure_ascii=False) + "\n",
                                         encoding="utf-8",
                                     )
+                            report_posted = None
+                            external_call_id = None
+                            if api_base_url is not None and state_before is not None:
+                                report_posted, external_call_id = await _wait_for_fake_report(
+                                    api_base_url,
+                                    len(state_before["calls"]),
+                                    timeout=5 if run_dir is not None else 1,
+                                )
                             if run_dir is not None:
-                                for filename in ("bot_audio.wav", "caller_timeline.json"):
+                                for filename in (
+                                    "bot_audio.wav",
+                                    "caller_audio.wav",
+                                    "caller_timeline.json",
+                                ):
                                     source = scratch / filename
                                     if source.exists():
                                         shutil.copy2(source, run_dir / filename)
@@ -343,6 +549,9 @@ async def run_matrix(
                                     ),
                                     "scenario": scenario_name,
                                     "rep": repetition,
+                                    "transport": transport,
+                                    "report_posted": report_posted,
+                                    "external_call_id": external_call_id,
                                     "smart_turn_stop_secs": smart_turn_stop_secs,
                                     "caller_error": timeline.get("error"),
                                     "caller_timeline_path": (
@@ -378,6 +587,8 @@ async def run_matrix(
 
     results = {
         "created_at": datetime.now(UTC).isoformat(),
+        "transport": transport,
+        "fake_api": api_base_url is not None,
         "smart_turn_stop_secs": smart_turn_stop_secs,
         "calls": calls,
         "provider_errors": provider_errors,
@@ -388,6 +599,18 @@ async def run_matrix(
         encoding="utf-8",
     )
     summary = render_summary(calls)
+    summary += f"\n\nTransport: {transport}\nFake API: {api_base_url is not None}\n"
+    if api_base_url is not None:
+        summary += (
+            "\n| Scenario | Rep | Transport | Report posted | External call ID |\n"
+            "| --- | ---: | --- | --- | --- |\n"
+        )
+        for call in calls:
+            summary += (
+                f"| {call.get('scenario', '—')} | {call.get('rep', '—')} | "
+                f"{call.get('transport', '—')} | {call.get('report_posted')} | "
+                f"{call.get('external_call_id') or '—'} |\n"
+            )
     (results_dir / "summary.md").write_text(summary, encoding="utf-8")
     print(f"\nResults: {results_dir}")
     print(summary)
@@ -417,6 +640,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=SMART_TURN_STOP_DEFAULT_SECS,
     )
     parser.add_argument("--knowledge-fixture", action="store_true")
+    parser.add_argument("--transport", choices=("webrtc", "twilio"), default="webrtc")
+    parser.add_argument("--fake-api", action="store_true")
     return parser
 
 
@@ -434,6 +659,8 @@ def main() -> None:
                 arguments.elevenlabs_voice,
                 arguments.llm,
                 arguments.smart_turn_stop_secs,
+                transport=arguments.transport,
+                fake_api=arguments.fake_api,
             )
         )
         return
@@ -477,6 +704,8 @@ def main() -> None:
                     arguments.llm,
                     arguments.smart_turn_stop_secs,
                     imported["digest_path"],
+                    transport=arguments.transport,
+                    fake_api=arguments.fake_api,
                 )
             )
             digest_copy = results_dir / "knowledge_fixture" / "digest.md"

@@ -1,16 +1,62 @@
+from copy import deepcopy
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from inbound_api.auth import TenantContext, get_tenant_session, require_role
+from inbound_api.models import (
+    Assistant,
+    Conversation,
+    Intake,
+    IntakeReview,
+    MembershipRole,
+    Message,
+    Task,
+)
 from inbound_api.schemas import (
     ConversationDetailResponse,
     ConversationListResponse,
     ConversationReviewCreate,
     ConversationReviewResponse,
+    ConversationSummary,
+    IntakeResponse,
+    MessageResponse,
+    TaskSummary,
 )
+from inbound_api.services.audit import write_audit
+from inbound_api.services.pagination import page_query
+from inbound_api.services.review import merged_needs_review
 
 router = APIRouter(tags=["conversations"])
+_staff = Depends(require_role(MembershipRole.STAFF))
+_tenant_session_dependency = Depends(get_tenant_session)
+
+_HAS_REVIEW = text(
+    """
+    EXISTS (
+      SELECT 1 FROM intakes i
+      CROSS JOIN LATERAL jsonb_each(
+        CASE WHEN jsonb_typeof(i.data->'fields') = 'object'
+             THEN i.data->'fields' ELSE '{}'::jsonb END
+      ) f
+      WHERE i.conversation_id = conversations.id
+        AND i.version = 'merged'
+        AND coalesce(f.value->>'status', '') <> 'human'
+        AND (
+          (f.value->'needs_review') = 'true'::jsonb
+          OR (
+            jsonb_typeof(f.value->'confidence') = 'number'
+            AND (f.value->>'confidence')::float
+              < coalesce((assistants.config->>'review_confidence_threshold')::float, 0.7)
+          )
+        )
+    )
+    """
+)
 
 
 @router.get("/conversations", response_model=ConversationListResponse)
@@ -20,14 +66,71 @@ async def list_conversations(
     has_review: bool | None = None,
     person_id: UUID | None = None,
     cursor: str | None = None,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
+    _: TenantContext = _staff,
+    session: AsyncSession = _tenant_session_dependency,
 ) -> ConversationListResponse:
-    raise HTTPException(status_code=501, detail="Not implemented")
+    statement = select(Conversation).join(Assistant, Assistant.id == Conversation.assistant_id)
+    if channel is not None:
+        statement = statement.where(Conversation.channel == channel)
+    if status is not None:
+        statement = statement.where(Conversation.status == status)
+    if person_id is not None:
+        statement = statement.where(Conversation.person_id == person_id)
+    if has_review is not None:
+        statement = statement.where(
+            _HAS_REVIEW if has_review else text(f"NOT ({_HAS_REVIEW.text})")
+        )
+    rows, next_cursor = await page_query(
+        session,
+        statement,
+        created_at_column=Conversation.created_at,
+        id_column=Conversation.id,
+        cursor=cursor,
+        limit=limit,
+    )
+    return ConversationListResponse(
+        items=[ConversationSummary.model_validate(row) for row in rows],
+        next_cursor=next_cursor,
+    )
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetailResponse)
-async def get_conversation(conversation_id: UUID) -> ConversationDetailResponse:
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def get_conversation(
+    conversation_id: UUID,
+    _: TenantContext = _staff,
+    session: AsyncSession = _tenant_session_dependency,
+) -> ConversationDetailResponse:
+    conversation = await session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    messages = await session.scalars(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.ts, Message.id)
+    )
+    intakes = list(
+        await session.scalars(
+            select(Intake)
+            .where(Intake.conversation_id == conversation_id)
+            .order_by(Intake.created_at)
+        )
+    )
+    tasks = await session.scalars(
+        select(Task).where(Task.conversation_id == conversation_id).order_by(Task.created_at)
+    )
+    merged = next((intake.data for intake in intakes if intake.version.value == "merged"), {})
+    assistant = await session.get(Assistant, conversation.assistant_id)
+    threshold = float(assistant.config.get("review_confidence_threshold", 0.7))
+    return ConversationDetailResponse(
+        **ConversationSummary.model_validate(conversation).model_dump(),
+        messages=[MessageResponse.model_validate(message) for message in messages],
+        intakes=[IntakeResponse(version=intake.version, data=intake.data) for intake in intakes],
+        needs_review=merged_needs_review(merged, threshold),
+        tasks=[TaskSummary.model_validate(task) for task in tasks],
+        metrics=conversation.metrics,
+        estimated_cost=conversation.estimated_cost,
+    )
 
 
 @router.post(
@@ -36,6 +139,75 @@ async def get_conversation(conversation_id: UUID) -> ConversationDetailResponse:
     status_code=201,
 )
 async def create_review(
-    conversation_id: UUID, payload: ConversationReviewCreate
+    conversation_id: UUID,
+    payload: ConversationReviewCreate,
+    ctx: TenantContext = _staff,
+    session: AsyncSession = _tenant_session_dependency,
 ) -> ConversationReviewResponse:
-    raise HTTPException(status_code=501, detail="Not implemented")
+    conversation = await session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    intake = await session.scalar(
+        select(Intake)
+        .where(Intake.conversation_id == conversation_id, Intake.version == "merged")
+        .with_for_update()
+    )
+    if intake is None:
+        raise HTTPException(status_code=409, detail="Conversation has no merged intake")
+    data = deepcopy(intake.data)
+    fields = data.get("fields")
+    existing = fields.get(payload.field) if isinstance(fields, dict) else None
+    assistant = await session.get(Assistant, conversation.assistant_id)
+    service_name = data.get("service")
+    service = assistant.config.get("services", {}).get(service_name, {})
+    configured_fields = {
+        item.get("name")
+        for item in service.get("fields", [])
+        if isinstance(item, dict) and item.get("name")
+    }
+    if existing is None and payload.field not in configured_fields:
+        raise HTTPException(status_code=422, detail="Unknown intake field")
+    previous = existing.get("value") if isinstance(existing, dict) else None
+    replacement = {
+        **(existing if isinstance(existing, dict) else {}),
+        "value": payload.resolved_value,
+        "status": "human",
+        "provenance": "human",
+        "confidence": 1.0,
+        "needs_review": False,
+        "reviewed_by": str(ctx.user.id),
+        "reviewed_at": datetime.now(UTC).isoformat(),
+        "sources": {
+            **(existing.get("sources", {}) if isinstance(existing, dict) else {}),
+            "human": {
+                "value": payload.resolved_value,
+                "user_id": str(ctx.user.id),
+                "note": payload.note,
+            },
+        },
+    }
+    if previous is not None and previous != payload.resolved_value:
+        replacement["previous_value"] = previous
+    data.setdefault("fields", {})[payload.field] = replacement
+    if isinstance(data.get("needs_review"), list):
+        data["needs_review"] = [field for field in data["needs_review"] if field != payload.field]
+    intake.data = data
+    review = IntakeReview(
+        tenant_id=ctx.tenant_id,
+        conversation_id=conversation_id,
+        field=payload.field,
+        resolved_value=payload.resolved_value,
+        resolved_by=ctx.user.id,
+        note=payload.note,
+    )
+    session.add(review)
+    await session.flush()
+    await write_audit(
+        session,
+        ctx,
+        "intake.reviewed",
+        "conversation",
+        conversation_id,
+        {"field": payload.field, "resolved_value": payload.resolved_value},
+    )
+    return ConversationReviewResponse.model_validate(review)

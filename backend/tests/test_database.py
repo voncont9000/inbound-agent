@@ -2,6 +2,8 @@ import os
 from uuid import uuid4
 
 import psycopg
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from inbound_api.db import engine
 
@@ -36,7 +38,12 @@ def test_application_engine_uses_non_superuser_non_bypass_role() -> None:
 
 
 def test_migration_has_applied() -> None:
-    assert _execute(OWNER_DATABASE_URL, "SELECT version_num FROM alembic_version") == [("0001",)]
+    applied = {
+        version
+        for (version,) in _execute(OWNER_DATABASE_URL, "SELECT version_num FROM alembic_version")
+    }
+    expected = set(ScriptDirectory.from_config(Config("alembic.ini")).get_heads())
+    assert applied == expected
 
 
 def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:

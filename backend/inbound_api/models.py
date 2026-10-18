@@ -169,6 +169,23 @@ class User(TimestampMixin, Base):
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=sql_text("gen_random_uuid()")
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_sha256: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Membership(TenantMixin, Base):
     __tablename__ = "memberships"
 

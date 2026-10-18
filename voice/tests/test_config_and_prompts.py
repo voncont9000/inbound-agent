@@ -72,6 +72,20 @@ def test_prompt_only_mentions_enabled_actions() -> None:
     assert "confirm_critical_fields" not in prompt
     assert "request_callback" not in prompt
     assert "flag_urgent" not in prompt
+
+
+def test_caller_context_is_inserted_only_when_nonblank() -> None:
+    assistant = load_assistant_config(ROOT / "config" / "assistants" / "demo_firm.yaml")
+    original = render_system_prompt(assistant)
+
+    assert render_system_prompt(assistant, context_card=None) == original
+    assert render_system_prompt(assistant, context_card=" \n ") == original
+
+    prompt = render_system_prompt(assistant, context_card="  Previously asked about a callback.  ")
+
+    assert "WHAT WE ALREADY KNOW ABOUT THIS CALLER" in prompt
+    assert "<<<CALLER CONTEXT\nPreviously asked about a callback.\nCALLER CONTEXT>>>" in prompt
+    assert prompt.index("CALLER CONTEXT>>>") < prompt.index("CALL BEHAVIOUR MECHANICS")
     assert (
         "When the caller gives an email address, spell it back once, letter by letter, "
         "and ask them to confirm. Do not read back other details."

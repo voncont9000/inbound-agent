@@ -210,30 +210,59 @@ finishes a conversation with `end_call`, it speaks its goodbye before ending the
 The page is served by Pipecat's development runner. Real speech processing requires the
 API keys.
 
-## Twilio Media Streams
+## Twilio phone server
 
-Configure `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, then expose the local runner using
-a secure tunnel such as ngrok:
+Configure `TWILIO_AUTH_TOKEN` to validate incoming webhook signatures. Add
+`TWILIO_ACCOUNT_SID` when REST hang-up is desired; otherwise the server closes the
+WebSocket after the shared pipeline ends. Expose port 7861 through a secure tunnel such as
+ngrok, and set `PUBLIC_BASE_URL` to the tunnel's HTTPS URL:
 
 ```sh
-ngrok http 7860
-uv run --env-file .env bot.py -t twilio -x YOUR_NGROK_HOST
+ngrok http 7861
+PUBLIC_BASE_URL=https://YOUR_NGROK_HOST uv run --env-file .env phone_server.py --port 7861
 ```
 
-Configure the Twilio number's incoming voice webhook to the runner's generated HTTP URL.
-The runner returns TwiML that connects the call to its WebSocket media endpoint; the
-equivalent TwiML shape is:
+Configure the Twilio number's incoming Voice webhook to
+`https://YOUR_NGROK_HOST/twilio/voice` using HTTP POST. The service returns TwiML that
+connects the stream to `/twilio/ws`. `/healthz` is available for readiness checks. The
+Pipecat development runner's `-t twilio` path also remains available for development.
 
-```xml
-<Response>
-  <Connect>
-    <Stream url="wss://YOUR_NGROK_HOST/ws" />
-  </Connect>
-</Response>
+The phone pipeline uses 8 kHz PCM internally and Twilio's 8 kHz μ-law stream externally.
+Set `PUBLIC_BASE_URL` behind a proxy so signature validation uses Twilio's public request
+URL. Never disable signature validation in a public deployment.
+
+## API routing and reporting
+
+Set `API_BASE_URL` and `VOICE_SERVICE_TOKEN` to use tenant-aware routing and call reports.
+WebRTC API routing also requires `WEB_CALL_TO_NUMBER`; otherwise it uses local
+`ASSISTANT_CONFIG`. The phone webhook supplies its `To` and `From` numbers. Route lookup
+occurs before the greeting with a default 2-second timeout; a failed route uses local YAML
+but still attempts reporting. Start and report calls retry transient failures. Undelivered
+reports are atomically written to `VOICE_SPOOL_DIR` (default `spool/`) and can be resent:
+
+```sh
+uv run python -m inbound_voice.api_client resend
 ```
 
-Use a public HTTPS/WSS endpoint and validate the webhook in any production deployment.
-Twilio credentials are optional for local WebRTC and must never be committed.
+`VOICE_SPOOL_DIR`, `API_BASE_URL`, service tokens, and `.env` values are local configuration;
+never commit `.env`, call runs, or spool files.
+
+## Local Twilio simulation
+
+Run the phone server and, in a second terminal, the μ-law simulator:
+
+```sh
+uv run phone_server.py --port 7861
+uv run python -m eval.twilio_sim --scenario employment --output-dir runs/twilio-smoke
+```
+
+For routing and report-delivery checks without a backend, use the matrix runner's in-process
+fake API:
+
+```sh
+uv run python -m eval.run_matrix --stt soniox --tts speechify \
+  --scenario employment --reps 1 --transport twilio --fake-api
+```
 
 ## Call outputs and report
 

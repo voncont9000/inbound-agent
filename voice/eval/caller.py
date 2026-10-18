@@ -6,6 +6,7 @@ import json
 import time
 import wave
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from fractions import Fraction
@@ -218,10 +219,17 @@ def final_call_timeout_seconds(scenario: dict[str, Any]) -> float:
 
 
 class AgentAudioRecorder:
-    def __init__(self, call_started: float, timeline: dict[str, Any], output_path: Path) -> None:
+    def __init__(
+        self,
+        call_started: float,
+        timeline: dict[str, Any],
+        output_path: Path,
+        sample_rate: int = WEBRTC_SAMPLE_RATE,
+    ) -> None:
         self._call_started = call_started
         self._timeline = timeline
         self._output_path = output_path
+        self.sample_rate = sample_rate
         self._condition = asyncio.Condition()
         self._sample_chunks: list[bytes] = []
         self._completed_speeches = 0
@@ -235,14 +243,13 @@ class AgentAudioRecorder:
         return self._completed_speeches
 
     async def record(self, track: Any) -> None:
-        resampler = AudioResampler("s16", "mono", WEBRTC_SAMPLE_RATE)
+        resampler = AudioResampler("s16", "mono", self.sample_rate)
         try:
             while True:
                 frame = await track.recv()
                 for output_frame in resampler.resample(frame):
                     samples = output_frame.to_ndarray().reshape(-1).astype(np.int16)
-                    self._sample_chunks.append(samples.tobytes())
-                    await self._observe_energy(samples, time.monotonic())
+                    await self.feed(samples, time.monotonic())
         except MediaStreamError:
             pass
         finally:
@@ -255,6 +262,11 @@ class AgentAudioRecorder:
             self.ended.set()
             async with self._condition:
                 self._condition.notify_all()
+
+    async def feed(self, samples: np.ndarray, now: float) -> None:
+        normalized = np.asarray(samples, dtype=np.int16).reshape(-1)
+        self._sample_chunks.append(normalized.tobytes())
+        await self._observe_energy(normalized, now)
 
     async def _observe_energy(self, samples: np.ndarray, now: float) -> None:
         if not samples.size:
@@ -329,7 +341,7 @@ class AgentAudioRecorder:
         with wave.open(str(self._output_path), "wb") as audio_file:
             audio_file.setnchannels(1)
             audio_file.setsampwidth(2)
-            audio_file.setframerate(WEBRTC_SAMPLE_RATE)
+            audio_file.setframerate(self.sample_rate)
             audio_file.writeframes(b"".join(self._sample_chunks))
 
 
@@ -349,6 +361,103 @@ def _read_caller_audio(path: Path) -> np.ndarray:
             f"Expected {WEBRTC_SAMPLE_RATE} Hz caller audio in {path}, got {sample_rate} Hz."
         )
     return samples
+
+
+def _create_timeline(scenario_name: str, utterances: list[str]) -> dict[str, Any]:
+    return {
+        "scenario": scenario_name,
+        "call_started_at": datetime.now(UTC).isoformat(),
+        "utterances": [
+            {
+                "index": index,
+                "text": text,
+                "start_seconds": None,
+                "end_seconds": None,
+            }
+            for index, text in enumerate(utterances)
+        ],
+        "agent_speech": [],
+        "server_disconnect_detected": False,
+        "server_disconnect_at_seconds": None,
+        "seconds_from_last_agent_speech_end_to_disconnect": None,
+        "number_holds": [],
+        "caller_lines_completed": 0,
+        "caller_finished_all_lines": False,
+        "error": None,
+    }
+
+
+async def _drive_conversation(
+    scenario_name: str,
+    scenario: dict[str, Any],
+    timeline: dict[str, Any],
+    audio_dir: str | Path,
+    recorder: AgentAudioRecorder,
+    server_disconnected: asyncio.Event,
+    ready: asyncio.Event,
+    queue_utterance: Callable[[np.ndarray, dict[str, Any]], asyncio.Event],
+) -> int:
+    utterances = scenario["utterances"]
+    ready_for_greeting = await _wait_for_event_or_disconnect(
+        ready, server_disconnected, TURN_TIMEOUT_SECONDS
+    )
+    if ready_for_greeting:
+        greeting_spoken = await _wait_for_agent_speech_or_disconnect(
+            recorder, 0, server_disconnected
+        )
+        if not greeting_spoken:
+            return 0
+
+    caller_lines_completed = 0
+    if ready_for_greeting and not server_disconnected.is_set():
+        for index, utterance in enumerate(utterances):
+            if server_disconnected.is_set():
+                break
+            audio_path = utterance_audio_path(
+                audio_dir,
+                scenario_name,
+                index,
+                utterance,
+                scenario["caller_voice"],
+            )
+            if not audio_path.exists():
+                raise FileNotFoundError(f"Missing synthesized caller audio: {audio_path}")
+            previous_speeches = recorder.completed_speeches
+            completed = queue_utterance(
+                _read_caller_audio(audio_path), timeline["utterances"][index]
+            )
+            try:
+                played = await _wait_for_event_or_disconnect(
+                    completed, server_disconnected, timeout=30
+                )
+            except TimeoutError as error:
+                raise TimeoutError(f"Caller utterance {index} did not finish playback.") from error
+            if not played:
+                break
+            caller_lines_completed += 1
+
+            if index < len(utterances) - 1:
+                try:
+                    response_spoken = await _wait_for_agent_speech_or_disconnect(
+                        recorder, previous_speeches, server_disconnected
+                    )
+                    if not response_spoken:
+                        break
+                except TimeoutError as error:
+                    if not server_disconnected.is_set():
+                        raise TimeoutError(
+                            f"Timed out waiting for the agent response after utterance {index}."
+                        ) from error
+                    break
+            else:
+                try:
+                    await asyncio.wait_for(
+                        server_disconnected.wait(),
+                        timeout=final_call_timeout_seconds(scenario),
+                    )
+                except TimeoutError:
+                    pass
+    return caller_lines_completed
 
 
 async def _connect(
@@ -392,33 +501,18 @@ async def run_call(
     output.mkdir(parents=True, exist_ok=True)
 
     call_started = time.monotonic()
-    timeline: dict[str, Any] = {
-        "scenario": scenario_name,
-        "call_started_at": datetime.now(UTC).isoformat(),
-        "utterances": [
-            {
-                "index": index,
-                "text": text,
-                "start_seconds": None,
-                "end_seconds": None,
-            }
-            for index, text in enumerate(utterances)
-        ],
-        "agent_speech": [],
-        "server_disconnect_detected": False,
-        "server_disconnect_at_seconds": None,
-        "seconds_from_last_agent_speech_end_to_disconnect": None,
-        "number_holds": [],
-        "caller_lines_completed": 0,
-        "caller_finished_all_lines": False,
-        "error": None,
-    }
+    timeline = _create_timeline(scenario_name, utterances)
     peer = RTCPeerConnection()
     caller_track = ScriptedAudioTrack(call_started, timeline)
     peer.addTrack(caller_track)
     peer.createDataChannel("chat", ordered=True)
 
-    recorder = AgentAudioRecorder(call_started, timeline, output / "bot_audio.wav")
+    recorder = AgentAudioRecorder(
+        call_started,
+        timeline,
+        output / "bot_audio.wav",
+        sample_rate=WEBRTC_SAMPLE_RATE,
+    )
     recording_tasks: list[asyncio.Task[None]] = []
     audio_track_event = asyncio.Event()
     server_disconnected = asyncio.Event()
@@ -443,76 +537,29 @@ async def run_call(
 
     session_timeout = ClientTimeout(total=20)
     caller_lines_completed = 0
+
+    def queue_utterance(samples: np.ndarray, entry: dict[str, Any]) -> asyncio.Event:
+        item = caller_track.queue_utterance(samples, entry)
+        assert item.completed is not None
+        return item.completed
+
     try:
         async with ClientSession(timeout=session_timeout) as session:
             await _connect(peer, base_url, session)
             try:
-                audio_track_ready = await _wait_for_event_or_disconnect(
-                    audio_track_event, server_disconnected, TURN_TIMEOUT_SECONDS
+                caller_lines_completed = await _drive_conversation(
+                    scenario_name,
+                    scenario,
+                    timeline,
+                    audio_dir,
+                    recorder,
+                    server_disconnected,
+                    audio_track_event,
+                    queue_utterance,
                 )
-                if audio_track_ready:
-                    greeting_spoken = await _wait_for_agent_speech_or_disconnect(
-                        recorder, 0, server_disconnected
-                    )
-                    if not greeting_spoken:
-                        audio_track_ready = False
             except TimeoutError as error:
                 if not server_disconnected.is_set():
                     raise TimeoutError("Timed out waiting for the agent's greeting.") from error
-
-            if audio_track_ready and not server_disconnected.is_set():
-                for index in range(len(utterances)):
-                    if server_disconnected.is_set():
-                        break
-                    audio_path = utterance_audio_path(
-                        audio_dir,
-                        scenario_name,
-                        index,
-                        utterances[index],
-                        scenario["caller_voice"],
-                    )
-                    if not audio_path.exists():
-                        raise FileNotFoundError(f"Missing synthesized caller audio: {audio_path}")
-                    previous_speeches = recorder.completed_speeches
-                    item = caller_track.queue_utterance(
-                        _read_caller_audio(audio_path),
-                        timeline["utterances"][index],
-                    )
-                    assert item.completed is not None
-                    try:
-                        played = await _wait_for_event_or_disconnect(
-                            item.completed, server_disconnected, timeout=30
-                        )
-                    except TimeoutError as error:
-                        raise TimeoutError(
-                            f"Caller utterance {index} did not finish playback."
-                        ) from error
-                    if not played:
-                        break
-                    caller_lines_completed += 1
-
-                    if index < len(utterances) - 1:
-                        try:
-                            response_spoken = await _wait_for_agent_speech_or_disconnect(
-                                recorder, previous_speeches, server_disconnected
-                            )
-                            if not response_spoken:
-                                break
-                        except TimeoutError as error:
-                            if not server_disconnected.is_set():
-                                raise TimeoutError(
-                                    "Timed out waiting for the agent response after "
-                                    f"utterance {index}."
-                                ) from error
-                            break
-                    else:
-                        try:
-                            await asyncio.wait_for(
-                                server_disconnected.wait(),
-                                timeout=final_call_timeout_seconds(scenario),
-                            )
-                        except TimeoutError:
-                            pass
     except Exception as error:
         timeline["error"] = f"{type(error).__name__}: {error}"
     finally:
