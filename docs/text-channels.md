@@ -58,6 +58,11 @@ uv run --directory backend python -m inbound_api.channels.simulate whatsapp \
   --text "What are your opening hours?"
 ```
 
+Each WhatsApp reply and Gmail draft stores its token usage and estimated cost in the assistant
+message's `meta`, and adds the cost to `conversations.estimated_cost` (running total plus
+per-component sums). The Home dashboard reports that total as AI cost
+([m1-architecture.md](m1-architecture.md#home-dashboard)).
+
 ## Session window and current limits
 
 An active WhatsApp conversation is scoped to the receiving phone-number ID and contact `wa_id`;

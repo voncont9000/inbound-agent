@@ -265,6 +265,11 @@ Older metrics without provider metadata default to Deepgram and Gemini 2.5 Flash
 Missing price or usage components are reported as unknown, not silently treated as a
 zero-cost service. Twilio number rental and taxes are excluded.
 
+The backend stores the call report's `turn_latency_summary` in `conversations.metrics` and the
+cost estimate in `conversations.estimated_cost`. The Home dashboard shows the median of the calls'
+p50 response latency and splits cost into telephony (`twilio`) and AI (everything else); see
+[m1-architecture.md](m1-architecture.md#home-dashboard).
+
 ## Provider research (2026-10-17)
 
 The following are **public benchmarks and vendor list prices, not measurements from this

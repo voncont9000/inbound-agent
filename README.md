@@ -4,7 +4,7 @@ A personalised, vertical-agnostic AI agent that takes customer inquiries via pho
 ## Docs
 - [Product requirements (PRD)](docs/PRD.md)
 - [Customer context graph](docs/context-graph.md): research and design for linking interactions across channels
-- [M1 architecture and agent seams](docs/m1-architecture.md)
+- [M1 architecture and agent seams](docs/m1-architecture.md), including the [home dashboard metric definitions](docs/m1-architecture.md#home-dashboard)
 - [Voice pipeline (M0 architecture)](docs/voice-pipeline.md)
 - [Production deployment](docs/deployment.md): single-server Hetzner operations runbook
 - [Text channels: Gmail and WhatsApp](docs/text-channels.md)
