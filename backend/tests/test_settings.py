@@ -29,6 +29,7 @@ def test_production_accepts_whatsapp_off_without_credentials() -> None:
         app_env="production",
         voice_service_token="configured-service-token",
         whatsapp_mode="off",
+        gmail_mode="off",
     )
 
     assert settings.whatsapp_mode == "off"

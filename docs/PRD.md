@@ -178,8 +178,8 @@ See [context-graph.md](./context-graph.md) for research and design.
 | M5 Actions | Call transfer/forwarding, WhatsApp sends from calls, web search, webhooks, practice management integration. |
 
 **Production deployment status (2026-10-18):** the single-server Hetzner stack, HTTPS edge routing,
-production guards, and backup/restore runbook are implemented; email provider routes remain pending
-the Gmail PR.
+production guards, and backup/restore runbook are implemented. Gmail v1 is implemented as
+draft-only; keep `GMAIL_MODE=off` until Google OAuth and Pub/Sub are configured.
 
 **WhatsApp implementation status (2026-10-16):** the first backend text-channel slice supports
 manual phone-number-ID connections, signed webhooks, 24-hour free-form replies, shared prompt

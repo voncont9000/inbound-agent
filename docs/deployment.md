@@ -88,11 +88,13 @@ openssl rand -hex 32
 Use separate random values for `POSTGRES_PASSWORD`, `INBOUND_APP_PASSWORD`, and
 `VOICE_SERVICE_TOKEN`. Replace the placeholder email/domain, then edit
 `deploy/.env.production` through a protected editor. Do not put secrets in shell history. The
-example intentionally starts with WhatsApp and Twilio disabled. WhatsApp `graph` mode requires
-`WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_ACCESS_TOKEN`; `fake` is rejected
-in production. Twilio `twilio` mode requires `TWILIO_AUTH_TOKEN`. A tokenless browser demo is
-rejected in production unless the request supplies the configured `WEB_CALL_TOKEN`. Enable each
-provider only after configuring its external credentials and public webhook settings.
+example intentionally starts with WhatsApp, Twilio, and Gmail disabled. Keep `GMAIL_MODE=off`
+on first deploy until Google OAuth, Pub/Sub, and credential encryption are configured. WhatsApp
+`graph` mode requires `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, and
+`WHATSAPP_ACCESS_TOKEN`; `fake` is rejected in production. Twilio `twilio` mode requires
+`TWILIO_AUTH_TOKEN`. A tokenless browser demo is rejected in production unless the request
+supplies the configured `WEB_CALL_TOKEN`. Enable each provider only after configuring its
+external credentials and public webhook settings.
 
 Validate and deploy:
 
@@ -121,10 +123,12 @@ expose database or Redis ports to the Internet.
 - **Browser calls:** configure the required selected speech/LLM provider credentials. The public
   app is at `https://$DOMAIN/call/`; assistant-bound calls must use the backend-issued call token.
   The optional demo gate token is separate from the voice service token.
-- **Gmail:** Google Pub/Sub push and OAuth callback URLs will be documented when the Gmail PR
-  defines the exact routes. They will be under `https://$DOMAIN/webhooks/` and
-  `https://$DOMAIN/oauth/`, respectively; both prefixes are already routed unmodified to the API.
-- Gmail routes are not enabled by this deployment; `GMAIL_MODE=off` is coming with the Gmail PR.
+- **Gmail:** configure the Google Pub/Sub push endpoint as
+  `https://agent.vinci-labs.tech/webhooks/gmail` and the Google OAuth redirect URI as
+  `https://agent.vinci-labs.tech/oauth/google/callback`. The OAuth URL must exactly match
+  `GOOGLE_OAUTH_REDIRECT_URL`; set the Pub/Sub authenticated push audience to the value of
+  `GMAIL_PUBSUB_AUDIENCE`. Caddy already routes `/webhooks/*` and `/oauth/*` to the backend.
+  Keep `GMAIL_MODE=off` until Google OAuth, Pub/Sub, and credential encryption are configured.
 
 ## Backups and recovery
 
