@@ -120,7 +120,7 @@ The plain-text context card follows merge links and includes known identities, u
 
 Contact merges move the exact identity, person-fact, conversation, task, and commitment rows to a survivor, resolve active `possible_same_person` suggestions between the pair, and set `merged_into_id`. The operation writes an `identity_merge_log` snapshot and a `contact.merge` audit event. `POST /contacts/{contact_id}/merge/undo` appends a split log referring to the merge, restores only rows in that snapshot that remain on the survivor, reactivates resolved suggestions, and records `contact.merge.undo`; the original merge log remains immutable. A contact split moves selected identities and only conversations linked by `via_identity` edges to moved identities (and not retained identities), along with their sourced facts, tasks, and commitments. It records the moved IDs in the merge log and a `contact.split` audit event.
 
-The contacts API provides tenant-scoped list/search with cursor pagination, contact detail and context, and merge, merge-undo, and split actions. During the auth implementation transition, `contacts.py` checks whether the auth dependency signatures can be parsed by FastAPI; if the auth stubs still make route registration fail, a temporary dependency responds with `501 Authentication is not implemented`. The router is ready to use the real `current_user` and `current_tenant` dependencies once auth is implemented, and its tests can override those dependencies.
+The contacts API provides tenant-scoped list/search with cursor pagination, contact detail and context, and merge, merge-undo, and split actions. All contacts routes require an owner or staff membership via `require_role(MembershipRole.STAFF)`.
 
 ## Voice/API lifecycle
 

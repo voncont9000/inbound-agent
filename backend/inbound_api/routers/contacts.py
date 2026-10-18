@@ -1,15 +1,12 @@
 import base64
 import json
 from datetime import datetime
-from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.dependencies.utils import get_dependant
-from fastapi.exceptions import FastAPIError
 from sqlalchemy import or_, select
 
-from inbound_api import auth
+from inbound_api.auth import TenantContext, require_role
 from inbound_api.db import tenant_session
 from inbound_api.graph import (
     PersonAlreadyMerged,
@@ -26,6 +23,7 @@ from inbound_api.models import (
     Fact,
     FactStatus,
     Identity,
+    MembershipRole,
     Person,
     Task,
     TaskStatus,
@@ -46,22 +44,7 @@ from inbound_api.schemas import (
 )
 
 router = APIRouter(tags=["contacts"])
-
-
-def _auth_dependency(dependency: Any) -> Any:
-    try:
-        get_dependant(path="/", call=dependency)
-    except FastAPIError:
-
-        async def unavailable() -> None:
-            raise HTTPException(status_code=501, detail="Authentication is not implemented")
-
-        return unavailable
-    return dependency
-
-
-current_user = _auth_dependency(auth.current_user)
-current_tenant = _auth_dependency(auth.current_tenant)
+_staff = Depends(require_role(MembershipRole.STAFF))
 
 
 def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
@@ -124,15 +107,13 @@ def _task_summary(task: Task) -> TaskSummary:
 
 @router.get("/contacts", response_model=ContactsResponse)
 async def list_contacts(
-    user: Annotated[Any, Depends(current_user)],
-    tenant_id: Annotated[UUID, Depends(current_tenant)],
+    ctx: TenantContext = _staff,
     q: str | None = None,
     include_merged: bool = False,
     limit: int = Query(50, ge=1, le=200),
     cursor: str | None = None,
 ) -> ContactsResponse:
-    del user
-    async with tenant_session(tenant_id) as session:
+    async with tenant_session(ctx.tenant_id) as session:
         statement = select(Person)
         if not include_merged:
             statement = statement.where(Person.merged_into_id.is_(None))
@@ -185,11 +166,9 @@ async def list_contacts(
 @router.get("/contacts/{contact_id}", response_model=ContactDetailResponse)
 async def get_contact(
     contact_id: UUID,
-    user: Annotated[Any, Depends(current_user)],
-    tenant_id: Annotated[UUID, Depends(current_tenant)],
+    ctx: TenantContext = _staff,
 ) -> ContactDetailResponse:
-    del user
-    async with tenant_session(tenant_id) as session:
+    async with tenant_session(ctx.tenant_id) as session:
         person = await session.scalar(select(Person).where(Person.id == contact_id))
         if person is None:
             raise HTTPException(status_code=404, detail="Contact not found")
@@ -282,17 +261,15 @@ async def get_contact(
 async def merge_contact(
     contact_id: UUID,
     payload: ContactMergeRequest,
-    user: Annotated[Any, Depends(current_user)],
-    tenant_id: Annotated[UUID, Depends(current_tenant)],
+    ctx: TenantContext = _staff,
 ) -> ContactMergeResponse:
-    actor_user = user
-    async with tenant_session(tenant_id) as session:
+    async with tenant_session(ctx.tenant_id) as session:
         try:
             await merge_persons(
                 session,
                 survivor_id=contact_id,
                 merged_id=payload.other_id,
-                actor_user_id=actor_user.id,
+                actor_user_id=ctx.user.id,
             )
         except PersonAlreadyMerged as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
@@ -306,16 +283,14 @@ async def merge_contact(
 @router.post("/contacts/{contact_id}/merge/undo", response_model=ContactMergeResponse)
 async def undo_contact_merge(
     contact_id: UUID,
-    user: Annotated[Any, Depends(current_user)],
-    tenant_id: Annotated[UUID, Depends(current_tenant)],
+    ctx: TenantContext = _staff,
 ) -> ContactMergeResponse:
-    actor_user = user
-    async with tenant_session(tenant_id) as session:
+    async with tenant_session(ctx.tenant_id) as session:
         try:
             merged_id = await undo_last_merge(
                 session,
                 person_id=contact_id,
-                actor_user_id=actor_user.id,
+                actor_user_id=ctx.user.id,
             )
         except LookupError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
@@ -326,17 +301,15 @@ async def undo_contact_merge(
 async def split_contact(
     contact_id: UUID,
     payload: ContactSplitRequest,
-    user: Annotated[Any, Depends(current_user)],
-    tenant_id: Annotated[UUID, Depends(current_tenant)],
+    ctx: TenantContext = _staff,
 ) -> ContactSplitResponse:
-    actor_user = user
-    async with tenant_session(tenant_id) as session:
+    async with tenant_session(ctx.tenant_id) as session:
         try:
             split_person_id = await split_person(
                 session,
                 person_id=contact_id,
                 identity_ids=payload.identity_ids,
-                actor_user_id=actor_user.id,
+                actor_user_id=ctx.user.id,
             )
         except LookupError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error

@@ -2228,7 +2228,9 @@ export interface operations {
                 limit?: number;
                 cursor?: string | null;
             };
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2257,7 +2259,9 @@ export interface operations {
     get_contact_contacts__contact_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 contact_id: string;
             };
@@ -2288,7 +2292,9 @@ export interface operations {
     merge_contact_contacts__contact_id__merge_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 contact_id: string;
             };
@@ -2323,7 +2329,9 @@ export interface operations {
     undo_contact_merge_contacts__contact_id__merge_undo_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 contact_id: string;
             };
@@ -2354,7 +2362,9 @@ export interface operations {
     split_contact_contacts__contact_id__split_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
             path: {
                 contact_id: string;
             };

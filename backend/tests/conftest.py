@@ -80,6 +80,7 @@ async def tenant_pair() -> AsyncIterator[dict]:
                 if emails:
                     connection.execute("DELETE FROM users WHERE email = ANY(%s)", (emails,))
 
+
 @pytest_asyncio.fixture
 async def graph_env() -> AsyncIterator[dict[str, Any]]:
     tenant_id, user_id, assistant_id = uuid4(), uuid4(), uuid4()

@@ -2,11 +2,14 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
+import psycopg
 import pytest
 from conftest import create_conversation, create_person
 
+from inbound_api import auth
+from inbound_api.auth import TenantContext
 from inbound_api.main import app
-from inbound_api.routers import contacts
+from inbound_api.models import MembershipRole
 
 
 def _add_identity(graph_env, person_id, identity_type, value):
@@ -28,10 +31,11 @@ def _client():
 
 
 def _override_auth(graph_env):
-    app.dependency_overrides[contacts.current_user] = lambda: SimpleNamespace(
-        id=graph_env["user_id"]
+    app.dependency_overrides[auth.current_tenant] = lambda: TenantContext(
+        user=SimpleNamespace(id=graph_env["user_id"]),
+        tenant_id=graph_env["tenant_id"],
+        role=MembershipRole.STAFF,
     )
-    app.dependency_overrides[contacts.current_tenant] = lambda: graph_env["tenant_id"]
 
 
 @pytest.mark.asyncio
@@ -156,8 +160,34 @@ async def test_contact_merge_undo_split_and_error_codes(graph_env):
 
 
 @pytest.mark.asyncio
-async def test_contacts_auth_adapter_returns_501_without_overrides():
+async def test_contacts_require_authentication():
     app.dependency_overrides.clear()
     async with _client() as client:
         response = await client.get("/contacts")
-    assert response.status_code == 501
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_contacts_real_auth_scopes_each_tenant(tenant_pair, owner_database_url):
+    app.dependency_overrides.clear()
+    first, second = tenant_pair["first"], tenant_pair["second"]
+    first_contact_id, second_contact_id = uuid4(), uuid4()
+    with psycopg.connect(owner_database_url) as connection:
+        connection.execute(
+            "INSERT INTO persons (id, tenant_id, display_name) VALUES (%s, %s, %s)",
+            (first_contact_id, first["tenant_id"], "First tenant contact"),
+        )
+        connection.execute(
+            "INSERT INTO persons (id, tenant_id, display_name) VALUES (%s, %s, %s)",
+            (second_contact_id, second["tenant_id"], "Second tenant contact"),
+        )
+
+    try:
+        first_response = await first["client"].get("/contacts")
+        second_response = await second["client"].get("/contacts")
+        assert first_response.status_code == 200, first_response.text
+        assert second_response.status_code == 200, second_response.text
+        assert [item["id"] for item in first_response.json()["items"]] == [str(first_contact_id)]
+        assert [item["id"] for item in second_response.json()["items"]] == [str(second_contact_id)]
+    finally:
+        app.dependency_overrides.clear()

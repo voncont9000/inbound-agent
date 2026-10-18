@@ -234,12 +234,9 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert (message_count, task_count, gap_count) == (1, 2, 1)
     assert await run_next_job()
     job = await client.get(f"/jobs/{job_id}")
-    assert job.json()["status"] == "failed"
+    assert job.json()["status"] == "succeeded"
     assert job.json()["attempts"] == 1
-    assert (
-        "NotImplementedError: graph.ingest_conversation is not implemented yet"
-        in job.json()["error"]
-    )
+    assert job.json()["error"] is None
 
 
 async def test_sql_review_filter_matches_python_review_policy(tenant_pair) -> None:
