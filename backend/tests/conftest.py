@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 
 from inbound_api.db import engine
 from inbound_api.main import app
+from inbound_api.settings import get_settings
 
 
 def _owner_database_url() -> str:
@@ -23,7 +24,8 @@ async def owner_database_url() -> str:
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def dispose_async_engine() -> AsyncIterator[None]:
+async def dispose_async_engine(monkeypatch) -> AsyncIterator[None]:
+    monkeypatch.setattr(get_settings(), "session_cookie_secure", False)
     yield
     await engine.dispose()
 

@@ -74,7 +74,9 @@ reviews retain previous values and record reviewer, timestamp, note, and provena
 
 Call reports and knowledge imports enqueue durable jobs inside their write transaction.
 The worker claims one job through the `claim_next_job` security-definer function using
-`FOR UPDATE SKIP LOCKED`; a lease expiry makes a crashed worker's job reclaimable.
+`FOR UPDATE SKIP LOCKED`. Each claim receives a lease token; a heartbeat extends the
+lease while the handler runs, and token-guarded updates prevent stale workers from
+committing results after a reclaim.
 Transient failures retry with exponential backoff up to `JOB_MAX_ATTEMPTS`. Permanent
 errors, unimplemented handlers, and exhausted retries are marked failed.
 
@@ -85,7 +87,20 @@ Run the worker with `uv run --directory backend python -m inbound_api.worker`.
 The shared crawler, document readers, chunking, digest prompt, and manifest logic live in
 `core/inbound_core/knowledge.py`; voice retains its CLI-compatible wrapper. Tenant uploads
 are stored under `UPLOAD_DIR` (default `backend/var/uploads`) with relative paths in source
-manifests. Digest generation requires `GOOGLE_API_KEY`.
+manifests and are removed by a tenant-scoped cleanup job when an assistant is deleted.
+Missing upload directories are treated as already cleaned; other filesystem errors trigger
+the normal job retry policy. Failed-source manifest updates are skipped after a job loses
+its lease.
+Failed refreshes retain existing chunks and their prior fetch timestamp. A partial refresh
+builds the digest from fresh content and retained chunks; a refresh with no usable fresh
+content fails without replacing the latest digest. URL sources and redirect hops are
+resolved and checked to block private and otherwise non-public IP addresses. Set
+`KNOWLEDGE_ALLOW_PRIVATE_URLS=true` only for trusted local development.
+
+Session cookies are Secure by default. Cookie-authenticated writes validate `Origin`
+against `ALLOWED_ORIGINS` (default `http://localhost:5173`); without an Origin, requests
+marked `same-site` or `cross-site` are rejected. Bearer and internal service-token requests
+are exempt.
 
 ## Internal voice API
 
@@ -94,7 +109,8 @@ are idempotent by channel and external call ID; report retries do not duplicate 
 records or graph jobs after completion. `conversation_tenant` is the narrow security-
 definer lookup used to route reports into the correct tenant session.
 
-Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `UPLOAD_DIR`,
+Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `ALLOWED_ORIGINS`,
+`KNOWLEDGE_ALLOW_PRIVATE_URLS`, `UPLOAD_DIR`,
 `MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
 `KNOWLEDGE_REQUEST_DELAY`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
 `JOB_LEASE_SECONDS`, and `WORKER_POLL_SECONDS`.

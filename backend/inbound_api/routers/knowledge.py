@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
@@ -29,6 +30,7 @@ from inbound_api.schemas import (
 )
 from inbound_api.services.audit import write_audit
 from inbound_api.services.pagination import page_query
+from inbound_api.services.url_safety import is_public_http_url
 from inbound_api.settings import get_settings
 
 router = APIRouter(tags=["knowledge"])
@@ -57,11 +59,17 @@ async def list_sources(
     "/assistants/{assistant_id}/knowledge/sources",
     response_model=KnowledgeSourceResponse,
     status_code=201,
+    responses={
+        411: {"description": "Content-Length is required for multipart uploads"},
+        413: {"description": "Knowledge upload is too large"},
+    },
     openapi_extra={
         "requestBody": {
             "required": True,
             "content": {
-                "application/json": {"schema": KnowledgeSourceCreate.model_json_schema()},
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/KnowledgeSourceCreate"}
+                },
                 "multipart/form-data": {
                     "schema": {
                         "type": "object",
@@ -91,6 +99,11 @@ async def create_source(
         parsed = urlsplit(source.uri)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise HTTPException(status_code=422, detail="Knowledge URL must be HTTP(S) with a host")
+        settings = get_settings()
+        if not settings.knowledge_allow_private_urls and not await asyncio.to_thread(
+            is_public_http_url, source.uri
+        ):
+            raise HTTPException(status_code=422, detail="Knowledge URL must resolve to public IPs")
         row = KnowledgeSource(
             tenant_id=ctx.tenant_id,
             assistant_id=assistant_id,
@@ -100,6 +113,15 @@ async def create_source(
             manifest={},
         )
     elif content_type.startswith("multipart/form-data"):
+        content_length = request.headers.get("content-length")
+        if content_length is None:
+            raise HTTPException(status_code=411, detail="Content-Length is required for uploads")
+        try:
+            declared_size = int(content_length)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length") from None
+        if declared_size > get_settings().max_upload_bytes + 64 * 1024:
+            raise HTTPException(status_code=413, detail="Knowledge upload is too large")
         form = await request.form()
         upload = form.get("file")
         if upload is None or not hasattr(upload, "read"):

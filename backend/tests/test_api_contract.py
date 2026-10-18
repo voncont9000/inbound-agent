@@ -4,10 +4,82 @@ from pathlib import Path
 from inbound_api.main import app
 
 OPENAPI_PATH = Path(__file__).resolve().parents[1] / "openapi.json"
+PRE_PLATFORM_API_COMPONENTS = {
+    "AssistantConfig-Input",
+    "AssistantConfig-Output",
+    "AssistantCreate",
+    "AssistantListResponse",
+    "AssistantResponse",
+    "AssistantUpdate",
+    "AssistantVersionResponse",
+    "AssistantVersionsResponse",
+    "AuthResponse",
+    "CallReportAccepted",
+    "CallReportRequest",
+    "CallStartRequest",
+    "CommitmentResponse",
+    "ContactDetailResponse",
+    "ContactMergeRequest",
+    "ContactMergeResponse",
+    "ContactSplitRequest",
+    "ContactSplitResponse",
+    "ContactSummary",
+    "ContactsResponse",
+    "ConversationCreatedResponse",
+    "ConversationDetailResponse",
+    "ConversationListResponse",
+    "ConversationReviewCreate",
+    "ConversationReviewResponse",
+    "ConversationSummary",
+    "DateDeadlineUrgencyRule",
+    "FactResponse",
+    "FieldSpec",
+    "HTTPValidationError",
+    "IdentityResponse",
+    "IntakeResponse",
+    "JobResponse",
+    "KeywordUrgencyRule",
+    "KnowledgeConfig-Input",
+    "KnowledgeConfig-Output",
+    "KnowledgeDigestResponse",
+    "KnowledgeDigestUpdate",
+    "KnowledgeFAQ",
+    "KnowledgeGapResponse",
+    "KnowledgeGapUpdate",
+    "KnowledgeGapsResponse",
+    "KnowledgeSource",
+    "KnowledgeSourceCreate",
+    "KnowledgeSourceResponse",
+    "KnowledgeSourcesResponse",
+    "LoginRequest",
+    "LogoutResponse",
+    "MeResponse",
+    "MessageResponse",
+    "OfficeHours",
+    "PriceItem",
+    "RouteResponse",
+    "ServiceConfig",
+    "SignupRequest",
+    "TaskListResponse",
+    "TaskSummary",
+    "TaskUpdate",
+    "TemplateResponse",
+    "TenantResponse",
+    "TranscriptTurn",
+    "UserResponse",
+    "ValidationError",
+}
 
 
 def test_committed_openapi_is_current() -> None:
     assert json.loads(OPENAPI_PATH.read_text(encoding="utf-8")) == app.openapi()
+
+
+def test_openapi_preserves_legacy_components_and_knowledge_source_create() -> None:
+    components = app.openapi()["components"]["schemas"]
+
+    assert "KnowledgeSourceCreate" in components
+    assert PRE_PLATFORM_API_COMPONENTS <= components.keys()
 
 
 def test_all_feature_routers_are_mounted() -> None:

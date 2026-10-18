@@ -15,13 +15,15 @@ from inbound_core.knowledge import (
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from inbound_api.jobs import PermanentJobError, register
+from inbound_api.db import tenant_session
+from inbound_api.jobs import PermanentJobError, job_lease_held, register
 from inbound_api.models import (
     Assistant,
     KnowledgeChunk,
     KnowledgeDigest,
     KnowledgeSource,
 )
+from inbound_api.services.url_safety import is_public_http_url
 from inbound_api.settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
@@ -56,14 +58,17 @@ async def knowledge_import(session: AsyncSession, payload: dict[str, Any]) -> di
     if not sources:
         raise PermanentJobError("No knowledge sources are available.")
     records_by_source: dict[UUID, list[dict[str, Any]]] = {}
-    all_records: list[dict[str, Any]] = []
+    retained_records_by_source: dict[UUID, list[dict[str, Any]]] = {}
+    usable_by_source: dict[UUID, bool] = {}
     for source in sources:
         if source.kind == "url":
+            allow_url = None if settings.knowledge_allow_private_urls else is_public_http_url
             records = await asyncio.to_thread(
                 crawl_websites,
                 [source.uri],
                 max_pages=settings.knowledge_max_pages,
                 request_delay=settings.knowledge_request_delay,
+                allow_url=allow_url,
             )
         else:
             stored_path = source.manifest.get("stored_path")
@@ -85,7 +90,65 @@ async def knowledge_import(session: AsyncSession, payload: dict[str, Any]) -> di
                     read_files, [file_path], display_names=[source.uri]
                 )
         records_by_source[source.id] = records
-        all_records.extend(records)
+        usable_by_source[source.id] = any(
+            isinstance(record.get("text"), str) and record["text"].strip() for record in records
+        )
+        if not usable_by_source[source.id]:
+            chunks = await session.scalars(
+                select(KnowledgeChunk)
+                .where(KnowledgeChunk.source_id == source.id)
+                .order_by(KnowledgeChunk.chunk_index)
+            )
+            source_label = f"file:{source.uri}" if source.kind == "file" else source.uri
+            retained_records_by_source[source.id] = [
+                {
+                    "source": source_label,
+                    "title": chunk.title,
+                    "text": chunk.text,
+                    "fetched_at": (source.fetched_at or source.created_at).isoformat(),
+                    "status": "ok",
+                    "chars": len(chunk.text),
+                    "errors": [],
+                }
+                for chunk in chunks
+            ]
+
+    if not any(usable_by_source.values()):
+        failed_manifests = {}
+        for source in sources:
+            errors = [
+                error
+                for record in records_by_source[source.id]
+                for error in record.get("errors", [])
+            ]
+            last_error = "; ".join(errors) or "No usable text was returned by the source."
+            failed_manifests[source.id] = {
+                **source.manifest,
+                "status": "error",
+                "last_error": last_error,
+                "last_attempt_pages": [
+                    {key: value for key, value in record.items() if key != "text"}
+                    for record in records_by_source[source.id]
+                ],
+            }
+        async with tenant_session(sources[0].tenant_id) as error_session:
+            if await job_lease_held(error_session):
+                for source in sources:
+                    failed_source = await error_session.get(KnowledgeSource, source.id)
+                    if failed_source is not None:
+                        failed_source.status = "failed"
+                        failed_source.manifest = failed_manifests[source.id]
+        raise PermanentJobError("No knowledge sources produced usable text.")
+
+    all_records = [
+        record
+        for source in sources
+        for record in (
+            records_by_source[source.id]
+            if usable_by_source[source.id]
+            else retained_records_by_source[source.id]
+        )
+    ]
     client = make_genai_client(api_key)
     try:
         digest, usage = await generate_digest(
@@ -100,38 +163,58 @@ async def knowledge_import(session: AsyncSession, payload: dict[str, Any]) -> di
     total_chunks = 0
     now = datetime.now(UTC)
     for source in sources:
-        records = records_by_source[source.id]
-        await session.execute(delete(KnowledgeChunk).where(KnowledgeChunk.source_id == source.id))
-        chunks = build_chunks(records)
-        next_index = 0
-        for chunk in chunks:
-            session.add(
-                KnowledgeChunk(
-                    tenant_id=source.tenant_id,
-                    source_id=source.id,
-                    chunk_index=next_index,
-                    title=chunk["title"],
-                    text=chunk["text"],
-                    sha256=chunk["sha256"],
-                    embedding=None,
-                )
+        fresh_records = records_by_source[source.id]
+        if usable_by_source[source.id]:
+            await session.execute(
+                delete(KnowledgeChunk).where(KnowledgeChunk.source_id == source.id)
             )
-            next_index += 1
-        total_chunks += next_index
-        retained = {
-            key: value
-            for key, value in source.manifest.items()
-            if key in {"stored_path", "filename", "content_type", "size"}
-        }
-        source.manifest = {
-            **retained,
-            "pages": [
-                {key: value for key, value in record.items() if key != "text"} for record in records
-            ],
-            "chunk_count": next_index,
-        }
-        source.status = "ready" if any(record["status"] == "ok" for record in records) else "failed"
-        source.fetched_at = now
+            chunks = build_chunks(fresh_records)
+            next_index = 0
+            for chunk in chunks:
+                session.add(
+                    KnowledgeChunk(
+                        tenant_id=source.tenant_id,
+                        source_id=source.id,
+                        chunk_index=next_index,
+                        title=chunk["title"],
+                        text=chunk["text"],
+                        sha256=chunk["sha256"],
+                        embedding=None,
+                    )
+                )
+                next_index += 1
+            total_chunks += next_index
+            retained = {
+                key: value
+                for key, value in source.manifest.items()
+                if key in {"stored_path", "filename", "content_type", "size"}
+            }
+            source.manifest = {
+                **retained,
+                "pages": [
+                    {key: value for key, value in record.items() if key != "text"}
+                    for record in fresh_records
+                ],
+                "chunk_count": next_index,
+                "status": "ready",
+            }
+            source.status = "ready"
+            source.fetched_at = now
+        else:
+            retained_records = retained_records_by_source[source.id]
+            total_chunks += len(retained_records)
+            errors = [error for record in fresh_records for error in record.get("errors", [])]
+            last_error = "; ".join(errors) or "No usable text was returned by the source."
+            source.manifest = {
+                **source.manifest,
+                "status": "error",
+                "last_error": last_error,
+                "last_attempt_pages": [
+                    {key: value for key, value in record.items() if key != "text"}
+                    for record in fresh_records
+                ],
+            }
+            source.status = "failed"
     digest_row = KnowledgeDigest(
         tenant_id=assistant.tenant_id,
         assistant_id=assistant_id,
