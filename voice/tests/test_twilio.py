@@ -59,6 +59,46 @@ def test_twiml_signature_validation_and_public_websocket_url() -> None:
     assert missing_signature.status_code == 403
 
 
+def test_public_base_url_signature_includes_request_query_string() -> None:
+    token = "query-string-token"
+    public_base_url = "https://voice.example.com"
+    query_string = "source=twilio&attempt=2"
+    form = {"To": "+449876543210", "From": "+441234567890"}
+    signature = compute_signature(
+        token,
+        f"{public_base_url}/twilio/voice?{query_string}",
+        form,
+    )
+
+    with TestClient(
+        create_app(
+            {
+                "TWILIO_AUTH_TOKEN": token,
+                "PUBLIC_BASE_URL": public_base_url,
+            }
+        )
+    ) as client:
+        response = client.post(
+            f"/twilio/voice?{query_string}",
+            data=form,
+            headers={"X-Twilio-Signature": signature},
+        )
+        without_query_signature = client.post(
+            f"/twilio/voice?{query_string}",
+            data=form,
+            headers={
+                "X-Twilio-Signature": compute_signature(
+                    token,
+                    f"{public_base_url}/twilio/voice",
+                    form,
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    assert without_query_signature.status_code == 403
+
+
 def test_webhook_skips_signature_when_token_is_not_configured() -> None:
     with TestClient(create_app({})) as client:
         response = client.post(

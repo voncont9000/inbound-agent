@@ -17,6 +17,7 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketTransport,
 )
 from starlette.datastructures import FormData
+from starlette.websockets import WebSocketState
 
 from bot import resolve_caller_id, run_bot
 from inbound_voice.call_setup import prepare_call
@@ -44,6 +45,7 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
         public_base_url = env.get("PUBLIC_BASE_URL", "").strip()
         webhook_url = (
             f"{public_base_url.rstrip('/')}/twilio/voice"
+            + (f"?{request.url.query}" if request.url.query else "")
             if public_base_url
             else _external_request_url(request)
         )
@@ -119,7 +121,7 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
             except RuntimeError:
                 pass
         finally:
-            if websocket.client_state.value != 3:
+            if websocket.client_state != WebSocketState.DISCONNECTED:
                 try:
                     await websocket.close()
                 except RuntimeError:

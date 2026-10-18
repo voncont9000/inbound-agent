@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import json
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -74,6 +75,15 @@ def test_caller_id_uses_test_override_or_twilio_start_parameters() -> None:
         )
         == "07700900456"
     )
+
+
+def test_runner_external_call_id_uses_call_data_or_generates_uuid() -> None:
+    helper = BOT_MODULE._runner_external_call_id
+
+    assert helper({"call_id": "CA123"}) == "CA123"
+    assert helper(SimpleNamespace(call_id="CA456")) == "CA456"
+    fallback = helper(None)
+    assert str(uuid.UUID(fallback)) == fallback
 
 
 def test_number_hold_strategy_waits_only_for_incomplete_numbers() -> None:

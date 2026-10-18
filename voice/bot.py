@@ -719,7 +719,11 @@ async def bot(runner_args: RunnerArguments) -> None:
     telephony = getattr(runner_args, "transport_type", None) == "twilio"
     call_data = getattr(runner_args, "call_data", None)
     caller_id = resolve_caller_id(call_data, os.environ, telephony=telephony)
-    call_id = str(getattr(runner_args, "call_id", None) or uuid.uuid4())
+    call_id = (
+        _runner_external_call_id(call_data)
+        if telephony
+        else str(getattr(runner_args, "call_id", None) or uuid.uuid4())
+    )
     to_number, from_number = _runner_call_numbers(call_data)
     prepared = await prepare_call(
         os.environ,
@@ -735,6 +739,15 @@ async def bot(runner_args: RunnerArguments) -> None:
         prepared=prepared,
         call_id=call_id,
     )
+
+
+def _runner_external_call_id(call_data: Any) -> str:
+    call_id = (
+        call_data.get("call_id")
+        if isinstance(call_data, Mapping)
+        else getattr(call_data, "call_id", None)
+    )
+    return str(call_id or uuid.uuid4())
 
 
 def _runner_call_numbers(call_data: Any) -> tuple[str | None, str | None]:
