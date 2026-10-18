@@ -145,7 +145,7 @@ robots requests, preventing a second DNS resolution from rebinding a checked pub
 Settings include `APP_ENV`, `VOICE_SERVICE_TOKEN`, `WEB_CALL_BASE_URL`, `SESSION_TTL_HOURS`,
 `SESSION_COOKIE_SECURE`, `ALLOWED_ORIGINS`, `KNOWLEDGE_ALLOW_PRIVATE_URLS`, `UPLOAD_DIR`,
 `MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
-`KNOWLEDGE_REQUEST_DELAY`, `WHATSAPP_MODE`, `WHATSAPP_APP_SECRET`,
+`KNOWLEDGE_REQUEST_DELAY`, `WHATSAPP_MODE` (`fake`, `graph`, or `off`), `WHATSAPP_APP_SECRET`,
 `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_GRAPH_BASE_URL`,
 `TEXT_AGENT_MODEL`, `EXTRACTION_MODEL`, `MESSAGE_EXTRACT_DELAY_SECONDS`,
 `FAKE_OUTBOX_PATH`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
@@ -155,6 +155,9 @@ Settings include `APP_ENV`, `VOICE_SERVICE_TOKEN`, `WEB_CALL_BASE_URL`, `SESSION
 must be non-empty and must not use the committed development default. The Makefile includes
 and exports `.env`; if `MIGRATION_DATABASE_URL` is not explicitly set there, it is built from
 `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
+
+In production, `WHATSAPP_MODE=off` requires no Meta credentials; `fake` is rejected, and `graph`
+requires the app secret, verify token, and access token.
 
 ## Context graph
 

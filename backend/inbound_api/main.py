@@ -1,5 +1,8 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
+from inbound_api.db import session_factory
 from inbound_api.routers import (
     assistants,
     auth,
@@ -14,6 +17,17 @@ from inbound_api.routers import (
 from inbound_api.schemas import KnowledgeSourceCreate
 
 app = FastAPI(title="Inbound API", version="0.1.0")
+
+
+@app.get("/healthz", include_in_schema=False)
+async def healthz() -> JSONResponse:
+    try:
+        async with session_factory() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(status_code=503, content={"ok": False})
+    return JSONResponse(content={"ok": True})
+
 
 for router in (
     auth.router,
