@@ -275,10 +275,12 @@ function makeContacts(tenantIndex: number): Schemas["ContactDetailResponse"][] {
 
 export interface TenantFixture {
   tenant: Schemas["TenantResponse"];
-  assistant: Schemas["AssistantResponse"];
-  versions: Schemas["AssistantVersionResponse"][];
-  sources: Schemas["KnowledgeSourceResponse"][];
-  digest: Schemas["KnowledgeDigestResponse"];
+  assistants: Schemas["AssistantResponse"][];
+  assistantData: Record<string, {
+    versions: Schemas["AssistantVersionResponse"][];
+    sources: Schemas["KnowledgeSourceResponse"][];
+    digest: Schemas["KnowledgeDigestResponse"];
+  }>;
   conversations: Schemas["ConversationDetailResponse"][];
   contacts: Schemas["ContactDetailResponse"][];
   gaps: Schemas["KnowledgeGapResponse"][];
@@ -296,17 +298,21 @@ function makeTenant(index: number): TenantFixture {
   const contacts = makeContacts(index);
   const taskList = conversations.flatMap(({ tasks }) => tasks);
   return {
-    tenant, assistant,
-    versions: [1, 2, 3].map((version) => ({
-      id: `${assistant.id}-version-${version}`, version, created_by: fakeUser.id,
-      config: version === 3 ? config : { ...config, greeting: version === 2 ? `${config.greeting} Welcome.` : config.greeting, review_confidence_threshold: version === 1 ? 0.6 : config.review_confidence_threshold },
-      created_at: date(version + 2),
-    })),
-    sources: [
-      { id: `${assistant.id}-source-1`, assistant_id: assistant.id, kind: "url", uri: index === 0 ? "https://brightside.example/" : "https://demoandco.example/", status: "succeeded", manifest: {}, fetched_at: date(5), created_at: date(1) },
-      { id: `${assistant.id}-source-2`, assistant_id: assistant.id, kind: "file", uri: "service-guide.pdf", status: "pending", manifest: {}, fetched_at: null, created_at: date(6) },
-    ],
-    digest: { id: `${assistant.id}-digest`, assistant_id: assistant.id, content: index === 0 ? "Brightside provides plumbing and heating support. The team confirms availability and pricing." : "Demo & Co provides general information and arranges solicitor callbacks.", edited_by: fakeUser.id, created_at: date(5) },
+    tenant, assistants: [assistant],
+    assistantData: {
+      [assistant.id]: {
+        versions: [1, 2, 3].map((version) => ({
+          id: `${assistant.id}-version-${version}`, version, created_by: fakeUser.id,
+          config: version === 3 ? config : { ...config, greeting: version === 2 ? `${config.greeting} Welcome.` : config.greeting, review_confidence_threshold: version === 1 ? 0.6 : config.review_confidence_threshold },
+          created_at: date(version + 2),
+        })),
+        sources: [
+          { id: `${assistant.id}-source-1`, assistant_id: assistant.id, kind: "url", uri: index === 0 ? "https://brightside.example/" : "https://demoandco.example/", status: "succeeded", manifest: {}, fetched_at: date(5), created_at: date(1) },
+          { id: `${assistant.id}-source-2`, assistant_id: assistant.id, kind: "file", uri: "service-guide.pdf", status: "pending", manifest: {}, fetched_at: null, created_at: date(6) },
+        ],
+        digest: { id: `${assistant.id}-digest`, assistant_id: assistant.id, content: index === 0 ? "Brightside provides plumbing and heating support. The team confirms availability and pricing." : "Demo & Co provides general information and arranges solicitor callbacks.", edited_by: fakeUser.id, created_at: date(5) },
+      },
+    },
     conversations, contacts,
     gaps: [0, 1, 2].map((n) => ({
       id: `${assistant.id}-gap-${n + 1}`, assistant_id: assistant.id, conversation_id: conversations[n].id,

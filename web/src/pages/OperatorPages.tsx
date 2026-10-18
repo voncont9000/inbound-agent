@@ -293,11 +293,29 @@ export function ContactPage() {
   const detail = detailQuery.data;
   const merge = useMutation({
     mutationFn: () => unwrap(api.POST("/contacts/{contact_id}/merge", { params: { path: { contact_id: id } }, body: { other_id: otherId } })),
-    onSuccess: async ({ survivor_id }) => { setDialog(""); await queryClient.invalidateQueries({ queryKey: ["contacts"] }); navigate(`/contacts/${survivor_id}`); },
+    onSuccess: async ({ survivor_id }) => {
+      setDialog("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["contacts-for-merge"] }),
+        queryClient.invalidateQueries({ queryKey: ["contact", survivor_id] }),
+        queryClient.invalidateQueries({ queryKey: ["contact", id] }),
+      ]);
+      navigate(`/contacts/${survivor_id}`);
+    },
   });
   const split = useMutation({
     mutationFn: () => unwrap(api.POST("/contacts/{contact_id}/split", { params: { path: { contact_id: id } }, body: { identity_ids: selectedIdentities } })),
-    onSuccess: async ({ split_person_id }) => { setDialog(""); await queryClient.invalidateQueries({ queryKey: ["contacts"] }); navigate(`/contacts/${split_person_id}`); },
+    onSuccess: async ({ split_person_id }) => {
+      setDialog("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["contacts-for-merge"] }),
+        queryClient.invalidateQueries({ queryKey: ["contact", split_person_id] }),
+        queryClient.invalidateQueries({ queryKey: ["contact", id] }),
+      ]);
+      navigate(`/contacts/${split_person_id}`);
+    },
   });
   if (detailQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;
   if (detailQuery.error || !detail) return <main className="page" id="main-content"><ErrorState message="Contact could not be loaded." /></main>;

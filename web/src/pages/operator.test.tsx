@@ -14,6 +14,7 @@ const contactId = "30000000-0000-4000-8000-000000000001";
 describe("operator workflows", () => {
   it("validates settings, saves the complete config, and shows server validation paths", async () => {
     const user = userEvent.setup();
+    const initialConfig = structuredClone(mockDb.tenants[0].assistants[0].config);
     let putCount = 0;
     let capturedBody: Record<string, unknown> | undefined;
     const putListener = ({ request }: { request: Request }) => {
@@ -38,27 +39,19 @@ describe("operator workflows", () => {
     expect(putCount).toBe(0);
 
     await user.clear(enumChoices);
-    await user.type(enumChoices, "no_heating, leak");
+    await user.type(enumChoices, "a, b");
     await user.clear(fieldNames[1]);
     await user.type(fieldNames[1], "phone");
+    await user.clear(screen.getByLabelText("Phrases (comma or newline separated)"));
+    await user.type(screen.getByLabelText("Phrases (comma or newline separated)"), "gas leak, flooding");
+    fireEvent.change(fieldNames[6], { target: { value: "requested_visit_date" } });
+    fireEvent.change(screen.getAllByLabelText("Service key")[0], { target: { value: "boiler_service" } });
     await user.click(screen.getByRole("radio", { name: /Read email addresses back letter by letter/ }));
     await user.click(screen.getByRole("radio", { name: /Read back every field marked critical/ }));
     await user.click(screen.getByRole("checkbox", { name: /request callback/ }));
     const threshold = screen.getByRole("slider", { name: /confidence threshold/i });
     fireEvent.change(threshold, { target: { value: "0.8" } });
 
-    server.use(http.put<{ id: string }, Schemas["AssistantUpdate"], Schemas["AssistantResponse"]>("*/api/assistants/:id", async ({ request }) => {
-      const body = await request.json() as Schemas["AssistantUpdate"];
-      const assistant = mockDb.tenants[0].assistant;
-      return HttpResponse.json<Schemas["AssistantResponse"]>({
-        ...assistant,
-        ...body,
-        name: body.name ?? assistant.name,
-        template: body.template ?? assistant.template,
-        version: 4,
-        updated_at: new Date().toISOString(),
-      });
-    }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(capturedBody).toBeDefined());
     expect(await screen.findByText("Saved version 4")).toBeInTheDocument();
@@ -67,16 +60,20 @@ describe("operator workflows", () => {
     expect(savedConfig.readback).toBe("critical");
     expect(savedConfig.live_actions).toContain("request_callback");
     expect(savedConfig.review_confidence_threshold).toBe(0.8);
-    expect(savedConfig.knowledge).toEqual(mockDb.tenants[0].assistant.config.knowledge);
-    expect(savedConfig.price_list).toEqual(mockDb.tenants[0].assistant.config.price_list);
-    for (const service of Object.values(savedConfig.services as Record<string, { fields: Array<Record<string, unknown>> }>)) {
+    expect(savedConfig.knowledge).toEqual(initialConfig.knowledge);
+    expect(savedConfig.price_list).toEqual(initialConfig.price_list);
+    const savedServices = savedConfig.services as Record<string, { fields: Array<Record<string, unknown>> }>;
+    expect(savedServices.boiler_service.fields[4].choices).toEqual(["a", "b"]);
+    expect((savedConfig.urgency_rules as Array<Record<string, unknown>>).find(({ type }) => type === "keyword")?.phrases).toEqual(["gas leak", "flooding"]);
+    expect((savedConfig.urgency_rules as Array<Record<string, unknown>>).find(({ type }) => type === "date_deadline")).toMatchObject({ service: "boiler_service", field: "requested_visit_date" });
+    for (const service of Object.values(savedServices)) {
       for (const field of service.fields) {
         if (field.type !== "enum") expect(field).not.toHaveProperty("choices");
       }
     }
 
     server.use(http.put<{ id: string }, Schemas["AssistantUpdate"], Schemas["HTTPValidationError"]>("*/api/assistants/:id", () => HttpResponse.json<Schemas["HTTPValidationError"]>({
-      detail: [{ loc: ["body", "config", "services", "boiler_repair", "fields", 0, "label"], msg: "Label rejected by server.", type: "value_error" }],
+      detail: [{ loc: ["body", "config", "services", "boiler_service", "fields", 0, "label"], msg: "Label rejected by server.", type: "value_error" }],
     }, { status: 422 })));
     const firstLabel = screen.getAllByLabelText("Field label")[0];
     await user.clear(firstLabel);
@@ -86,6 +83,55 @@ describe("operator workflows", () => {
     expect(firstLabel).toHaveAttribute("aria-invalid", "true");
     expect(document.getElementById(firstLabel.getAttribute("aria-describedby") ?? "")).toHaveTextContent("Label rejected by server.");
     server.events.removeListener("request:start", putListener);
+  }, 15000);
+
+  it("rejects duplicate contact keys without overwriting a contact", async () => {
+    const user = userEvent.setup();
+    const contacts = mockDb.tenants[0].assistants[0].config.contacts;
+    const keys = Object.keys(contacts);
+    const firstKey = keys[0]!;
+    const secondKey = keys[1]!;
+    let putCount = 0;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) putCount += 1;
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+
+    const firstContactKey = screen.getAllByLabelText("Contact key")[0];
+    fireEvent.change(firstContactKey, { target: { value: secondKey } });
+    expect(firstContactKey).toHaveValue(firstKey);
+    expect(firstContactKey).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getAllByText("Contact keys must be unique.")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Contact value")[0]).toHaveValue(contacts[firstKey]);
+    expect(screen.getAllByLabelText("Contact value")[1]).toHaveValue(contacts[secondKey]);
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(putCount).toBe(0);
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("appends created assistants and keeps the existing assistant state", async () => {
+    const user = userEvent.setup();
+    const existingAssistantId = mockDb.tenants[0].assistants[0].id;
+    renderApp("/assistants", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Assistants" });
+    await user.click(screen.getByRole("button", { name: "Create from template" }));
+    await user.click(await screen.findByRole("radio", { name: /home services/i }));
+    await user.type(screen.getByLabelText("Assistant name"), "Second assistant");
+    await user.click(screen.getByRole("button", { name: "Create assistant" }));
+
+    await screen.findByRole("heading", { name: "Second assistant" });
+    const tenant = mockDb.tenants[0];
+    expect(tenant.assistants).toHaveLength(2);
+    expect(tenant.assistants[0].id).toBe(existingAssistantId);
+    expect(tenant.assistants[1].name).toBe("Second assistant");
+    expect(tenant.assistantData[existingAssistantId].versions).toHaveLength(3);
+    expect(tenant.assistantData[tenant.assistants[1].id].versions).toHaveLength(1);
+    await user.click(screen.getByRole("link", { name: "Assistants" }));
+    expect(await screen.findByRole("heading", { name: "Brightside reception" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Second assistant" })).toBeInTheDocument();
   });
 
   it("resolves a review conflict only after explicit caller-confirmation override", async () => {
@@ -180,6 +226,14 @@ describe("operator workflows", () => {
     const user = userEvent.setup();
     let mergeBody: unknown;
     let mergeCount = 0;
+    let contactsListRequests = 0;
+    let currentContactRequests = 0;
+    const queryListener = ({ request }: { request: Request }) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith("/contacts")) contactsListRequests += 1;
+      if (request.method === "GET" && url.pathname.endsWith(`/contacts/${contactId}`)) currentContactRequests += 1;
+    };
+    server.events.on("request:start", queryListener);
     server.use(http.post<{ id: string }, Schemas["ContactMergeRequest"], Schemas["ContactMergeResponse"]>("*/api/contacts/:id/merge", async ({ request, params }) => {
       mergeCount += 1;
       mergeBody = await request.json() as Schemas["ContactMergeRequest"];
@@ -196,8 +250,11 @@ describe("operator workflows", () => {
     await user.click(screen.getByRole("button", { name: "Merge contact" }));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Merge" }));
     await waitFor(() => expect(mergeBody).toEqual({ other_id: "30000000-0000-4000-8000-000000000002" }));
+    await waitFor(() => expect(contactsListRequests).toBeGreaterThan(1));
+    await waitFor(() => expect(currentContactRequests).toBeGreaterThan(1));
     expect(screen.getByTestId("current-location")).toHaveTextContent(`/contacts/${contactId}`);
     expect(screen.getByRole("heading", { name: "Jamie Morgan" })).toBeInTheDocument();
+    server.events.removeListener("request:start", queryListener);
   });
 
   it("confirms a split, sends selected identities, and navigates to the returned contact", async () => {
@@ -206,6 +263,12 @@ describe("operator workflows", () => {
     const contact = mockDb.tenants[0].contacts[0];
     const identityId = contact.identities[0].id;
     let splitBody: unknown;
+    let currentContactRequests = 0;
+    const queryListener = ({ request }: { request: Request }) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith(`/contacts/${contactId}`)) currentContactRequests += 1;
+    };
+    server.events.on("request:start", queryListener);
     server.use(
       http.post<{ id: string }, Schemas["ContactSplitRequest"], Schemas["ContactSplitResponse"]>("*/api/contacts/:id/split", async ({ request, params }) => {
         splitBody = await request.json();
@@ -228,6 +291,8 @@ describe("operator workflows", () => {
     await user.click(within(dialog).getByRole("button", { name: "Split" }));
     await waitFor(() => expect(splitBody).toEqual({ identity_ids: [identityId] }));
     expect(await screen.findByTestId("current-location")).toHaveTextContent(`/contacts/${splitId}`);
+    await waitFor(() => expect(currentContactRequests).toBeGreaterThan(1));
+    server.events.removeListener("request:start", queryListener);
   });
 
   it("redirects to login and returns to the inbox filters after sign-in", async () => {
