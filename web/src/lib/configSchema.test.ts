@@ -13,6 +13,7 @@ describe("assistant config JSON schema options", () => {
       "end_call",
       "check_availability",
       "book_appointment",
+      "transfer_call",
     ]);
     expect(enumAt(assistantConfigSchema, ["$defs", "FieldSpec", "properties", "type", "enum"], [])).toEqual([
       "string",

@@ -144,6 +144,17 @@ def score_call(
             "actual": actual,
             "passed": actual is expected,
         }
+    transfer_checks = {}
+    if "expected_transfer" in scenario:
+        expected_transfer = scenario["expected_transfer"]
+        actual_transfer = metrics.get("transfer", {})
+        for name, expected in expected_transfer.items():
+            actual = actual_transfer.get(name) if isinstance(actual_transfer, dict) else None
+            transfer_checks[name] = {
+                "expected": expected,
+                "actual": actual,
+                "passed": actual == expected,
+            }
 
     booking_checks = {}
     bookings = (fake_state or {}).get("bookings", [])
@@ -195,6 +206,7 @@ def score_call(
         *intake_checks.values(),
         *task_checks.values(),
         *booking_checks.values(),
+        *transfer_checks.values(),
         *knowledge_gap_checks.values(),
     ]
     price_table = prices if prices is not None else load_price_table(PRICES_PATH)
@@ -228,6 +240,7 @@ def score_call(
         "needs_review": intake.get("needs_review", []) if isinstance(intake, dict) else [],
         "task_checks": task_checks,
         "booking_checks": booking_checks,
+        "transfer_checks": transfer_checks,
         "checks_passed": sum(bool(check["passed"]) for check in checks),
         "checks_total": len(checks),
         "turn_latency_summary": metrics.get("turn_latency_summary", {}),

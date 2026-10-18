@@ -31,5 +31,10 @@ Production must use Google or disable Calendar; fake mode is not allowed.
 - Successful bookings create a system conversation message, an appointment commitment, and
   booking details in conversation metrics.
 
+For voice calls, the system speaks configurable holding messages while checking availability
+or creating a booking. The model calls each tool immediately and silently, avoiding dead air or
+an announcement without the corresponding action. These voice-only messages do not affect
+WhatsApp or other text conversations.
+
 See [voice pipeline](voice-pipeline.md) and [text channels](text-channels.md) for channel
 behavior. `.env.example` documents Calendar mode, fake-file path, and fake-provider delay.

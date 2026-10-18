@@ -111,6 +111,8 @@ async def _start_runner(
     transport: str = "webrtc",
     api_base_url: str | None = None,
     service_token: str | None = None,
+    assistant_path: str | None = None,
+    twilio_fake_log_path: str | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
     process_env["STT_PROVIDER"] = stt
@@ -120,6 +122,8 @@ async def _start_runner(
     process_env["SMART_TURN_STOP_SECS"] = str(smart_turn_stop_secs)
     if knowledge_digest_path:
         process_env["KNOWLEDGE_DIGEST_PATH"] = knowledge_digest_path
+    if assistant_path:
+        process_env["ASSISTANT_CONFIG"] = str(VOICE_ROOT / assistant_path)
     _configure_caller_id_override(process_env, caller_id_override)
     if api_base_url is not None and service_token is not None:
         process_env["API_BASE_URL"] = api_base_url
@@ -129,6 +133,9 @@ async def _start_runner(
         process_env["TWILIO_AUTH_TOKEN"] = "test-auth-token"
         process_env["TWILIO_ACCOUNT_SID"] = ""
         process_env["PUBLIC_BASE_URL"] = ""
+        process_env["TWILIO_CALL_CONTROL"] = "fake"
+        if twilio_fake_log_path:
+            process_env["TWILIO_FAKE_CALL_LOG"] = twilio_fake_log_path
         command = ["uv", "run", "phone_server.py", "--port", "7861"]
         readiness_url, readiness_path = PHONE_SERVER_URL, "/healthz"
     else:
@@ -250,10 +257,10 @@ async def _fake_api_state(api_url: str) -> dict[str, Any]:
             return await response.json()
 
 
-async def _set_fake_assistant(api_url: str, assistant_path: str) -> None:
+async def _set_fake_assistant(api_base_url: str, assistant_path: str) -> None:
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"{api_url}/_fake/assistant",
+            f"{api_base_url}/_fake/assistant",
             headers={"X-Service-Token": FAKE_API_TOKEN},
             json={"assistant": assistant_path},
         ) as response:
@@ -479,14 +486,18 @@ async def _run_matrix_calls(
                 output_task = None
                 output_lines = []
                 active_caller_id = object()
+                active_assistant = object()
                 try:
                     for scenario_name in scenario_names:
                         scenario = scenarios[scenario_name]
                         caller_id = scenario.get("caller_id")
-                        if api_base_url is not None and scenario.get("assistant"):
-                            await _set_fake_assistant(api_base_url, scenario["assistant"])
-                        if process is None or (
-                            transport == "webrtc" and caller_id != active_caller_id
+                        assistant_path = scenarios[scenario_name].get("assistant")
+                        if api_base_url is not None and assistant_path:
+                            await _set_fake_assistant(api_base_url, assistant_path)
+                        if (
+                            process is None
+                            or (transport == "webrtc" and caller_id != active_caller_id)
+                            or (api_base_url is None and assistant_path != active_assistant)
                         ):
                             if process is not None:
                                 await _stop_runner(process, output_task)
@@ -506,8 +517,13 @@ async def _run_matrix_calls(
                                 transport,
                                 api_base_url,
                                 FAKE_API_TOKEN if api_base_url is not None else None,
+                                assistant_path,
+                                str(results_dir / "twilio_call_control.jsonl")
+                                if transport == "twilio"
+                                else None,
                             )
                             active_caller_id = caller_id
+                            active_assistant = assistant_path
                         for repetition in repetitions:
                             before = _existing_run_dirs()
                             scratch = (
@@ -529,6 +545,7 @@ async def _run_matrix_calls(
                                     to_number=FAKE_API_TO_NUMBER,
                                     from_number=caller_id,
                                     audio_dir=AUDIO_DIR,
+                                    fake_call_log_path=results_dir / "twilio_call_control.jsonl",
                                 )
                             else:
                                 timeline = await run_call(

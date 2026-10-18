@@ -136,7 +136,7 @@ export function AssistantSettingsPage() {
   }, [assistantQuery.data]);
 
   const readbackOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "readback", "enum"], ["off", "email", "critical"]), [schemaQuery.data]);
-  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "check_availability", "book_appointment", "end_call"]), [schemaQuery.data]);
+  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "check_availability", "book_appointment", "end_call", "transfer_call"]), [schemaQuery.data]);
   const typeOptions = useMemo(() => enumAt(schemaQuery.data, ["$defs", "FieldSpec", "properties", "type", "enum"], ["string", "email", "phone", "date", "boolean", "integer", "number", "enum", "list"]), [schemaQuery.data]);
   const thresholdRange = useMemo(() => rangeAt(schemaQuery.data), [schemaQuery.data]);
   const serverErrors = errors;
@@ -362,6 +362,8 @@ export function AssistantSettingsPage() {
         {bookingConfig && <>
           <div className="form-grid">
             <Field path="booking.calendar_id" label="Calendar ID" help="Use primary for the connected Google account's primary calendar.">{(fieldId) => <input id={fieldId} value={bookingConfig.calendar_id} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.calendar_id = event.target.value; })} />}</Field>
+            <Field path="booking.check_message" label="Availability holding message">{(fieldId) => <input id={fieldId} value={bookingConfig.check_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.check_message = event.target.value; })} />}</Field>
+            <Field path="booking.book_message" label="Booking holding message">{(fieldId) => <input id={fieldId} value={bookingConfig.book_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.book_message = event.target.value; })} />}</Field>
             <Field path="booking.min_notice_hours" label="Minimum notice (hours)">{(fieldId) => <input id={fieldId} type="number" min="0" value={bookingConfig.min_notice_hours} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.min_notice_hours = Number(event.target.value); })} />}</Field>
             <Field path="booking.horizon_days" label="Booking horizon (days)">{(fieldId) => <input id={fieldId} type="number" min="1" max="60" value={bookingConfig.horizon_days} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.horizon_days = Number(event.target.value); })} />}</Field>
             <Field path="booking.buffer_minutes" label="Buffer between appointments (minutes)">{(fieldId) => <input id={fieldId} type="number" min="0" value={bookingConfig.buffer_minutes} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.buffer_minutes = Number(event.target.value); })} />}</Field>
@@ -391,6 +393,18 @@ export function AssistantSettingsPage() {
           <button type="button" onClick={() => update((draft) => { draft.price_list.splice(index, 1); })}>Remove price</button>
         </div>)}
         <button type="button" onClick={() => update((draft) => { draft.price_list.push({ service: "", price: "", notes: "" }); })}>Add price</button>
+      </section>
+      <section className="panel stack"><h2>Transfer targets</h2>
+        {(config.transfer_targets ?? []).map((target, index) => <div className="inline-editor" key={`transfer-${index}`}>
+          <div className="form-grid">
+            {(["key", "label", "phone", "when_to_use"] as const).map((key) => <Field key={key} path={`transfer_targets.${index}.${key}`} label={key === "when_to_use" ? "When to use" : key.replaceAll("_", " ")} error={allErrors[`transfer_targets.${index}.${key}`]}>{(fieldId, describedBy) => key === "when_to_use" ? <textarea id={fieldId} value={target[key]} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.transfer_targets![index][key] = event.target.value; })} /> : <input id={fieldId} type={key === "phone" ? "tel" : "text"} value={target[key]} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.transfer_targets![index][key] = event.target.value; })} />}</Field>)}
+            <Field path={`transfer_targets.${index}.office_hours_only`} label="Only during office hours">{(fieldId) => <input id={fieldId} type="checkbox" checked={target.office_hours_only} onChange={(event) => update((draft) => { draft.transfer_targets![index].office_hours_only = event.target.checked; })} />}</Field>
+          </div>
+          <button type="button" onClick={() => update((draft) => { draft.transfer_targets!.splice(index, 1); })}>Remove transfer target</button>
+        </div>)}
+        <button type="button" onClick={() => update((draft) => { draft.transfer_targets ??= []; draft.transfer_targets.push({ key: "", label: "", phone: "", when_to_use: "", office_hours_only: true }); })}>Add transfer target</button>
+        <Field path="transfer_failed_message" label="Message when nobody answers">{(fieldId) => <textarea id={fieldId} value={config.transfer_failed_message} onChange={(event) => update((draft) => { draft.transfer_failed_message = event.target.value; })} />}</Field>
+        <Field path="transfer_handoff_message" label="Handoff message">{(fieldId) => <textarea id={fieldId} value={config.transfer_handoff_message} onChange={(event) => update((draft) => { draft.transfer_handoff_message = event.target.value; })} />}</Field>
       </section>
       <section className="panel stack"><h2>Contacts</h2>
         {Object.entries(config.contacts).map(([key, value], index) => <div className="form-grid" key={`${key}-${index}`}>
@@ -441,6 +455,7 @@ const liveActionHelp: Record<string, string> = {
   end_call: "End the interaction after a clear closing.",
   check_availability: "Find real Calendar openings; requires booking configuration and Calendar access.",
   book_appointment: "Create a confirmed Calendar event after the caller chooses and confirms a slot.",
+  transfer_call: "Transfer the caller to a configured person; needs at least one transfer target.",
 };
 
 function formatDate(value: string) {

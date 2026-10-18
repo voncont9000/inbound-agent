@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from inbound_core.phone import normalise_phone
 
 
 class OfficeHours(BaseModel):
@@ -14,6 +16,24 @@ class OfficeHours(BaseModel):
     opens: str
     closes: str
     timezone: str = "Europe/London"
+
+
+class TransferTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(pattern=r"^[a-z0-9_]+$")
+    label: str
+    phone: str
+    when_to_use: str
+    office_hours_only: bool = True
+
+    @field_validator("phone")
+    @classmethod
+    def normalise_transfer_phone(cls, value: str) -> str:
+        normalised = normalise_phone(value)
+        if normalised is None:
+            raise ValueError("Transfer phone must be a valid phone number.")
+        return normalised
 
 
 class PriceItem(BaseModel):
@@ -131,6 +151,8 @@ class BookingConfig(BaseModel):
     max_slots_offered: int = Field(default=3, ge=1, le=5)
     slot_step_minutes: int = Field(default=30, ge=5, le=240)
     send_updates: Literal["all", "externalOnly", "none"] = "all"
+    check_message: str = "Let me check the diary."
+    book_message: str = "One moment while I book that."
 
     @model_validator(mode="after")
     def validate_unique_keys(self) -> BookingConfig:
@@ -170,11 +192,24 @@ class AssistantConfig(BaseModel):
             "end_call",
             "check_availability",
             "book_appointment",
+            "transfer_call",
         ]
     ]
     booking: BookingConfig | None = None
+    transfer_targets: list[TransferTarget] = Field(default_factory=list)
+    transfer_handoff_message: str = "I'm putting you through now, please hold."
+    transfer_failed_message: str = (
+        "Sorry, nobody is available to take your call right now. Someone will call you back "
+        "as soon as possible. Goodbye."
+    )
     review_confidence_threshold: float = Field(default=0.7, ge=0, le=1)
 
+    @model_validator(mode="after")
+    def validate_unique_transfer_target_keys(self) -> AssistantConfig:
+        keys = [target.key for target in self.transfer_targets]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Transfer target keys must be unique.")
+        return self
 
 def assistant_config_json_schema() -> dict[str, Any]:
     return AssistantConfig.model_json_schema()

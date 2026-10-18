@@ -105,4 +105,15 @@ urgency_rules:
 #   slot_step_minutes: 30
 #   send_updates: all
 live_actions: []
+transfer_handoff_message: "I'm putting you through now, please hold."
+transfer_failed_message: "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye."
+# Example human-transfer configuration:
+# live_actions:
+#   - transfer_call
+# transfer_targets:
+#   - key: team_member
+#     label: Team member
+#     phone: "+447700900123"
+#     when_to_use: The caller explicitly asks to speak to a person now.
+#     office_hours_only: true
 review_confidence_threshold: 0.7

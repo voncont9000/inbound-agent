@@ -58,6 +58,9 @@ const plumbingConfig: AssistantConfig = {
     { question: "Can you install a new boiler?", answer: "Yes, request a survey for an installation quote." },
   ], max_digest_chars: 24000 },
   live_actions: ["flag_urgent"],
+  transfer_targets: [],
+  transfer_handoff_message: "I'm putting you through now, please hold.",
+  transfer_failed_message: "Sorry, nobody is available to take your call right now.",
   review_confidence_threshold: 0.7,
 };
 
@@ -156,7 +159,12 @@ in response.`,
     { question: "How much does a review cost?", answer: "The published price list is illustrative; the team can confirm scope." },
     { question: "Can you check a conflict?", answer: "The team will complete any required checks." },
   ], digest_path: "knowledge/demo_firm/digest.md", max_digest_chars: 24000 },
-  live_actions: [],
+  live_actions: ["transfer_call"],
+  transfer_targets: [
+    { key: "duty_solicitor", label: "Duty solicitor", phone: "+447700900123", when_to_use: "The caller explicitly asks to speak to a person now.", office_hours_only: false },
+  ],
+  transfer_handoff_message: "I'm putting you through now, please hold.",
+  transfer_failed_message: "Sorry, nobody is available to take your call right now.",
   review_confidence_threshold: 0.7,
 };
 
@@ -207,6 +215,7 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
   const person = ids.people[tenantIndex * 4 + (index % 4)];
   const caller = tenantCallers[tenantIndex][index % 4];
   const summary = conversationSummaries[tenantIndex][index];
+  const transferred = tenantIndex === 1 && index === 0;
   const channel = (["phone", "web", "gmail", "whatsapp"] as const)[index % 4];
   const rawName = tenantIndex === 0 ? "boiler_repair.caller_name" : "employment.caller_name";
   const callerName = caller.name;
@@ -242,6 +251,16 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
   const task: Schemas["TaskSummary"] = { id: `60000000-0000-4000-8000-${String(tenantIndex * 10 + index + 1).padStart(12, "0")}`, kind: ["callback", "urgent", "quote", "knowledge_gap"][index % 4], status: index % 3 === 0 ? "done" : "open", due_at: date(index + 3), source: index % 2 === 0 ? "live" : "post_call", payload: { reason: "Follow up with the caller", summary: "Confirm next steps" } };
   task.conversation_id = id;
   task.person_id = person;
+  const tasks = [task];
+  if (transferred) {
+    tasks.push({
+      ...task,
+      id: `${id}-transfer-failed`,
+      kind: "transfer_failed",
+      payload: { target_key: "duty_solicitor", dial_status: "no-answer", reason: "Caller asked for a person." },
+      source: "live",
+    });
+  }
   return {
     id, assistant_id: ids.assistants[tenantIndex], person_id: person, channel,
     external_ref: channel === "phone" || channel === "whatsapp" ? caller.phone : caller.email,
@@ -250,14 +269,15 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
     test_call: tenantIndex === 0 && index === 0,
     status: (["completed", "completed", "active", "failed", "completed", "completed"] as const)[index],
     started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary,
-    end_reason: index === 3 ? "connection_lost" : "caller_hangup",
+    end_reason: transferred ? "transferred" : index === 3 ? "connection_lost" : "caller_hangup",
+    transfer: transferred ? { target_key: "duty_solicitor", status: "no-answer", latency_ms: 1200 } : null,
     messages: [
       { id: `${id}-m1`, role: "caller", text: summary, ts: date(index + 1), meta: {} },
       { id: `${id}-m2`, role: "assistant", text: "Of course. Can I take your name and a callback number?", ts: date(index + 1), meta: {} },
       { id: `${id}-m3`, role: "caller", text: `${callerName}, and the best number is ${caller.phone}.`, ts: date(index + 1), meta: {} },
     ],
-    intakes, tasks: [task],
-    metrics: { call_duration_seconds: 185 + index * 10, providers: { stt: "mock-stt", tts: "mock-tts" }, turn_latency_summary: { p50_seconds: 0.42, p95_seconds: 0.81, max_seconds: 1.02 }, turn_end_latency_summary: { p50_seconds: 0.19, p95_seconds: 0.31, max_seconds: 0.44 }, usage: { stt_seconds: 180, tts_characters: 490 } },
+    intakes, tasks,
+    metrics: { call_duration_seconds: 185 + index * 10, providers: { stt: "mock-stt", tts: "mock-tts" }, turn_latency_summary: { p50_seconds: 0.42, p95_seconds: 0.81, max_seconds: 1.02 }, turn_end_latency_summary: { p50_seconds: 0.19, p95_seconds: 0.31, max_seconds: 0.44 }, usage: { stt_seconds: 180, tts_characters: 490 }, ...(transferred ? { transfer: { target_key: "duty_solicitor", status: "no-answer", latency_ms: 1200 } } : {}) },
     estimated_cost: { currency: "GBP", components: { stt: 0.01, tts: 0.02, llm_input: 0.01, llm_output: 0.02, twilio: 0.04, extraction: 0.005 }, total: 0.105, unknown_components: [] },
   };
 }

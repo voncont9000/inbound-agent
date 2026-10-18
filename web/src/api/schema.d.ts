@@ -4,91 +4,6 @@
  */
 
 export interface paths {
-    "/auth/signup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Signup */
-        post: operations["signup_auth_signup_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Login */
-        post: operations["login_auth_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Logout */
-        post: operations["logout_auth_logout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Me */
-        get: operations["me_me_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Templates */
-        get: operations["list_templates_templates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/assistant-config/schema": {
         parameters: {
             query?: never;
@@ -143,6 +58,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistants/{assistant_id}/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Channels */
+        get: operations["list_channels_assistants__assistant_id__channels_get"];
+        put?: never;
+        /** Create Channel */
+        post: operations["create_channel_assistants__assistant_id__channels_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/channels/gmail/oauth-start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gmail Oauth Start */
+        post: operations["gmail_oauth_start_assistants__assistant_id__channels_gmail_oauth_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/channels/{channel_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Channel */
+        delete: operations["delete_channel_assistants__assistant_id__channels__channel_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/knowledge/digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Digest */
+        get: operations["get_digest_assistants__assistant_id__knowledge_digest_get"];
+        /** Update Digest */
+        put: operations["update_digest_assistants__assistant_id__knowledge_digest_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/knowledge/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Knowledge */
+        post: operations["import_knowledge_assistants__assistant_id__knowledge_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/knowledge/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sources */
+        get: operations["list_sources_assistants__assistant_id__knowledge_sources_get"];
+        put?: never;
+        /**
+         * Create Source
+         * @description Accept a URL JSON body or a document multipart upload.
+         */
+        post: operations["create_source_assistants__assistant_id__knowledge_sources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants/{assistant_id}/test-calls": {
         parameters: {
             query?: never;
@@ -177,25 +200,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/assistants/{assistant_id}/channels": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Channels */
-        get: operations["list_channels_assistants__assistant_id__channels_get"];
-        put?: never;
-        /** Create Channel */
-        post: operations["create_channel_assistants__assistant_id__channels_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistants/{assistant_id}/channels/{channel_id}": {
+    "/auth/login": {
         parameters: {
             query?: never;
             header?: never;
@@ -204,36 +209,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        /** Delete Channel */
-        delete: operations["delete_channel_assistants__assistant_id__channels__channel_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistants/{assistant_id}/knowledge/sources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Sources */
-        get: operations["list_sources_assistants__assistant_id__knowledge_sources_get"];
-        put?: never;
-        /**
-         * Create Source
-         * @description Accept a URL JSON body or a document multipart upload.
-         */
-        post: operations["create_source_assistants__assistant_id__knowledge_sources_post"];
+        /** Login */
+        post: operations["login_auth_login_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/assistants/{assistant_id}/knowledge/import": {
+    "/auth/logout": {
         parameters: {
             query?: never;
             header?: never;
@@ -242,50 +226,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import Knowledge */
-        post: operations["import_knowledge_assistants__assistant_id__knowledge_import_post"];
+        /** Logout */
+        post: operations["logout_auth_logout_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/assistants/{assistant_id}/knowledge/digest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Digest */
-        get: operations["get_digest_assistants__assistant_id__knowledge_digest_get"];
-        /** Update Digest */
-        put: operations["update_digest_assistants__assistant_id__knowledge_digest_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/knowledge-gaps": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Knowledge Gaps */
-        get: operations["list_knowledge_gaps_knowledge_gaps_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/knowledge-gaps/{gap_id}": {
+    "/auth/signup": {
         parameters: {
             query?: never;
             header?: never;
@@ -294,23 +243,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
+        /** Signup */
+        post: operations["signup_auth_signup_post"];
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Knowledge Gap */
-        patch: operations["update_knowledge_gap_knowledge_gaps__gap_id__patch"];
+        patch?: never;
         trace?: never;
     };
-    "/jobs/{job_id}": {
+    "/calendar/mode": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Job */
-        get: operations["get_job_jobs__job_id__get"];
+        /** Calendar Mode */
+        get: operations["calendar_mode_calendar_mode_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -319,89 +268,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/conversations": {
+    "/channels/gmail/mode": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Conversations */
-        get: operations["list_conversations_conversations_get"];
+        /** Gmail Mode */
+        get: operations["gmail_mode_channels_gmail_mode_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/conversations/{conversation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Conversation */
-        get: operations["get_conversation_conversations__conversation_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/conversations/{conversation_id}/reviews": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Review */
-        post: operations["create_review_conversations__conversation_id__reviews_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Tasks */
-        get: operations["list_tasks_tasks_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tasks/{task_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Task */
-        patch: operations["update_task_tasks__task_id__patch"];
         trace?: never;
     };
     "/contacts": {
@@ -489,15 +370,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal/voice/route": {
+    "/conversations": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Route Call */
-        get: operations["route_call_internal_voice_route_get"];
+        /** List Conversations */
+        get: operations["list_conversations_conversations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -506,15 +387,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal/voice/web-route": {
+    "/conversations/{conversation_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Route Web Call */
-        get: operations["route_web_call_internal_voice_web_route_get"];
+        /** Get Conversation */
+        get: operations["get_conversation_conversations__conversation_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -523,7 +404,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal/voice/calls": {
+    "/conversations/{conversation_id}/reviews": {
         parameters: {
             query?: never;
             header?: never;
@@ -532,25 +413,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start Call */
-        post: operations["start_call_internal_voice_calls_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/internal/voice/calls/{conversation_id}/report": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Report Call */
-        post: operations["report_call_internal_voice_calls__conversation_id__report_post"];
+        /** Create Review */
+        post: operations["create_review_conversations__conversation_id__reviews_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -591,25 +455,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/webhooks/whatsapp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Verify Whatsapp Webhook */
-        get: operations["verify_whatsapp_webhook_webhooks_whatsapp_get"];
-        put?: never;
-        /** Receive Whatsapp Webhook */
-        post: operations["receive_whatsapp_webhook_webhooks_whatsapp_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/webhooks/gmail": {
+    "/internal/voice/calls": {
         parameters: {
             query?: never;
             header?: never;
@@ -618,23 +464,40 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Receive Gmail Webhook */
-        post: operations["receive_gmail_webhook_webhooks_gmail_post"];
+        /** Start Call */
+        post: operations["start_call_internal_voice_calls_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/channels/gmail/mode": {
+    "/internal/voice/calls/{conversation_id}/report": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Gmail Mode */
-        get: operations["gmail_mode_channels_gmail_mode_get"];
+        get?: never;
+        put?: never;
+        /** Report Call */
+        post: operations["report_call_internal_voice_calls__conversation_id__report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/voice/route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Route Call */
+        get: operations["route_call_internal_voice_route_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -643,7 +506,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/assistants/{assistant_id}/channels/gmail/oauth-start": {
+    "/internal/voice/web-route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Route Web Call */
+        get: operations["route_web_call_internal_voice_web_route_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge-gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Knowledge Gaps */
+        get: operations["list_knowledge_gaps_knowledge_gaps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge-gaps/{gap_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -652,8 +566,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Gmail Oauth Start */
-        post: operations["gmail_oauth_start_assistants__assistant_id__channels_gmail_oauth_start_post"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Knowledge Gap */
+        patch: operations["update_knowledge_gap_knowledge_gaps__gap_id__patch"];
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_me_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -677,17 +608,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/calendar/mode": {
+    "/tasks": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Calendar Mode */
-        get: operations["calendar_mode_calendar_mode_get"];
+        /** List Tasks */
+        get: operations["list_tasks_tasks_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Task */
+        patch: operations["update_task_tasks__task_id__patch"];
+        trace?: never;
+    };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/gmail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Gmail Webhook */
+        post: operations["receive_gmail_webhook_webhooks_gmail_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/whatsapp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Verify Whatsapp Webhook */
+        get: operations["verify_whatsapp_webhook_webhooks_whatsapp_get"];
+        put?: never;
+        /** Receive Whatsapp Webhook */
+        post: operations["receive_whatsapp_webhook_webhooks_whatsapp_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -700,26 +700,26 @@ export interface components {
     schemas: {
         /** AppointmentType */
         AppointmentType: {
+            /** Duration Minutes */
+            duration_minutes: number;
             /** Key */
             key: string;
             /** Label */
             label: string;
-            /** Duration Minutes */
-            duration_minutes: number;
-            /** When To Use */
-            when_to_use: string;
             /** Location Or Link */
             location_or_link?: string | null;
+            /** When To Use */
+            when_to_use: string;
         };
         /** AssistantConfig */
         "AssistantConfig-Input": {
-            /**
-             * Language
-             * @default English
-             */
-            language: string;
+            booking?: components["schemas"]["BookingConfig"] | null;
             /** Business Name */
             business_name: string;
+            /** Contacts */
+            contacts: {
+                [key: string]: string;
+            };
             /** Greeting */
             greeting: string;
             /**
@@ -727,46 +727,58 @@ export interface components {
              * @default
              */
             instructions: string;
+            knowledge?: components["schemas"]["KnowledgeConfig-Input"];
+            /**
+             * Language
+             * @default English
+             */
+            language: string;
+            /** Live Actions */
+            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment" | "transfer_call")[];
+            office_hours: components["schemas"]["OfficeHours"];
+            /** Policies */
+            policies: string[];
+            /** Price List */
+            price_list: components["schemas"]["PriceItem"][];
             /**
              * Readback
              * @default off
              * @enum {string}
              */
             readback: "off" | "email" | "critical";
-            office_hours: components["schemas"]["OfficeHours"];
-            /** Price List */
-            price_list: components["schemas"]["PriceItem"][];
-            /** Policies */
-            policies: string[];
-            /** Contacts */
-            contacts: {
-                [key: string]: string;
-            };
-            /** Services */
-            services: {
-                [key: string]: components["schemas"]["ServiceConfig"];
-            };
-            /** Urgency Rules */
-            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
-            knowledge?: components["schemas"]["KnowledgeConfig-Input"];
-            /** Live Actions */
-            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment")[];
-            booking?: components["schemas"]["BookingConfig"] | null;
             /**
              * Review Confidence Threshold
              * @default 0.7
              */
             review_confidence_threshold: number;
+            /** Services */
+            services: {
+                [key: string]: components["schemas"]["ServiceConfig"];
+            };
+            /**
+             * Transfer Failed Message
+             * @default Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.
+             */
+            transfer_failed_message: string;
+            /**
+             * Transfer Handoff Message
+             * @default I'm putting you through now, please hold.
+             */
+            transfer_handoff_message: string;
+            /** Transfer Targets */
+            transfer_targets?: components["schemas"]["TransferTarget"][];
+            /** Urgency Rules */
+            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
         };
         /** AssistantConfig */
         "AssistantConfig-Output": {
-            /**
-             * Language
-             * @default English
-             */
-            language: string;
+            booking?: components["schemas"]["BookingConfig"] | null;
             /** Business Name */
             business_name: string;
+            /** Contacts */
+            contacts: {
+                [key: string]: string;
+            };
             /** Greeting */
             greeting: string;
             /**
@@ -774,44 +786,56 @@ export interface components {
              * @default
              */
             instructions: string;
+            knowledge?: components["schemas"]["KnowledgeConfig-Output"];
+            /**
+             * Language
+             * @default English
+             */
+            language: string;
+            /** Live Actions */
+            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment" | "transfer_call")[];
+            office_hours: components["schemas"]["OfficeHours"];
+            /** Policies */
+            policies: string[];
+            /** Price List */
+            price_list: components["schemas"]["PriceItem"][];
             /**
              * Readback
              * @default off
              * @enum {string}
              */
             readback: "off" | "email" | "critical";
-            office_hours: components["schemas"]["OfficeHours"];
-            /** Price List */
-            price_list: components["schemas"]["PriceItem"][];
-            /** Policies */
-            policies: string[];
-            /** Contacts */
-            contacts: {
-                [key: string]: string;
-            };
-            /** Services */
-            services: {
-                [key: string]: components["schemas"]["ServiceConfig"];
-            };
-            /** Urgency Rules */
-            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
-            knowledge?: components["schemas"]["KnowledgeConfig-Output"];
-            /** Live Actions */
-            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment")[];
-            booking?: components["schemas"]["BookingConfig"] | null;
             /**
              * Review Confidence Threshold
              * @default 0.7
              */
             review_confidence_threshold: number;
+            /** Services */
+            services: {
+                [key: string]: components["schemas"]["ServiceConfig"];
+            };
+            /**
+             * Transfer Failed Message
+             * @default Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.
+             */
+            transfer_failed_message: string;
+            /**
+             * Transfer Handoff Message
+             * @default I'm putting you through now, please hold.
+             */
+            transfer_handoff_message: string;
+            /** Transfer Targets */
+            transfer_targets?: components["schemas"]["TransferTarget"][];
+            /** Urgency Rules */
+            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
         };
         /** AssistantCreate */
         AssistantCreate: {
+            config: components["schemas"]["AssistantConfig-Input"];
             /** Name */
             name: string;
             /** Template */
             template?: string | null;
-            config: components["schemas"]["AssistantConfig-Input"];
         };
         /** AssistantListResponse */
         AssistantListResponse: {
@@ -820,6 +844,12 @@ export interface components {
         };
         /** AssistantResponse */
         AssistantResponse: {
+            config: components["schemas"]["AssistantConfig-Output"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
             /**
              * Id
              * Format: uuid
@@ -829,30 +859,35 @@ export interface components {
             name: string;
             /** Template */
             template: string | null;
-            config: components["schemas"]["AssistantConfig-Output"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
             /** Version */
             version: number;
+        };
+        /** AssistantUpdate */
+        AssistantUpdate: {
+            config: components["schemas"]["AssistantConfig-Input"];
+            /** Name */
+            name?: string | null;
+            /** Template */
+            template?: string | null;
+        };
+        /** AssistantVersionResponse */
+        AssistantVersionResponse: {
+            config: components["schemas"]["AssistantConfig-Output"];
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
             /**
-             * Updated At
-             * Format: date-time
+             * Created By
+             * Format: uuid
              */
-            updated_at: string;
-        };
-        /** AssistantUpdate */
-        AssistantUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Template */
-            template?: string | null;
-            config: components["schemas"]["AssistantConfig-Input"];
-        };
-        /** AssistantVersionResponse */
-        AssistantVersionResponse: {
+            created_by: string;
             /**
              * Id
              * Format: uuid
@@ -860,17 +895,6 @@ export interface components {
             id: string;
             /** Version */
             version: number;
-            config: components["schemas"]["AssistantConfig-Output"];
-            /**
-             * Created By
-             * Format: uuid
-             */
-            created_by: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
         };
         /** AssistantVersionsResponse */
         AssistantVersionsResponse: {
@@ -879,11 +903,11 @@ export interface components {
         };
         /** AuthResponse */
         AuthResponse: {
-            user: components["schemas"]["UserResponse"];
-            /** Tenants */
-            tenants: components["schemas"]["TenantResponse"][];
             /** Access Token */
             access_token: string;
+            /** Tenants */
+            tenants: components["schemas"]["TenantResponse"][];
+            user: components["schemas"]["UserResponse"];
         };
         /** AvailabilityRequest */
         AvailabilityRequest: {
@@ -901,20 +925,20 @@ export interface components {
         AvailabilityResponse: {
             /** Available */
             available: boolean;
-            /** Reason */
-            reason?: string | null;
-            /** Timezone */
-            timezone?: string | null;
-            /** Window Start */
-            window_start?: string | null;
-            /** Window End */
-            window_end?: string | null;
             /** Busy */
             busy?: components["schemas"]["BusyBlock"][];
             /** Fetched At */
             fetched_at?: string | null;
             /** Provider Ms */
             provider_ms?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+            /** Window End */
+            window_end?: string | null;
+            /** Window Start */
+            window_start?: string | null;
         };
         /** BookRequest */
         BookRequest: {
@@ -923,120 +947,130 @@ export interface components {
              * Format: uuid
              */
             conversation_id: string;
-            /** External Call Id */
-            external_call_id: string;
-            /** Slot Id */
-            slot_id: string;
-            /** Name */
-            name: string;
             /** Email */
             email?: string | null;
+            /** External Call Id */
+            external_call_id: string;
+            /** Name */
+            name: string;
             /** Phone */
             phone?: string | null;
+            /** Slot Id */
+            slot_id: string;
         };
         /** BookResponse */
         BookResponse: {
+            /** Alternatives */
+            alternatives?: components["schemas"]["SlotOffer"][];
+            booking?: components["schemas"]["BookingRecord"] | null;
+            /** Reason */
+            reason?: string | null;
             /**
              * Status
              * @enum {string}
              */
             status: "booked" | "unavailable" | "invalid" | "error";
-            /** Reason */
-            reason?: string | null;
-            booking?: components["schemas"]["BookingRecord"] | null;
-            /** Alternatives */
-            alternatives?: components["schemas"]["SlotOffer"][];
         };
         /** BookingConfig */
         BookingConfig: {
-            /**
-             * Calendar Id
-             * @default primary
-             */
-            calendar_id: string;
             /** Appointment Types */
             appointment_types: components["schemas"]["AppointmentType"][];
             /**
-             * Min Notice Hours
-             * @default 2
+             * Book Message
+             * @default One moment while I book that.
              */
-            min_notice_hours: number;
-            /**
-             * Horizon Days
-             * @default 14
-             */
-            horizon_days: number;
+            book_message: string;
             /**
              * Buffer Minutes
              * @default 0
              */
             buffer_minutes: number;
             /**
+             * Calendar Id
+             * @default primary
+             */
+            calendar_id: string;
+            /**
+             * Check Message
+             * @default Let me check the diary.
+             */
+            check_message: string;
+            /**
+             * Horizon Days
+             * @default 14
+             */
+            horizon_days: number;
+            /**
              * Max Slots Offered
              * @default 3
              */
             max_slots_offered: number;
             /**
-             * Slot Step Minutes
-             * @default 30
+             * Min Notice Hours
+             * @default 2
              */
-            slot_step_minutes: number;
+            min_notice_hours: number;
             /**
              * Send Updates
              * @default all
              * @enum {string}
              */
             send_updates: "all" | "externalOnly" | "none";
+            /**
+             * Slot Step Minutes
+             * @default 30
+             */
+            slot_step_minutes: number;
         };
         /** BookingRecord */
         BookingRecord: {
-            /** Booking Id */
-            booking_id: string;
             /** Appointment Type */
             appointment_type: string;
-            /** Label */
-            label: string;
-            /**
-             * Start
-             * Format: date-time
-             */
-            start: string;
+            /** Attendee Email */
+            attendee_email?: string | null;
+            /** Attendee Name */
+            attendee_name: string;
+            /** Booking Id */
+            booking_id: string;
+            /** Calendar Id */
+            calendar_id: string;
             /**
              * End
              * Format: date-time
              */
             end: string;
-            /** Timezone */
-            timezone: string;
-            /** Speech */
-            speech: string;
-            /** Text */
-            text: string;
             /** Event Id */
             event_id: string;
             /** Event Link */
             event_link?: string | null;
-            /** Calendar Id */
-            calendar_id: string;
-            /** Attendee Name */
-            attendee_name: string;
-            /** Attendee Email */
-            attendee_email?: string | null;
+            /** Label */
+            label: string;
             /** Provider */
             provider: string;
-        };
-        /** BusyBlock */
-        BusyBlock: {
+            /** Speech */
+            speech: string;
             /**
              * Start
              * Format: date-time
              */
             start: string;
+            /** Text */
+            text: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** BusyBlock */
+        BusyBlock: {
             /**
              * End
              * Format: date-time
              */
             end: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
         };
         /** CallReportAccepted */
         CallReportAccepted: {
@@ -1045,78 +1079,90 @@ export interface components {
         };
         /** CallReportRequest */
         CallReportRequest: {
-            /** External Call Id */
-            external_call_id: string;
+            /** End Reason */
+            end_reason?: string | null;
             /**
              * Ended At
              * Format: date-time
              */
             ended_at: string;
-            /** End Reason */
-            end_reason?: string | null;
-            /** Summary */
-            summary?: string | null;
-            /** Transcript */
-            transcript: components["schemas"]["TranscriptTurn"][];
+            /** Estimated Cost */
+            estimated_cost?: {
+                [key: string]: unknown;
+            } | null;
+            /** External Call Id */
+            external_call_id: string;
+            /** Knowledge Gaps */
+            knowledge_gaps: {
+                [key: string]: unknown;
+            }[];
             /** Live Intake */
             live_intake: {
+                [key: string]: unknown;
+            };
+            /** Merged Intake */
+            merged_intake: {
+                [key: string]: unknown;
+            };
+            /** Metrics */
+            metrics: {
                 [key: string]: unknown;
             };
             /** Post Call Intake */
             post_call_intake?: {
                 [key: string]: unknown;
             } | null;
-            /** Merged Intake */
-            merged_intake: {
-                [key: string]: unknown;
-            };
+            /** Summary */
+            summary?: string | null;
             /** Tasks */
             tasks: {
                 [key: string]: unknown;
             }[];
-            /** Knowledge Gaps */
-            knowledge_gaps: {
-                [key: string]: unknown;
-            }[];
-            /** Metrics */
-            metrics: {
-                [key: string]: unknown;
-            };
-            /** Estimated Cost */
-            estimated_cost?: {
-                [key: string]: unknown;
-            } | null;
+            /** Transcript */
+            transcript: components["schemas"]["TranscriptTurn"][];
         };
         /** CallStartRequest */
         CallStartRequest: {
-            /** To Number */
-            to_number: string;
-            /** From Number */
-            from_number?: string | null;
-            /** External Call Id */
-            external_call_id: string;
             /**
              * Channel
              * @enum {string}
              */
             channel: "phone" | "web";
+            /** External Call Id */
+            external_call_id: string;
+            /** From Number */
+            from_number?: string | null;
             /**
              * Started At
              * Format: date-time
              */
             started_at: string;
+            /** To Number */
+            to_number: string;
             /** Web Call Token */
             web_call_token?: string | null;
         };
+        /** CallTransferMetrics */
+        CallTransferMetrics: {
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "answered" | "completed" | "no-answer" | "busy" | "failed" | "canceled" | "unknown" | "error" | "simulated";
+            /** Target Key */
+            target_key: string;
+        };
         /** ChannelConnectionCreate */
         ChannelConnectionCreate: {
+            /** External Id */
+            external_id: string;
             /**
              * Kind
              * @enum {string}
              */
             kind: "phone" | "gmail" | "whatsapp" | "web";
-            /** External Id */
-            external_id: string;
             /** Settings */
             settings?: {
                 [key: string]: unknown;
@@ -1125,35 +1171,35 @@ export interface components {
         /** ChannelConnectionResponse */
         ChannelConnectionResponse: {
             /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
              * Assistant Id
              * Format: uuid
              */
             assistant_id: string;
             /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "phone" | "gmail" | "whatsapp" | "web";
-            /** External Id */
-            external_id: string;
-            /** Status */
-            status: string;
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            };
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** External Id */
+            external_id: string;
             /** Google Features */
             readonly google_features: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "phone" | "gmail" | "whatsapp" | "web";
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
         };
         /** ChannelConnectionsResponse */
         ChannelConnectionsResponse: {
@@ -1162,54 +1208,54 @@ export interface components {
         };
         /** CommitmentResponse */
         CommitmentResponse: {
+            /** Due At */
+            due_at: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** What */
-            what: string;
-            /** Due At */
-            due_at: string | null;
             /**
              * Status
              * @enum {string}
              */
             status: "open" | "kept" | "broken" | "cancelled";
+            /** What */
+            what: string;
         };
         /** ContactDetailResponse */
         ContactDetailResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Display Name */
-            display_name: string;
-            /** Merged Into Id */
-            merged_into_id: string | null;
+            /** Active Facts */
+            active_facts: components["schemas"]["FactResponse"][];
+            /** Context Card */
+            context_card: string;
+            /** Conversations */
+            conversations: components["schemas"]["ConversationSummary"][];
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Identities */
+            identities: components["schemas"]["IdentityResponse"][];
+            /** Merged Into Id */
+            merged_into_id: string | null;
+            /** Open Commitments */
+            open_commitments: components["schemas"]["CommitmentResponse"][];
+            /** Open Tasks */
+            open_tasks: components["schemas"]["TaskSummary"][];
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
-            /** Identities */
-            identities: components["schemas"]["IdentityResponse"][];
-            /** Active Facts */
-            active_facts: components["schemas"]["FactResponse"][];
-            /** Conversations */
-            conversations: components["schemas"]["ConversationSummary"][];
-            /** Open Tasks */
-            open_tasks: components["schemas"]["TaskSummary"][];
-            /** Open Commitments */
-            open_commitments: components["schemas"]["CommitmentResponse"][];
-            /** Context Card */
-            context_card: string;
         };
         /** ContactMergeRequest */
         ContactMergeRequest: {
@@ -1222,15 +1268,15 @@ export interface components {
         /** ContactMergeResponse */
         ContactMergeResponse: {
             /**
-             * Survivor Id
-             * Format: uuid
-             */
-            survivor_id: string;
-            /**
              * Merged Id
              * Format: uuid
              */
             merged_id: string;
+            /**
+             * Survivor Id
+             * Format: uuid
+             */
+            survivor_id: string;
         };
         /** ContactSplitRequest */
         ContactSplitRequest: {
@@ -1253,19 +1299,19 @@ export interface components {
         /** ContactSummary */
         ContactSummary: {
             /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Display Name */
-            display_name: string;
-            /** Merged Into Id */
-            merged_into_id: string | null;
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Merged Into Id */
+            merged_into_id: string | null;
             /**
              * Updated At
              * Format: date-time
@@ -1290,66 +1336,67 @@ export interface components {
         /** ConversationDetailResponse */
         ConversationDetailResponse: {
             /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
              * Assistant Id
              * Format: uuid
              */
             assistant_id: string;
-            /** Person Id */
-            person_id: string | null;
             /**
              * Channel
              * @enum {string}
              */
             channel: "phone" | "web" | "gmail" | "whatsapp";
+            /** Contact Name */
+            contact_name?: string | null;
+            /** End Reason */
+            end_reason: string | null;
+            /** Ended At */
+            ended_at: string | null;
+            /** Estimated Cost */
+            estimated_cost: {
+                [key: string]: unknown;
+            } | null;
             /** External Ref */
             external_ref: string;
             /**
-             * Status
-             * @enum {string}
+             * Id
+             * Format: uuid
              */
-            status: "active" | "completed" | "failed";
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            /** Ended At */
-            ended_at: string | null;
-            /** Summary */
-            summary: string | null;
-            /** End Reason */
-            end_reason: string | null;
+            id: string;
+            /** Intakes */
+            intakes: components["schemas"]["IntakeResponse"][];
+            /** Messages */
+            messages: components["schemas"]["MessageResponse"][];
+            /** Metrics */
+            metrics: {
+                [key: string]: unknown;
+            };
             /**
              * Needs Review
              * @default false
              */
             needs_review: boolean;
+            /** Person Id */
+            person_id: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "completed" | "failed";
+            /** Summary */
+            summary: string | null;
+            /** Tasks */
+            tasks: components["schemas"]["TaskSummary"][];
             /**
              * Test Call
              * @default false
              */
             test_call: boolean;
-            /** Contact Name */
-            contact_name?: string | null;
-            /** Messages */
-            messages: components["schemas"]["MessageResponse"][];
-            /** Intakes */
-            intakes: components["schemas"]["IntakeResponse"][];
-            /** Tasks */
-            tasks: components["schemas"]["TaskSummary"][];
-            /** Metrics */
-            metrics: {
-                [key: string]: unknown;
-            };
-            /** Estimated Cost */
-            estimated_cost: {
-                [key: string]: unknown;
-            } | null;
+            transfer?: components["schemas"]["CallTransferMetrics"] | null;
         };
         /** ConversationListResponse */
         ConversationListResponse: {
@@ -1362,107 +1409,111 @@ export interface components {
         ConversationReviewCreate: {
             /** Field */
             field: string;
-            /** Resolved Value */
-            resolved_value: unknown;
             /** Note */
             note?: string | null;
+            /** Resolved Value */
+            resolved_value: unknown;
         };
         /** ConversationReviewResponse */
         ConversationReviewResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Field */
-            field: string;
-            /** Resolved Value */
-            resolved_value: unknown;
-            /**
-             * Resolved By
-             * Format: uuid
-             */
-            resolved_by: string;
-            /** Note */
-            note: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Field */
+            field: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Resolved By
+             * Format: uuid
+             */
+            resolved_by: string;
+            /** Resolved Value */
+            resolved_value: unknown;
         };
         /** ConversationSummary */
         ConversationSummary: {
+            /**
+             * Assistant Id
+             * Format: uuid
+             */
+            assistant_id: string;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "phone" | "web" | "gmail" | "whatsapp";
+            /** Contact Name */
+            contact_name?: string | null;
+            /** End Reason */
+            end_reason: string | null;
+            /** Ended At */
+            ended_at: string | null;
+            /** External Ref */
+            external_ref: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /**
-             * Assistant Id
-             * Format: uuid
+             * Needs Review
+             * @default false
              */
-            assistant_id: string;
+            needs_review: boolean;
             /** Person Id */
             person_id: string | null;
-            /**
-             * Channel
-             * @enum {string}
-             */
-            channel: "phone" | "web" | "gmail" | "whatsapp";
-            /** External Ref */
-            external_ref: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "active" | "completed" | "failed";
             /**
              * Started At
              * Format: date-time
              */
             started_at: string;
-            /** Ended At */
-            ended_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "completed" | "failed";
             /** Summary */
             summary: string | null;
-            /** End Reason */
-            end_reason: string | null;
-            /**
-             * Needs Review
-             * @default false
-             */
-            needs_review: boolean;
             /**
              * Test Call
              * @default false
              */
             test_call: boolean;
-            /** Contact Name */
-            contact_name?: string | null;
         };
         /** DateDeadlineUrgencyRule */
         DateDeadlineUrgencyRule: {
+            /** Add Months */
+            add_months: number;
+            /** Field */
+            field: string;
+            /** Minus Days */
+            minus_days: number;
+            /** Reason */
+            reason: string;
+            /** Service */
+            service: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             type: "date_deadline";
-            /** Service */
-            service: string;
-            /** Field */
-            field: string;
-            /** Add Months */
-            add_months: number;
-            /** Minus Days */
-            minus_days: number;
             /** Urgent Within Days */
             urgent_within_days: number;
-            /** Reason */
-            reason: string;
         };
         /** FactResponse */
         FactResponse: {
+            /** Confidence */
+            confidence: number;
+            /** Evidence */
+            evidence: string;
             /**
              * Id
              * Format: uuid
@@ -1470,8 +1521,11 @@ export interface components {
             id: string;
             /** Predicate */
             predicate: string;
-            /** Value */
-            value: unknown | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "superseded" | "rejected";
             /**
              * Valid From
              * Format: date-time
@@ -1479,34 +1533,13 @@ export interface components {
             valid_from: string;
             /** Valid To */
             valid_to: string | null;
-            /** Evidence */
-            evidence: string;
-            /** Confidence */
-            confidence: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "active" | "superseded" | "rejected";
+            /** Value */
+            value: unknown | null;
         };
         /** FieldSpec */
         FieldSpec: {
-            /** Name */
-            name: string;
-            /** Label */
-            label: string;
-            /**
-             * Type
-             * @enum {string}
-             */
-            type: "string" | "email" | "phone" | "date" | "boolean" | "integer" | "number" | "enum" | "list";
             /** Choices */
             choices?: string[] | null;
-            /**
-             * Required
-             * @default false
-             */
-            required: boolean;
             /**
              * Critical
              * @default false
@@ -1517,6 +1550,20 @@ export interface components {
              * @default
              */
             description: string;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "string" | "email" | "phone" | "date" | "boolean" | "integer" | "number" | "enum" | "list";
         };
         /** GmailOAuthStartRequest */
         GmailOAuthStartRequest: {
@@ -1530,11 +1577,15 @@ export interface components {
         };
         /** IdentityResponse */
         IdentityResponse: {
+            /** Confidence */
+            confidence: number;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Source */
+            source: string;
             /**
              * Type
              * @enum {string}
@@ -1544,25 +1595,30 @@ export interface components {
             value_normalized: string;
             /** Verified */
             verified: boolean;
-            /** Confidence */
-            confidence: number;
-            /** Source */
-            source: string;
         };
         /** IntakeResponse */
         IntakeResponse: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
             /**
              * Version
              * @enum {string}
              */
             version: "live" | "post_call" | "merged";
-            /** Data */
-            data: {
-                [key: string]: unknown;
-            };
         };
         /** JobResponse */
         JobResponse: {
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
             /**
              * Id
              * Format: uuid
@@ -1570,11 +1626,6 @@ export interface components {
             id: string;
             /** Kind */
             kind: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "running" | "succeeded" | "failed";
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -1583,70 +1634,61 @@ export interface components {
             result: {
                 [key: string]: unknown;
             } | null;
-            /** Error */
-            error: string | null;
-            /** Attempts */
-            attempts: number;
             /**
              * Run After
              * Format: date-time
              */
             run_after: string;
             /**
-             * Created At
-             * Format: date-time
+             * Status
+             * @enum {string}
              */
-            created_at: string;
+            status: "queued" | "running" | "succeeded" | "failed";
         };
         /** KeywordUrgencyRule */
         KeywordUrgencyRule: {
+            /** Phrases */
+            phrases: string[];
+            /** Reason */
+            reason: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             type: "keyword";
-            /** Phrases */
-            phrases: string[];
-            /** Reason */
-            reason: string;
         };
         /** KnowledgeConfig */
         "KnowledgeConfig-Input": {
-            /** Sources */
-            sources?: components["schemas"]["KnowledgeSource"][];
-            /** Faqs */
-            faqs?: components["schemas"]["KnowledgeFAQ"][];
+            /** Digest Content */
+            digest_content?: string | null;
             /** Digest Path */
             digest_path?: string | null;
+            /** Faqs */
+            faqs?: components["schemas"]["KnowledgeFAQ"][];
             /**
              * Max Digest Chars
              * @default 24000
              */
             max_digest_chars: number;
-            /** Digest Content */
-            digest_content?: string | null;
+            /** Sources */
+            sources?: components["schemas"]["KnowledgeSource"][];
         };
         /** KnowledgeConfig */
         "KnowledgeConfig-Output": {
-            /** Sources */
-            sources?: components["schemas"]["KnowledgeSource"][];
-            /** Faqs */
-            faqs?: components["schemas"]["KnowledgeFAQ"][];
             /** Digest Path */
             digest_path?: string | null;
+            /** Faqs */
+            faqs?: components["schemas"]["KnowledgeFAQ"][];
             /**
              * Max Digest Chars
              * @default 24000
              */
             max_digest_chars: number;
+            /** Sources */
+            sources?: components["schemas"]["KnowledgeSource"][];
         };
         /** KnowledgeDigestResponse */
         KnowledgeDigestResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
             /**
              * Assistant Id
              * Format: uuid
@@ -1654,13 +1696,18 @@ export interface components {
             assistant_id: string;
             /** Content */
             content: string;
-            /** Edited By */
-            edited_by: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Edited By */
+            edited_by: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** KnowledgeDigestUpdate */
         KnowledgeDigestUpdate: {
@@ -1669,18 +1716,13 @@ export interface components {
         };
         /** KnowledgeFAQ */
         KnowledgeFAQ: {
-            /** Question */
-            question: string;
             /** Answer */
             answer: string;
+            /** Question */
+            question: string;
         };
         /** KnowledgeGapResponse */
         KnowledgeGapResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
             /**
              * Assistant Id
              * Format: uuid
@@ -1691,20 +1733,25 @@ export interface components {
              * Format: uuid
              */
             conversation_id: string;
-            /** Question */
-            question: string;
-            /** Evidence */
-            evidence: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "open" | "answered" | "dismissed";
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Evidence */
+            evidence: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Question */
+            question: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "answered" | "dismissed";
         };
         /** KnowledgeGapUpdate */
         KnowledgeGapUpdate: {
@@ -1723,43 +1770,53 @@ export interface components {
         };
         /** KnowledgeSource */
         KnowledgeSource: {
-            /** Url */
-            url?: string | null;
             /** File */
             file?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /** KnowledgeSourceCreate */
+        KnowledgeSourceCreate: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "url";
+            /** Uri */
+            uri: string;
         };
         /** KnowledgeSourceResponse */
         KnowledgeSourceResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
             /**
              * Assistant Id
              * Format: uuid
              */
             assistant_id: string;
             /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "url" | "file";
-            /** Uri */
-            uri: string;
-            /** Status */
-            status: string;
-            /** Manifest */
-            manifest: {
-                [key: string]: unknown;
-            };
-            /** Fetched At */
-            fetched_at: string | null;
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Fetched At */
+            fetched_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "url" | "file";
+            /** Manifest */
+            manifest: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Uri */
+            uri: string;
         };
         /** KnowledgeSourcesResponse */
         KnowledgeSourcesResponse: {
@@ -1783,10 +1840,10 @@ export interface components {
         };
         /** MeResponse */
         MeResponse: {
-            user: components["schemas"]["UserResponse"];
-            tenant: components["schemas"]["TenantResponse"];
             /** Memberships */
             memberships: components["schemas"]["TenantResponse"][];
+            tenant: components["schemas"]["TenantResponse"];
+            user: components["schemas"]["UserResponse"];
         };
         /** MessageResponse */
         MessageResponse: {
@@ -1795,6 +1852,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
             /**
              * Role
              * @enum {string}
@@ -1807,19 +1868,15 @@ export interface components {
              * Format: date-time
              */
             ts: string;
-            /** Meta */
-            meta: {
-                [key: string]: unknown;
-            };
         };
         /** OfficeHours */
         OfficeHours: {
+            /** Closes */
+            closes: string;
             /** Days */
             days: string[];
             /** Opens */
             opens: string;
-            /** Closes */
-            closes: string;
             /**
              * Timezone
              * @default Europe/London
@@ -1828,45 +1885,47 @@ export interface components {
         };
         /** PriceItem */
         PriceItem: {
-            /** Service */
-            service: string;
-            /** Price */
-            price: string;
             /** Notes */
             notes: string;
+            /** Price */
+            price: string;
+            /** Service */
+            service: string;
         };
         /** RouteResponse */
         RouteResponse: {
-            /**
-             * Tenant Id
-             * Format: uuid
-             */
-            tenant_id: string;
             /**
              * Assistant Id
              * Format: uuid
              */
             assistant_id: string;
-            config: components["schemas"]["AssistantConfig-Output"];
-            /** Digest */
-            digest?: string | null;
-            /** Context Card */
-            context_card?: string | null;
             /**
              * Booking Available
              * @default false
              */
             booking_available: boolean;
+            config: components["schemas"]["AssistantConfig-Output"];
+            /** Context Card */
+            context_card?: string | null;
+            /** Digest */
+            digest?: string | null;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
         };
         /** ServiceConfig */
         ServiceConfig: {
-            /** Label */
-            label: string;
             /** Fields */
             fields: components["schemas"]["FieldSpec"][];
+            /** Label */
+            label: string;
         };
         /** SignupRequest */
         SignupRequest: {
+            /** Display Name */
+            display_name: string;
             /**
              * Email
              * Format: email
@@ -1874,31 +1933,29 @@ export interface components {
             email: string;
             /** Password */
             password: string;
-            /** Display Name */
-            display_name: string;
             /** Tenant Name */
             tenant_name: string;
         };
         /** SlotOffer */
         SlotOffer: {
-            /** Slot Id */
-            slot_id: string;
-            /**
-             * Start
-             * Format: date-time
-             */
-            start: string;
+            /** Appointment Type */
+            appointment_type: string;
             /**
              * End
              * Format: date-time
              */
             end: string;
-            /** Appointment Type */
-            appointment_type: string;
             /** Label */
             label: string;
+            /** Slot Id */
+            slot_id: string;
             /** Speech */
             speech: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
             /** Text */
             text: string;
         };
@@ -1911,6 +1968,10 @@ export interface components {
         };
         /** TaskSummary */
         TaskSummary: {
+            /** Conversation Id */
+            conversation_id?: string | null;
+            /** Due At */
+            due_at: string | null;
             /**
              * Id
              * Format: uuid
@@ -1918,26 +1979,22 @@ export interface components {
             id: string;
             /** Kind */
             kind: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "open" | "done" | "dismissed";
-            /** Due At */
-            due_at: string | null;
             /** Payload */
             payload: {
                 [key: string]: unknown;
             };
+            /** Person Id */
+            person_id?: string | null;
             /**
              * Source
              * @enum {string}
              */
             source: "live" | "post_call" | "manual";
-            /** Conversation Id */
-            conversation_id?: string | null;
-            /** Person Id */
-            person_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "done" | "dismissed";
         };
         /** TaskUpdate */
         TaskUpdate: {
@@ -1949,9 +2006,9 @@ export interface components {
         };
         /** TemplateResponse */
         TemplateResponse: {
+            config: components["schemas"]["AssistantConfig-Output"];
             /** Name */
             name: string;
-            config: components["schemas"]["AssistantConfig-Output"];
         };
         /** TenantResponse */
         TenantResponse: {
@@ -1970,10 +2027,10 @@ export interface components {
         };
         /** TestCallResponse */
         TestCallResponse: {
-            /** Url */
-            url: string;
             /** Expires At */
             expires_at: number;
+            /** Url */
+            url: string;
         };
         /** TranscriptTurn */
         TranscriptTurn: {
@@ -1990,43 +2047,49 @@ export interface components {
              */
             timestamp: string;
         };
+        /** TransferTarget */
+        TransferTarget: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Office Hours Only
+             * @default true
+             */
+            office_hours_only: boolean;
+            /** Phone */
+            phone: string;
+            /** When To Use */
+            when_to_use: string;
+        };
         /** UserResponse */
         UserResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
+            /** Display Name */
+            display_name: string;
             /**
              * Email
              * Format: email
              */
             email: string;
-            /** Display Name */
-            display_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
-        };
-        /** KnowledgeSourceCreate */
-        KnowledgeSourceCreate: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "url";
-            /** Uri */
-            uri: string;
         };
     };
     responses: never;
@@ -2037,154 +2100,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    signup_auth_signup_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SignupRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    login_auth_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    logout_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LogoutResponse"];
-                };
-            };
-        };
-    };
-    me_me_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_templates_templates_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TemplateResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     assistant_config_schema_assistant_config_schema_get: {
         parameters: {
             query?: never;
@@ -2385,72 +2300,6 @@ export interface operations {
             };
         };
     };
-    create_test_call_assistants__assistant_id__test_calls_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                assistant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TestCallResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_assistant_versions_assistants__assistant_id__versions_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                assistant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantVersionsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_channels_assistants__assistant_id__channels_get: {
         parameters: {
             query?: never;
@@ -2521,6 +2370,45 @@ export interface operations {
             };
         };
     };
+    gmail_oauth_start_assistants__assistant_id__channels_gmail_oauth_start_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GmailOAuthStartRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_channel_assistants__assistant_id__channels__channel_id__delete: {
         parameters: {
             query?: never;
@@ -2541,6 +2429,109 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_digest_assistants__assistant_id__knowledge_digest_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDigestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_digest_assistants__assistant_id__knowledge_digest_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeDigestUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDigestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_knowledge_assistants__assistant_id__knowledge_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2641,40 +2632,7 @@ export interface operations {
             };
         };
     };
-    import_knowledge_assistants__assistant_id__knowledge_import_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                assistant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_digest_assistants__assistant_id__knowledge_digest_get: {
+    create_test_call_assistants__assistant_id__test_calls_post: {
         parameters: {
             query?: never;
             header?: {
@@ -2693,7 +2651,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeDigestResponse"];
+                    "application/json": components["schemas"]["TestCallResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2707,7 +2665,7 @@ export interface operations {
             };
         };
     };
-    update_digest_assistants__assistant_id__knowledge_digest_put: {
+    list_assistant_versions_assistants__assistant_id__versions_get: {
         parameters: {
             query?: never;
             header?: {
@@ -2716,11 +2674,40 @@ export interface operations {
             path: {
                 assistant_id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantVersionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["KnowledgeDigestUpdate"];
+                "application/json": components["schemas"]["LoginRequest"];
             };
         };
         responses: {
@@ -2730,7 +2717,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeDigestResponse"];
+                    "application/json": components["schemas"]["AuthResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2744,17 +2731,10 @@ export interface operations {
             };
         };
     };
-    list_knowledge_gaps_knowledge_gaps_get: {
+    logout_auth_logout_post: {
         parameters: {
-            query?: {
-                status?: string | null;
-                assistant_id?: string | null;
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
+            query?: never;
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2766,175 +2746,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeGapsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["LogoutResponse"];
                 };
             };
         };
     };
-    update_knowledge_gap_knowledge_gaps__gap_id__patch: {
+    signup_auth_signup_post: {
         parameters: {
             query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                gap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KnowledgeGapUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeGapResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_job_jobs__job_id__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_conversations_conversations_get: {
-        parameters: {
-            query?: {
-                channel?: ("phone" | "web" | "gmail" | "whatsapp") | null;
-                status?: ("active" | "completed" | "failed") | null;
-                has_review?: boolean | null;
-                person_id?: string | null;
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_conversation_conversations__conversation_id__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                conversation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_review_conversations__conversation_id__reviews_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                conversation_id: string;
-            };
-            cookie?: never;
-        };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConversationReviewCreate"];
+                "application/json": components["schemas"]["SignupRequest"];
             };
         };
         responses: {
@@ -2944,7 +2770,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationReviewResponse"];
+                    "application/json": components["schemas"]["AuthResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2958,16 +2784,9 @@ export interface operations {
             };
         };
     };
-    list_tasks_tasks_get: {
+    calendar_mode_calendar_mode_get: {
         parameters: {
-            query?: {
-                status?: string | null;
-                kind?: string | null;
-                assistant_id?: string | null;
-                conversation_id?: string | null;
-                cursor?: string | null;
-                limit?: number;
-            };
+            query?: never;
             header?: {
                 "X-Tenant-Id"?: string | null;
             };
@@ -2982,7 +2801,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TaskListResponse"];
+                    "application/json": {
+                        [key: string]: "off" | "fake" | "google";
+                    };
                 };
             };
             /** @description Validation Error */
@@ -2996,22 +2817,14 @@ export interface operations {
             };
         };
     };
-    update_task_tasks__task_id__patch: {
+    gmail_mode_channels_gmail_mode_get: {
         parameters: {
             query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                task_id: string;
-            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TaskUpdate"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3019,16 +2832,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TaskSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": {
+                        [key: string]: "off" | "fake" | "google";
+                    };
                 };
             };
         };
@@ -3209,14 +3015,18 @@ export interface operations {
             };
         };
     };
-    route_call_internal_voice_route_get: {
+    list_conversations_conversations_get: {
         parameters: {
-            query: {
-                to: string;
-                from?: string | null;
+            query?: {
+                channel?: ("phone" | "web" | "gmail" | "whatsapp") | null;
+                status?: ("active" | "completed" | "failed") | null;
+                has_review?: boolean | null;
+                person_id?: string | null;
+                cursor?: string | null;
+                limit?: number;
             };
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Tenant-Id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3229,7 +3039,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RouteResponse"];
+                    "application/json": components["schemas"]["ConversationListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3243,15 +3053,15 @@ export interface operations {
             };
         };
     };
-    route_web_call_internal_voice_web_route_get: {
+    get_conversation_conversations__conversation_id__get: {
         parameters: {
-            query: {
-                token: string;
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
             };
-            header: {
-                "X-Service-Token": string;
+            path: {
+                conversation_id: string;
             };
-            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3262,7 +3072,114 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RouteResponse"];
+                    "application/json": components["schemas"]["ConversationDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_review_conversations__conversation_id__reviews_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationReviewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationReviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    availability_internal_voice_availability_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Service-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    book_internal_voice_book_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Service-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3348,20 +3265,19 @@ export interface operations {
             };
         };
     };
-    availability_internal_voice_availability_post: {
+    route_call_internal_voice_route_get: {
         parameters: {
-            query?: never;
+            query: {
+                to: string;
+                from?: string | null;
+            };
             header: {
                 "X-Service-Token": string;
             };
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AvailabilityRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3369,7 +3285,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AvailabilityResponse"];
+                    "application/json": components["schemas"]["RouteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3383,18 +3299,122 @@ export interface operations {
             };
         };
     };
-    book_internal_voice_book_post: {
+    route_web_call_internal_voice_web_route_get: {
         parameters: {
-            query?: never;
+            query: {
+                token: string;
+            };
             header: {
                 "X-Service-Token": string;
             };
             path?: never;
             cookie?: never;
         };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_knowledge_gaps_knowledge_gaps_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                assistant_id?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGapsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_knowledge_gap_knowledge_gaps__gap_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                gap_id: string;
+            };
+            cookie?: never;
+        };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BookRequest"];
+                "application/json": components["schemas"]["KnowledgeGapUpdate"];
             };
         };
         responses: {
@@ -3404,7 +3424,211 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BookResponse"];
+                    "application/json": components["schemas"]["KnowledgeGapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_me_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gmail_oauth_callback_oauth_google_callback_get: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tasks_tasks_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                kind?: string | null;
+                assistant_id?: string | null;
+                conversation_id?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_task_tasks__task_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_templates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    receive_gmail_webhook_webhooks_gmail_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -3469,167 +3693,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
-                };
-            };
-        };
-    };
-    receive_gmail_webhook_webhooks_gmail_post: {
-        parameters: {
-            query?: {
-                token?: string | null;
-            };
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    gmail_mode_channels_gmail_mode_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: "off" | "fake" | "google";
-                    };
-                };
-            };
-        };
-    };
-    gmail_oauth_start_assistants__assistant_id__channels_gmail_oauth_start_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path: {
-                assistant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["GmailOAuthStartRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    gmail_oauth_callback_oauth_google_callback_get: {
-        parameters: {
-            query: {
-                code: string;
-                state: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    calendar_mode_calendar_mode_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Tenant-Id"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: "off" | "fake" | "google";
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

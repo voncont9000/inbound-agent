@@ -264,6 +264,7 @@ def create_fake_api(
         app.state.fake["route_response"] = app.state.fake["route_response"].model_copy(
             update={
                 "config": assistant,
+                "digest": assistant.knowledge.digest_content,
                 "booking_available": assistant.booking is not None
                 and {"check_availability", "book_appointment"} <= set(assistant.live_actions),
             }
@@ -298,7 +299,8 @@ def main() -> None:
         config=assistant,
         digest=assistant.knowledge.digest_content,
         context_card=args.context_card,
-        booking_available=assistant.booking is not None,
+        booking_available=assistant.booking is not None
+        and {"check_availability", "book_appointment"} <= set(assistant.live_actions),
     )
     app = create_fake_api(
         route_response,

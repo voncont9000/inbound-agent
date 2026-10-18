@@ -6,6 +6,7 @@ A personalised, vertical-agnostic AI agent that takes customer inquiries via pho
 - [Customer context graph](docs/context-graph.md): research and design for linking interactions across channels
 - [M1 architecture and agent seams](docs/m1-architecture.md)
 - [Voice pipeline (M0 architecture)](docs/voice-pipeline.md)
+- [Production deployment](docs/deployment.md): single-server Hetzner operations runbook
 - [Text channels: Gmail and WhatsApp](docs/text-channels.md)
 - [Google Calendar booking](docs/booking.md): appointment types, Calendar connection, and booking behavior
 - [Fonio teardown](docs/fonio-teardown.md): reverse-engineering notes on the reference product, made with [REA](https://github.com/morluto/rea)

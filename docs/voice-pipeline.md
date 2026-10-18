@@ -86,7 +86,10 @@ When booking is enabled for a routed phone or tokenized web call, Calendar avail
 prefetched while route lookup completes. The booking tools are exposed only when the assistant
 has booking configuration, the route reports Calendar availability, and the relevant live
 action is enabled. Voice booking uses cached prefetched results when possible and records
-tool round-trip timings in call metrics.
+tool round-trip timings in call metrics. For availability checks and bookings, the system starts
+the tool and speaks the configured holding message concurrently; the model calls immediately
+without announcing the action. This avoids the dead air or missed tool call that can occur when
+the speech model is asked to announce and call in one turn. Holding messages are voice-only.
 
 ## Turn-taking and safeguards
 
@@ -496,3 +499,53 @@ clear callback preference to `preferred_time_iso` using the configured office-ho
 timezone (Europe/London by default). Callback task `due_at` values must be aware and within
 14 days of call end; an out-of-hours time moves to the next opening, and missing or invalid
 preferences use the next opening when office hours are configured.
+## Live call transfer
+
+Assistants can configure `transfer_targets` (key, label, phone, `when_to_use`, and
+`office_hours_only`) and enable the `transfer_call` live action. Phone numbers are
+normalized to E.164. Office-hours-only targets use the assistant timezone and the
+half-open interval from `opens` through (but not including) `closes`. The tool and prompt
+section appear only when the action is enabled and at least one target is available; text
+channels do not expose it.
+
+On a successful tool call, the system speaks `transfer_handoff_message` (default:
+“I'm putting you through now, please hold.”); the model is instructed to call
+`transfer_call` without announcing the transfer. If the bot is already speaking, the
+handler waits until it has been quiet for 0.3 seconds, capped at 6 seconds, before pushing
+the handoff message. It then observes `BotStartedSpeakingFrame` and
+`BotStoppedSpeakingFrame` for the handoff: it waits up to 2 seconds for speech to start,
+then up to 4 seconds for it to stop, with a 0.2-second quiet grace period. If speech does
+not start or stop in time, transfer still proceeds and the result is logged.
+
+After that bounded wait, the handler starts the Twilio call redirect before sending
+`EndWorkerFrame`. This ordering is required because Pipecat's FastAPI websocket transport
+closes the websocket when the pipeline ends on `EndFrame`; closing the `<Connect><Stream>`
+before the REST redirect would make Twilio hang up the call. The call-finalization path
+reuses the start result and waits for its outcome callback.
+
+Phone calls use Twilio Dial TwiML, an answered callback for prompt outcome reporting, and
+the Dial action callback for the final result. Callback URLs use the configured public
+base URL or forwarded request host and are signature-validated when `TWILIO_AUTH_TOKEN`
+is configured. The configurable `transfer_failed_message` is spoken when a dial fails.
+Reports include `metrics.transfer` and end reason `transferred`; no-answer, busy, failed,
+canceled, and start errors create a `transfer_failed` task. Browser/practice calls
+simulate transfer outcomes.
+
+`TWILIO_CALL_CONTROL=rest` selects Twilio REST control; it is selected by default when
+both Twilio credentials are set. Otherwise call control defaults to the fake. Set
+`TWILIO_CALL_CONTROL=fake` and optionally `TWILIO_FAKE_CALL_LOG` for local evaluation.
+`TRANSFER_OUTCOME_WAIT_SECS` controls the callback wait (default 35 seconds). The
+callback registry is process-local: a callback reaching another process gets valid
+failure TwiML, but the original process reports the outcome as `unknown`.
+
+The `transfer_request` evaluation scenario uses fake call control and a signed Dial
+callback; the real provider scenario is not required for unit-test plumbing.
+
+## Production voice services
+
+The production Compose stack runs the phone and browser-call servers as separate containers behind
+Caddy. Set `TWILIO_MODE=off` until a production Twilio auth token and webhook are configured;
+`twilio` mode requires `TWILIO_AUTH_TOKEN`. In production the browser-call WebSocket requires a
+backend `call_token`, or a valid configured `WEB_CALL_TOKEN` for demo access. The proxy routes
+`/twilio/*` to the phone service and `/call/*` to the browser-call service; the two services are
+not published directly on the host.

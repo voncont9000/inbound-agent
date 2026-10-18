@@ -1,11 +1,15 @@
 import json
 import shutil
+import time
 from pathlib import Path
 
 import pytest
 
+from eval import twilio_sim
 from eval.score import aggregate_calls, render_summary, score_call
 from eval.synth_callers import load_scenarios
+from inbound_voice.config import load_assistant_config
+from inbound_voice.twilio import compute_signature
 
 
 def test_latency_breakdown_aligns_turns_with_service_metrics() -> None:
@@ -200,6 +204,109 @@ def test_booking_checks_are_scored_from_fake_api_state(tmp_path) -> None:
     )
 
     assert all(item["passed"] for item in score["booking_checks"].values())
+
+
+def test_booking_scenario_assistant_fixture_enables_booking() -> None:
+    scenario = load_scenarios()["booking"]
+    assistant_path = Path(__file__).resolve().parents[1] / scenario["assistant"]
+    assistant = load_assistant_config(assistant_path)
+
+    assert assistant.booking is not None
+    assert {"check_availability", "book_appointment"} <= set(assistant.live_actions)
+    assert (
+        scenarios["transfer_request"]["assistant"] == "eval/fixtures/assistants/transfer_firm.yaml"
+    )
+    assert scenarios["transfer_request"]["expected_transfer"] == {
+        "target_key": "duty_solicitor",
+        "status": "no-answer",
+    }
+
+
+def test_score_call_checks_transfer_metrics(tmp_path) -> None:
+    run_dir = tmp_path / "fixture-call"
+    shutil.copytree(FIXTURE, run_dir)
+    metrics_path = run_dir / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics["transfer"] = {"target_key": "duty_solicitor", "status": "no-answer"}
+    metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+
+    result = score_call(
+        run_dir, {"expected_transfer": {"target_key": "duty_solicitor", "status": "no-answer"}}
+    )
+
+    assert result["transfer_checks"]["target_key"]["passed"]
+    assert result["transfer_checks"]["status"]["passed"]
+
+
+def test_transfer_scenario_loads_its_assistant_override() -> None:
+    scenario = load_scenarios()["transfer_request"]
+    assistant_path = Path(__file__).resolve().parents[1] / scenario["assistant"]
+    assistant = load_assistant_config(assistant_path)
+
+    assert "transfer_call" in assistant.live_actions
+    assert [target.key for target in assistant.transfer_targets] == ["duty_solicitor"]
+
+
+@pytest.mark.asyncio
+async def test_twilio_simulator_posts_signed_transfer_callback(tmp_path, monkeypatch) -> None:
+    call_sid = "CA123"
+    callback_url = "https://voice.example.com/twilio/transfer-status"
+    twiml = (
+        '<Response><Dial timeout="20" action="https://voice.example.com/twilio/transfer-status">'
+        '<Number statusCallback="https://voice.example.com/twilio/transfer-status?event=answered">'
+        "+447700900123</Number></Dial></Response>"
+    )
+    log_path = tmp_path / "twilio_call_control.jsonl"
+    log_path.write_text(
+        json.dumps({"call_sid": call_sid, "twiml": twiml}) + "\n",
+        encoding="utf-8",
+    )
+    posted = {}
+
+    class FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def text(self):
+            return "<Response><Hangup /></Response>"
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        def post(self, url, *, data, headers):
+            posted.update(url=url, data=data, headers=headers)
+            return FakeResponse()
+
+    monkeypatch.setattr(twilio_sim, "ClientSession", FakeSession)
+    timeline = {"agent_speech": [{"start_seconds": 0.5}]}
+    auth_token = "simulator-auth-token"
+
+    await twilio_sim._observe_fake_transfer(
+        log_path,
+        call_sid,
+        {"transfer_dial_status": "no-answer"},
+        auth_token,
+        time.monotonic() - 1,
+        timeline,
+    )
+
+    assert posted["url"] == callback_url
+    assert posted["data"] == {"CallSid": call_sid, "DialCallStatus": "no-answer"}
+    assert posted["headers"]["X-Twilio-Signature"] == compute_signature(
+        auth_token, callback_url, posted["data"]
+    )
+    assert timeline["transfer"]["dial_number"] == "+447700900123"
+    assert timeline["transfer"]["callback_status"] == 200
+    assert timeline["transfer"]["greeting_to_transfer_seconds"] > 0
 
 
 def test_score_call_checks_assistant_answers_and_knowledge_gaps(tmp_path) -> None:

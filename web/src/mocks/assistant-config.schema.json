@@ -3,6 +3,12 @@
     "AppointmentType": {
       "additionalProperties": false,
       "properties": {
+        "duration_minutes": {
+          "exclusiveMinimum": 0,
+          "maximum": 480,
+          "title": "Duration Minutes",
+          "type": "integer"
+        },
         "key": {
           "pattern": "^[a-z0-9_]+$",
           "title": "Key",
@@ -10,16 +16,6 @@
         },
         "label": {
           "title": "Label",
-          "type": "string"
-        },
-        "duration_minutes": {
-          "exclusiveMinimum": 0,
-          "maximum": 480,
-          "title": "Duration Minutes",
-          "type": "integer"
-        },
-        "when_to_use": {
-          "title": "When To Use",
           "type": "string"
         },
         "location_or_link": {
@@ -33,6 +29,10 @@
           ],
           "default": null,
           "title": "Location Or Link"
+        },
+        "when_to_use": {
+          "title": "When To Use",
+          "type": "string"
         }
       },
       "required": [
@@ -47,11 +47,6 @@
     "BookingConfig": {
       "additionalProperties": false,
       "properties": {
-        "calendar_id": {
-          "default": "primary",
-          "title": "Calendar Id",
-          "type": "string"
-        },
         "appointment_types": {
           "items": {
             "$ref": "#/$defs/AppointmentType"
@@ -60,23 +55,32 @@
           "title": "Appointment Types",
           "type": "array"
         },
-        "min_notice_hours": {
-          "default": 2,
+        "book_message": {
+          "default": "One moment while I book that.",
+          "title": "Book Message",
+          "type": "string"
+        },
+        "buffer_minutes": {
+          "default": 0,
           "minimum": 0,
-          "title": "Min Notice Hours",
+          "title": "Buffer Minutes",
           "type": "integer"
+        },
+        "calendar_id": {
+          "default": "primary",
+          "title": "Calendar Id",
+          "type": "string"
+        },
+        "check_message": {
+          "default": "Let me check the diary.",
+          "title": "Check Message",
+          "type": "string"
         },
         "horizon_days": {
           "default": 14,
           "maximum": 60,
           "minimum": 1,
           "title": "Horizon Days",
-          "type": "integer"
-        },
-        "buffer_minutes": {
-          "default": 0,
-          "minimum": 0,
-          "title": "Buffer Minutes",
           "type": "integer"
         },
         "max_slots_offered": {
@@ -86,11 +90,10 @@
           "title": "Max Slots Offered",
           "type": "integer"
         },
-        "slot_step_minutes": {
-          "default": 30,
-          "maximum": 240,
-          "minimum": 5,
-          "title": "Slot Step Minutes",
+        "min_notice_hours": {
+          "default": 2,
+          "minimum": 0,
+          "title": "Min Notice Hours",
           "type": "integer"
         },
         "send_updates": {
@@ -102,6 +105,13 @@
           ],
           "title": "Send Updates",
           "type": "string"
+        },
+        "slot_step_minutes": {
+          "default": 30,
+          "maximum": 240,
+          "minimum": 5,
+          "title": "Slot Step Minutes",
+          "type": "integer"
         }
       },
       "required": [
@@ -113,34 +123,34 @@
     "DateDeadlineUrgencyRule": {
       "additionalProperties": false,
       "properties": {
-        "type": {
-          "const": "date_deadline",
-          "title": "Type",
+        "add_months": {
+          "title": "Add Months",
+          "type": "integer"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "minus_days": {
+          "title": "Minus Days",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
           "type": "string"
         },
         "service": {
           "title": "Service",
           "type": "string"
         },
-        "field": {
-          "title": "Field",
+        "type": {
+          "const": "date_deadline",
+          "title": "Type",
           "type": "string"
-        },
-        "add_months": {
-          "title": "Add Months",
-          "type": "integer"
-        },
-        "minus_days": {
-          "title": "Minus Days",
-          "type": "integer"
         },
         "urgent_within_days": {
           "title": "Urgent Within Days",
           "type": "integer"
-        },
-        "reason": {
-          "title": "Reason",
-          "type": "string"
         }
       },
       "required": [
@@ -158,29 +168,6 @@
     "FieldSpec": {
       "additionalProperties": false,
       "properties": {
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "label": {
-          "title": "Label",
-          "type": "string"
-        },
-        "type": {
-          "enum": [
-            "string",
-            "email",
-            "phone",
-            "date",
-            "boolean",
-            "integer",
-            "number",
-            "enum",
-            "list"
-          ],
-          "title": "Type",
-          "type": "string"
-        },
         "choices": {
           "anyOf": [
             {
@@ -196,11 +183,6 @@
           "default": null,
           "title": "Choices"
         },
-        "required": {
-          "default": false,
-          "title": "Required",
-          "type": "boolean"
-        },
         "critical": {
           "default": false,
           "title": "Critical",
@@ -209,6 +191,34 @@
         "description": {
           "default": "",
           "title": "Description",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "email",
+            "phone",
+            "date",
+            "boolean",
+            "integer",
+            "number",
+            "enum",
+            "list"
+          ],
+          "title": "Type",
           "type": "string"
         }
       },
@@ -223,11 +233,6 @@
     "KeywordUrgencyRule": {
       "additionalProperties": false,
       "properties": {
-        "type": {
-          "const": "keyword",
-          "title": "Type",
-          "type": "string"
-        },
         "phrases": {
           "items": {
             "type": "string"
@@ -237,6 +242,11 @@
         },
         "reason": {
           "title": "Reason",
+          "type": "string"
+        },
+        "type": {
+          "const": "keyword",
+          "title": "Type",
           "type": "string"
         }
       },
@@ -251,19 +261,17 @@
     "KnowledgeConfig": {
       "additionalProperties": false,
       "properties": {
-        "sources": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeSource"
-          },
-          "title": "Sources",
-          "type": "array"
-        },
-        "faqs": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeFAQ"
-          },
-          "title": "Faqs",
-          "type": "array"
+        "digest_content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest Content"
         },
         "digest_path": {
           "anyOf": [
@@ -277,23 +285,25 @@
           "default": null,
           "title": "Digest Path"
         },
+        "faqs": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeFAQ"
+          },
+          "title": "Faqs",
+          "type": "array"
+        },
         "max_digest_chars": {
           "default": 24000,
           "exclusiveMinimum": 0,
           "title": "Max Digest Chars",
           "type": "integer"
         },
-        "digest_content": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Digest Content"
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeSource"
+          },
+          "title": "Sources",
+          "type": "array"
         }
       },
       "title": "KnowledgeConfig",
@@ -302,12 +312,12 @@
     "KnowledgeFAQ": {
       "additionalProperties": false,
       "properties": {
-        "question": {
-          "title": "Question",
-          "type": "string"
-        },
         "answer": {
           "title": "Answer",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
           "type": "string"
         }
       },
@@ -321,6 +331,18 @@
     "KnowledgeSource": {
       "additionalProperties": false,
       "properties": {
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File"
+        },
         "url": {
           "anyOf": [
             {
@@ -334,18 +356,6 @@
           ],
           "default": null,
           "title": "Url"
-        },
-        "file": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "File"
         }
       },
       "title": "KnowledgeSource",
@@ -354,6 +364,10 @@
     "OfficeHours": {
       "additionalProperties": false,
       "properties": {
+        "closes": {
+          "title": "Closes",
+          "type": "string"
+        },
         "days": {
           "items": {
             "type": "string"
@@ -363,10 +377,6 @@
         },
         "opens": {
           "title": "Opens",
-          "type": "string"
-        },
-        "closes": {
-          "title": "Closes",
           "type": "string"
         },
         "timezone": {
@@ -386,16 +396,16 @@
     "PriceItem": {
       "additionalProperties": false,
       "properties": {
-        "service": {
-          "title": "Service",
+        "notes": {
+          "title": "Notes",
           "type": "string"
         },
         "price": {
           "title": "Price",
           "type": "string"
         },
-        "notes": {
-          "title": "Notes",
+        "service": {
+          "title": "Service",
           "type": "string"
         }
       },
@@ -410,16 +420,16 @@
     "ServiceConfig": {
       "additionalProperties": false,
       "properties": {
-        "label": {
-          "title": "Label",
-          "type": "string"
-        },
         "fields": {
           "items": {
             "$ref": "#/$defs/FieldSpec"
           },
           "title": "Fields",
           "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
         }
       },
       "required": [
@@ -428,18 +438,66 @@
       ],
       "title": "ServiceConfig",
       "type": "object"
+    },
+    "TransferTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "pattern": "^[a-z0-9_]+$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "office_hours_only": {
+          "default": true,
+          "title": "Office Hours Only",
+          "type": "boolean"
+        },
+        "phone": {
+          "title": "Phone",
+          "type": "string"
+        },
+        "when_to_use": {
+          "title": "When To Use",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "phone",
+        "when_to_use"
+      ],
+      "title": "TransferTarget",
+      "type": "object"
     }
   },
   "additionalProperties": false,
   "properties": {
-    "language": {
-      "default": "English",
-      "title": "Language",
-      "type": "string"
+    "booking": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BookingConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "business_name": {
       "title": "Business Name",
       "type": "string"
+    },
+    "contacts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Contacts",
+      "type": "object"
     },
     "greeting": {
       "title": "Greeting",
@@ -449,6 +507,48 @@
       "default": "",
       "title": "Instructions",
       "type": "string"
+    },
+    "knowledge": {
+      "$ref": "#/$defs/KnowledgeConfig"
+    },
+    "language": {
+      "default": "English",
+      "title": "Language",
+      "type": "string"
+    },
+    "live_actions": {
+      "items": {
+        "enum": [
+          "confirm_critical_fields",
+          "flag_urgent",
+          "request_callback",
+          "log_complaint",
+          "end_call",
+          "check_availability",
+          "book_appointment",
+          "transfer_call"
+        ],
+        "type": "string"
+      },
+      "title": "Live Actions",
+      "type": "array"
+    },
+    "office_hours": {
+      "$ref": "#/$defs/OfficeHours"
+    },
+    "policies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Policies",
+      "type": "array"
+    },
+    "price_list": {
+      "items": {
+        "$ref": "#/$defs/PriceItem"
+      },
+      "title": "Price List",
+      "type": "array"
     },
     "readback": {
       "default": "off",
@@ -460,29 +560,12 @@
       "title": "Readback",
       "type": "string"
     },
-    "office_hours": {
-      "$ref": "#/$defs/OfficeHours"
-    },
-    "price_list": {
-      "items": {
-        "$ref": "#/$defs/PriceItem"
-      },
-      "title": "Price List",
-      "type": "array"
-    },
-    "policies": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Policies",
-      "type": "array"
-    },
-    "contacts": {
-      "additionalProperties": {
-        "type": "string"
-      },
-      "title": "Contacts",
-      "type": "object"
+    "review_confidence_threshold": {
+      "default": 0.7,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Review Confidence Threshold",
+      "type": "number"
     },
     "services": {
       "additionalProperties": {
@@ -490,6 +573,23 @@
       },
       "title": "Services",
       "type": "object"
+    },
+    "transfer_failed_message": {
+      "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "title": "Transfer Failed Message",
+      "type": "string"
+    },
+    "transfer_handoff_message": {
+      "default": "I'm putting you through now, please hold.",
+      "title": "Transfer Handoff Message",
+      "type": "string"
+    },
+    "transfer_targets": {
+      "items": {
+        "$ref": "#/$defs/TransferTarget"
+      },
+      "title": "Transfer Targets",
+      "type": "array"
     },
     "urgency_rules": {
       "items": {
@@ -511,43 +611,6 @@
       },
       "title": "Urgency Rules",
       "type": "array"
-    },
-    "knowledge": {
-      "$ref": "#/$defs/KnowledgeConfig"
-    },
-    "live_actions": {
-      "items": {
-        "enum": [
-          "confirm_critical_fields",
-          "flag_urgent",
-          "request_callback",
-          "log_complaint",
-          "end_call",
-          "check_availability",
-          "book_appointment"
-        ],
-        "type": "string"
-      },
-      "title": "Live Actions",
-      "type": "array"
-    },
-    "booking": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/BookingConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "review_confidence_threshold": {
-      "default": 0.7,
-      "maximum": 1,
-      "minimum": 0,
-      "title": "Review Confidence Threshold",
-      "type": "number"
     }
   },
   "required": [

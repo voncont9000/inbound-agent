@@ -138,6 +138,7 @@ class CallMetricsObserver(BaseObserver):
         self.service_metrics: list[dict[str, Any]] = []
         self.number_holds: list[dict[str, Any]] = []
         self.tool_round_trip_ms: dict[str, list[float]] = {}
+        self.transfer: dict[str, Any] | None = None
         self.usage: dict[str, float | int] = {
             "stt_audio_seconds": 0,
             "tts_characters": 0,
@@ -270,6 +271,10 @@ class CallMetricsObserver(BaseObserver):
         self.usage["extraction_output_tokens"] = usage.get("output_tokens", 0)
         self._save()
 
+    def record_transfer(self, transfer: dict[str, Any]) -> None:
+        self.transfer = dict(transfer)
+        self._save()
+
     def start_number_hold(self) -> dict[str, Any]:
         now = time.monotonic()
         self.latency.number_hold_started(now)
@@ -316,5 +321,7 @@ class CallMetricsObserver(BaseObserver):
                 if values
             },
         }
+        if self.transfer is not None:
+            metrics["transfer"] = self.transfer
         metrics["estimated_cost"] = calculate_cost(metrics, self.price_table)
         return metrics

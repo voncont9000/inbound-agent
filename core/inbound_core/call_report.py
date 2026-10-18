@@ -24,6 +24,22 @@ class CallStart(BaseModel):
     web_call_token: str | None = None
 
 
+class CallTransferMetrics(BaseModel):
+    target_key: str
+    status: Literal[
+        "answered",
+        "completed",
+        "no-answer",
+        "busy",
+        "failed",
+        "canceled",
+        "unknown",
+        "error",
+        "simulated",
+    ]
+    latency_ms: int | None = None
+
+
 class CallReport(BaseModel):
     external_call_id: str
     ended_at: datetime

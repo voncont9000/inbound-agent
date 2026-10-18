@@ -5,5 +5,11 @@
 **/.pytest_cache
 **/.ruff_cache
 **/node_modules
+web/dist
+backend/var
+voice/spool
 voice/runs
 voice/eval/results
+**/.env
+deploy/.env.production
+deploy/backups

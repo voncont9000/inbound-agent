@@ -130,6 +130,7 @@ export function ConversationPage() {
       <p>Status: {String(booking.status ?? "booked")}</p>
       {typeof booking.event_link === "string" && <p><a href={booking.event_link} target="_blank" rel="noreferrer">Open Calendar event</a></p>}
     </section>}
+    {detail.transfer && <section className="panel"><h2>Transfer</h2><div className="card-grid"><div><strong>Target</strong><p>{detail.transfer.target_key}</p></div><div><strong>Status</strong><p>{detail.transfer.status}</p></div><div><strong>Latency</strong><p>{detail.transfer.latency_ms == null ? "—" : `${detail.transfer.latency_ms} ms`}</p></div></div></section>}
     <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role} {message.role === "assistant" && message.meta.draft === true && <Badge tone="neutral">Draft in Gmail</Badge>}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>
     <section className="panel stack"><h2>Intake comparison</h2>
       {!intakes.merged && <p className="muted">Merged intake is unavailable. Live and post-call values are shown where available.</p>}

@@ -5,6 +5,15 @@ on:
   pull_request:
 
 jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck -x deploy/*.sh
+      - run: docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.production.example config -q
+
   voice:
     runs-on: ubuntu-latest
     steps:

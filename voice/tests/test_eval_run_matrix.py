@@ -1,11 +1,40 @@
-import pytest
+import asyncio
+import socket
 
+import pytest
+import uvicorn
+from test_api_client import _route_response
+
+from eval.fake_api import create_fake_api
 from eval.run_matrix import (
+    FAKE_API_TOKEN,
     PROVIDER_ERROR,
     _configure_caller_id_override,
     _configure_llm_provider,
     _configure_tts_voice,
+    _fake_api_state,
 )
+
+
+@pytest.mark.asyncio
+async def test_fake_api_state_reads_response_from_live_server() -> None:
+    with socket.socket() as server_socket:
+        server_socket.bind(("127.0.0.1", 0))
+        port = server_socket.getsockname()[1]
+
+    app = create_fake_api(_route_response(), FAKE_API_TOKEN)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    server_task = asyncio.create_task(server.serve())
+    try:
+        async with asyncio.timeout(5):
+            while not server.started:
+                await asyncio.sleep(0.01)
+
+        state = await _fake_api_state(f"http://127.0.0.1:{port}")
+        assert state == {"calls": [], "reports": []}
+    finally:
+        server.should_exit = True
+        await server_task
 
 
 def test_provider_error_detection_ignores_timestamp_status_fragment() -> None:
