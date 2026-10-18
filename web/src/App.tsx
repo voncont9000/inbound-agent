@@ -4,6 +4,7 @@ import { RequireAuth } from "./auth/RequireAuth";
 import { useAuth } from "./auth/AuthProvider";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { AssistantSetupPage } from "./pages/AssistantSetupPage";
+import { HomePage } from "./pages/HomePage";
 import { AssistantsPage, AssistantKnowledgePage, AssistantSettingsPage } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
 
@@ -15,8 +16,9 @@ function AppShell() {
   return (
     <div className={shell.frame}>
       <aside className={shell.sidebar}>
-        <Link className={shell.brand} to="/inbox">Inbound operator</Link>
+        <Link className={shell.brand} to="/">Inbound operator</Link>
         <nav className={shell.navigation} aria-label="Main navigation">
+          <NavLink to="/" end>Home</NavLink>
           <NavLink to="/inbox">Inbox</NavLink>
           <NavLink to="/contacts">Contacts</NavLink>
           <NavLink to="/tasks">Tasks</NavLink>
@@ -53,7 +55,7 @@ export default function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
-            <Route path="/" element={<Navigate to="/inbox" replace />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/assistants/new" element={<AssistantSetupPage />} />
             <Route path="/assistants" element={<AssistantsPage />} />
             <Route path="/assistants/:id/settings" element={<AssistantSettingsPage />} />

@@ -85,6 +85,40 @@ match the merge policy: non-human fields need review when explicitly flagged or 
 numeric confidence is below the assistant's configured threshold (default `0.7`). Human
 reviews retain previous values and record reviewer, timestamp, note, and provenance.
 
+## Home dashboard
+
+`GET /dashboard/summary` (`backend/inbound_api/services/dashboard.py`) serves the Home page
+(PRD FR-S14). Query parameters: `range` (`today`, `7d` default, `30d`, `custom` with `start`
+and `end` dates, at most 366 days), `timezone` (IANA name, default `UTC`; day boundaries and
+chart buckets follow it), optional `assistant_id`, and `include_test`. Every number comes
+from one aggregate SQL statement on the tenant session, so RLS scopes it; an assistant id
+from another tenant returns zeros.
+
+- **Counted conversations:** `started_at` in the range. Practice calls
+  (`metrics.test_call`) are excluded unless `include_test=true`.
+- **Passed to staff:** the conversation has a task of any kind except the system kinds
+  `action_failed` and `action_setup_needed` (so callbacks, urgent, complaint,
+  `email_needs_human` and similar count), an operator message (takeover reply), or a call
+  transfer with `metrics.transfer.status` of `answered`, `completed` or `simulated`. Every
+  other conversation is **handled by the assistant**.
+- **Bookings:** `calendar_bookings` rows with status `booked` linked to counted
+  conversations. **Tasks** counts all non-system tasks; **callbacks** counts `callback` tasks.
+- **Estimated time saved (minutes):** the sum over conversations of
+  `MINUTES_SAVED_PER_CONVERSATION[channel]` (phone 5, web 5, WhatsApp 4, Gmail 6), multiplied
+  by `PASSED_TO_STAFF_CREDIT` (0.5) when the conversation was passed to staff, because the
+  assistant still did the intake. Both constants are returned in the response and shown on
+  the page.
+- **Median response time:** the median across calls of each call's
+  `metrics.turn_latency_summary.p50_seconds` (caller stopped speaking to first agent audio,
+  written by the voice runtime). Calls without the summary are not counted in
+  `calls_measured`.
+- **Cost:** the sum of `conversations.estimated_cost.total`. **Telephony** is its `twilio`
+  component; **AI** is the rest (STT, TTS, LLM, extraction). Voice calls store this from the
+  call report; WhatsApp and Gmail replies add each reply's estimated LLM cost to the
+  conversation (`services/costs.py`). Migration `0172` backfills that total from earlier
+  assistant-message costs and adds `(tenant_id, conversation_id)` indexes on `tasks` and
+  `calendar_bookings` for the dashboard joins.
+
 ## Jobs and worker
 
 Call reports, text extraction, and knowledge imports enqueue durable jobs inside their write transaction.
@@ -258,6 +292,7 @@ The operator UI is in `web/`, built with React, TypeScript, React Query, and pla
 | Route | Purpose |
 |---|---|
 | `/login`, `/signup` | Cookie-session authentication and account creation |
+| `/` | Home dashboard: conversation, handling, booking, task, time-saved, latency, and cost stats with a chart |
 | `/assistants` | Assistant list and template-based setup |
 | `/assistants/:id/settings` | Configuration editor and version comparison |
 | `/assistants/:id/knowledge` | Sources, import jobs, digest, and FAQ editing |

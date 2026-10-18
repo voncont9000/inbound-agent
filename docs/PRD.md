@@ -214,6 +214,13 @@ template- and prompt-driven and vertical-neutral.
   vs passed to staff, bookings made, callbacks/tasks created, estimated time saved, median response
   latency, and AI/telephony cost.
 
+  **Implementation status (FR-S14):** `GET /dashboard/summary` (tenant-scoped, staff role) returns
+  these metrics for `today`, `7d`, `30d` or a `custom` date range in the browser's time zone, with an
+  optional assistant filter, and a per-hour/per-day series by channel. Practice calls are excluded
+  unless `include_test=true`. The web app's Home page at `/` shows stat cards, an SVG chart, and the
+  range/assistant filters; the inbox stays at `/inbox`. Definitions and formulas are in
+  [m1-architecture.md](m1-architecture.md#home-dashboard).
+
 **Later:** website chat widget, SMS, DTMF tones, background office sound, team invites.
 
 ## 8. Non-functional requirements

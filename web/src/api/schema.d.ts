@@ -506,6 +506,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard Summary */
+        get: operations["get_dashboard_summary_dashboard_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/voice/availability": {
         parameters: {
             query?: never;
@@ -1371,6 +1388,29 @@ export interface components {
             /** Items */
             items: components["schemas"]["ChannelConnectionResponse"][];
         };
+        /** ChannelCounts */
+        ChannelCounts: {
+            /**
+             * Gmail
+             * @default 0
+             */
+            gmail: number;
+            /**
+             * Phone
+             * @default 0
+             */
+            phone: number;
+            /**
+             * Web
+             * @default 0
+             */
+            web: number;
+            /**
+             * Whatsapp
+             * @default 0
+             */
+            whatsapp: number;
+        };
         /** CommitmentResponse */
         CommitmentResponse: {
             /** Due At */
@@ -1654,6 +1694,117 @@ export interface components {
              * @default false
              */
             test_call: boolean;
+        };
+        /** DashboardCost */
+        DashboardCost: {
+            /** Ai */
+            ai: number;
+            /** Conversations Costed */
+            conversations_costed: number;
+            /** Currency */
+            currency: string;
+            /** Telephony */
+            telephony: number;
+            /** Total */
+            total: number;
+        };
+        /** DashboardLatency */
+        DashboardLatency: {
+            /** Calls Measured */
+            calls_measured: number;
+            /** Median Seconds */
+            median_seconds: number | null;
+        };
+        /** DashboardRange */
+        DashboardRange: {
+            /**
+             * Bucket
+             * @enum {string}
+             */
+            bucket: "hour" | "day";
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /**
+             * Preset
+             * @enum {string}
+             */
+            preset: "today" | "7d" | "30d" | "custom";
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** DashboardSeriesPoint */
+        DashboardSeriesPoint: {
+            /**
+             * Gmail
+             * @default 0
+             */
+            gmail: number;
+            /**
+             * Phone
+             * @default 0
+             */
+            phone: number;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Web
+             * @default 0
+             */
+            web: number;
+            /**
+             * Whatsapp
+             * @default 0
+             */
+            whatsapp: number;
+        };
+        /** DashboardSummary */
+        DashboardSummary: {
+            /** Assistant Id */
+            assistant_id: string | null;
+            /** Bookings */
+            bookings: number;
+            by_channel: components["schemas"]["ChannelCounts"];
+            /** Callbacks */
+            callbacks: number;
+            /** Conversations */
+            conversations: number;
+            cost: components["schemas"]["DashboardCost"];
+            /** Handled By Assistant */
+            handled_by_assistant: number;
+            /** Include Test */
+            include_test: boolean;
+            /** Minutes Saved Per Conversation */
+            minutes_saved_per_conversation: {
+                [key: string]: number;
+            };
+            /** Passed To Staff */
+            passed_to_staff: number;
+            /** Passed To Staff Credit */
+            passed_to_staff_credit: number;
+            range: components["schemas"]["DashboardRange"];
+            response_latency: components["schemas"]["DashboardLatency"];
+            /** Series */
+            series: components["schemas"]["DashboardSeriesPoint"][];
+            /** Tasks */
+            tasks: number;
+            /** Time Saved Minutes */
+            time_saved_minutes: number;
         };
         /** DateDeadlineUrgencyRule */
         DateDeadlineUrgencyRule: {
@@ -3651,6 +3802,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationReviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_summary_dashboard_summary_get: {
+        parameters: {
+            query?: {
+                range?: "today" | "7d" | "30d" | "custom";
+                start?: string | null;
+                end?: string | null;
+                timezone?: string;
+                assistant_id?: string | null;
+                include_test?: boolean;
+            };
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummary"];
                 };
             };
             /** @description Validation Error */
