@@ -9,4 +9,9 @@ COPY backend /app/backend
 WORKDIR /app/backend
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv sync --locked --no-dev
-CMD ["uv", "run", "uvicorn", "inbound_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN useradd --create-home --uid 1000 app \
+    && mkdir -p /app/backend/var \
+    && chown -R app:app /app/backend/var
+ENV PATH=/opt/venv/bin:$PATH
+USER app
+CMD ["/opt/venv/bin/uvicorn", "inbound_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
