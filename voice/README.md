@@ -210,6 +210,24 @@ finishes a conversation with `end_call`, it speaks its goodbye before ending the
 The page is served by Pipecat's development runner. Real speech processing requires the
 API keys.
 
+## Hosted browser call
+
+The hosted browser-call server sends 16 kHz PCM microphone audio and receives 24 kHz PCM
+playback over a same-origin WebSocket. This works through HTTPS reverse proxies that do
+not forward the direct UDP media required by WebRTC. It is a development and practice tool;
+it binds to `127.0.0.1` by default and should remain behind a trusted local preview proxy.
+Use headphones so the agent does not hear its own audio.
+
+```sh
+STT_PROVIDER=soniox uv run --env-file .env python web_call_server.py \
+  --host 127.0.0.1 --port 7862
+```
+
+Open the page at `/`. Set `WEB_CALL_TO_NUMBER` to route through the configured voice API,
+`WEB_CALL_TOKEN` to require a shared token (pass it as `?token=...`), and
+`WEB_CALL_MAX_CONCURRENT` to change the in-process call limit (default `2`). Provider keys
+are read from the process environment or `.env`.
+
 ## Twilio phone server
 
 Configure `TWILIO_AUTH_TOKEN` to validate incoming webhook signatures. Add

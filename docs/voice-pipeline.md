@@ -443,6 +443,9 @@ its existing 16 kHz input and 24 kHz output rates. These findings verify Pipecat
 sample-rate configuration paths; provider account/model acceptance was not exercised
 against live services.
 
+Hosted browser practice calls can use same-origin WebSocket PCM at 16 kHz input and 24 kHz
+output for HTTPS reverse proxies that cannot forward WebRTC's direct UDP media.
+
 ## Local Twilio simulator
 
 `eval.twilio_sim` signs and posts the webhook, parses the returned TwiML, opens a local
