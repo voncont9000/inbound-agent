@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         "postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound"
     )
     voice_service_token: str = DEFAULT_VOICE_SERVICE_TOKEN
+    web_call_base_url: str | None = None
     session_ttl_hours: int = 336
     session_cookie_secure: bool = True
     allowed_origins: list[str] = ["http://localhost:5173"]

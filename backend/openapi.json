@@ -608,6 +608,17 @@
           "to_number": {
             "title": "To Number",
             "type": "string"
+          },
+          "web_call_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Call Token"
           }
         },
         "required": [
@@ -2566,6 +2577,24 @@
         "title": "TenantResponse",
         "type": "object"
       },
+      "TestCallResponse": {
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "TestCallResponse",
+        "type": "object"
+      },
       "TranscriptTurn": {
         "properties": {
           "role": {
@@ -3517,6 +3546,65 @@
         "summary": "Create Source",
         "tags": [
           "knowledge"
+        ]
+      }
+    },
+    "/assistants/{assistant_id}/test-calls": {
+      "post": {
+        "operationId": "create_test_call_assistants__assistant_id__test_calls_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Test Call",
+        "tags": [
+          "assistants"
         ]
       }
     },
@@ -4498,6 +4586,57 @@
           }
         },
         "summary": "Route Call",
+        "tags": [
+          "internal voice"
+        ]
+      }
+    },
+    "/internal/voice/web-route": {
+      "get": {
+        "operationId": "route_web_call_internal_voice_web_route_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Service-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Service-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Route Web Call",
         "tags": [
           "internal voice"
         ]

@@ -228,6 +228,12 @@ Open the page at `/`. Set `WEB_CALL_TO_NUMBER` to route through the configured v
 `WEB_CALL_MAX_CONCURRENT` to change the in-process call limit (default `2`). Provider keys
 are read from the process environment or `.env`.
 
+For owner-created assistant test calls, configure `API_BASE_URL` and the matching
+`VOICE_SERVICE_TOKEN` in the voice service, and set backend `WEB_CALL_BASE_URL` to the
+browser-call page URL (for example, `http://127.0.0.1:7862/`). The API issues a signed
+10-minute `call_token`; tokenized calls route to that assistant and fail closed if the API
+route is unavailable. Calls without a `call_token` retain the local-config behavior.
+
 ## Twilio phone server
 
 Configure `TWILIO_AUTH_TOKEN` to validate incoming webhook signatures. Add

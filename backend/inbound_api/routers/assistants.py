@@ -1,4 +1,5 @@
 from typing import Any
+from urllib.parse import urljoin
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,11 +26,13 @@ from inbound_api.schemas import (
     ChannelConnectionResponse,
     ChannelConnectionsResponse,
     TemplateResponse,
+    TestCallResponse,
 )
 from inbound_api.services.audit import write_audit
 from inbound_api.services.diff import config_diff
 from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
+from inbound_api.web_call_tokens import issue
 
 router = APIRouter(tags=["assistants"])
 _staff = Depends(require_role(MembershipRole.STAFF))
@@ -108,6 +111,29 @@ async def get_assistant(
     if assistant is None:
         raise HTTPException(status_code=404, detail="Assistant not found")
     return AssistantResponse.model_validate(assistant)
+
+
+@router.post(
+    "/assistants/{assistant_id}/test-calls",
+    response_model=TestCallResponse,
+)
+async def create_test_call(
+    assistant_id: UUID,
+    ctx: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> TestCallResponse:
+    assistant = await session.get(Assistant, assistant_id)
+    if assistant is None:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    base_url = get_settings().web_call_base_url
+    if not base_url:
+        raise HTTPException(status_code=503, detail="Test calls are not configured")
+    token, expires_at = issue(ctx.tenant_id, assistant_id)
+    await write_audit(session, ctx, "assistant.test_call_created", "assistant", assistant_id)
+    return TestCallResponse(
+        url=urljoin(base_url, f"?call_token={token}"),
+        expires_at=expires_at,
+    )
 
 
 @router.put("/assistants/{assistant_id}", response_model=AssistantResponse)

@@ -10,6 +10,11 @@ const ids = {
 };
 const date = (day: number) => `2026-02-${String(day).padStart(2, "0")}T10:30:00Z`;
 
+export const testCallResponse: Schemas["TestCallResponse"] = {
+  url: "http://127.0.0.1:7862/?call_token=mock-call-token",
+  expires_at: 1792320000,
+};
+
 const plumbingConfig: AssistantConfig = {
   business_name: "Brightside Plumbing & Heating",
   language: "English",

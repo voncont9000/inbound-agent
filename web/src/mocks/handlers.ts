@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import type { Schemas } from "../api/client";
 import type { paths } from "../api/schema";
 import { validateAssistantConfig } from "../lib/config";
-import { authUser, templates } from "./fixtures";
+import { authUser, templates, testCallResponse } from "./fixtures";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
 import type { TenantFixture } from "./fixtures";
 import assistantConfigSchema from "./assistant-config.schema.json";
@@ -110,6 +110,11 @@ export const handlers = [
     return HttpResponse.json<Schemas["MeResponse"]>({ user: mockDb.user, tenant: mockDb.memberships.find(({ id }) => id === selectedTenantId(request)) ?? mockDb.memberships[0], memberships: mockDb.memberships });
   }),
   http.get<never, never, Schemas["AssistantListResponse"]>("*/api/assistants", ({ request }) => HttpResponse.json<Schemas["AssistantListResponse"]>({ items: selectedTenant(request).assistants })),
+  http.post<{ id: string }, never, ApiResponse<Schemas["TestCallResponse"]>>("*/api/assistants/:id/test-calls", ({ request, params }) => {
+    return findAssistant(selectedTenant(request), String(params.id))
+      ? HttpResponse.json<Schemas["TestCallResponse"]>(testCallResponse)
+      : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+  }),
   http.post<never, Schemas["AssistantCreate"], ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistants", async ({ request }) => {
     const body = await requestJson<Schemas["AssistantCreate"]>(request);
     const tenant = selectedTenant(request);

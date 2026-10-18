@@ -8,6 +8,7 @@ from uuid import UUID
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from inbound_core.call_report import CallReport, CallStart, RouteResponse
 
@@ -72,6 +73,27 @@ async def test_route_start_and_report_happy_path(tmp_path: Path) -> None:
     assert len(app.state.fake["calls"]) == 1
     assert app.state.fake["reports"][0]["conversation_id"] == str(conversation_id)
     assert app.state.fake["reports"][0]["external_call_id"] == "CA-test-call"
+
+
+@pytest.mark.asyncio
+async def test_route_web_call_uses_signed_token_query_parameter(tmp_path: Path) -> None:
+    app = FastAPI()
+    received_tokens: list[str] = []
+
+    @app.get("/internal/voice/web-route")
+    async def route_web_call(token: str) -> dict:
+        received_tokens.append(token)
+        return _route_response().model_dump(mode="json")
+
+    client = VoiceApiClient(
+        ApiSettings("http://fake", "test-service-token"),
+        spool_dir=tmp_path,
+        transport=httpx.ASGITransport(app=app),
+    )
+    route = await client.route_web_call("signed-token")
+
+    assert received_tokens == ["signed-token"]
+    assert route.assistant_id == _route_response().assistant_id
 
 
 @pytest.mark.asyncio
