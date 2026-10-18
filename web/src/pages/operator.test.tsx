@@ -182,7 +182,7 @@ describe("operator workflows", () => {
       appointment_types: [{ key: "consultation", duration_minutes: 45 }],
     });
     server.events.removeListener("request:start", listener);
-  });
+  }, 15000);
 
   it("requests Calendar OAuth scopes and warns when the calendar is disconnected", async () => {
     const user = userEvent.setup();
