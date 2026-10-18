@@ -343,8 +343,11 @@ firm-approved prices before any real client-facing use.
 Assistant behavior is configured in each business's multiline `instructions` field and
 formatted with the business name, greeting, and office-hours placeholders. The prompt
 renderer contributes identity, business data, knowledge, and feature mechanics; it does not
-hard-code callback or other call-behavior policy. `readback` selects `off`, `email`, or
-`critical` behavior. The law-firm template selects `email`.
+hard-code callback or other call-behavior policy. The channel-neutral business context,
+intake extraction, and pricing helpers live in `core/inbound_core` and are shared with text
+channels; voice-specific readback, caller ID, and tool mechanics remain in the voice service.
+`readback` selects `off`, `email`, or `critical` behavior. The law-firm template selects
+`email`.
 Email read-backs spell addresses as separate letters and spoken words such as “dot” and
 “at,” rather than punctuation symbols; common domains are spoken as words.
 

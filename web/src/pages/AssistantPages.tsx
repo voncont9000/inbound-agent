@@ -189,6 +189,7 @@ export function AssistantSettingsPage() {
   const summaryErrors = Object.fromEntries(Object.entries(allErrors).filter(([path]) => path !== "_form"));
   return <main className="page" id="main-content">
     <p className="eyebrow">Assistant settings</p><h1>{baseline.name}</h1>
+    <ChannelConnections assistantId={id} />
     <TestCallButton assistantId={baseline.id} />
     <p className="muted">{isDirty ? "Unsaved changes" : `Version ${baseline.version} is up to date`}</p>
     <form className="stack" onSubmit={saveConfig} noValidate>
@@ -386,6 +387,49 @@ const liveActionHelp: Record<string, string> = {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+export function ChannelConnections({ assistantId }: { assistantId: string }) {
+  const queryClient = useQueryClient();
+  const [kind, setKind] = useState<Schemas["ChannelConnectionCreate"]["kind"]>("phone");
+  const [externalId, setExternalId] = useState("");
+  const [error, setError] = useState("");
+  const channels = useQuery({
+    queryKey: ["assistant-channels", assistantId],
+    queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/channels", { params: { path: { assistant_id: assistantId } } })),
+  });
+  const add = useMutation({
+    mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/channels", {
+      params: { path: { assistant_id: assistantId } },
+      body: { kind, external_id: externalId, settings: {} },
+    })),
+    onSuccess: async () => {
+      setExternalId("");
+      setError("");
+      await queryClient.invalidateQueries({ queryKey: ["assistant-channels", assistantId] });
+    },
+    onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to add channel."),
+  });
+  return <section className="panel stack" aria-labelledby="assistant-channels-heading">
+    <h2 id="assistant-channels-heading">Channels</h2>
+    <p className="muted">Connect a phone number, WhatsApp phone number ID, or email inbox.</p>
+    {channels.isLoading && <LoadingState />}
+    {channels.error && <ErrorState message="Channel connections could not be loaded." />}
+    {channels.data?.items.map((channel) => <p key={channel.id}>{channel.kind}: <strong>{channel.external_id}</strong></p>)}
+    <form className="form-grid" onSubmit={(event) => {
+      event.preventDefault();
+      setError("");
+      add.mutate();
+    }}>
+      <Field path="channel-kind" label="Channel">{(fieldId) => <select id={fieldId} value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+        <option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="gmail">Gmail</option><option value="web">Web</option>
+      </select>}</Field>
+      <Field path="channel-external-id" label={kind === "whatsapp" ? "WhatsApp phone_number_id" : "External ID"}>{(fieldId) => <input id={fieldId} value={externalId} onChange={(event) => setExternalId(event.target.value)} required />}</Field>
+      <button className="button-primary" type="submit" disabled={add.isPending || !externalId.trim()}>{add.isPending ? "Adding…" : "Add channel"}</button>
+    </form>
+    {kind === "whatsapp" && <p className="help">Enter the phone_number_id from your Meta WhatsApp Business account.</p>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
 }
 
 export function AssistantKnowledgePage() {

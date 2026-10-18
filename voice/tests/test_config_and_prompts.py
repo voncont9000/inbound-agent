@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from pathlib import Path
 
@@ -60,6 +61,27 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "do not separately flag the configured deadline" not in prompt
     assert "No live actions are enabled." not in prompt
     assert "end_call" not in prompt
+
+
+def test_system_prompt_matches_pre_shared_context_goldens() -> None:
+    golden_path = ROOT / "tests" / "fixtures" / "render_system_prompt_before_shared_context.json"
+    goldens = json.loads(golden_path.read_text(encoding="utf-8"))
+    for key, expected in goldens.items():
+        template, readback, caller_id, context_card = key.split("|")
+        config = load_assistant_config(ROOT / "config" / "templates" / f"{template}.yaml")
+        config = config.model_copy(update={"readback": readback})
+        actual = render_system_prompt(
+            config,
+            today=date(2026, 1, 15),
+            caller_id="+447700900123" if caller_id == "true" else None,
+            context_card=(
+                "Caller: Alex. Previously asked about opening hours."
+                if context_card == "true"
+                else None
+            ),
+        )
+
+        assert actual == expected, key
 
 
 def test_prompt_only_mentions_enabled_actions() -> None:

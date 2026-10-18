@@ -134,7 +134,10 @@ robots requests, preventing a second DNS resolution from rebinding a checked pub
 Settings include `APP_ENV`, `VOICE_SERVICE_TOKEN`, `WEB_CALL_BASE_URL`, `SESSION_TTL_HOURS`,
 `SESSION_COOKIE_SECURE`, `ALLOWED_ORIGINS`, `KNOWLEDGE_ALLOW_PRIVATE_URLS`, `UPLOAD_DIR`,
 `MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
-`KNOWLEDGE_REQUEST_DELAY`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
+`KNOWLEDGE_REQUEST_DELAY`, `WHATSAPP_MODE`, `WHATSAPP_APP_SECRET`,
+`WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_GRAPH_BASE_URL`,
+`TEXT_AGENT_MODEL`, `EXTRACTION_MODEL`, `MESSAGE_EXTRACT_DELAY_SECONDS`,
+`FAKE_OUTBOX_PATH`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
 `JOB_LEASE_SECONDS`, and `WORKER_POLL_SECONDS`.
 
 `APP_ENV` defaults to `development`. Outside `development` and `test`, `VOICE_SERVICE_TOKEN`
@@ -170,6 +173,27 @@ The contacts API provides tenant-scoped list/search with cursor pagination, cont
 4. **Graph ingest:** the report handler stores the conversation and enqueues `graph_ingest`; the worker calls the graph seam to ingest the conversation.
 
 All internal voice routes require `X-Service-Token`, checked against `VOICE_SERVICE_TOKEN`.
+
+## WhatsApp text runtime
+
+`GET` and `POST /webhooks/whatsapp` verify Meta subscription and raw-body signatures. The
+webhook resolves an active phone-number ID through a SECURITY DEFINER lookup owned by the
+restricted `inbound_lookup` role, stores inbound `wamid`s with a tenant-scoped unique index,
+and enqueues the shared text-agent jobs. Replies use the editable assistant business context,
+latest knowledge digest, and lookup-only contact context card from the shared routing service,
+then persist the returned Graph message ID and usage/cost. The first reply discloses the AI
+assistant once; later replies omit it. Conversation identity includes both the receiving number
+ID and sender `wa_id`. Inbound records carry server receipt timestamps and retries skip a send
+already persisted after the latest inbound message. Extraction reuses the core intake pipeline
+and shared conversation-results persistence; Graph ingest links the WhatsApp `wa_id` and E.164
+phone identity to the same contact.
+
+Conversations stay active for the 24-hour customer-service window. The reply job coalesces
+bursts, while post-call-style extraction waits for the configured quiet period. Outside the
+window the system creates a `whatsapp_template_needed` task and does not send a free-form
+message. There is no media download or template sender yet; the access token is currently
+global rather than per channel. See [Text channels](text-channels.md) for setup and the
+simulator.
 
 ## Voice integration (agent D)
 

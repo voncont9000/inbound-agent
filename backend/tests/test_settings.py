@@ -11,7 +11,14 @@ def test_production_rejects_empty_or_default_voice_service_token(token: str) -> 
 
 
 def test_production_accepts_configured_voice_service_token() -> None:
-    settings = Settings(app_env="production", voice_service_token="configured-service-token")
+    settings = Settings(
+        app_env="production",
+        voice_service_token="configured-service-token",
+        whatsapp_mode="graph",
+        whatsapp_app_secret="configured-app-secret",
+        whatsapp_verify_token="configured-verify-token",
+        whatsapp_access_token="configured-access-token",
+    )
 
     assert settings.voice_service_token == "configured-service-token"
 

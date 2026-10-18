@@ -470,6 +470,13 @@ class Message(UUIDPrimaryKeyMixin, TenantMixin, Base):
     __tablename__ = "messages"
     __table_args__ = (
         Index("ix_messages_tenant_conversation_ts", "tenant_id", "conversation_id", "ts"),
+        Index(
+            "uq_messages_tenant_external_id",
+            "tenant_id",
+            "external_id",
+            unique=True,
+            postgresql_where=sql_text("external_id IS NOT NULL"),
+        ),
     )
 
     conversation_id: Mapped[UUID] = mapped_column(
@@ -478,6 +485,7 @@ class Message(UUIDPrimaryKeyMixin, TenantMixin, Base):
     role: Mapped[MessageRole] = mapped_column(_enum(MessageRole, "message_role"), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    external_id: Mapped[str | None] = mapped_column(Text)
     meta: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=sql_text("'{}'::jsonb")
     )

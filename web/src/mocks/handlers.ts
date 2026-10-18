@@ -111,6 +111,28 @@ export const handlers = [
     return HttpResponse.json<Schemas["MeResponse"]>({ user: mockDb.user, tenant: mockDb.memberships.find(({ id }) => id === selectedTenantId(request)) ?? mockDb.memberships[0], memberships: mockDb.memberships });
   }),
   http.get<never, never, Schemas["AssistantListResponse"]>("*/api/assistants", ({ request }) => HttpResponse.json<Schemas["AssistantListResponse"]>({ items: selectedTenant(request).assistants })),
+  http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>("*/api/assistants/:id/channels", ({ params }) => HttpResponse.json<Schemas["ChannelConnectionsResponse"]>({ items: mockDb.channels[String(params.id)] ?? [] })),
+  http.post<{ id: string }, Schemas["ChannelConnectionCreate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/assistants/:id/channels", async ({ params, request }) => {
+    const assistantId = String(params.id);
+    const tenant = selectedTenant(request);
+    if (!findAssistant(tenant, assistantId)) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    const body = await requestJson<Schemas["ChannelConnectionCreate"]>(request);
+    const connections = mockDb.channels[assistantId] ?? [];
+    if (connections.some((channel) => channel.kind === body.kind && channel.external_id === body.external_id)) {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "This channel is already connected" }, { status: 409 });
+    }
+    const channel: Schemas["ChannelConnectionResponse"] = {
+      id: crypto.randomUUID(),
+      assistant_id: assistantId,
+      kind: body.kind,
+      external_id: body.external_id,
+      status: "active",
+      settings: body.settings ?? {},
+      created_at: new Date().toISOString(),
+    };
+    mockDb.channels[assistantId] = [...connections, channel];
+    return HttpResponse.json<Schemas["ChannelConnectionResponse"]>(channel, { status: 201 });
+  }),
   http.post<{ id: string }, never, ApiResponse<Schemas["TestCallResponse"]>>("*/api/assistants/:id/test-calls", ({ request, params }) => {
     return findAssistant(selectedTenant(request), String(params.id))
       ? HttpResponse.json<Schemas["TestCallResponse"]>(testCallResponse)

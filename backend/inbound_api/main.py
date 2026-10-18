@@ -8,6 +8,7 @@ from inbound_api.routers import (
     internal_voice,
     knowledge,
     tasks,
+    webhooks,
 )
 from inbound_api.schemas import KnowledgeSourceCreate
 
@@ -21,6 +22,7 @@ for router in (
     tasks.router,
     contacts.router,
     internal_voice.router,
+    webhooks.router,
 ):
     app.include_router(router)
 
