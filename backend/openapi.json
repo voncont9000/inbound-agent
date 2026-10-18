@@ -675,6 +675,14 @@
             "title": "External Id",
             "type": "string"
           },
+          "google_features": {
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true,
+            "title": "Google Features",
+            "type": "array"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -707,7 +715,8 @@
           "external_id",
           "status",
           "settings",
-          "created_at"
+          "created_at",
+          "google_features"
         ],
         "title": "ChannelConnectionResponse",
         "type": "object"
@@ -1584,6 +1593,19 @@
           "type"
         ],
         "title": "FieldSpec",
+        "type": "object"
+      },
+      "GmailOAuthStartRequest": {
+        "properties": {
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Features",
+            "type": "array"
+          }
+        },
+        "title": "GmailOAuthStartRequest",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -3196,6 +3218,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GmailOAuthStartRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

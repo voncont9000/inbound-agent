@@ -140,6 +140,7 @@ export const handlers = [
       status: "active",
       settings: body.settings ?? {},
       created_at: new Date().toISOString(),
+      google_features: [],
     };
     mockDb.channels[assistantId] = [...connections, channel];
     return HttpResponse.json<Schemas["ChannelConnectionResponse"]>(channel, { status: 201 });

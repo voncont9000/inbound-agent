@@ -83,6 +83,14 @@ for the deployed application. Refresh tokens are Fernet-encrypted in
 `channel_connections.credentials_ciphertext`; they are never stored in connection
 settings or returned by the API.
 
+### Google features
+
+Gmail OAuth is the shared Google sign-in for connected Google features. The default
+request includes Gmail access; callers may additionally request the `sheets` or
+`calendar` feature. Granted scopes are stored internally and connection responses expose
+only derived feature names. Gmail uses `gmail.modify`, Sheets uses `spreadsheets`, and
+Calendar uses `calendar.events` plus `calendar.freebusy`.
+
 Deployments may set `GMAIL_MODE=off` before a Google project is available. In that mode
 the Gmail webhook returns 503, OAuth start reports that Gmail is not enabled, and queued
 Gmail sync jobs are no-ops. Production accepts `off` without Google configuration;
