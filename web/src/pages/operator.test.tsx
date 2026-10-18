@@ -195,6 +195,24 @@ describe("operator workflows", () => {
     expect(await screen.findAllByText("Test call")).not.toHaveLength(0);
   });
 
+  it("marks Gmail assistant messages as drafts", async () => {
+    const conversation = structuredClone(mockDb.tenants[0].conversations[0]);
+    conversation.channel = "gmail";
+    conversation.messages.push({
+      id: `${conversationId}-draft`,
+      role: "assistant",
+      text: "Thanks for your enquiry.",
+      ts: new Date().toISOString(),
+      meta: { draft: true, gmail_draft_id: "draft-1" },
+    });
+    server.use(http.get<{ id: string }, never, Schemas["ConversationDetailResponse"]>(
+      "*/api/conversations/:id",
+      () => HttpResponse.json<Schemas["ConversationDetailResponse"]>(conversation),
+    ));
+    renderApp(`/conversations/${conversationId}`, { loggedIn: true });
+    expect(await screen.findByText("Draft in Gmail")).toBeInTheDocument();
+  });
+
   it("sends task filters to the server", async () => {
     const user = userEvent.setup();
     const requested: URL[] = [];

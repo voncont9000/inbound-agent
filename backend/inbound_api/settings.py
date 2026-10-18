@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     extraction_model: str = "gemini-3.8-flash"
     message_extract_delay_seconds: int = 120
     fake_outbox_path: Path = BACKEND_ROOT / "var" / "whatsapp-outbox.jsonl"
+    gmail_mode: Literal["off", "fake", "google"] = "fake"
+    gmail_fake_dir: Path = BACKEND_ROOT / "var" / "gmail-fake"
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_redirect_url: str | None = None
+    gmail_pubsub_topic: str | None = None
+    gmail_pubsub_audience: str | None = None
+    gmail_pubsub_service_account: str | None = None
+    gmail_push_token: str | None = None
+    gmail_reconcile_interval_seconds: int = 300
+    credentials_encryption_key: str | None = None
     price_table_path: Path = (
         Path(__file__).resolve().parents[2] / "voice" / "config" / "prices.yaml"
     )
@@ -61,6 +72,12 @@ class Settings(BaseSettings):
         path = Path(value)
         return path if path.is_absolute() else BACKEND_ROOT.parent / path
 
+    @field_validator("gmail_fake_dir", mode="before")
+    @classmethod
+    def resolve_gmail_fake_dir(cls, value: str | Path) -> Path:
+        path = Path(value)
+        return path if path.is_absolute() else BACKEND_ROOT.parent / path
+
     @field_validator("price_table_path", mode="before")
     @classmethod
     def resolve_price_table_path(cls, value: str | Path) -> Path:
@@ -85,6 +102,25 @@ class Settings(BaseSettings):
             raise ValueError(
                 "WhatsApp production requires graph mode, WHATSAPP_APP_SECRET, "
                 "WHATSAPP_VERIFY_TOKEN, and WHATSAPP_ACCESS_TOKEN"
+            )
+        if self.app_env not in {"development", "test"} and self.gmail_mode == "fake":
+            raise ValueError("Gmail production requires google mode or off mode")
+        if (
+            self.app_env not in {"development", "test"}
+            and self.gmail_mode == "google"
+            and (
+                not (self.google_oauth_client_id or "").strip()
+                or not (self.google_oauth_client_secret or "").strip()
+                or not (self.google_oauth_redirect_url or "").strip()
+                or not (self.gmail_pubsub_topic or "").strip()
+                or not (self.gmail_pubsub_audience or "").strip()
+                or not (self.gmail_pubsub_service_account or "").strip()
+                or not (self.credentials_encryption_key or "").strip()
+            )
+        ):
+            raise ValueError(
+                "Gmail production google mode requires Google OAuth/Pub/Sub settings "
+                "and CREDENTIALS_ENCRYPTION_KEY"
             )
         return self
 
