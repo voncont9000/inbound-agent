@@ -21,6 +21,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistant-setup/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Setup */
+        post: operations["complete_setup_assistant_setup_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant-setup/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Setup Draft */
+        post: operations["create_setup_draft_assistant_setup_drafts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants": {
         parameters: {
             query?: never;
@@ -976,6 +1010,27 @@ export interface components {
             updated_at: string;
             /** Version */
             version: number;
+        };
+        /** AssistantSetupComplete */
+        AssistantSetupComplete: {
+            accepted?: components["schemas"]["SetupDraft"];
+            /** Business Name */
+            business_name: string;
+            /** Name */
+            name: string;
+            /** Template */
+            template: string;
+            /** Website Url */
+            website_url?: string | null;
+        };
+        /** AssistantSetupDraftCreate */
+        AssistantSetupDraftCreate: {
+            /** Business Name */
+            business_name: string;
+            /** Template */
+            template: string;
+            /** Website Url */
+            website_url: string;
         };
         /** AssistantUpdate */
         AssistantUpdate: {
@@ -2140,6 +2195,20 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** SetupDraft */
+        SetupDraft: {
+            /** Company Info */
+            company_info?: string | null;
+            /** Faqs */
+            faqs?: components["schemas"]["KnowledgeFAQ"][] | null;
+            office_hours?: components["schemas"]["OfficeHours"] | null;
+            /** Price List */
+            price_list?: components["schemas"]["PriceItem"][] | null;
+            /** Services */
+            services?: {
+                [key: string]: components["schemas"]["ServiceConfig"];
+            } | null;
+        };
         /** SheetColumn */
         SheetColumn: {
             /** Header */
@@ -2418,6 +2487,76 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_setup_assistant_setup_complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantSetupComplete"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_setup_draft_assistant_setup_drafts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantSetupDraftCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
                 };
             };
             /** @description Validation Error */

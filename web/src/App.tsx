@@ -3,13 +3,14 @@ import shell from "./components/AppShell.module.css";
 import { RequireAuth } from "./auth/RequireAuth";
 import { useAuth } from "./auth/AuthProvider";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
+import { AssistantSetupPage } from "./pages/AssistantSetupPage";
 import { AssistantsPage, AssistantKnowledgePage, AssistantSettingsPage } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
 
 function AppShell() {
   const { user, memberships, selectedTenant, setSelectedTenant, logout } = useAuth();
   const location = useLocation();
-  const assistantArea = location.pathname.startsWith("/assistants/");
+  const assistantArea = location.pathname.startsWith("/assistants/") && location.pathname !== "/assistants/new";
   const assistantId = location.pathname.split("/")[2];
   return (
     <div className={shell.frame}>
@@ -53,6 +54,7 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/inbox" replace />} />
+            <Route path="/assistants/new" element={<AssistantSetupPage />} />
             <Route path="/assistants" element={<AssistantsPage />} />
             <Route path="/assistants/:id/settings" element={<AssistantSettingsPage />} />
             <Route path="/assistants/:id/knowledge" element={<AssistantKnowledgePage />} />

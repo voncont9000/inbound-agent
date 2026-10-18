@@ -184,6 +184,7 @@ template- and prompt-driven and vertical-neutral.
   and an LLM drafts company info, FAQs, opening hours, price list and suggested services. The business
   reviews and accepts each draft section; nothing generated is used until accepted. Setup without a
   website remains possible.
+  - Status: Implemented with per-section review; only accepted sections are applied at completion.
 
 **Languages and voices**
 - FR-S8: `language` becomes a structured locale (e.g. `en-GB`, `de-DE`) or `multi`. Speech recognition
