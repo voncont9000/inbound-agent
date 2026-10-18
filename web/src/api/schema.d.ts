@@ -232,6 +232,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/contacts/{contact_id}/merge/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Contact Merge */
+        post: operations["undo_contact_merge_contacts__contact_id__merge_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/contacts/{contact_id}/split": {
         parameters: {
             query?: never;
@@ -1945,8 +1962,10 @@ export interface operations {
     list_contacts_contacts_get: {
         parameters: {
             query?: {
-                cursor?: string | null;
+                q?: string | null;
+                include_merged?: boolean;
                 limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -2019,6 +2038,37 @@ export interface operations {
                 "application/json": components["schemas"]["ContactMergeRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactMergeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_contact_merge_contacts__contact_id__merge_undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

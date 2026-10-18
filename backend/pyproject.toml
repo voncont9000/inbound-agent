@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115,<1",
     "inbound-core",
     "pgvector>=0.3,<1",
+    "phonenumbers>=8.13,<10",
     "psycopg[binary]>=3.2,<4",
     "pydantic-settings>=2.7,<3",
     "python-multipart>=0.0.20,<1",
