@@ -75,7 +75,11 @@ async def tenant_pair() -> AsyncIterator[dict]:
         emails = [item["email"] for item in created]
         if tenant_ids or emails:
             with psycopg.connect(_owner_database_url()) as connection:
-                if tenant_ids:
-                    connection.execute("DELETE FROM tenants WHERE id = ANY(%s)", (tenant_ids,))
+                for tenant_id in tenant_ids:
+                    connection.execute(
+                        "SELECT set_config('app.tenant_id', %s, true)",
+                        (tenant_id,),
+                    )
+                    connection.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
                 if emails:
                     connection.execute("DELETE FROM users WHERE email = ANY(%s)", (emails,))
