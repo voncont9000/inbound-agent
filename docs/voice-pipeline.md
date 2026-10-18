@@ -345,6 +345,8 @@ formatted with the business name, greeting, and office-hours placeholders. The p
 renderer contributes identity, business data, knowledge, and feature mechanics; it does not
 hard-code callback or other call-behavior policy. `readback` selects `off`, `email`, or
 `critical` behavior. The law-firm template selects `email`.
+Email read-backs spell addresses as separate letters and spoken words such as “dot” and
+“at,” rather than punctuation symbols; common domains are spoken as words.
 
 Twilio caller identity is taken from the start message's `From` custom parameter. For local
 and evaluation WebRTC calls only, `CALLER_ID_OVERRIDE` supplies a test caller number. The

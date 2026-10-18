@@ -2,6 +2,13 @@ from datetime import date
 
 from inbound_voice.config import AssistantConfig, DateDeadlineUrgencyRule
 
+EMAIL_SPELLING_RULE = (
+    "- When spelling an email address back, write it as separate letters and spoken words, "
+    'with no hyphens, full stops or @ symbols: say "dot", "at", "underscore" and "dash" '
+    "as words, and say common domains as words. For example, jane.mcallister@gmail.com is "
+    '"J, A, N, E, dot, M, C, A, L, L, I, S, T, E, R, at gmail dot com".'
+)
+
 
 def render_system_prompt(
     config: AssistantConfig,
@@ -75,7 +82,7 @@ def render_system_prompt(
         "off": "Do not read details back to the caller.",
         "email": (
             "When the caller gives an email address, spell it back once, letter by letter, "
-            "and ask them to confirm. Do not read back other details."
+            "and ask them to confirm. Do not read back other details.\n" + EMAIL_SPELLING_RULE
         ),
         "critical": (
             "Ask for each critical field at a natural point. If the caller does not answer, "
@@ -83,7 +90,8 @@ def render_system_prompt(
             "- Read back names, phone numbers, email addresses and dates to confirm them.\n"
             "- When the caller wants to finish or says goodbye, read back all collected, "
             "unconfirmed critical details in one sentence, ask the caller to confirm them, and "
-            "wait for confirmation. Do not invent values for details the caller has not provided."
+            "wait for confirmation. Do not invent values for details the caller has not provided.\n"
+            + EMAIL_SPELLING_RULE
         ),
     }[config.readback]
     caller_id_instruction = ""
