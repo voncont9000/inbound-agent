@@ -204,6 +204,15 @@ export function AssistantSettingsPage() {
         <Field path="greeting" label="Greeting" error={allErrors.greeting}>{(fieldId, describedBy) => <textarea id={fieldId} value={config.greeting} {...inputProps("greeting")} aria-describedby={describedBy} onChange={(event) => { clearFieldError("greeting"); update((draft) => { draft.greeting = event.target.value; }); }} />}</Field>
         <Field path="instructions" label="Instructions">{(fieldId) => <textarea id={fieldId} value={config.instructions} onChange={(event) => update((draft) => { draft.instructions = event.target.value; })} />}</Field>
       </section>
+      <section className="panel stack"><h2>Email triage</h2>
+        <p className="help">How the email agent decides whether to draft a reply, hand the email to a person, or ignore it.</p>
+        {([
+          ["enquiry", "Enquiry"],
+          ["needs_human", "Needs a person"],
+          ["spam", "Spam"],
+          ["not_relevant", "Not relevant"],
+        ] as const).map(([key, label]) => <Field key={key} path={`email_triage.${key}`} label={label}>{(fieldId) => <textarea id={fieldId} value={config.email_triage[key]} onChange={(event) => update((draft) => { draft.email_triage[key] = event.target.value; })} />}</Field>)}
+      </section>
       <section className="panel stack"><h2>Policies</h2>
         {config.policies.map((policy, index) => <div className="inline-editor" key={`policy-${index}`}>
           <Field path={`policies.${index}`} label={`Policy ${index + 1}`}>{(fieldId) => <textarea id={fieldId} value={policy} onChange={(event) => update((draft) => { draft.policies[index] = event.target.value; })} />}</Field>

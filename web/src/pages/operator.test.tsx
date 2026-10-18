@@ -58,6 +58,31 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", listener);
   }, 15000);
 
+  it("edits and saves the email triage criteria", async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+
+    const needsPerson = screen.getByLabelText("Needs a person");
+    await user.clear(needsPerson);
+    await user.type(needsPerson, "Escalate complaints and urgent requests to the team.");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    const savedConfig = capturedBody?.config as Record<string, unknown>;
+    expect(savedConfig.email_triage).toEqual(expect.objectContaining({
+      needs_human: "Escalate complaints and urgent requests to the team.",
+    }));
+    server.events.removeListener("request:start", listener);
+  }, 15000);
+
   it("shows transfer metrics and failed transfer task on conversation details", async () => {
     const transferConversation = mockDb.tenants[1].conversations[0];
     server.use(
@@ -283,6 +308,10 @@ describe("operator workflows", () => {
   it("marks Gmail assistant messages as drafts", async () => {
     const conversation = structuredClone(mockDb.tenants[0].conversations[0]);
     conversation.channel = "gmail";
+    conversation.metrics = {
+      ...conversation.metrics,
+      email_triage: { category: "needs_human", reason: "A person should review this enquiry." },
+    };
     conversation.messages.push({
       id: `${conversationId}-draft`,
       role: "assistant",
@@ -296,6 +325,9 @@ describe("operator workflows", () => {
     ));
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
     expect(await screen.findByText("Draft in Gmail")).toBeInTheDocument();
+    const triage = screen.getByRole("heading", { name: "Email triage" }).parentElement;
+    expect(triage).toHaveTextContent("needs_human");
+    expect(triage).toHaveTextContent("A person should review this enquiry.");
   });
 
   it("sends task filters to the server", async () => {
