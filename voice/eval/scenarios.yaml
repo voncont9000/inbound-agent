@@ -1,0 +1,110 @@
+# Scripted caller scenarios for provider A/B calls.
+# Caller audio is synthesised once (fixed voices) and band-limited to 8 kHz to approximate
+# a phone line. Each utterance is played after the agent has finished speaking.
+# Checks are scored against transcript.jsonl (user turns), intake.json and tasks.json.
+scenarios:
+  employment:
+    caller_voice: hamish            # Speechify en-GB male, not used as an agent voice
+    caller_id: "07700900456"
+    utterances:
+      - "Hi there. I think I've been unfairly dismissed and I'd like to speak to someone about it."
+      - "My name is Siobhan McAllister."
+      - "Yes, that's fine."
+      - "I worked for Brightwell Logistics Limited as a warehouse supervisor for just over four years."
+      - "They dismissed me on the tenth of August."
+      - "No, I haven't contacted ACAS yet."
+      - "My email is siobhan dot mcallister at example dot com."
+      - "A call back tomorrow morning would be great. That's everything, thank you. Bye."
+      - "Yes, that's all correct. Thanks, bye."
+    transcript_checks:              # regex, case-insensitive, over all user turns joined by spaces
+      caller_surname: "mc ?allister|mcalister"
+      employer: "brightwell"
+      acas: "\\bacas\\b"
+      dismissal_date: "10(th)? (of )?august|tenth of august"
+    assistant_checks:
+      email_readback: "(?i)s[ ,.-]*i[ ,.-]*o[ ,.-]*b[ ,.-]*h[ ,.-]*a[ ,.-]*n"
+    intake_checks:                  # field: regex over the stringified saved value
+      caller_name: "(?i)siobhan.*mc ?allister"
+      phone: "07700 ?900 ?456|\\+?44 ?7700 ?900 ?456"
+      email: "(?i)^siobhan\\.mcallister@example\\.com$"
+      employer_name: "(?i)brightwell"
+      termination_date: "^2026-08-10$"
+      acas_early_conciliation_started: "^False$"
+    task_checks:
+      urgent: true                  # deadline 2026-11-09 is <= 28 days from 2026-10-17
+    expected_end_call_source: goodbye_detected
+    expected_server_disconnect: true
+  conveyancing:
+    caller_voice: catriona          # Speechify en-GB female, not used as an agent voice
+    assistant_not_matches: "(?i)call ?back"
+    utterances:
+      - "Hello. I'm buying a leasehold flat and I'd like a quote for the conveyancing."
+      - "The purchase price is two hundred and eighty-five thousand pounds."
+      - "It's in Leeds, the postcode is L S six, two A B."
+      - "Yes, I've got a mortgage offer from Nationwide."
+      - "I'm a first-time buyer and there's no chain."
+      - "My name is Daniel Okafor, and my number is oh seven seven zero zero, nine double oh, four five six."
+      - "That's everything for now, thank you. Goodbye."
+      - "Yes, that's all correct. Thanks, bye."
+    transcript_checks:
+      price: "285,?000|two hundred and eighty.five thousand"
+      postcode: "ls ?6 ?2ab|l s six,? two a b"
+      lender: "nationwide"
+      leasehold: "leasehold"
+      surname: "okafor"
+    intake_checks:
+      caller_name: "(?i)daniel okafor"
+      phone: "07700 ?900 ?456|\\+?44 ?7700 ?900 ?456"
+      postcode: "(?i)^ls6 ?2ab$"
+      tenure: "(?i)leasehold"
+      lender: "(?i)nationwide"
+      first_time_buyer: "^True$"
+      mortgage: "^True$"
+    task_checks:
+      urgent: false
+    expected_end_call_source: goodbye_detected
+    expected_server_disconnect: true
+
+  knowledge_check:
+    caller_voice: catriona
+    utterances:
+      - "Hi, I'm thinking of remortgaging. Do you do remortgages and how much is it?"
+      - "Great. Is there parking at your office?"
+      - "And do you handle probate as well?"
+      - "One more thing, do you offer a discount for NHS workers?"
+      - "My name is Daniel Okafor, and my number is oh seven seven oh oh, nine oh oh | pause 1.4 | four five six."
+      - "No, that's everything, thanks. Bye."
+      - "Yes, that's all correct. Thanks, bye."
+    assistant_checks:
+      remortgage_fee: "595"
+      parking: "(?i)(Wellington Street|Q-Park|no free parking)"
+      probate_not_offered: "(?i)(don't|do not|doesn't).*probate|probate.*(not|isn't)"
+    assistant_max_matches:
+      callback_offers:
+        pattern: "(?i)call ?back"
+        max: 1
+    knowledge_gap_checks:
+      nhs_discount:
+        pattern: "(?i)NHS|discount"
+        present: true
+      answered_questions:
+        pattern: "(?i)remortgag|parking|probate"
+        scope: all
+        present: false
+    intake_checks:
+      caller_name: "(?i)daniel okafor"
+      phone: "07700 ?900 ?456|\\+?44 ?7700 ?900 ?456"
+    task_checks:
+      callback: false
+      number_hold_resumed: true
+    no_agent_speech_between_segments: true
+    expected_end_call_source: goodbye_detected
+    expected_server_disconnect: true
+
+  idle_check:
+    caller_voice: catriona
+    utterances:
+      - "Hi, I'm calling about a property purchase."
+    final_call_timeout_seconds: 35
+    expected_end_call_source: idle
+    expected_server_disconnect: true

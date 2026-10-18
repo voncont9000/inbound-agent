@@ -1,0 +1,11 @@
+{
+  "service": "employment",
+  "model": "gemini-3.8-flash",
+  "fields": {
+    "caller_name": {
+      "value": "Siobhan McAllister",
+      "confidence": 0.96,
+      "evidence": "My name is Siobhan McAllister."
+    }
+  }
+}

@@ -1,0 +1,93 @@
+language: British English
+business_name: Law firm
+greeting: "Hello, you are speaking with our AI assistant. How can I help?"
+instructions: |
+  Use short, natural spoken sentences. Ask one question at a time.
+  When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
+  question twice in a row.
+
+  At the beginning of every call, disclose that you are an AI assistant. Say: "{greeting}"
+
+  Ask for each critical field at a natural point. If the caller does not answer, acknowledge it,
+  move on, and return to it once before the end.
+  Collect other details conversationally; they are extracted after the call. Do not call a tool
+  for each detail.
+  Offer to pass unanswered questions to the team.
+
+  If the caller describes something urgent, acknowledge it and tell them the team will treat it
+  as urgent. Do not delay the conversation to finish intake.
+  Be honest when the business is closed. Office hours: {office_hours}.
+
+  When the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye
+  in response.
+readback: email
+office_hours:
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday]
+  opens: "09:00"
+  closes: "17:30"
+  timezone: Europe/London
+price_list: []
+policies:
+  - "You are not a solicitor and must never give legal advice. Give general information only from approved business information. For advice, arrange a solicitor callback; do not predict legal outcomes."
+  - "Never confirm or deny whether anyone is or was a client. Never discuss a matter or disclose personal information to a third party. Caller ID alone does not verify identity. Do not leave detailed voicemails."
+  - "Never say the firm will act or that a conflict check has passed. Record other-party names for a conflict check pending."
+  - "Answer prices only from the published price list. Never estimate, invent or promise a quote. If no listed price fits, offer a quote request or callback."
+  - "If the caller complains, acknowledge it, log it, and give the published complaints contact, procedure and Legal Ombudsman information."
+  - "If anyone is in immediate danger, tell them to call 999 now. Treat a hearing or arrest today, distress, or an imminent deadline as urgent; the team is alerted after the call."
+  - "For existing-client matter updates, take a message for the fee earner; never imply access to live matter status."
+  - "For employment termination dates, the system calculates the tribunal deadline. Do not calculate or reassure callers about legal time limits, and offer a callback."
+contacts: {}
+services:
+  conveyancing:
+    label: Residential conveyancing
+    fields:
+      - {name: caller_name, label: Caller name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: email, label: Email address, type: email, critical: true}
+      - {name: funding, label: Funding, type: enum, choices: [private, legal_expenses_insurance, legal_aid, no_win_no_fee]}
+      - {name: contact_preference, label: Contact preference, type: enum, choices: [phone, email]}
+      - {name: other_parties, label: Other parties, type: list}
+      - {name: transaction_type, label: Transaction type, type: enum, choices: [purchase, sale, both, remortgage]}
+      - {name: property_address, label: Property address, type: string}
+      - {name: postcode, label: Postcode, type: string}
+      - {name: price, label: Price, type: string}
+      - {name: tenure, label: Tenure, type: enum, choices: [freehold, leasehold, shared_ownership]}
+      - {name: new_build, label: New build, type: boolean}
+      - {name: mortgage, label: Mortgage, type: boolean}
+      - {name: lender, label: Lender, type: string}
+      - {name: first_time_buyer, label: First-time buyer, type: boolean}
+      - {name: chain_status, label: Chain status, type: string}
+      - {name: estate_agent, label: Estate agent, type: string}
+      - {name: target_exchange_date, label: Target exchange date, type: date}
+      - {name: target_completion_date, label: Target completion date, type: date}
+      - {name: other_side_solicitor, label: Other-side solicitor, type: string}
+  employment:
+    label: Employment law
+    fields:
+      - {name: caller_name, label: Caller name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: email, label: Email address, type: email, critical: true}
+      - {name: funding, label: Funding, type: enum, choices: [private, legal_expenses_insurance, legal_aid, no_win_no_fee]}
+      - {name: contact_preference, label: Contact preference, type: enum, choices: [phone, email]}
+      - {name: other_parties, label: Other parties, type: list}
+      - {name: issue_type, label: Issue type, type: enum, choices: [dismissal, redundancy, discrimination, settlement_agreement, grievance]}
+      - {name: employer_name, label: Employer name, type: string}
+      - {name: job_title, label: Job title, type: string}
+      - {name: length_of_service, label: Length of service, type: string}
+      - {name: termination_date, label: Termination date, type: date, critical: true}
+      - {name: last_act_complained_of, label: Last act complained of, type: date, critical: true}
+      - {name: acas_early_conciliation_started, label: ACAS early conciliation started, type: boolean}
+      - {name: key_dates, label: Key dates, type: list, description: "Dates and event names mentioned by the caller."}
+urgency_rules:
+  - type: keyword
+    phrases: ["in danger", "immediate danger", "domestic abuse", "999", "hearing today", "arrested today", "arrest today", "distressed", "deadline today", "deadline within days"]
+    reason: "Caller described an immediate safety or time-critical concern: {phrase}"
+  - type: date_deadline
+    service: employment
+    field: termination_date
+    add_months: 3
+    minus_days: 1
+    urgent_within_days: 28
+    reason: "Employment tribunal time limit may be within 28 days."
+live_actions: []
+review_confidence_threshold: 0.7

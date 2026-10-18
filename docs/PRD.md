@@ -7,7 +7,7 @@
 | Reference analysis | [Fonio teardown](./fonio-teardown.md), [Context graph](./context-graph.md) |
 
 ## 1. Summary
-A multi-tenant SaaS for UK businesses, starting with **consumer-facing (B2C) law firms**: an AI agent that answers inbound customer enquiries on **phone** (speech-to-text → LLM → text-to-speech), **email** (Gmail) and **WhatsApp**, for one business. All channels share one knowledge base, one contact store and one conversation inbox. It answers questions, captures structured lead and request data, books or routes requests, and hands off to a human when needed. The business owner sees every conversation with a summary and the extracted results.
+A multi-tenant SaaS for businesses, with **consumer-facing UK law firms as the first template**: an AI agent that answers inbound customer enquiries on **phone** (speech-to-text → LLM → text-to-speech), **email** (Gmail) and **WhatsApp**, for one business. Each business configures its own assistant, intake fields, critical fields, urgency rules, optional live actions, and review threshold in a shape intended for later editing in app settings. Live actions are configurable and default to none; keyword urgency remains live, while other v1 urgency escalation and follow-up actions are post-call. All channels share one knowledge base, one contact store and one conversation inbox. It answers questions, captures structured lead and request data, books or routes requests, and hands off to a human when needed. The business owner sees every conversation with a summary and the extracted results.
 
 ## 2. Problem
 Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) miss calls, answer emails late and handle WhatsApp by hand. The enquiries are repetitive: hours, prices, availability, orders, bookings, callbacks. Existing tools such as Fonio work, but they split voice, email and WhatsApp into separately priced products and depend on a lot of tuning parameters.
@@ -42,7 +42,7 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 
 ## 6. Core concepts
 - **Workspace (tenant):** one business. Has members with roles (owner, staff). Data is strictly isolated per tenant.
-- **Assistant:** persona, language(s), voice, rules, prompt, knowledge, abilities and an extraction schema. One assistant serves all channels, with per-channel overrides (greeting, length, tone).
+- **Assistant:** persona, language(s), voice, rules, prompt, knowledge, abilities and a configurable extraction schema. One assistant serves all channels, with per-channel overrides (greeting, length, tone). Business-specific fields and rules are editable configuration; law firms are the first template, not the product model.
 - **Channel connection:** phone number, Gmail mailbox (OAuth) or WhatsApp number (WABA).
 - **Contact:** matched by phone/email/WhatsApp ID. Has built-in and custom fields, some AI-maintained ("intelligent fields").
 - **Conversation:** channel, participants, messages/turns, transcript, recording (voice), summary, intent, outcome, tags, extracted results, status (open / handled / needs human / closed).
@@ -60,6 +60,10 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-A6: Abilities you can toggle in v1: look up/create contact, create task, book appointment (Google Calendar), write/read Google Sheets, send email. Later: transfer/forward call, send WhatsApp from a call, web search, webhooks/custom tools.
 - FR-A7: Test console: browser web call (voice) and simulated email/WhatsApp threads. Test conversations are marked as such.
 - FR-A8: Versioned config with an unsaved-changes indicator and rollback.
+- FR-A9: Assistant templates define services, typed intake fields, critical fields, urgency rules, configurable live actions, and a review-confidence threshold. Businesses can override template defaults; law firms are the first template. Live actions are opt-in and default to none. In v1, date-deadline urgency, callback requests, and complaints create post-call tasks; keyword urgency rules continue to run live on caller-final transcripts.
+- FR-A10: Hybrid intake confirms configured critical fields live only when that action is enabled, and extracts remaining fields after the conversation. Store caller-affirmed readbacks and live/post-call values with provenance and confidence, merge without erasing either source, and send conflicts, invalid values, or low-confidence fields to a human review queue.
+- FR-A11: Configure call behavior in each business's prompt and settings rather than generic hard-coded prompt text. **M0:** assistants have multiline `instructions` and `readback: off|email|critical`; the law-firm template selects email readback. Use Twilio caller ID as a phone-field source unless the caller provides a different number, and hold incomplete UK phone-number turns for up to two seconds while allowing caller resumption.
+- FR-A12: Merged intake facts map to customer context-graph facts with their source conversation, evidence, confidence, and history; corrections supersede rather than erase prior values (see [context-graph.md](./context-graph.md)).
 
 ### 7.2 Phone (STT/TTS)
 - FR-P1: Buy or port a UK number (geographic or 03, Ofcom-compliant) through a telephony provider (Twilio first), or forward an existing number. Assign it to an assistant.
@@ -99,9 +103,9 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-C3: The assistant can read only fields the owner allows (allowed contact fields).
 
 ### 7.7 Knowledge
-- FR-K1: Sources: company info (markdown), FAQ entries, website crawl, uploaded PDFs/DOCX, opening hours with holidays.
-- FR-K2: RAG retrieval with citations stored in the run log. Answers outside the knowledge are declined or escalated (no hallucinated prices or availability).
-- FR-K3: **Knowledge gaps:** unanswered questions are clustered and listed. Resolving one creates a knowledge entry.
+- FR-K1: Sources: company info (markdown), FAQ entries, website crawl, uploaded PDFs/DOCX, opening hours with holidays. **M0:** YAML FAQs and a CLI importer support website, PDF, DOCX, TXT, and Markdown sources; imports write a digest, manifest, and hashed chunks.
+- FR-K2: RAG retrieval with citations stored in the run log. Answers outside the knowledge are declined or escalated (no hallucinated prices or availability). **M0:** the cited digest is loaded into the prompt for low-latency answers; unknown questions are declined and passed to the team. Chunks are reserved for M1 pgvector retrieval.
+- FR-K3: **Knowledge gaps:** unanswered questions are clustered and listed. Resolving one creates a knowledge entry. **M0:** post-call extraction records unanswered questions and exact caller evidence in `knowledge_gaps.json` and creates `knowledge_gap` tasks; clustering and resolution remain future work.
 
 ### 7.8 Integrations and tools
 **v1**
@@ -128,7 +132,7 @@ See [context-graph.md](./context-graph.md) for research and design.
 - FR-G5: Owners can view a customer's timeline and graph, correct or reject facts, and merge or split contacts (audited and reversible).
 - FR-G6: External business records (invoices, payments, orders, bookings) can be synced into the graph (Xero first) to support future payment follow-up.
 
-### 7.11 Law-firm requirements (launch vertical)
+### 7.11 Law-firm requirements (first assistant template)
 - FR-L1: **No legal advice.** The agent gives general information only from the firm's approved knowledge base, says it is not giving legal advice, and routes advice questions to a solicitor (callback or booking). Configurable disclaimer.
 - FR-L2: **Intake by practice area.** Launch presets: **conveyancing** and **employment law**. Others (family, wills/probate, immigration, personal injury) come later as presets on the same schema engine.
   - *Conveyancing* (residential): transaction type (purchase / sale / both / remortgage), property address and postcode, price, tenure (freehold / leasehold / shared ownership), new build, mortgage and lender, first-time buyer, chain status, estate agent, target exchange/completion date, other side's solicitor if known. Answers price questions from the firm's published conveyancing fees and offers a quote-request or callback.
@@ -155,7 +159,7 @@ See [context-graph.md](./context-graph.md) for research and design.
 
 ## 9. Proposed architecture (v1)
 - **Backend:** TypeScript (Node) API plus workers. Postgres with pgvector for data, RAG and the customer context graph (row-level security per tenant). Redis for realtime session state. A durable job queue for email and WhatsApp runs.
-- **Voice gateway:** a separate realtime service handling telephony media streams (Twilio Media Streams / SIP). Built in-house, not on Vapi/Retell. Pluggable STT (e.g. Deepgram/Soniox), LLM (OpenAI/Anthropic), TTS (ElevenLabs/Cartesia). Open-source orchestration libraries (e.g. Pipecat, LiveKit Agents) are allowed inside our own service.
+- **Voice gateway:** a separate realtime service handling telephony media streams (Twilio Media Streams / SIP). Built in-house, not on Vapi/Retell. M0 provider candidates are AssemblyAI, Soniox or Deepgram for STT; Google Gemini API for the LLM (OpenRouter optional); and Speechify, ElevenLabs or Deepgram for TTS. Open-source orchestration libraries (e.g. Pipecat, LiveKit Agents) are allowed inside our own service.
 - **Channel adapters:** Gmail (Pub/Sub watch plus History API), WhatsApp Cloud API webhooks, telephony. All channels normalise into one `Conversation`/`Message` model and one agent runtime with shared tools.
 - **Frontend:** React web app (assistant setup, inbox, contacts, knowledge, analytics).
 
