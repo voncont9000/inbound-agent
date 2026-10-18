@@ -812,7 +812,13 @@ async def run_bot(
                 now=call_now,
             ),
         )
-        tts = create_tts(providers, os.environ, session, sample_rate=output_sample_rate)
+        tts = create_tts(
+            providers,
+            os.environ,
+            session,
+            sample_rate=output_sample_rate,
+            pronunciations=assistant.rules.pronunciations,
+        )
         context = create_llm_context(
             call_tools,
             call_transfer,

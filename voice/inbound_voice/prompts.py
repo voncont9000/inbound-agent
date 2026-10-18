@@ -21,6 +21,7 @@ def render_system_prompt(
     now: datetime | None = None,
 ) -> str:
     current_date = today or date.today()
+    transfer_targets = available_transfer_targets(config, now)
     business_context = render_business_context(
         config,
         current_date,
@@ -31,6 +32,7 @@ def render_system_prompt(
         ),
         include_deadline_instructions=False,
         booking_enabled=booking_enabled,
+        handoff_available=bool(transfer_targets) and "transfer_call" in config.live_actions,
     )
     readback_instructions = {
         "off": "Do not read details back to the caller.",
@@ -84,7 +86,6 @@ def render_system_prompt(
             "the system will say a short holding line. Read the chosen slot back once and get a "
             "yes before calling book_appointment. After booking, confirm it in one sentence."
         )
-    transfer_targets = available_transfer_targets(config, now)
     transfer_instructions = ""
     if transfer_targets:
         transfer_instructions = (

@@ -2,6 +2,7 @@ import asyncio
 
 import aiohttp
 import pytest
+from inbound_core.config import PronunciationEntry
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
@@ -11,6 +12,7 @@ from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.soniox.stt import SonioxSTTService
 from pipecat.services.speechify.tts import SpeechifyHttpTTSService
 
+from inbound_voice.pronunciation import PronunciationFilter
 from inbound_voice.providers import (
     KEYTERMS,
     VoiceProviders,
@@ -156,6 +158,23 @@ def test_create_tts() -> None:
     assert elevenlabs_flash._settings.voice == "elevenlabs-voice-id"
     assert isinstance(deepgram, DeepgramTTSService)
     assert deepgram._settings.voice == "aura-2-pandora-en"
+
+
+def test_create_tts_attaches_pronunciation_filter() -> None:
+    async def create_service():
+        async with aiohttp.ClientSession() as session:
+            environment = _environment()
+            return create_tts(
+                resolve_providers(environment),
+                environment,
+                session,
+                pronunciations=[PronunciationEntry(term="ACAS", say_as="Ay-cass")],
+            )
+
+    service = asyncio.run(create_service())
+
+    assert len(service._text_filters) == 1
+    assert isinstance(service._text_filters[0], PronunciationFilter)
 
 
 def test_create_llm() -> None:

@@ -6,7 +6,7 @@ instructions: |
   When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
   question twice in a row.
 
-  At the beginning of every call, disclose that you are an AI assistant. Say: "{greeting}"
+  At the beginning of every call, say: "{greeting}"
 
   Ask for each critical field at a natural point. If the caller does not answer, acknowledge it,
   move on, and return to it once before the end.
@@ -36,6 +36,14 @@ policies:
   - "If anyone is in immediate danger, tell them to call 999 now. Treat a hearing or arrest today, distress, or an imminent deadline as urgent; the team is alerted after the call."
   - "For existing-client matter updates, take a message for the fee earner; never imply access to live matter status."
   - "For employment termination dates, the system calculates the tribunal deadline. Do not calculate or reassure callers about legal time limits, and offer a callback."
+rules:
+  ai_disclosure: at_start
+  style: formal
+  off_topic: redirect
+  angry_caller: de_escalate
+  sales_calls: decline
+  pronunciations:
+    - {term: ACAS, say_as: Ay-cass}
 contacts: {}
 services:
   conveyancing:

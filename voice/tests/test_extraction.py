@@ -3,6 +3,9 @@ import json
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
+from inbound_core.config import SentenceUrgencyRule
+
+from inbound_voice.call_report import build_call_report
 from inbound_voice.config import load_assistant_config
 from inbound_voice.extraction import (
     _extraction_schema,
@@ -236,6 +239,12 @@ def test_stated_phone_overrides_caller_id_and_keeps_alternative() -> None:
 def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, monkeypatch) -> None:
     import inbound_voice.extraction as extraction
 
+    config = load_assistant_config(DEFAULT_CONFIG_PATH)
+    sentence_rule_index = len(config.urgency_rules)
+    config.urgency_rules.append(
+        SentenceUrgencyRule(type="sentence", text="A hearing is within 14 days.")
+    )
+    monkeypatch.setattr(extraction, "load_assistant_config", lambda _path: config)
     (tmp_path / "transcript.jsonl").write_text(
         json.dumps({"role": "caller", "text": "I was dismissed."}) + "\n",
         encoding="utf-8",
@@ -285,6 +294,13 @@ def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, mon
                     "evidence": "Do you offer a discount for NHS staff?",
                 }
             ],
+            "urgency_matches": [
+                {
+                    "rule": sentence_rule_index,
+                    "reason": "The hearing is within 14 days.",
+                    "evidence": "My hearing is in 14 days.",
+                }
+            ],
             "usage": {"input_tokens": 1_000_000, "output_tokens": 1_000_000},
         }
 
@@ -299,13 +315,22 @@ def test_reextract_run_rewrites_intake_and_updates_extraction_cost(tmp_path, mon
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
     gaps = json.loads((tmp_path / "knowledge_gaps.json").read_text(encoding="utf-8"))
     tasks = json.loads((tmp_path / "tasks.json").read_text(encoding="utf-8"))
+    report = build_call_report(tmp_path, "test-call")
     assert result["extraction_status"] == "completed"
     assert merged["fields"]["issue_type"]["status"] == "filled"
     assert post_call["fields"]["issue_type"]["value"] == "dismissal"
+    assert post_call["urgency_matches"][0]["reason"] == "The hearing is within 14 days."
     assert metrics["usage"]["extraction_input_tokens"] == 1_000_000
     assert metrics["estimated_cost"]["components"]["extraction"] == 4.5
     assert gaps["unanswered_questions"][0]["evidence"] == "Do you offer a discount for NHS staff?"
     assert any(task["type"] == "knowledge_gap" and task["source"] == "post_call" for task in tasks)
+    urgent_task = next(task for task in tasks if task["type"] == "urgent")
+    assert urgent_task["reason"] == "The hearing is within 14 days."
+    assert urgent_task["rule"] == sentence_rule_index
+    assert urgent_task["rule_text"] == "A hearing is within 14 days."
+    assert urgent_task["evidence"] == "My hearing is in 14 days."
+    assert urgent_task["source"] == "post_call"
+    assert any(task.get("reason") == urgent_task["reason"] for task in report.tasks)
 
 
 def test_merge_intake_covers_agreed_live_filled_conflict_and_corrected() -> None:
