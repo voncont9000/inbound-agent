@@ -127,8 +127,11 @@ export function ConversationPage() {
     <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>
     <section className="panel stack"><h2>Intake comparison</h2>
       {!intakes.merged && <p className="muted">Merged intake is unavailable. Live and post-call values are shown where available.</p>}
-      <div className="intake-grid">
-        <div className="intake-head">Field</div><div className="intake-head">Live</div><div className="intake-head">Post-call</div><div className="intake-head">Merged</div>
+      <div className="table-scroll">
+        <table className="intake-table">
+          <caption className="sr-only">Intake comparison by field</caption>
+          <thead><tr><th scope="col">Field</th><th scope="col">Live</th><th scope="col">Post-call</th><th scope="col">Merged</th></tr></thead>
+          <tbody>
         {fieldNames.map((name) => {
           const service = String(mergedData?.service ?? intakes.live?.service ?? intakes.post_call?.service ?? "");
           const path = `${service}.${name}`;
@@ -139,21 +142,23 @@ export function ConversationPage() {
           const flagged = merged?.needs_review === true || Boolean((mergedData?.needs_review as unknown[] | undefined)?.some((item) => String(item) === name || String(item) === path));
           const candidates = reviewCandidates(live, post, merged);
           const liveValue = live?.value;
-          return <div key={name} className="intake-row">
-            <div><strong>{fieldLabel}</strong>{isCritical(assistantQuery.data, mergedData, name) && <span className="muted"> · critical</span>}</div>
-            <div>{displayValue(liveValue)}{live?.confirmed && <p><Badge tone="success">Confirmed by caller</Badge></p>}</div>
-            <div>{displayValue(post?.value)}{typeof post?.confidence === "number" && <p className="muted">Confidence {post.confidence.toFixed(2)}</p>}</div>
-            <div>
+          return <tr key={name}>
+            <th scope="row"><strong>{fieldLabel}</strong>{isCritical(assistantQuery.data, mergedData, name) && <span className="muted"> · critical</span>}</th>
+            <td>{displayValue(liveValue)}{live?.confirmed && <p><Badge tone="success">Confirmed by caller</Badge></p>}</td>
+            <td>{displayValue(post?.value)}{typeof post?.confidence === "number" && <p className="muted">Confidence {post.confidence.toFixed(2)}</p>}</td>
+            <td>
               {merged ? <><strong>{displayValue(merged.value)}</strong>{typeof merged.confidence === "number" && <p className="muted">Confidence {merged.confidence.toFixed(2)}</p>}<p><Badge>{mergedSource(merged)}</Badge></p>{merged.status === "conflict" && merged.alternative !== undefined && <p>Alternative: {displayValue(merged.alternative)}</p>}{flagged && <Badge tone="warning">Needs review</Badge>}{merged.status === "human" && merged.sources?.human?.note && <p>Note: {merged.sources.human.note}</p>}</> : <span>—</span>}
               <div><button type="button" onClick={() => setOpenReview(openReview === name ? "" : name)}>{openReview === name ? "Close review" : "Review field"}</button></div>
               {openReview === name && <ReviewForm field={name} candidates={candidates} live={live} post={post} merged={merged} onSubmit={(input) => review.mutate(input)} pending={review.isPending} />}
-            </div>
-          </div>;
+            </td>
+          </tr>;
         })}
-        {!fieldNames.length && <div>—</div>}
+        {!fieldNames.length && <tr><td className="muted" colSpan={4}>No intake fields recorded.</td></tr>}
+          </tbody>
+        </table>
       </div>
     </section>
-    <section className="panel"><h2>Tasks</h2>{detail.tasks.map((task) => <div className="list-row" key={task.id}><span>{task.kind} · {task.source} · {compactPayload(task.payload)}</span><label className="sr-only" htmlFor={`conversation-task-${task.id}`}>Status for {task.kind}</label><select id={`conversation-task-${task.id}`} value={task.status} onChange={(event) => patchTask.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></div>)}</section>
+    <section className="panel"><h2>Tasks</h2>{detail.tasks.length ? detail.tasks.map((task) => <div className="list-row" key={task.id}><span>{task.kind} · {task.source} · {compactPayload(task.payload)}</span><label className="sr-only" htmlFor={`conversation-task-${task.id}`}>Status for {task.kind}</label><select id={`conversation-task-${task.id}`} value={task.status} onChange={(event) => patchTask.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></div>) : <p className="muted">No tasks.</p>}</section>
     <MetricsCard metrics={detail.metrics} estimatedCost={detail.estimated_cost} />
   </main>;
 }
@@ -299,12 +304,12 @@ export function ContactPage() {
   const mergeChoices = (contactsQuery.data?.items ?? []).filter((contact) => contact.id !== id && !contact.merged_into_id);
   return <main className="page" id="main-content"><p className="eyebrow">Contact</p><h1>{detail.display_name}</h1>
     <div className="toolbar"><div className="field"><label htmlFor="merge-contact">Merge another contact into this one</label><select id="merge-contact" value={otherId} onChange={(event) => setOtherId(event.target.value)}><option value="">Choose a contact</option>{mergeChoices.map((contact) => <option key={contact.id} value={contact.id}>{contact.display_name}</option>)}</select></div><button type="button" disabled={!otherId} onClick={() => setDialog("merge")}>Merge contact</button></div>
-    <section className="panel"><h2>Identities</h2>{detail.identities.map((identity) => <div className="list-row" key={identity.id}><label className="check-row"><input type="checkbox" checked={selectedIdentities.includes(identity.id)} onChange={(event) => setSelectedIdentities((current) => event.target.checked ? [...current, identity.id] : current.filter((item) => item !== identity.id))} />{identity.type}: {identity.value_normalized}</label><span>{identity.verified ? "Verified" : "Unverified"} · {identity.source} · {identity.confidence.toFixed(2)}</span></div>)}<button type="button" disabled={!selectedIdentities.length} onClick={() => setDialog("split")}>Split selected identities</button></section>
-    <section className="panel"><h2>Active facts</h2>{detail.active_facts.map((fact) => <div className="list-row" key={fact.id}><span><strong>{fact.predicate}</strong>: {displayValue(fact.value)}<br /><span className="muted">{fact.evidence} · confidence {fact.confidence.toFixed(2)} · since {formatDate(fact.valid_from)}</span></span></div>)}</section>
-    <section className="panel"><h2>Conversations</h2>{detail.conversations.map((conversation) => <div className="list-row" key={conversation.id}><Link to={`/conversations/${conversation.id}`}>{conversation.channel} · {conversation.summary ?? conversation.external_ref}</Link><span>{formatDate(conversation.started_at)}</span></div>)}</section>
-    <section className="panel"><h2>Open tasks</h2>{detail.open_tasks.map((task) => <p key={task.id}>{task.kind} · {task.status} · {compactPayload(task.payload)}</p>)}</section>
-    <section className="panel"><h2>Open commitments</h2>{detail.open_commitments.map((commitment) => <p key={commitment.id}>{commitment.what} · {commitment.due_at ? formatDate(commitment.due_at) : "No due date"} · {commitment.status}</p>)}</section>
-    <section className="panel"><h2>Context card preview</h2><pre className="context-card">{detail.context_card}</pre></section>
+    <section className="panel"><h2>Identities</h2>{detail.identities.map((identity) => <div className="list-row" key={identity.id}><label className="check-row"><input type="checkbox" checked={selectedIdentities.includes(identity.id)} onChange={(event) => setSelectedIdentities((current) => event.target.checked ? [...current, identity.id] : current.filter((item) => item !== identity.id))} />{identity.type}: {identity.value_normalized}</label><span>{identity.verified ? "Verified" : "Unverified"} · {identity.source} · {identity.confidence.toFixed(2)}</span></div>)}{!detail.identities.length && <p className="muted">No identities yet.</p>}<button type="button" disabled={!selectedIdentities.length} onClick={() => setDialog("split")}>Split selected identities</button></section>
+    <section className="panel"><h2>Active facts</h2>{detail.active_facts.map((fact) => <div className="list-row" key={fact.id}><span><strong>{fact.predicate}</strong>: {displayValue(fact.value)}<br /><span className="muted">{fact.evidence} · confidence {fact.confidence.toFixed(2)} · since {formatDate(fact.valid_from)}</span></span></div>)}{!detail.active_facts.length && <p className="muted">No facts yet.</p>}</section>
+    <section className="panel"><h2>Conversations</h2>{detail.conversations.map((conversation) => <div className="list-row" key={conversation.id}><Link to={`/conversations/${conversation.id}`}>{conversation.channel} · {conversation.summary ?? conversation.external_ref}</Link><span>{formatDate(conversation.started_at)}</span></div>)}{!detail.conversations.length && <p className="muted">No conversations yet.</p>}</section>
+    <section className="panel"><h2>Open tasks</h2>{detail.open_tasks.map((task) => <p key={task.id}>{task.kind} · {task.status} · {compactPayload(task.payload)}</p>)}{!detail.open_tasks.length && <p className="muted">No open tasks.</p>}</section>
+    <section className="panel"><h2>Open commitments</h2>{detail.open_commitments.map((commitment) => <p key={commitment.id}>{commitment.what} · {commitment.due_at ? formatDate(commitment.due_at) : "No due date"} · {commitment.status}</p>)}{!detail.open_commitments.length && <p className="muted">No open commitments.</p>}</section>
+    <section className="panel"><h2>Context card preview</h2>{detail.context_card ? <pre className="context-card">{detail.context_card}</pre> : <p className="muted">No context card yet.</p>}</section>
     {dialog === "merge" && <ConfirmDialog title={`Merge ${mergeChoices.find(({ id: other }) => other === otherId)?.display_name ?? "contact"} into ${detail.display_name}?`} onCancel={() => setDialog("")} onConfirm={() => merge.mutate()} confirmLabel="Merge">Identities, facts and conversations move to {detail.display_name}. This is audited and can be reversed by a split.</ConfirmDialog>}
     {dialog === "split" && <ConfirmDialog title="Split selected identities?" onCancel={() => setDialog("")} onConfirm={() => split.mutate()} confirmLabel="Split">The selected identities will move to a new contact profile.</ConfirmDialog>}
   </main>;
@@ -323,7 +328,7 @@ export function TasksPage() {
   const rows = (tasks.data?.items ?? []).filter((task) => (statusFilter === "all" || task.status === statusFilter) && (kindFilter === "all" || task.kind === kindFilter));
   return <main className="page" id="main-content"><p className="eyebrow">Follow-up</p><h1>Tasks</h1>
     <div className="toolbar"><div className="field"><label htmlFor="task-status-filter">Status</label><select id="task-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{["open", "done", "dismissed"].map((status) => <option key={status}>{status}</option>)}</select></div><div className="field"><label htmlFor="task-kind-filter">Kind</label><select id="task-kind-filter" value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}><option value="all">All kinds</option>{kinds.map((kind) => <option key={kind}>{kind}</option>)}</select></div></div>
-    {tasks.isLoading && <LoadingState />}{tasks.error && <ErrorState message="Tasks could not be loaded." />}{!rows.length && !tasks.isLoading && <EmptyState>No tasks match these filters.</EmptyState>}
+    {tasks.isLoading && <LoadingState />}{tasks.error && <ErrorState message="Tasks could not be loaded." />}{!rows.length && !tasks.isLoading && !tasks.error && <EmptyState>No tasks match these filters.</EmptyState>}
     <div className="table-wrap"><table><thead><tr><th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id}><td>{task.kind}</td><td>{task.status}</td><td>{task.source}</td><td>{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
   </main>;
 }
@@ -339,7 +344,7 @@ export function KnowledgeGapsPage() {
   const rows = (gaps.data?.items ?? []).filter(({ status }) => filter === "all" || status === filter);
   return <main className="page" id="main-content"><p className="eyebrow">Knowledge</p><h1>Knowledge gaps</h1>
     <div className="field"><label htmlFor="gap-filter">Status</label><select id="gap-filter" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All statuses</option><option value="open">Open</option><option value="answered">Answered</option><option value="dismissed">Dismissed</option></select></div>
-    {gaps.isLoading && <LoadingState />}{gaps.error && <ErrorState message="Knowledge gaps could not be loaded." />}{!rows.length && !gaps.isLoading && <EmptyState>No knowledge gaps match this status.</EmptyState>}
+    {gaps.isLoading && <LoadingState />}{gaps.error && <ErrorState message="Knowledge gaps could not be loaded." />}{!rows.length && !gaps.isLoading && !gaps.error && <EmptyState>No knowledge gaps match this status.</EmptyState>}
     <div className="card-grid">{rows.map((gap) => <article className="panel stack" key={gap.id}><div className="button-row"><Badge tone={gap.status === "open" ? "warning" : "success"}>{gap.status}</Badge><span className="muted">{formatDate(gap.created_at)}</span></div><h2>{gap.question}</h2><p>{gap.evidence}</p><Link to={`/conversations/${gap.conversation_id}`}>View conversation</Link><div className="button-row">{gap.status !== "answered" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "answered" })}>Mark answered</button>}{gap.status !== "dismissed" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "dismissed" })}>Dismiss</button>}{gap.status !== "open" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "open" })}>Reopen</button>}</div></article>)}</div>
   </main>;
 }

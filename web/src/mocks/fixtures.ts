@@ -162,21 +162,58 @@ export const memberships: Schemas["TenantResponse"][] = [
 ];
 export const authUser = fakeUser;
 
+const tenantCallers = [
+  [
+    { name: "Jamie Morgan", email: "jamie.morgan@example.com", phone: "+44 7700 900123" },
+    { name: "Jamie Morgan", email: "jamie.morgan.alt@example.com", phone: "+44 7700 900123" },
+    { name: "Riley Patel", email: "riley.patel@example.com", phone: "+44 7700 900124" },
+    { name: "Casey Lee", email: "casey.lee@example.com", phone: "+44 7700 900125" },
+  ],
+  [
+    { name: "Alex Morgan", email: "alex.morgan@example.com", phone: "+44 7700 900231" },
+    { name: "Alex Morgan", email: "alex.morgan.alt@example.com", phone: "+44 7700 900231" },
+    { name: "Imogen Price", email: "imogen.price@example.com", phone: "+44 7700 900232" },
+    { name: "Oliver Grant", email: "oliver.grant@example.com", phone: "+44 7700 900233" },
+  ],
+] as const;
+
+const conversationSummaries = [
+  [
+    "Boiler not firing, no hot water since this morning",
+    "Quote request for bathroom radiator replacement",
+    "Landlord reporting leak under kitchen sink",
+    "Annual boiler service availability for a two-bedroom flat",
+    "Follow-up on a replacement thermostat installation",
+    "Asked whether an engineer can inspect a noisy circulation pump",
+  ],
+  [
+    "Enquiry about unfair dismissal; termination date 3 Sept",
+    "Conveyancing quote for flat purchase",
+    "Existing client asking for update on probate matter",
+    "Request for review of a settlement agreement",
+    "Question about leasehold title checks before exchange",
+    "Follow-up on a power of attorney appointment",
+  ],
+] as const;
+
 function makeConversation(tenantIndex: number, index: number): Schemas["ConversationDetailResponse"] {
   const id = `50000000-0000-4000-8000-${String(tenantIndex * 10 + index + 1).padStart(12, "0")}`;
   const review = index === 0 || index === 1;
   const person = ids.people[tenantIndex * 4 + (index % 4)];
+  const caller = tenantCallers[tenantIndex][index % 4];
+  const summary = conversationSummaries[tenantIndex][index];
+  const channel = (["phone", "web", "gmail", "whatsapp"] as const)[index % 4];
   const rawName = tenantIndex === 0 ? "boiler_repair.caller_name" : "employment.caller_name";
-  const callerName = tenantIndex === 0 ? "Jamie Morgan" : "Alex Morgan";
+  const callerName = caller.name;
   const postName = index === 0 ? (tenantIndex === 0 ? "Jamie M." : "Alex M.") : callerName;
   const liveFields = {
     caller_name: { value: callerName, confirmed: true, confirmed_at: date(index + 2) },
-    phone: { value: "+44 7700 900123", confirmed: false, confirmed_at: null },
+    phone: { value: caller.phone, confirmed: false, confirmed_at: null },
     ...(tenantIndex === 0 ? { issue: { value: "no_heating", confirmed: false, confirmed_at: null } } : {}),
   };
   const postFields = {
     caller_name: { value: postName, confidence: review ? 0.51 : 0.96, evidence: "Caller provided their name.", confirmed_by_caller: false },
-    phone: { value: "+44 7700 900123", confidence: 0.93, evidence: "Caller gave a callback number.", confirmed_by_caller: false },
+    phone: { value: caller.phone, confidence: 0.93, evidence: "Caller gave a callback number.", confirmed_by_caller: false },
     ...(tenantIndex === 0 ? { issue: { value: "no_hot_water", confidence: 0.61, evidence: "There is no heating or hot water.", confirmed_by_caller: false } } : {}),
   };
   const mergedCallerName = {
@@ -195,19 +232,19 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
   const intakes: Schemas["IntakeResponse"][] = [
     { version: "live", data: { service: tenantIndex === 0 ? "boiler_repair" : "employment", fields: liveFields } },
     { version: "post_call", data: { status: index === 5 ? "failed" : "succeeded", service: tenantIndex === 0 ? "boiler_repair" : "employment", model: "fixture-extractor", fields: postFields, callback_requested: true, complaint: false, unanswered_questions: [] } },
-    { version: "merged", data: { service: tenantIndex === 0 ? "boiler_repair" : "employment", fields: { caller_name: mergedCallerName, phone: { value: "+44 7700 900123", status: "agreed", confidence: 0.93, needs_review: false, confirmed_by_caller: false, sources: { live: { value: "+44 7700 900123" }, post_call: { value: "+44 7700 900123", confidence: 0.93 } } }, ...(tenantIndex === 0 ? { issue: { value: "no_heating", status: "conflict", confidence: 0.61, needs_review: false, confirmed_by_caller: false, sources: { live: { value: "no_heating" }, post_call: { value: "no_hot_water", confidence: 0.61 } }, alternative: "no_hot_water" } } : {}) }, needs_review: review ? [rawName] : [] } },
+    { version: "merged", data: { service: tenantIndex === 0 ? "boiler_repair" : "employment", fields: { caller_name: mergedCallerName, phone: { value: caller.phone, status: "agreed", confidence: 0.93, needs_review: false, confirmed_by_caller: false, sources: { live: { value: caller.phone }, post_call: { value: caller.phone, confidence: 0.93 } } }, ...(tenantIndex === 0 ? { issue: { value: "no_heating", status: "conflict", confidence: 0.61, needs_review: false, confirmed_by_caller: false, sources: { live: { value: "no_heating" }, post_call: { value: "no_hot_water", confidence: 0.61 } }, alternative: "no_hot_water" } } : {}) }, needs_review: review ? [rawName] : [] } },
   ];
   const task: Schemas["TaskSummary"] = { id: `60000000-0000-4000-8000-${String(tenantIndex * 10 + index + 1).padStart(12, "0")}`, kind: ["callback", "urgent", "quote", "knowledge_gap"][index % 4], status: index % 3 === 0 ? "done" : "open", due_at: date(index + 3), source: index % 2 === 0 ? "live" : "post_call", payload: { reason: "Follow up with the caller", summary: "Confirm next steps" } };
   return {
-    id, assistant_id: ids.assistants[tenantIndex], person_id: person, channel: (["phone", "web", "gmail", "whatsapp"] as const)[index % 4],
-    external_ref: index % 4 === 0 ? "+44 7700 900123" : `fixture-${tenantIndex}-${index}@example.com`,
+    id, assistant_id: ids.assistants[tenantIndex], person_id: person, channel,
+    external_ref: channel === "phone" || channel === "whatsapp" ? caller.phone : caller.email,
     status: (["completed", "completed", "active", "failed", "completed", "completed"] as const)[index],
-    started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary: index % 2 === 0 ? "Caller asked for help and a team member will follow up." : "Inquiry received; details recorded for the team.",
+    started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary,
     end_reason: index === 3 ? "connection_lost" : "caller_hangup",
     messages: [
-      { id: `${id}-m1`, role: "caller", text: "Hello, I need some help please.", ts: date(index + 1), meta: {} },
+      { id: `${id}-m1`, role: "caller", text: summary, ts: date(index + 1), meta: {} },
       { id: `${id}-m2`, role: "assistant", text: "Of course. Can I take your name and a callback number?", ts: date(index + 1), meta: {} },
-      { id: `${id}-m3`, role: "caller", text: `${callerName}, and the best number is +44 7700 900123.`, ts: date(index + 1), meta: {} },
+      { id: `${id}-m3`, role: "caller", text: `${callerName}, and the best number is ${caller.phone}.`, ts: date(index + 1), meta: {} },
     ],
     intakes, needs_review: review, tasks: [task],
     metrics: { call_duration_seconds: 185 + index * 10, providers: { stt: "mock-stt", tts: "mock-tts" }, turn_latency_summary: { p50_seconds: 0.42, p95_seconds: 0.81, max_seconds: 1.02 }, turn_end_latency_summary: { p50_seconds: 0.19, p95_seconds: 0.31, max_seconds: 0.44 }, usage: { stt_seconds: 180, tts_characters: 490 } },
@@ -218,13 +255,14 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
 function makeContacts(tenantIndex: number): Schemas["ContactDetailResponse"][] {
   return Array.from({ length: 4 }, (_, index) => {
     const personId = ids.people[tenantIndex * 4 + index];
-    const displayName = ["Jamie Morgan", "Jamie Morgan (duplicate)", "Riley Patel", "Casey Lee"][index];
+    const caller = tenantCallers[tenantIndex][index];
+    const displayName = index === 1 ? `${caller.name} (possible duplicate)` : caller.name;
     const conversation = makeConversation(tenantIndex, index);
     return {
       id: personId, display_name: displayName, merged_into_id: null, created_at: date(index + 1), updated_at: date(index + 4),
       identities: [
-        { id: `${personId}-identity-1`, type: "phone", value_normalized: "+447700900123", verified: index === 0, confidence: 0.94, source: "caller_id" },
-        { id: `${personId}-identity-2`, type: "email", value_normalized: `${index === 1 ? "jamie.duplicate" : displayName.split(" ")[0].toLowerCase()}@example.com`, verified: false, confidence: 0.82, source: "conversation" },
+        { id: `${personId}-identity-1`, type: "phone", value_normalized: caller.phone.replaceAll(" ", ""), verified: index === 0, confidence: 0.94, source: "caller_id" },
+        { id: `${personId}-identity-2`, type: "email", value_normalized: caller.email, verified: false, confidence: 0.82, source: "conversation" },
       ],
       active_facts: [{ id: `${personId}-fact-1`, predicate: "preferred_contact_method", value: "phone", valid_from: date(index + 1), valid_to: null, evidence: "Caller requested a callback.", confidence: 0.9, status: "active" }],
       conversations: [conversation],

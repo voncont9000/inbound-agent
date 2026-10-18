@@ -96,10 +96,11 @@ describe("operator workflows", () => {
     };
     server.events.on("request:start", listener);
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
-    await screen.findByRole("heading", { name: /Caller asked for help/ });
-    expect(screen.getByText("Live")).toBeInTheDocument();
-    expect(screen.getByText("Post-call")).toBeInTheDocument();
-    expect(screen.getByText("Merged")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: /Boiler not firing, no hot water/ });
+    const intakeTable = screen.getByRole("table", { name: "Intake comparison by field" });
+    expect(within(intakeTable).getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Field", "Live", "Post-call", "Merged"]);
+    expect(within(intakeTable).getAllByRole("row")).toHaveLength(4);
+    expect(within(intakeTable).getByRole("rowheader", { name: "caller_name" })).toBeInTheDocument();
     expect(screen.getAllByText("Jamie M.").length).toBeGreaterThan(0);
     expect(screen.getAllByText("live (conflict)", { exact: true }).length).toBeGreaterThan(0);
 
@@ -138,6 +139,41 @@ describe("operator workflows", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent("phone");
     server.events.removeListener("request:start", listener);
+  });
+
+  it("shows muted empty states for contact sections and conversation tasks", async () => {
+    const contact = mockDb.tenants[0].contacts[0];
+    const conversation = mockDb.tenants[0].conversations[0];
+    server.use(
+      http.get<{ id: string }, never, Schemas["ContactDetailResponse"]>("*/api/contacts/:id", ({ params }) =>
+        HttpResponse.json<Schemas["ContactDetailResponse"]>({
+          ...contact,
+          id: params.id,
+          identities: [],
+          active_facts: [],
+          conversations: [],
+          open_tasks: [],
+          open_commitments: [],
+          context_card: "",
+        }),
+      ),
+      http.get<{ id: string }, never, Schemas["ConversationDetailResponse"]>("*/api/conversations/:id", ({ params }) =>
+        HttpResponse.json<Schemas["ConversationDetailResponse"]>({ ...conversation, id: params.id, tasks: [] }),
+      ),
+    );
+
+    const contactView = renderApp(`/contacts/${contactId}`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Jamie Morgan" });
+    expect(screen.getByText("No identities yet.")).toBeInTheDocument();
+    expect(screen.getByText("No facts yet.")).toBeInTheDocument();
+    expect(screen.getByText("No conversations yet.")).toBeInTheDocument();
+    expect(screen.getByText("No open tasks.")).toBeInTheDocument();
+    expect(screen.getByText("No open commitments.")).toBeInTheDocument();
+    expect(screen.getByText("No context card yet.")).toBeInTheDocument();
+    contactView.unmount();
+
+    renderApp(`/conversations/${conversationId}`, { loggedIn: true });
+    await screen.findByText("No tasks.");
   });
 
   it("shows merge confirmation and sends no merge request until confirmed", async () => {

@@ -72,9 +72,13 @@ tr:last-child td { border-bottom: 0; }
 .message { width: fit-content; max-width: min(80%, 720px); padding: 0.8rem 1rem; background: #f1f5f2; border-radius: 12px; }
 .message-caller { justify-self: end; background: #e4f2ec; }
 .message time { display: block; margin-top: 0.4rem; font-size: 0.75rem; color: var(--muted); }
-.intake-grid { display: grid; grid-template-columns: minmax(150px, 0.8fr) repeat(3, minmax(180px, 1fr)); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.intake-grid > div { padding: 0.75rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.intake-head { font-weight: 700; background: #f7faf8; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: white; }
+.intake-table { min-width: 850px; }
+.intake-table th, .intake-table td { vertical-align: top; border-right: 1px solid var(--line); }
+.intake-table th:last-child, .intake-table td:last-child { border-right: 0; }
+.intake-table th[scope="row"] { min-width: 150px; color: var(--ink); font-size: 0.95rem; text-transform: none; letter-spacing: normal; background: white; }
+.intake-table td { min-width: 180px; }
+.intake-table tr:last-child th, .intake-table tr:last-child td { border-bottom: 0; }
 .review-form { display: grid; gap: 0.7rem; border: 1px solid #e6c880; background: #fffaf0; padding: 0.9rem; border-radius: 8px; }
 .context-card { white-space: pre-wrap; background: #f2f5f3; padding: 1rem; border-radius: 8px; font: 0.9rem/1.5 ui-monospace, monospace; }
 .auth-card { width: min(470px, calc(100% - 2rem)); margin: 7vh auto; padding: 2rem; background: white; border: 1px solid var(--line); border-radius: 14px; }
