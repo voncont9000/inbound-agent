@@ -504,9 +504,10 @@ class IncompletePhoneNumberTurnStopStrategy(TurnAnalyzerUserTurnStopStrategy):
 
 def create_function_schemas(
     call_tools: CallTools,
-    metrics_observer: CallMetricsObserver | None = None,
     call_transfer: CallTransfer | None = None,
     speech_tracker: BotSpeechTracker | None = None,
+    *,
+    metrics_observer: CallMetricsObserver | None = None,
 ) -> list[FunctionSchema]:
     schemas = []
     transfer = call_transfer or SimulatedCallTransfer()
@@ -605,15 +606,16 @@ def create_function_schemas(
 
 def create_llm_context(
     call_tools: CallTools,
-    metrics_observer: CallMetricsObserver | None = None,
     call_transfer: CallTransfer | None = None,
     speech_tracker: BotSpeechTracker | None = None,
+    *,
+    metrics_observer: CallMetricsObserver | None = None,
 ) -> LLMContext:
     schemas = create_function_schemas(
         call_tools,
-        metrics_observer,
         call_transfer,
         speech_tracker,
+        metrics_observer=metrics_observer,
     )
     return LLMContext(tools=schemas) if schemas else LLMContext()
 
@@ -714,9 +716,9 @@ async def run_bot(
         tts = create_tts(providers, os.environ, session, sample_rate=output_sample_rate)
         context = create_llm_context(
             call_tools,
-            metrics_observer,
             call_transfer,
             speech_tracker,
+            metrics_observer=metrics_observer,
         )
         context_aggregators = LLMContextAggregatorPair(
             context,

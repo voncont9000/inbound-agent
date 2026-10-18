@@ -249,6 +249,7 @@ class CallTools:
         self.sink.append_tool_call(name, arguments, result)
         return result
 
+
 def tool_specs(
     config: AssistantConfig | None = None,
     now: datetime | None = None,

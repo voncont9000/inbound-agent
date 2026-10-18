@@ -32,6 +32,8 @@ describe("validateAssistantConfig", () => {
     const config = structuredClone(tenantFixtures[0].assistants[0].config);
     config.booking = {
       calendar_id: "primary",
+      check_message: "Let me check the diary.",
+      book_message: "One moment while I book that.",
       appointment_types: [
         { key: "initial_consultation", label: "Consultation", duration_minutes: 30, when_to_use: "New callers" },
         { key: "initial_consultation", label: "Follow-up", duration_minutes: 481, when_to_use: "Existing callers" },

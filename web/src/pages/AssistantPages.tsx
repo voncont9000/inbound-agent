@@ -15,6 +15,8 @@ type BookingConfig = NonNullable<AssistantConfig["booking"]>;
 
 const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   calendar_id: "primary",
+  check_message: "Let me check the diary.",
+  book_message: "One moment while I book that.",
   appointment_types: [{
     key: "consultation",
     label: "Consultation",

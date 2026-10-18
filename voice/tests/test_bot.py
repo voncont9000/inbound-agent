@@ -756,16 +756,12 @@ def test_booking_tool_speaks_configured_filler_concurrently(
         class FakeLLM:
             async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
                 events.append(("frame", frame))
-                await tracker.on_push_frame(
-                    SimpleNamespace(frame=BotStartedSpeakingFrame())
-                )
+                await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
 
                 async def finish_speech():
                     await asyncio.sleep(0.04)
                     events.append(("speech_finished",))
-                    await tracker.on_push_frame(
-                        SimpleNamespace(frame=BotStoppedSpeakingFrame())
-                    )
+                    await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
 
                 asyncio.create_task(finish_speech())
 
@@ -778,9 +774,7 @@ def test_booking_tool_speaks_configured_filler_concurrently(
 
         handler = next(
             schema.handler
-            for schema in BOT_MODULE.create_function_schemas(
-                call_tools, speech_tracker=tracker
-            )
+            for schema in BOT_MODULE.create_function_schemas(call_tools, speech_tracker=tracker)
             if schema.name == tool_name
         )
         await handler(FakeParams())
@@ -792,7 +786,10 @@ def test_booking_tool_speaks_configured_filler_concurrently(
     assert isinstance(filler, TTSSpeakFrame)
     assert filler.text == message
     assert events.index(("tool_started", tool_name)) < events.index(("speech_finished",))
-    assert events.index(("tool_finished", tool_name)) < events.index(("result_callback", {"ok": True}))
+    assert events.index(("tool_finished", tool_name)) < events.index(
+        ("result_callback", {"ok": True})
+    )
+    assert events.index(("speech_finished",)) < events.index(("result_callback", {"ok": True}))
 
 
 def test_non_booking_tool_does_not_speak_filler(tmp_path) -> None:

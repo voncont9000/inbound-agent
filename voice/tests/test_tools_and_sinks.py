@@ -50,9 +50,7 @@ def test_booking_tool_specs_require_config_route_availability_and_actions() -> N
         "check_availability",
         "book_appointment",
     }
-    assert all(
-        "immediately without announcing" in item["description"] for item in specs
-    )
+    assert all("immediately without announcing" in item["description"] for item in specs)
     assert all("same response" not in item["description"] for item in specs)
     disabled = assistant.model_copy(update={"live_actions": []})
     assert tool_specs(disabled, booking_available=True) == []
