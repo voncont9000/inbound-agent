@@ -71,6 +71,15 @@ class VoiceApiClient:
             response.raise_for_status()
             return RouteResponse.model_validate(response.json())
 
+    async def route_web_call(self, token: str) -> RouteResponse:
+        async with self._client(timeout=self.settings.route_timeout) as client:
+            response = await client.get(
+                "/internal/voice/web-route",
+                params={"token": token},
+            )
+            response.raise_for_status()
+            return RouteResponse.model_validate(response.json())
+
     async def start_call(self, call_start: CallStart) -> UUID:
         last_error: Exception | None = None
         async with self._client() as client:

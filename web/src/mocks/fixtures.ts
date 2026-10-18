@@ -10,6 +10,11 @@ const ids = {
 };
 const date = (day: number) => `2026-02-${String(day).padStart(2, "0")}T10:30:00Z`;
 
+export const testCallResponse: Schemas["TestCallResponse"] = {
+  url: "http://127.0.0.1:7862/?call_token=mock-call-token",
+  expires_at: 1792320000,
+};
+
 const plumbingConfig: AssistantConfig = {
   business_name: "Brightside Plumbing & Heating",
   language: "English",
@@ -242,6 +247,7 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
     external_ref: channel === "phone" || channel === "whatsapp" ? caller.phone : caller.email,
     contact_name: caller.name,
     needs_review: review,
+    test_call: tenantIndex === 0 && index === 0,
     status: (["completed", "completed", "active", "failed", "completed", "completed"] as const)[index],
     started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary,
     end_reason: index === 3 ? "connection_lost" : "caller_hangup",

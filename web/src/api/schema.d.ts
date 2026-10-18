@@ -149,6 +149,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistants/{assistant_id}/test-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Test Call */
+        post: operations["create_test_call_assistants__assistant_id__test_calls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants/{assistant_id}/versions": {
         parameters: {
             query?: never;
@@ -396,6 +413,23 @@ export interface paths {
         };
         /** Route Call */
         get: operations["route_call_internal_voice_route_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/voice/web-route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Route Web Call */
+        get: operations["route_web_call_internal_voice_web_route_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -766,6 +800,8 @@ export interface components {
             started_at: string;
             /** To Number */
             to_number: string;
+            /** Web Call Token */
+            web_call_token?: string | null;
         };
         /** ChannelConnectionCreate */
         ChannelConnectionCreate: {
@@ -1002,6 +1038,11 @@ export interface components {
             summary: string | null;
             /** Tasks */
             tasks: components["schemas"]["TaskSummary"][];
+            /**
+             * Test Call
+             * @default false
+             */
+            test_call: boolean;
         };
         /** ConversationListResponse */
         ConversationListResponse: {
@@ -1087,6 +1128,11 @@ export interface components {
             status: "active" | "completed" | "failed";
             /** Summary */
             summary: string | null;
+            /**
+             * Test Call
+             * @default false
+             */
+            test_call: boolean;
         };
         /** DateDeadlineUrgencyRule */
         DateDeadlineUrgencyRule: {
@@ -1591,6 +1637,13 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "staff";
+        };
+        /** TestCallResponse */
+        TestCallResponse: {
+            /** Expires At */
+            expires_at: number;
+            /** Url */
+            url: string;
         };
         /** TranscriptTurn */
         TranscriptTurn: {
@@ -2137,6 +2190,39 @@ export interface operations {
             };
         };
     };
+    create_test_call_assistants__assistant_id__test_calls_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCallResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_assistant_versions_assistants__assistant_id__versions_get: {
         parameters: {
             query?: never;
@@ -2617,6 +2703,39 @@ export interface operations {
             query: {
                 to: string;
                 from?: string | null;
+            };
+            header: {
+                "X-Service-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    route_web_call_internal_voice_web_route_get: {
+        parameters: {
+            query: {
+                token: string;
             };
             header: {
                 "X-Service-Token": string;

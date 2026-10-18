@@ -450,6 +450,9 @@ against live services.
 
 Hosted browser practice calls can use same-origin WebSocket PCM at 16 kHz input and 24 kHz
 output for HTTPS reverse proxies that cannot forward WebRTC's direct UDP media.
+An owner-generated assistant test link carries a signed, short-lived `call_token`; the
+browser server resolves its assistant configuration and knowledge digest through the
+internal voice API and fails closed when that route cannot be verified.
 
 ## Local Twilio simulator
 

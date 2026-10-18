@@ -35,6 +35,7 @@ from inbound_api.schemas import (
 )
 from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
+from inbound_api.web_call_tokens import verify as verify_web_call_token
 
 router = APIRouter(prefix="/internal/voice", tags=["internal voice"])
 LOGGER = logging.getLogger(__name__)
@@ -68,6 +69,45 @@ async def route_call(
     if resolution is None:
         raise HTTPException(status_code=404, detail="Unknown number")
     tenant_id, assistant_id = resolution
+    caller_phone = from_number
+    if from_number:
+        try:
+            caller_phone = normalise_phone(from_number, strict=False)
+        except ValueError:
+            pass
+    return await _load_assistant_route(
+        tenant_id,
+        assistant_id,
+        caller_phone=caller_phone,
+        include_context_card=True,
+    )
+
+
+@router.get(
+    "/web-route",
+    response_model=RouteResponse,
+    dependencies=[Depends(require_voice_service_token)],
+)
+async def route_web_call(token: str = Query(...)) -> RouteResponse:
+    try:
+        tenant_id, assistant_id = verify_web_call_token(token)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid web call token") from None
+    return await _load_assistant_route(
+        tenant_id,
+        assistant_id,
+        caller_phone=None,
+        include_context_card=False,
+    )
+
+
+async def _load_assistant_route(
+    tenant_id: UUID,
+    assistant_id: UUID,
+    *,
+    caller_phone: str | None,
+    include_context_card: bool,
+) -> RouteResponse:
     async with tenant_session(tenant_id) as session:
         assistant = await session.get(Assistant, assistant_id)
         if assistant is None:
@@ -79,25 +119,20 @@ async def route_call(
             .order_by(KnowledgeDigest.created_at.desc(), KnowledgeDigest.id.desc())
             .limit(1)
         )
-        caller_phone = from_number
-        if from_number:
-            try:
-                caller_phone = normalise_phone(from_number, strict=False)
-            except ValueError:
-                pass
         context_card = None
-        try:
-            async with session.begin_nested():
-                person = await graph.resolve_person(
-                    session, phone=caller_phone, email=None, source="phone"
-                )
-                if person:
-                    context_card = await graph.build_context_card(session, person)
-        except NotImplementedError:
-            context_card = None
-        except Exception:
-            LOGGER.warning("Could not build caller context card", exc_info=True)
-            context_card = None
+        if include_context_card:
+            try:
+                async with session.begin_nested():
+                    person = await graph.resolve_person(
+                        session, phone=caller_phone, email=None, source="phone"
+                    )
+                    if person:
+                        context_card = await graph.build_context_card(session, person)
+            except NotImplementedError:
+                context_card = None
+            except Exception:
+                LOGGER.warning("Could not build caller context card", exc_info=True)
+                context_card = None
     return RouteResponse(
         tenant_id=tenant_id,
         assistant_id=assistant_id,
@@ -114,22 +149,29 @@ async def route_call(
     dependencies=[Depends(require_voice_service_token)],
 )
 async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
-    if payload.channel == "phone":
+    if payload.channel == "web" and payload.web_call_token is not None:
         try:
-            external_id = normalise_phone(payload.to_number)
+            tenant_id, assistant_id = verify_web_call_token(payload.web_call_token)
         except ValueError:
-            raise HTTPException(status_code=404, detail="Unknown number") from None
-        kind = "phone"
+            raise HTTPException(status_code=401, detail="Invalid web call token") from None
+        resolution = (tenant_id, assistant_id)
     else:
-        external_id = payload.to_number.strip()
-        kind = "web"
-    async with session_factory() as session:
-        resolution = (
-            await session.execute(
-                text("SELECT * FROM resolve_channel(:kind, :external_id)"),
-                {"kind": kind, "external_id": external_id},
-            )
-        ).first()
+        if payload.channel == "phone":
+            try:
+                external_id = normalise_phone(payload.to_number)
+            except ValueError:
+                raise HTTPException(status_code=404, detail="Unknown number") from None
+            kind = "phone"
+        else:
+            external_id = payload.to_number.strip()
+            kind = "web"
+        async with session_factory() as session:
+            resolution = (
+                await session.execute(
+                    text("SELECT * FROM resolve_channel(:kind, :external_id)"),
+                    {"kind": kind, "external_id": external_id},
+                )
+            ).first()
     if resolution is None:
         raise HTTPException(status_code=404, detail="Unknown channel")
     tenant_id, assistant_id = resolution
@@ -171,8 +213,13 @@ async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
             status=ConversationStatus.ACTIVE,
             started_at=payload.started_at,
         )
+        metrics = {}
         if caller_phone:
-            conversation.metrics = {"from_number": caller_phone}
+            metrics["from_number"] = caller_phone
+        if payload.channel == "web" and payload.web_call_token is not None:
+            metrics["test_call"] = True
+        if metrics:
+            conversation.metrics = metrics
         try:
             async with session.begin_nested():
                 session.add(conversation)

@@ -84,6 +84,11 @@ class AssistantListResponse(BaseModel):
     items: list[AssistantResponse]
 
 
+class TestCallResponse(BaseModel):
+    url: str
+    expires_at: int
+
+
 class AssistantVersionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -210,6 +215,7 @@ class ConversationSummary(BaseModel):
     summary: str | None
     end_reason: str | None
     needs_review: bool = False
+    test_call: bool = False
     contact_name: str | None = None
 
 

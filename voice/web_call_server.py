@@ -46,8 +46,13 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
     @app.websocket("/ws")
     async def web_call_websocket(websocket: WebSocket) -> None:
         await websocket.accept()
+        call_token = websocket.query_params.get("call_token")
         token = env.get("WEB_CALL_TOKEN", "").strip()
-        if token and not hmac.compare_digest(websocket.query_params.get("token", ""), token):
+        if (
+            call_token is None
+            and token
+            and not hmac.compare_digest(websocket.query_params.get("token", ""), token)
+        ):
             await websocket.close(code=1008)
             return
 
@@ -66,6 +71,7 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
                 to_number=env.get("WEB_CALL_TO_NUMBER"),
                 from_number=caller_id,
                 external_call_id=call_id,
+                web_call_token=call_token,
             )
             transport = FastAPIWebsocketTransport(
                 websocket,

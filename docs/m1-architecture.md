@@ -121,10 +121,17 @@ server-side status and assistant filters. `/me` returns only the current user's 
 Human reviews are represented in the merged intake (`status: "human"` and `sources.human`),
 not by a separate review API field.
 
+Owners can create a short-lived signed test-call link for an assistant. The browser-call
+service resolves the token through `/internal/voice/web-route`, and the resulting conversation
+is saved as a `web` call in that assistant's tenant with `test_call` set in its metrics.
+`WEB_CALL_BASE_URL` must point to the browser-call page; the voice service must have the
+matching `API_BASE_URL` and `VOICE_SERVICE_TOKEN`. Tokenized calls do not use the local demo
+configuration as a fallback.
+
 The crawler validates and pins every resolved connection address, including redirect and
 robots requests, preventing a second DNS resolution from rebinding a checked public URL.
 
-Settings include `APP_ENV`, `VOICE_SERVICE_TOKEN`, `SESSION_TTL_HOURS`,
+Settings include `APP_ENV`, `VOICE_SERVICE_TOKEN`, `WEB_CALL_BASE_URL`, `SESSION_TTL_HOURS`,
 `SESSION_COOKIE_SECURE`, `ALLOWED_ORIGINS`, `KNOWLEDGE_ALLOW_PRIVATE_URLS`, `UPLOAD_DIR`,
 `MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
 `KNOWLEDGE_REQUEST_DELAY`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,

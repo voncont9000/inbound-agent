@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, unwrap, uploadKnowledgeFile, type Schemas } from "../api/client";
 import { ApiError, fieldErrorsFrom422 } from "../api/errors";
+import { TestCallButton } from "../components/TestCallButton";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
 import { enumAt, rangeAt } from "../lib/configSchema";
@@ -83,7 +84,10 @@ export function AssistantsPage() {
       <p className="eyebrow">{assistant.template ?? "Custom"}</p>
       <h2>{assistant.name}</h2><p>{assistant.config.business_name}</p>
       <p className="muted">{Object.values(assistant.config.services).map((service) => service.label).join(" · ")}</p>
-      <Link to={`/assistants/${assistant.id}/settings`}>Manage assistant</Link>
+      <div className="button-row">
+        <Link to={`/assistants/${assistant.id}/settings`}>Manage assistant</Link>
+        <TestCallButton assistantId={assistant.id} />
+      </div>
     </article>)}</div>
   </main>;
 }
@@ -185,6 +189,7 @@ export function AssistantSettingsPage() {
   const summaryErrors = Object.fromEntries(Object.entries(allErrors).filter(([path]) => path !== "_form"));
   return <main className="page" id="main-content">
     <p className="eyebrow">Assistant settings</p><h1>{baseline.name}</h1>
+    <TestCallButton assistantId={baseline.id} />
     <p className="muted">{isDirty ? "Unsaved changes" : `Version ${baseline.version} is up to date`}</p>
     <form className="stack" onSubmit={saveConfig} noValidate>
       <ErrorSummary errors={summaryErrors} />

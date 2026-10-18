@@ -68,7 +68,7 @@ export function InboxPage() {
         <td>{conversation.person_id ? <Link to={`/contacts/${conversation.person_id}`}>{conversation.contact_name ?? conversation.external_ref}</Link> : conversation.contact_name ?? conversation.external_ref}</td>
         <td><Link to={`/conversations/${conversation.id}`}>{conversation.summary ?? "No summary"}</Link></td>
         <td>{formatDate(conversation.started_at)}</td>
-        <td>{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</td>
+        <td><div className="button-row">{conversation.test_call && <Badge tone="neutral">Test call</Badge>}{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</div></td>
       </tr>)}
     </tbody></table></div>}
     {conversations.hasNextPage && <button type="button" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button>}
@@ -117,7 +117,7 @@ export function ConversationPage() {
   if (detailQuery.error || !detail) return <main className="page" id="main-content"><ErrorState message="Conversation could not be loaded." /></main>;
   const contact = detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{detail.external_ref}</Link> : detail.external_ref;
   return <main className="page" id="main-content">
-    <p className="eyebrow">Conversation · {detail.channel}</p><h1>{detail.summary ?? "Conversation details"}</h1>
+    <p className="eyebrow">Conversation · {detail.channel} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</p><h1>{detail.summary ?? "Conversation details"}</h1>
     <div className="panel card-grid"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
     <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>
     <section className="panel stack"><h2>Intake comparison</h2>

@@ -143,6 +143,7 @@ describe("operator workflows", () => {
     server.events.on("request:start", listener);
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
     await screen.findByRole("heading", { name: /Boiler not firing, no hot water/ });
+    expect(screen.getByText("Test call")).toBeInTheDocument();
     const intakeTable = screen.getByRole("table", { name: "Intake comparison by field" });
     expect(within(intakeTable).getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Field", "Live", "Post-call", "Merged"]);
     expect(within(intakeTable).getAllByRole("row")).toHaveLength(4);
@@ -186,6 +187,12 @@ describe("operator workflows", () => {
     expect(rows[0]).toHaveTextContent("phone");
     expect(rows[0]).toHaveTextContent("Jamie Morgan");
     server.events.removeListener("request:start", listener);
+  });
+
+  it("marks test calls in the inbox", async () => {
+    renderApp("/inbox", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Inbox" });
+    expect(await screen.findAllByText("Test call")).not.toHaveLength(0);
   });
 
   it("sends task filters to the server", async () => {

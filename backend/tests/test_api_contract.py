@@ -64,6 +64,7 @@ PRE_PLATFORM_API_COMPONENTS = {
     "TaskSummary",
     "TaskUpdate",
     "TemplateResponse",
+    "TestCallResponse",
     "TenantResponse",
     "TranscriptTurn",
     "UserResponse",
@@ -94,6 +95,7 @@ def test_all_feature_routers_are_mounted() -> None:
         "/assistant-config/schema",
         "/assistants",
         "/assistants/{assistant_id}",
+        "/assistants/{assistant_id}/test-calls",
         "/assistants/{assistant_id}/channels",
         "/assistants/{assistant_id}/channels/{channel_id}",
         "/assistants/{assistant_id}/versions",
@@ -113,6 +115,7 @@ def test_all_feature_routers_are_mounted() -> None:
         "/contacts/{contact_id}/merge",
         "/contacts/{contact_id}/split",
         "/internal/voice/route",
+        "/internal/voice/web-route",
         "/internal/voice/calls",
         "/internal/voice/calls/{conversation_id}/report",
     } <= paths

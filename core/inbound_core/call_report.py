@@ -21,6 +21,7 @@ class CallStart(BaseModel):
     external_call_id: str
     channel: Literal["phone", "web"]
     started_at: datetime
+    web_call_token: str | None = None
 
 
 class CallReport(BaseModel):

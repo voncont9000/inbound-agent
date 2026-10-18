@@ -216,6 +216,8 @@
           socketUrl.protocol = location.protocol === "https:" ? "wss:" : "ws:";
           const token = new URLSearchParams(location.search).get("token");
           if (token) socketUrl.searchParams.set("token", token);
+          const callToken = new URLSearchParams(location.search).get("call_token");
+          if (callToken) socketUrl.searchParams.set("call_token", callToken);
           socket = new WebSocket(socketUrl);
           socket.binaryType = "arraybuffer";
           socket.onopen = () => {

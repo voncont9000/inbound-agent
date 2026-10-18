@@ -35,12 +35,50 @@ async def prepare_call(
     to_number: str | None,
     from_number: str | None,
     external_call_id: str,
+    web_call_token: str | None = None,
 ) -> PreparedCall:
     if channel not in {"phone", "web"}:
         raise ValueError("channel must be 'phone' or 'web'")
 
     destination = env.get("WEB_CALL_TO_NUMBER", "").strip() if channel == "web" else to_number
     settings = api_settings_from_env(env)
+    if channel == "web" and web_call_token is not None:
+        if settings is None:
+            raise RuntimeError(
+                "API_BASE_URL and VOICE_SERVICE_TOKEN are required for tokenized web calls."
+            )
+        api = VoiceApiClient(
+            settings,
+            spool_dir=env.get("VOICE_SPOOL_DIR", str(DEFAULT_SPOOL_DIR)),
+        )
+        call_start = CallStart(
+            to_number=destination or "",
+            from_number=from_number,
+            external_call_id=external_call_id,
+            channel=channel,
+            started_at=datetime.now(UTC),
+            web_call_token=web_call_token,
+        )
+        try:
+            route = await api.route_web_call(web_call_token)
+        except Exception as error:
+            raise RuntimeError("Could not route tokenized web call.") from error
+        assistant = route.config
+        if route.digest is not None:
+            assistant = assistant.model_copy(
+                update={
+                    "knowledge": assistant.knowledge.model_copy(
+                        update={"digest_content": route.digest}
+                    )
+                }
+            )
+        return PreparedCall(
+            assistant=assistant,
+            context_card=None,
+            api=api,
+            call_start=call_start,
+            route=route,
+        )
     if settings is None or (channel == "web" and not destination):
         if settings is not None and channel == "web" and not destination:
             logger.warning("WEB_CALL_TO_NUMBER is missing; using local assistant configuration.")

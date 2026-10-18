@@ -59,6 +59,8 @@ def test_page_and_health_endpoint() -> None:
     assert "Embedded view: if the mic is blocked" in page.text
     assert "open this page in a new tab" in page.text
     assert 'target="_blank"' in page.text
+    assert 'get("call_token")' in page.text
+    assert 'searchParams.set("call_token", callToken)' in page.text
     assert "AudioWorkletNode" in page.text
     assert health.status_code == 200
     assert health.json() == {"ok": True}
@@ -119,7 +121,7 @@ def test_websocket_runs_shared_web_call_pipeline(monkeypatch: pytest.MonkeyPatch
         "WEB_CALL_TOKEN": "secret",
     }
     with TestClient(web_call_server.create_app(env)) as client:
-        with client.websocket_connect("/ws?token=secret") as websocket:
+        with client.websocket_connect("/ws?call_token=signed-test-token") as websocket:
             with pytest.raises(WebSocketDisconnect):
                 websocket.receive_text()
 
@@ -129,6 +131,7 @@ def test_websocket_runs_shared_web_call_pipeline(monkeypatch: pytest.MonkeyPatch
         "to_number": "+449876543210",
         "from_number": "+441234567890",
         "external_call_id": run_calls[0][1]["call_id"],
+        "web_call_token": "signed-test-token",
     }
     transport, run_kwargs = run_calls[0]
     assert isinstance(transport, FastAPIWebsocketTransport)

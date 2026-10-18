@@ -128,13 +128,18 @@ def run_smoke(
     voice: str,
     token: str | None,
     timeout: float,
+    call_token: str | None = None,
 ) -> tuple[int, int, float, Path]:
     pcm = asyncio.run(synthesize_pcm(text, voice))
     previous_runs = _call_run_dirs()
     parts = urlsplit(url)
-    query = [(key, value) for key, value in parse_qsl(parts.query) if key != "token"]
+    query = [
+        (key, value) for key, value in parse_qsl(parts.query) if key not in {"token", "call_token"}
+    ]
     if token:
         query.append(("token", token))
+    if call_token:
+        query.append(("call_token", call_token))
     ws_url = urlunsplit(parts._replace(query=urlencode(query)))
 
     with connect(ws_url, open_timeout=10, close_timeout=5) as websocket:
@@ -162,6 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Smoke-test the hosted browser-call WebSocket.")
     parser.add_argument("--url", default="ws://127.0.0.1:7862/ws")
     parser.add_argument("--token", default=os.environ.get("WEB_CALL_TOKEN"))
+    parser.add_argument("--call-token")
     parser.add_argument("--text", default=DEFAULT_UTTERANCE)
     parser.add_argument("--voice", default="hamish")
     parser.add_argument("--timeout", type=float, default=60)
@@ -176,6 +182,7 @@ def main() -> None:
         args.voice,
         args.token,
         args.timeout,
+        args.call_token,
     )
     print(f"Greeting audio bytes: {greeting_bytes}")
     print(f"Reply audio bytes: {reply_bytes}")
