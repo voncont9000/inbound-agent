@@ -72,6 +72,17 @@ export function validateAssistantConfig(config: AssistantConfig): Record<string,
     }
     if (!rule.reason.trim()) set(`${base}.reason`, "Enter a reason.");
   });
+  const actionKeys = new Set<string>();
+  (config.post_actions ?? []).forEach((action, index) => {
+    const base = `post_actions.${index}`;
+    if (actionKeys.has(action.key)) set(`${base}.key`, "Action keys must be unique.");
+    actionKeys.add(action.key);
+    if (!action.key.trim()) set(`${base}.key`, "Enter an action key.");
+    if (!action.trigger.events.length) set(`${base}.trigger.events`, "Choose at least one trigger event.");
+    (action.trigger.services ?? []).forEach((service) => {
+      if (!config.services[service]) set(`${base}.trigger.services`, "Choose an existing service.");
+    });
+  });
   if (!Number.isFinite(config.review_confidence_threshold) || config.review_confidence_threshold < 0 || config.review_confidence_threshold > 1) {
     set("review_confidence_threshold", "Choose a value between 0 and 1.");
   }

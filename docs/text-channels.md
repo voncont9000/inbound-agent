@@ -1,5 +1,8 @@
 # Text channels
 
+Completed conversation actions are configured and delivered as described in
+[After-conversation actions](actions.md).
+
 The WhatsApp adapter normalizes Meta webhook messages into the shared tenant-scoped
 `Conversation` and `Message` model. A business connects a WhatsApp phone-number ID to an
 assistant. The signed webhook resolves that connection with the tenant-safe

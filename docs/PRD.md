@@ -117,6 +117,11 @@ FR-E7 suggested rules are explicitly out of scope for this implementation.
 - FR-T2: **Google Sheets**: (a) append one row per conversation with the extraction fields (intake log) to a sheet the firm picks; (b) read lookup tables (e.g. fee list, fee earners per practice area, office hours) as knowledge. OAuth, least-privilege scopes (`drive.file` where possible).
 - FR-T3: **Email** actions: send a confirmation or summary email to the caller (from the connected Gmail mailbox, using templates), and notify staff by email.
 
+**Implementation status:** The M1 after-conversation framework now supports configurable
+event-triggered customer/staff email, Google Sheets rows, and signed webhooks with tenant-scoped
+runs and owner dry-runs. Calendar and live Google Sheets lookup remain future work. See
+[After-conversation actions](actions.md).
+
 **Later**
 - FR-T4: Call transfer/forwarding (see FR-P6), sending WhatsApp messages from a call, web search, generic webhooks (before/during/after a conversation, templated request and response mapping), MCP tools.
 - FR-T5: **Practice management systems, kept flexible:** one `PracticeManagementConnector` interface (`findClient`, `findMatter`, `createEnquiry`, `addNote`, `createTask`) with adapters added when customers need them (candidates: Clio, LEAP, Actionstep, Osprey, Quill). Until an adapter exists, firms use the Google Sheets intake log, email or webhooks. Later: Outlook mail and calendar, and Xero (payment follow-up).
