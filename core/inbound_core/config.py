@@ -252,6 +252,55 @@ class WebhookAction(PostActionBase):
     url: AnyHttpUrl
 
 
+class CallSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    max_call_minutes: int | None = Field(default=None, ge=1, le=240)
+    max_call_message: str = Field(
+        default="We've reached the time limit for this call, so I'll need to end it now. "
+        "Thank you for calling. Goodbye.",
+        min_length=1,
+    )
+    silence_timeout_seconds: float | None = Field(default=None, gt=0, le=60)
+    still_there_prompt: str = Field(default="Are you still there?", min_length=1)
+    silence_goodbye_message: str = Field(
+        default="I'll end the call now. Thank you for calling. Goodbye.",
+        min_length=1,
+    )
+    speech_speed: float = Field(default=1.0, ge=0.7, le=1.2)
+    interruption_sensitivity: Literal["low", "normal", "high"] = "normal"
+    uninterruptible_greeting: bool = False
+    technical_terms: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("technical_terms")
+    @classmethod
+    def normalize_technical_terms(cls, values: list[str]) -> list[str]:
+        terms: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            term = value.strip()
+            if not term:
+                continue
+            if len(term) > 60:
+                raise ValueError("Technical terms must be at most 60 characters.")
+            key = term.casefold()
+            if key not in seen:
+                terms.append(term)
+                seen.add(key)
+        return terms
+
+
+class RecordingSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    consent_message: str = Field(
+        default="This call may be recorded for quality and training purposes.",
+        min_length=1,
+    )
+    retention_days: int = Field(default=30, ge=1, le=365)
+
+
 PostAction = Annotated[
     EmailCustomerAction | NotifyStaffAction | SheetsRowAction | WebhookAction,
     Field(discriminator="kind"),
@@ -279,6 +328,8 @@ class AssistantConfig(BaseModel):
     services: dict[str, ServiceConfig]
     urgency_rules: list[UrgencyRule]
     post_actions: list[PostAction] = Field(default_factory=list)
+    call_settings: CallSettings = Field(default_factory=CallSettings)
+    recording: RecordingSettings = Field(default_factory=RecordingSettings)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     live_actions: list[
         Literal[

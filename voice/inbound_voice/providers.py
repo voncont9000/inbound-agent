@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 import aiohttp
+from loguru import logger
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
@@ -88,14 +89,16 @@ def create_stt(
     providers: VoiceProviders,
     env: Mapping[str, str],
     sample_rate: int | None = None,
+    extra_terms: list[str] | None = None,
 ):
+    terms = merge_keyterms(extra_terms or [])
     if providers.stt == "assemblyai":
         return AssemblyAISTTService(
             api_key=env["ASSEMBLYAI_API_KEY"],
             sample_rate=sample_rate,
             settings=AssemblyAISTTService.Settings(
                 model="universal-3-6-pro",
-                keyterms_prompt=KEYTERMS,
+                keyterms_prompt=terms,
             ),
         )
     if providers.stt == "soniox":
@@ -105,7 +108,7 @@ def create_stt(
             settings=SonioxSTTService.Settings(
                 model="stt-rt-v5",
                 language_hints=[Language.EN],
-                context=SonioxContextObject(terms=KEYTERMS),
+                context=SonioxContextObject(terms=terms),
             ),
         )
     if providers.stt == "deepgram":
@@ -115,7 +118,7 @@ def create_stt(
             settings=DeepgramSTTService.Settings(
                 model="nova-3",
                 language="en-GB",
-                keyterm=KEYTERMS,
+                keyterm=terms,
             ),
         )
     raise ValueError(f"Unsupported STT provider: {providers.stt}")
@@ -126,8 +129,13 @@ def create_tts(
     env: Mapping[str, str],
     aiohttp_session: aiohttp.ClientSession,
     sample_rate: int | None = None,
+    speed: float = 1.0,
 ):
     if providers.tts == "speechify":
+        if speed != 1.0:
+            logger.info(
+                "Speechify does not support configurable speech speed; ignoring speed={}", speed
+            )
         return SpeechifyHttpTTSService(
             api_key=env["SPEECHIFY_API_KEY"],
             aiohttp_session=aiohttp_session,
@@ -138,6 +146,7 @@ def create_tts(
             ),
         )
     if providers.tts == "elevenlabs":
+        speed_setting = {"speed": speed} if speed != 1.0 else {}
         if providers.elevenlabs_model in ELEVENLABS_HTTP_ONLY_MODELS:
             return ElevenLabsHttpTTSService(
                 api_key=env["ELEVENLABS_API_KEY"],
@@ -146,6 +155,7 @@ def create_tts(
                 settings=ElevenLabsHttpTTSService.Settings(
                     model=providers.elevenlabs_model,
                     voice=providers.tts_voice,
+                    **speed_setting,
                 ),
             )
         return ElevenLabsTTSService(
@@ -154,17 +164,32 @@ def create_tts(
             settings=ElevenLabsTTSService.Settings(
                 model=providers.elevenlabs_model,
                 voice=providers.tts_voice,
+                **speed_setting,
             ),
         )
     if providers.tts == "deepgram":
+        speed_setting = {"speed": speed} if speed != 1.0 else {}
         return DeepgramTTSService(
             api_key=env["DEEPGRAM_API_KEY"],
             sample_rate=sample_rate,
             settings=DeepgramTTSService.Settings(
                 voice=providers.tts_voice or "aura-2-pandora-en",
+                **speed_setting,
             ),
         )
     raise ValueError(f"Unsupported TTS provider: {providers.tts}")
+
+
+def merge_keyterms(extra_terms: list[str]) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for term in [*KEYTERMS, *extra_terms]:
+        normalized = term.strip()
+        key = normalized.casefold()
+        if normalized and key not in seen:
+            terms.append(normalized)
+            seen.add(key)
+    return terms
 
 
 def create_llm(

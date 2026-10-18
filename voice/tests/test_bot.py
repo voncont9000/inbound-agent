@@ -14,6 +14,8 @@ from pipecat.frames.frames import (
     EndWorkerFrame,
     InputAudioRawFrame,
     InterruptionFrame,
+    LLMFullResponseEndFrame,
+    LLMRunFrame,
     LLMTextFrame,
     OutputAudioRawFrame,
     TranscriptionFrame,
@@ -25,17 +27,20 @@ from pipecat.frames.frames import (
     VADUserStartedSpeakingFrame,
     VADUserStoppedSpeakingFrame,
 )
+from pipecat.pipeline.pipeline import Pipeline
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
-from pipecat.processors.frame_processor import FrameDirection
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.tests.utils import run_test
 from pipecat.transports.base_output import BaseOutputTransport
 from pipecat.transports.base_transport import TransportParams
+from pipecat.turns.user_mute import MuteUntilFirstBotCompleteUserMuteStrategy
 from pipecat.utils.types import NOT_GIVEN
 
+from inbound_voice.call_settings import TransferUserMuteStrategy
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools
 
@@ -243,6 +248,124 @@ def test_idle_prompt_secs_parses_default_and_override() -> None:
     assert BOT_MODULE.idle_prompt_secs({"IDLE_PROMPT_SECS": "12"}) == 12.0
     with pytest.raises(ValueError, match="IDLE_PROMPT_SECS"):
         BOT_MODULE.idle_prompt_secs({"IDLE_PROMPT_SECS": "0"})
+
+
+def test_build_user_params_maps_sensitivity_and_preserves_phone_stop_strategy(tmp_path) -> None:
+    assistant = BOT_MODULE.load_assistant_config(BOT_MODULE.ASSISTANT_CONFIG)
+    assert assistant.call_settings.still_there_prompt == BOT_MODULE.IDLE_PROMPT_TEXT
+    assert assistant.call_settings.silence_goodbye_message == BOT_MODULE.IDLE_GOODBYE_TEXT
+    for sensitivity, confidence, start_secs in (
+        ("normal", 0.7, 0.2),
+        ("high", 0.6, 0.1),
+        ("low", 0.8, 0.4),
+    ):
+        assistant.call_settings.interruption_sensitivity = sensitivity
+        sink = LocalFilesCallSink(tmp_path, f"params-{sensitivity}")
+        call_tools = CallTools(sink)
+        observer = BOT_MODULE.CallMetricsObserver(sink)
+        params = BOT_MODULE.build_user_params(
+            assistant,
+            call_tools,
+            input_sample_rate=8000,
+            metrics_observer=observer,
+            env={},
+        )
+
+        assert params.vad_analyzer._params.confidence == confidence
+        assert params.vad_analyzer._params.start_secs == start_secs
+        if sensitivity == "low":
+            assert isinstance(
+                params.user_turn_strategies.start[0],
+                BOT_MODULE.MinWordsUserTurnStartStrategy,
+            )
+            assert params.user_turn_strategies.start[0]._min_words == 3
+        else:
+            assert isinstance(
+                params.user_turn_strategies.start[0],
+                BOT_MODULE.VADUserTurnStartStrategy,
+            )
+        assert isinstance(
+            params.user_turn_strategies.stop[0],
+            BOT_MODULE.IncompletePhoneNumberTurnStopStrategy,
+        )
+
+
+@pytest.mark.parametrize(
+    ("uninterruptible", "recording", "mute_count"),
+    [(False, False, 1), (True, False, 2), (False, True, 2)],
+)
+def test_build_user_mute_strategies(uninterruptible, recording, mute_count, tmp_path) -> None:
+    call_tools = CallTools(LocalFilesCallSink(tmp_path, "mute-settings"))
+    strategies = BOT_MODULE.build_user_mute_strategies(
+        call_tools,
+        uninterruptible_greeting=uninterruptible,
+        recording_enabled=recording,
+    )
+    assert len(strategies) == mute_count
+    assert isinstance(strategies[-1], TransferUserMuteStrategy)
+    if mute_count == 2:
+        assert isinstance(
+            strategies[0],
+            MuteUntilFirstBotCompleteUserMuteStrategy,
+        )
+
+
+def test_min_words_turn_start_accepts_silent_yes_and_requires_three_during_speech() -> None:
+    async def run() -> None:
+        strategy = BOT_MODULE.MinWordsUserTurnStartStrategy(min_words=3)
+        silent_yes = TranscriptionFrame(
+            text="yes",
+            user_id="caller",
+            timestamp="2026-10-17T00:00:00Z",
+            finalized=True,
+        )
+        assert (await strategy.process_frame(silent_yes)).name == "STOP"
+
+        await strategy.process_frame(BotStartedSpeakingFrame())
+        assert (await strategy.process_frame(silent_yes)).name == "CONTINUE"
+        three_words = TranscriptionFrame(
+            text="yes that works",
+            user_id="caller",
+            timestamp="2026-10-17T00:00:00Z",
+            finalized=True,
+        )
+        assert (await strategy.process_frame(three_words)).name == "STOP"
+
+    asyncio.run(run())
+
+
+def test_greeting_response_frames_precede_queued_recording_consent() -> None:
+    async def run() -> None:
+        order = []
+
+        class FakeLLM(FrameProcessor):
+            async def process_frame(self, frame, direction) -> None:
+                await super().process_frame(frame, direction)
+                if isinstance(frame, LLMRunFrame):
+                    await self.push_frame(LLMTextFrame(text="Assistant greeting"))
+                    await self.push_frame(LLMFullResponseEndFrame())
+                else:
+                    await self.push_frame(frame, direction)
+
+        class FakeTTS(FrameProcessor):
+            async def process_frame(self, frame, direction) -> None:
+                await super().process_frame(frame, direction)
+                if isinstance(frame, LLMTextFrame):
+                    order.append(("greeting", frame.text))
+                elif isinstance(frame, TTSSpeakFrame):
+                    order.append(("consent", frame.text))
+                await self.push_frame(frame, direction)
+
+        await run_test(
+            Pipeline([FakeLLM(), FakeTTS()]),
+            frames_to_send=[LLMRunFrame(), TTSSpeakFrame(text="Recording consent")],
+        )
+        assert order == [
+            ("greeting", "Assistant greeting"),
+            ("consent", "Recording consent"),
+        ]
+
+    asyncio.run(run())
 
 
 def test_number_hold_secs_parses_default_and_override() -> None:
@@ -761,7 +884,7 @@ def test_transfer_user_mute_suppresses_interruption_and_new_user_turn_frames(tmp
         aggregators = LLMContextAggregatorPair(
             context,
             user_params=LLMUserAggregatorParams(
-                user_mute_strategies=[BOT_MODULE.TransferUserMuteStrategy(call_tools)]
+                user_mute_strategies=[TransferUserMuteStrategy(call_tools)]
             ),
         )
         user_aggregator = aggregators.user()
@@ -1236,6 +1359,8 @@ def test_idle_hangup_prompts_then_ends_after_bot_stops(tmp_path) -> None:
             queue_frame,
             push_end_worker,
             idle_seconds=0.01,
+            prompt_text="Configured prompt",
+            goodbye_text="Configured goodbye",
         )
 
         async def push(frame) -> None:
@@ -1251,12 +1376,12 @@ def test_idle_hangup_prompts_then_ends_after_bot_stops(tmp_path) -> None:
         await push_speaking_pair(BotStoppedSpeakingFrame)
         await asyncio.sleep(0.03)
         assert isinstance(queued_frames[0], TTSSpeakFrame)
-        assert queued_frames[0].text == "Are you still there?"
+        assert queued_frames[0].text == "Configured prompt"
 
         await push_speaking_pair(BotStartedSpeakingFrame)
         await push_speaking_pair(BotStoppedSpeakingFrame)
         await asyncio.sleep(0.03)
-        assert queued_frames[1].text == ("I'll end the call now. Thank you for calling. Goodbye.")
+        assert queued_frames[1].text == "Configured goodbye"
 
         await push_speaking_pair(BotStartedSpeakingFrame)
         await push_speaking_pair(BotStoppedSpeakingFrame)

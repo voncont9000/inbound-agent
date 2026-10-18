@@ -106,33 +106,39 @@ def test_elevenlabs_requires_voice_id() -> None:
 )
 def test_create_stt(provider: str, expected_type: type) -> None:
     environment = _environment(STT_PROVIDER=provider)
-    service = create_stt(resolve_providers(environment), environment)
+    service = create_stt(
+        resolve_providers(environment),
+        environment,
+        extra_terms=[" Acme Clinic ", "acme clinic", "Northstar"],
+    )
+    terms = [*KEYTERMS, "Acme Clinic", "Northstar"]
 
     assert isinstance(service, expected_type)
     if provider == "assemblyai":
         assert service._vad_force_turn_endpoint is True
         assert service._settings.model == "universal-3-6-pro"
-        assert service._settings.keyterms_prompt == KEYTERMS
+        assert service._settings.keyterms_prompt == terms
     elif provider == "soniox":
         assert service._vad_force_turn_endpoint is True
         assert service._settings.model == "stt-rt-v5"
         assert service._settings.language_hints == ["en"]
-        assert service._settings.context.terms == KEYTERMS
+        assert service._settings.context.terms == terms
     else:
         assert service._settings.model == "nova-3"
         assert service._settings.language == "en-GB"
-        assert service._settings.keyterm == KEYTERMS
+        assert service._settings.keyterm == terms
 
 
 def test_create_tts() -> None:
-    async def create_services() -> tuple[object, object, object, object]:
+    async def create_services() -> tuple[object, object, object, object, object]:
         async with aiohttp.ClientSession() as session:
             services = []
-            for provider, voice, model in (
-                ("speechify", None, None),
-                ("elevenlabs", "elevenlabs-voice-id", None),
-                ("deepgram", None, None),
-                ("elevenlabs", "elevenlabs-voice-id", "eleven_flash_v2_5"),
+            for provider, voice, model, speed in (
+                ("speechify", None, None, 0.9),
+                ("elevenlabs", "elevenlabs-voice-id", None, 1.1),
+                ("deepgram", None, None, 1.2),
+                ("elevenlabs", "elevenlabs-voice-id", "eleven_flash_v2_5", 1.15),
+                ("deepgram", None, None, 1.0),
             ):
                 environment = _environment(TTS_PROVIDER=provider)
                 if voice:
@@ -140,22 +146,29 @@ def test_create_tts() -> None:
                 if model:
                     environment["ELEVENLABS_MODEL"] = model
                 providers = resolve_providers(environment)
-                services.append(create_tts(providers, environment, session))
+                services.append(create_tts(providers, environment, session, speed=speed))
             return tuple(services)
 
-    speechify, elevenlabs, deepgram, elevenlabs_flash = asyncio.run(create_services())
+    speechify, elevenlabs, deepgram, elevenlabs_flash, deepgram_default = asyncio.run(
+        create_services()
+    )
 
     assert isinstance(speechify, SpeechifyHttpTTSService)
     assert speechify._settings.model == "simba-3.2"
     assert speechify._settings.voice == "beatrice_32"
+    assert not hasattr(speechify._settings, "speed")
     assert isinstance(elevenlabs, ElevenLabsHttpTTSService)
     assert elevenlabs._settings.model == "eleven_v4_turbo"
     assert elevenlabs._settings.voice == "elevenlabs-voice-id"
+    assert elevenlabs._settings.speed == 1.1
     assert isinstance(elevenlabs_flash, ElevenLabsTTSService)
     assert elevenlabs_flash._settings.model == "eleven_flash_v2_5"
     assert elevenlabs_flash._settings.voice == "elevenlabs-voice-id"
+    assert elevenlabs_flash._settings.speed == 1.15
     assert isinstance(deepgram, DeepgramTTSService)
     assert deepgram._settings.voice == "aura-2-pandora-en"
+    assert deepgram._settings.speed == 1.2
+    assert deepgram_default._settings.speed is None
 
 
 def test_create_llm() -> None:
