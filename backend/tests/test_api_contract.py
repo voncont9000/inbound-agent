@@ -22,6 +22,8 @@ def test_all_feature_routers_are_mounted() -> None:
         "/assistant-config/schema",
         "/assistants",
         "/assistants/{assistant_id}",
+        "/assistants/{assistant_id}/channels",
+        "/assistants/{assistant_id}/channels/{channel_id}",
         "/assistants/{assistant_id}/versions",
         "/assistants/{assistant_id}/knowledge/sources",
         "/assistants/{assistant_id}/knowledge/import",
