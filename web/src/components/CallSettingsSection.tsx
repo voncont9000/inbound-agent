@@ -119,9 +119,10 @@ export function CallSettingsSection({ config, update, errors }: Props) {
       ] as const).map(([key, label]) => <Field key={key} path={`call_settings.${key}`} label={label} error={errors[`call_settings.${key}`]}>
         {(id, describedBy) => <textarea id={id} value={call[key]} aria-invalid={Boolean(errors[`call_settings.${key}`])} aria-describedby={describedBy} onChange={(event) => setCall(key, event.target.value)} />}
       </Field>)}
-      <Field path="call_settings.uninterruptible_greeting" label="Uninterruptible greeting" help="The first greeting cannot be interrupted. This is always on while recording is enabled.">
-        {(id, describedBy) => <input id={id} type="checkbox" checked={call.uninterruptible_greeting} aria-describedby={describedBy} onChange={(event) => setCall("uninterruptible_greeting", event.target.checked)} />}
-      </Field>
+      <label className="check-row">
+        <input type="checkbox" checked={call.uninterruptible_greeting || recording.enabled} disabled={recording.enabled} onChange={(event) => setCall("uninterruptible_greeting", event.target.checked)} />
+        <span><strong>Uninterruptible greeting</strong> — callers can't interrupt the first greeting.{recording.enabled && " Always on while recording is enabled."}</span>
+      </label>
       <Field path="call_settings.technical_terms" label="Technical terms" help="One term per line; terms are passed to speech recognition.">
         {(id, describedBy) => <textarea id={id} value={(call.technical_terms ?? []).join("\n")} aria-describedby={describedBy} onChange={(event) => setCall("technical_terms", event.target.value.split("\n"))} />}
       </Field>
