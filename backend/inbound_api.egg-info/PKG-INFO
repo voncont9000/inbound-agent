@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: inbound-api
+Version: 0.1.0
+Summary: Multi-tenant API for the inbound-agent platform
+Requires-Python: >=3.12
+Requires-Dist: alembic<2,>=1.14
+Requires-Dist: fastapi<1,>=0.115
+Requires-Dist: inbound-core
+Requires-Dist: pgvector<1,>=0.3
+Requires-Dist: psycopg[binary]<4,>=3.2
+Requires-Dist: pydantic-settings<3,>=2.7
+Requires-Dist: python-multipart<1,>=0.0.20
+Requires-Dist: sqlalchemy[asyncio]<3,>=2.0.36
+Requires-Dist: uvicorn[standard]<1,>=0.34

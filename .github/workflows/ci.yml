@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+        working-directory: voice
+      - run: uv run ruff check .
+        working-directory: voice
+      - run: uv run ruff format --check .
+        working-directory: voice
+      - run: uv run pytest
+        working-directory: voice
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+        working-directory: core
+      - run: uv run ruff check .
+        working-directory: core
+      - run: uv run ruff format --check .
+        working-directory: core
+      - run: uv run pytest
+        working-directory: core
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: inbound_migrator
+          POSTGRES_PASSWORD: inbound_migrator
+          POSTGRES_DB: inbound
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U inbound_migrator -d inbound"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound
+      MIGRATION_DATABASE_URL: postgresql://inbound_migrator:inbound_migrator@localhost:5432/inbound
+      APP_DATABASE_URL: postgresql://inbound_app_login:inbound_dev_only@localhost:5432/inbound
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+        working-directory: backend
+      - name: Create application login role
+        run: |
+          uv run python -c "import psycopg; c=psycopg.connect('$MIGRATION_DATABASE_URL'); c.execute(\"CREATE ROLE inbound_app_login LOGIN PASSWORD 'inbound_dev_only'\"); c.commit(); c.close()"
+        working-directory: backend
+      - run: uv run alembic upgrade head
+        working-directory: backend
+      - run: uv run ruff check .
+        working-directory: backend
+      - run: uv run ruff format --check .
+        working-directory: backend
+      - run: uv run python -m inbound_api.export_openapi
+        working-directory: backend
+      - run: git diff --exit-code -- openapi.json
+      - run: uv run pytest
+        working-directory: backend
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run api:types
+        working-directory: web
+      - run: git diff --exit-code -- src/api/schema.d.ts
+        working-directory: web
+      - run: npm run lint
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      - run: npm run build
+        working-directory: web

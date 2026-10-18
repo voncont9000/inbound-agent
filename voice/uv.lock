@@ -1609,11 +1609,35 @@ wheels = [
 ]
 
 [[package]]
+name = "inbound-core"
+version = "0.1.0"
+source = { editable = "../core" }
+dependencies = [
+    { name = "email-validator" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "email-validator", specifier = ">=2.2,<3" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "pyyaml", specifier = ">=6.0,<7" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.3,<9" },
+    { name = "ruff", specifier = ">=0.14,<1" },
+]
+
+[[package]]
 name = "inbound-voice"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "email-validator" },
+    { name = "inbound-core" },
     { name = "pipecat-ai", extra = ["deepgram", "google", "local-smart-turn", "runner", "webrtc"] },
     { name = "pydantic" },
     { name = "pypdf" },
@@ -1631,6 +1655,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "email-validator", specifier = ">=2.2,<3" },
+    { name = "inbound-core", editable = "../core" },
     { name = "pipecat-ai", extras = ["assemblyai", "deepgram", "elevenlabs", "google", "local-smart-turn", "openrouter", "runner", "silero", "soniox", "speechify", "webrtc"], specifier = "~=1.12.0" },
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "pypdf", specifier = ">=6.21.1" },

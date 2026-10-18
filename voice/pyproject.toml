@@ -11,6 +11,7 @@ dependencies = [
     "trafilatura>=2.3.1",
     "pypdf>=6.21.1",
     "python-docx>=1.2.0",
+    "inbound-core",
 ]
 
 [build-system]
@@ -41,3 +42,6 @@ indent-style = "space"
 
 [tool.setuptools.packages.find]
 include = ["inbound_voice*"]
+
+[tool.uv.sources]
+inbound-core = { path = "../core", editable = true }
