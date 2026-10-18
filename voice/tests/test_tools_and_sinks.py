@@ -51,7 +51,7 @@ def test_critical_fields_are_validated_and_saved_live(tmp_path) -> None:
     assert saved["fields"]["caller_name"]["value"] == "Alex Smith"
     assert saved["fields"]["caller_name"]["confirmed"] is True
     assert saved["fields"]["caller_name"]["confirmed_at"]
-    assert saved["fields"]["phone"]["value"] == "+44 7700 900123"
+    assert saved["fields"]["phone"]["value"] == "+447700900123"
 
 
 def test_dispatch_logs_enabled_actions_and_rejects_disabled_actions(tmp_path) -> None:

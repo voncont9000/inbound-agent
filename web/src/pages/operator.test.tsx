@@ -184,6 +184,57 @@ describe("operator workflows", () => {
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent("phone");
+    expect(rows[0]).toHaveTextContent("Jamie Morgan");
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("sends task filters to the server", async () => {
+    const user = userEvent.setup();
+    const requested: URL[] = [];
+    const listener = ({ request }: { request: Request }) => {
+      if (request.url.includes("/tasks?")) requested.push(new URL(request.url));
+    };
+    server.events.on("request:start", listener);
+    renderApp("/tasks", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Tasks" });
+    await user.selectOptions(screen.getByLabelText("Status"), "open");
+    await user.type(screen.getByLabelText("Kind"), "callback");
+    await screen.findByRole("option", { name: "Brightside reception" });
+    await user.selectOptions(screen.getByLabelText("Assistant"), assistantId);
+    await waitFor(() =>
+      expect(
+        requested.some(
+          (url) =>
+            url.searchParams.get("status") === "open"
+            && url.searchParams.get("kind") === "callback"
+            && url.searchParams.get("assistant_id") === assistantId,
+        ),
+      ).toBe(true),
+    );
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("sends knowledge-gap filters to the server", async () => {
+    const user = userEvent.setup();
+    const requested: URL[] = [];
+    const listener = ({ request }: { request: Request }) => {
+      if (request.url.includes("/knowledge-gaps?")) requested.push(new URL(request.url));
+    };
+    server.events.on("request:start", listener);
+    renderApp("/knowledge-gaps", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Knowledge gaps" });
+    await user.selectOptions(screen.getByLabelText("Status"), "answered");
+    await screen.findByRole("option", { name: "Brightside reception" });
+    await user.selectOptions(screen.getByLabelText("Assistant"), assistantId);
+    await waitFor(() =>
+      expect(
+        requested.some(
+          (url) =>
+            url.searchParams.get("status") === "answered"
+            && url.searchParams.get("assistant_id") === assistantId,
+        ),
+      ).toBe(true),
+    );
     server.events.removeListener("request:start", listener);
   });
 

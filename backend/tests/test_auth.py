@@ -26,6 +26,12 @@ async def test_signup_cookie_bearer_login_and_logout(tenant_pair, owner_database
     me = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.json()["tenant"]["id"] == account["tenant_id"]
+    assert me.json()["memberships"] == [
+        {"id": account["tenant_id"], "name": "Platform Tenant", "role": "owner"}
+    ]
+    assert tenant_pair["second"]["tenant_id"] not in {
+        membership["id"] for membership in me.json()["memberships"]
+    }
 
     wrong_password = await client.post(
         "/auth/login",

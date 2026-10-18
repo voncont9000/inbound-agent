@@ -1,10 +1,20 @@
 import asyncio
+import ipaddress
+import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.error import URLError
+from urllib.parse import urlsplit
+
+import pytest
 
 from inbound_core.knowledge import (
+    _fetch_checked,
+    _PinnedHTTPConnection,
+    _PinnedHTTPSConnection,
+    _RequestPacer,
     build_chunks,
     build_manifest,
     chunk_text,
@@ -117,3 +127,122 @@ def test_crawler_checks_redirect_hops_before_fetching() -> None:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def _address_info(address: str, port: int) -> tuple:
+    return (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, port))
+
+
+def test_crawler_rejects_dns_rebinding_at_connect_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    resolutions = iter(("93.184.216.34", "127.0.0.1"))
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda _host, port: [_address_info(next(resolutions), port)],
+    )
+    monkeypatch.setattr(
+        socket,
+        "create_connection",
+        lambda *_args, **_kwargs: pytest.fail("blocked DNS answer must not connect"),
+    )
+
+    def allow_url(url: str) -> bool:
+        host = urlsplit(url).hostname
+        return all(
+            ipaddress.ip_address(item[4][0]).is_global for item in socket.getaddrinfo(host, 80)
+        )
+
+    with pytest.raises(URLError):
+        _fetch_checked(
+            "http://crawler.example/",
+            allowed_host="crawler.example",
+            robots=None,
+            pacer=_RequestPacer(0),
+            allow_url=allow_url,
+            allow_address=lambda address: address.is_global,
+        )
+
+
+def test_pinned_connection_rejects_mixed_public_and_private_dns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda _host, port: [
+            _address_info("93.184.216.34", port),
+            _address_info("127.0.0.1", port),
+        ],
+    )
+    monkeypatch.setattr(
+        socket,
+        "create_connection",
+        lambda *_args, **_kwargs: pytest.fail("mixed DNS answers must not connect"),
+    )
+
+    connection = _PinnedHTTPConnection(
+        "crawler.example",
+        80,
+        allow_address=lambda address: address.is_global,
+    )
+    with pytest.raises(OSError, match="address safety policy"):
+        connection.connect()
+
+
+def test_pinned_connection_connects_to_the_validated_public_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda _host, port: [
+            _address_info("93.184.216.34", port),
+            _address_info("1.1.1.1", port),
+        ],
+    )
+    connected: list[tuple[str, int]] = []
+    monkeypatch.setattr(
+        socket,
+        "create_connection",
+        lambda address, _timeout: connected.append(address) or object(),
+    )
+
+    connection = _PinnedHTTPConnection(
+        "crawler.example",
+        80,
+        allow_address=lambda address: address.is_global,
+    )
+    connection.connect()
+
+    assert connected == [("93.184.216.34", 80)]
+
+
+def test_pinned_https_connection_preserves_hostname_for_sni(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda _host, port: [_address_info("93.184.216.34", port)],
+    )
+    monkeypatch.setattr(socket, "create_connection", lambda *_args: "validated-socket")
+
+    class FakeContext:
+        hostname: str | None = None
+
+        def wrap_socket(self, sock: object, *, server_hostname: str) -> str:
+            assert sock == "validated-socket"
+            self.hostname = server_hostname
+            return "wrapped-socket"
+
+    context = FakeContext()
+    connection = _PinnedHTTPSConnection(
+        "crawler.example",
+        443,
+        context=context,
+        allow_address=lambda address: address.is_global,
+    )
+    connection.connect()
+
+    assert context.hostname == "crawler.example"
+    assert connection.sock == "wrapped-socket"

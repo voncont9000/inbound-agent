@@ -48,6 +48,7 @@ class LogoutResponse(BaseModel):
 class MeResponse(BaseModel):
     user: UserResponse
     tenant: TenantResponse
+    memberships: list[TenantResponse]
 
 
 class TemplateResponse(BaseModel):
@@ -208,6 +209,8 @@ class ConversationSummary(BaseModel):
     ended_at: datetime | None
     summary: str | None
     end_reason: str | None
+    needs_review: bool = False
+    contact_name: str | None = None
 
 
 class ConversationListResponse(BaseModel):
@@ -241,12 +244,13 @@ class TaskSummary(BaseModel):
     due_at: datetime | None
     payload: dict[str, Any]
     source: Literal["live", "post_call", "manual"]
+    conversation_id: UUID | None = None
+    person_id: UUID | None = None
 
 
 class ConversationDetailResponse(ConversationSummary):
     messages: list[MessageResponse]
     intakes: list[IntakeResponse]
-    needs_review: bool
     tasks: list[TaskSummary]
     metrics: dict[str, Any]
     estimated_cost: dict[str, Any] | None

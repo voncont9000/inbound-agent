@@ -27,6 +27,7 @@ class CallReport(BaseModel):
     external_call_id: str
     ended_at: datetime
     end_reason: str | None = None
+    summary: str | None = None
     transcript: list[TranscriptTurn]
     live_intake: dict[str, Any]
     post_call_intake: dict[str, Any] | None = None

@@ -1,17 +1,8 @@
-import phonenumbers
-from phonenumbers import NumberParseException, PhoneNumberFormat
+from inbound_core.phone import normalise_phone as _normalise_phone
 
 
 def normalize_phone(raw: str | None) -> str | None:
-    if not raw or not raw.strip():
-        return None
-    try:
-        number = phonenumbers.parse(raw.strip(), "GB")
-    except NumberParseException:
-        return None
-    if not phonenumbers.is_possible_number(number):
-        return None
-    return phonenumbers.format_number(number, PhoneNumberFormat.E164)
+    return _normalise_phone(raw, strict=False)
 
 
 def normalize_email(raw: str | None) -> str | None:

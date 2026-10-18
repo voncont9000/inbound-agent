@@ -470,3 +470,9 @@ uv run python -m eval.run_matrix \
 Results include the transport and whether the matching external call report was delivered.
 The same runner also supports `--transport webrtc --fake-api`. A standalone call can be
 driven with `uv run python -m eval.twilio_sim --scenario employment --output-dir DIR`.
+
+Post-call extraction includes a neutral one- or two-sentence call summary and resolves a
+clear callback preference to `preferred_time_iso` using the configured office-hours
+timezone (Europe/London by default). Callback task `due_at` values must be aware and within
+14 days of call end; an out-of-hours time moves to the next opening, and missing or invalid
+preferences use the next opening when office hours are configured.

@@ -3,6 +3,20 @@ import socket
 from urllib.parse import urlsplit
 
 
+def is_public_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return (
+        address.is_global
+        and not address.is_private
+        and not address.is_loopback
+        and not address.is_link_local
+        and not address.is_multicast
+        and not address.is_reserved
+        and not address.is_unspecified
+    )
+
+
 def is_public_http_url(url: str) -> bool:
     try:
         parsed = urlsplit(url)
@@ -27,16 +41,6 @@ def is_public_http_url(url: str) -> bool:
             address = ipaddress.ip_address(address_info[4][0])
         except ValueError:
             return False
-        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
-            address = address.ipv4_mapped
-        if (
-            not address.is_global
-            or address.is_private
-            or address.is_loopback
-            or address.is_link_local
-            or address.is_multicast
-            or address.is_reserved
-            or address.is_unspecified
-        ):
+        if not is_public_address(address):
             return False
     return True

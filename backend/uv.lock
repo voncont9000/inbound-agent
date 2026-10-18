@@ -809,6 +809,7 @@ version = "0.1.0"
 source = { editable = "../core" }
 dependencies = [
     { name = "email-validator" },
+    { name = "phonenumbers" },
     { name = "pydantic" },
     { name = "pypdf" },
     { name = "python-docx" },
@@ -819,6 +820,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "email-validator", specifier = ">=2.2,<3" },
+    { name = "phonenumbers", specifier = ">=8.13,<10" },
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "pypdf", specifier = ">=6.21.1" },
     { name = "python-docx", specifier = ">=1.2.0" },

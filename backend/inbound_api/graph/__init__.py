@@ -40,6 +40,35 @@ class PersonAlreadyMerged(ValueError):
     """Raised when a merge participant has already been merged."""
 
 
+def _intake_summary(data: dict[str, Any] | None) -> str | None:
+    if not isinstance(data, dict):
+        return None
+    parts = []
+    service = data.get("service")
+    if isinstance(service, str) and service.strip():
+        parts.append(service.strip())
+    field_count = 0
+    fields = data.get("fields", {})
+    if isinstance(fields, dict):
+        for name, entry in sorted(fields.items()):
+            if not isinstance(entry, dict) or entry.get("value") is None:
+                continue
+            confidence = entry.get("confidence", 1.0 if entry.get("status") == "human" else 0.0)
+            try:
+                high_confidence = float(confidence) >= 0.7
+            except (TypeError, ValueError):
+                high_confidence = False
+            if not high_confidence:
+                continue
+            value = " ".join(str(entry["value"]).split())
+            if value:
+                parts.append(f"{name}: {value}")
+                field_count += 1
+            if field_count >= 3:
+                break
+    return "; ".join(parts) or None
+
+
 async def _tenant_id(session: AsyncSession) -> UUID:
     value = await session.scalar(text("SELECT current_setting('app.tenant_id', true)"))
     if not value:
@@ -591,18 +620,24 @@ async def build_context_card(session: AsyncSession, person_id: UUID) -> str:
                 )
             )
         ).all()
-        services = {
-            intake.conversation_id: (intake.data or {}).get("service") for intake in intake_rows
-        }
+        intakes_by_conversation = {intake.conversation_id: intake.data for intake in intake_rows}
         for conversation in conversations:
-            summary = conversation.summary or services.get(conversation.id) or "no summary"
+            summary = (
+                conversation.summary
+                or _intake_summary(intakes_by_conversation.get(conversation.id))
+                or "no summary"
+            )
             date = conversation.started_at.date().isoformat()
             lines.append(f"- {date} {conversation.channel.value}: {summary}")
 
     tasks = (
         await session.scalars(
             select(Task)
-            .where(Task.person_id == person.id, Task.status == TaskStatus.OPEN)
+            .where(
+                Task.person_id == person.id,
+                Task.status == TaskStatus.OPEN,
+                Task.kind.notin_(("end_call", "knowledge_gap")),
+            )
             .order_by(Task.due_at.asc().nullslast(), Task.created_at.desc())
         )
     ).all()

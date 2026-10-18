@@ -28,7 +28,7 @@ def test_dynamic_conveyancing_model_validates_field_types() -> None:
     )
     assert intake.transaction_type == "purchase"
     assert intake.target_exchange_date == date(2026, 12, 1)
-    assert intake.phone == "+44 7700 900123"
+    assert intake.phone == "+447700900123"
 
 
 def test_dynamic_service_model_rejects_invalid_enum_and_extra_fields() -> None:

@@ -4,7 +4,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, text
+from sqlalchemy import literal_column, not_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
@@ -15,6 +15,7 @@ from inbound_api.models import (
     IntakeReview,
     MembershipRole,
     Message,
+    Person,
     Task,
 )
 from inbound_api.schemas import (
@@ -35,7 +36,7 @@ router = APIRouter(tags=["conversations"])
 _staff = Depends(require_role(MembershipRole.STAFF))
 _tenant_session_dependency = Depends(get_tenant_session)
 
-_HAS_REVIEW = text(
+_HAS_REVIEW = literal_column(
     """
     EXISTS (
       SELECT 1 FROM intakes i
@@ -78,9 +79,7 @@ async def list_conversations(
     if person_id is not None:
         statement = statement.where(Conversation.person_id == person_id)
     if has_review is not None:
-        statement = statement.where(
-            _HAS_REVIEW if has_review else text(f"NOT ({_HAS_REVIEW.text})")
-        )
+        statement = statement.where(_HAS_REVIEW if has_review else not_(_HAS_REVIEW))
     rows, next_cursor = await page_query(
         session,
         statement,
@@ -89,8 +88,30 @@ async def list_conversations(
         cursor=cursor,
         limit=limit,
     )
+    summary_rows = (
+        await session.execute(
+            select(
+                Conversation.id,
+                Person.display_name,
+                _HAS_REVIEW.label("needs_review"),
+            )
+            .join(Assistant, Assistant.id == Conversation.assistant_id)
+            .outerjoin(Person, Person.id == Conversation.person_id)
+            .where(Conversation.id.in_([row.id for row in rows]))
+        )
+        if rows
+        else None
+    )
+    summaries = (
+        {
+            conversation_id: (contact_name, needs_review)
+            for conversation_id, contact_name, needs_review in summary_rows.all()
+        }
+        if summary_rows is not None
+        else {}
+    )
     return ConversationListResponse(
-        items=[ConversationSummary.model_validate(row) for row in rows],
+        items=[_conversation_summary(row, *summaries.get(row.id, (None, False))) for row in rows],
         next_cursor=next_cursor,
     )
 
@@ -122,14 +143,43 @@ async def get_conversation(
     merged = next((intake.data for intake in intakes if intake.version.value == "merged"), {})
     assistant = await session.get(Assistant, conversation.assistant_id)
     threshold = float(assistant.config.get("review_confidence_threshold", 0.7))
+    contact_name = (
+        await session.scalar(select(Person.display_name).where(Person.id == conversation.person_id))
+        if conversation.person_id is not None
+        else None
+    )
     return ConversationDetailResponse(
-        **ConversationSummary.model_validate(conversation).model_dump(),
+        **_conversation_summary(
+            conversation,
+            contact_name,
+            merged_needs_review(merged, threshold),
+        ).model_dump(),
         messages=[MessageResponse.model_validate(message) for message in messages],
         intakes=[IntakeResponse(version=intake.version, data=intake.data) for intake in intakes],
-        needs_review=merged_needs_review(merged, threshold),
         tasks=[TaskSummary.model_validate(task) for task in tasks],
         metrics=conversation.metrics,
         estimated_cost=conversation.estimated_cost,
+    )
+
+
+def _conversation_summary(
+    conversation: Conversation,
+    contact_name: str | None = None,
+    needs_review: bool = False,
+) -> ConversationSummary:
+    return ConversationSummary(
+        id=conversation.id,
+        assistant_id=conversation.assistant_id,
+        person_id=conversation.person_id,
+        channel=conversation.channel.value,
+        external_ref=conversation.external_ref,
+        status=conversation.status.value,
+        started_at=conversation.started_at,
+        ended_at=conversation.ended_at,
+        summary=conversation.summary,
+        end_reason=conversation.end_reason,
+        needs_review=needs_review,
+        contact_name=contact_name,
     )
 
 

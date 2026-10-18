@@ -1,17 +1,28 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
+import ipaddress
 import logging
 import re
+import socket
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urldefrag, urljoin, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import (
+    HTTPHandler,
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 from urllib.robotparser import RobotFileParser
 
 import trafilatura
@@ -19,6 +30,8 @@ from docx import Document
 from pypdf import PdfReader
 
 LOGGER = logging.getLogger(__name__)
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+AllowAddress = Callable[[IPAddress], bool]
 DEFAULT_EXTRACTION_MODEL = "gemini-3.8-flash"
 USER_AGENT = "InboundAgentKnowledgeImporter/0.1"
 REQUEST_DELAY_SECONDS = 0.5
@@ -95,6 +108,107 @@ class _NoRedirectHandler(HTTPRedirectHandler):
         return None
 
 
+def _create_pinned_connection(
+    host: str,
+    port: int,
+    timeout: float | None,
+    source_address: tuple[str, int] | None,
+    allow_address: AllowAddress,
+) -> socket.socket:
+    answers = socket.getaddrinfo(host, port)
+    addresses: list[IPAddress] = []
+    for answer in answers:
+        try:
+            address = ipaddress.ip_address(answer[4][0].split("%", 1)[0])
+        except (IndexError, TypeError, ValueError) as error:
+            raise OSError("DNS returned an invalid address.") from error
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            address = address.ipv4_mapped
+        if not allow_address(address):
+            raise OSError(f"Connection blocked by address safety policy: {address}")
+        addresses.append(address)
+    if not addresses:
+        raise OSError("DNS returned no addresses.")
+
+    address = str(addresses[0])
+    if source_address is None:
+        return socket.create_connection((address, port), timeout)
+    return socket.create_connection((address, port), timeout, source_address)
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, *args: Any, allow_address: AllowAddress, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._allow_address = allow_address
+
+    def connect(self) -> None:
+        self.sock = _create_pinned_connection(
+            self.host,
+            self.port,
+            self.timeout,
+            self.source_address,
+            self._allow_address,
+        )
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args: Any, allow_address: AllowAddress, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._allow_address = allow_address
+
+    def connect(self) -> None:
+        sock = _create_pinned_connection(
+            self.host,
+            self.port,
+            self.timeout,
+            self.source_address,
+            self._allow_address,
+        )
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+            sock = self.sock
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTPHandler(HTTPHandler):
+    def __init__(self, allow_address: AllowAddress) -> None:
+        super().__init__()
+        self.allow_address = allow_address
+
+    def http_open(self, request: Request) -> Any:
+        connection = partial(_PinnedHTTPConnection, allow_address=self.allow_address)
+        return self.do_open(connection, request)
+
+
+class _PinnedHTTPSHandler(HTTPSHandler):
+    def __init__(self, allow_address: AllowAddress) -> None:
+        super().__init__()
+        self.allow_address = allow_address
+
+    def https_open(self, request: Request) -> Any:
+        connection = partial(_PinnedHTTPSConnection, allow_address=self.allow_address)
+        return self.do_open(
+            connection,
+            request,
+            context=self._context,
+            check_hostname=self._check_hostname,
+        )
+
+
+def _build_opener(*handlers: Any, allow_address: AllowAddress | None = None) -> Any:
+    if allow_address is None:
+        return build_opener(*handlers)
+    return build_opener(
+        ProxyHandler({}),
+        _PinnedHTTPHandler(allow_address),
+        _PinnedHTTPSHandler(allow_address),
+        *handlers,
+    )
+
+
 class _RequestPacer:
     def __init__(self, delay_seconds: float) -> None:
         self.delay_seconds = delay_seconds
@@ -130,9 +244,12 @@ def _fetch_checked(
     robots: RobotFileParser | None,
     pacer: _RequestPacer,
     allow_url: Callable[[str], bool],
+    allow_address: AllowAddress | None = None,
+    opener: Any | None = None,
 ) -> tuple[bytes, Any, str]:
     current_url = url
-    opener = build_opener(_NoRedirectHandler())
+    if opener is None:
+        opener = _build_opener(_NoRedirectHandler(), allow_address=allow_address)
     for redirects in range(6):
         parts = urlsplit(current_url)
         if not allow_url(current_url):
@@ -172,6 +289,7 @@ def _robots_parser(
     pacer: _RequestPacer,
     *,
     allow_url: Callable[[str], bool] | None = None,
+    allow_address: AllowAddress | None = None,
 ) -> RobotFileParser:
     parts = urlsplit(start_url)
     robots_url = urlunsplit((parts.scheme, parts.netloc, "/robots.txt", "", ""))
@@ -186,6 +304,8 @@ def _robots_parser(
                 robots=None,
                 pacer=pacer,
                 allow_url=allow_url,
+                allow_address=allow_address,
+                opener=opener,
             )
         parser.parse(body.decode("utf-8", errors="replace").splitlines())
     except HTTPError as error:
@@ -221,6 +341,7 @@ def crawl_websites(
     request_delay: float = REQUEST_DELAY_SECONDS,
     *,
     allow_url: Callable[[str], bool] | None = None,
+    allow_address: AllowAddress | None = None,
 ) -> list[dict[str, Any]]:
     if max_pages < 1:
         raise ValueError("max_pages must be at least 1.")
@@ -240,12 +361,30 @@ def crawl_websites(
             continue
         allowed_host = start.hostname.casefold()
         if allow_url is None:
-            opener = build_opener(_SameHostRedirectHandler(allowed_host))
-            robots = _robots_parser(start_url, opener, pacer)
-            opener = build_opener(_SameHostRedirectHandler(allowed_host, robots))
+            opener = _build_opener(
+                _SameHostRedirectHandler(allowed_host),
+                allow_address=allow_address,
+            )
+            robots = _robots_parser(
+                start_url,
+                opener,
+                pacer,
+                allow_address=allow_address,
+            )
+            opener = _build_opener(
+                _SameHostRedirectHandler(allowed_host, robots),
+                allow_address=allow_address,
+            )
         else:
+            opener = _build_opener(_NoRedirectHandler(), allow_address=allow_address)
             try:
-                robots = _robots_parser(start_url, None, pacer, allow_url=allow_url)
+                robots = _robots_parser(
+                    start_url,
+                    opener,
+                    pacer,
+                    allow_url=allow_url,
+                    allow_address=allow_address,
+                )
             except Exception as error:
                 records.append(
                     _source_record(
@@ -283,6 +422,8 @@ def crawl_websites(
                         robots=robots,
                         pacer=pacer,
                         allow_url=allow_url,
+                        allow_address=allow_address,
+                        opener=opener,
                     )
                 if (urlsplit(final_url).hostname or "").casefold() != allowed_host:
                     raise ValueError("Cross-host redirect blocked.")

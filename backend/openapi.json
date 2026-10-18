@@ -534,6 +534,17 @@
             ],
             "title": "Post Call Intake"
           },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "tasks": {
             "items": {
               "additionalProperties": true,
@@ -1012,6 +1023,17 @@
             "title": "Channel",
             "type": "string"
           },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
           "end_reason": {
             "anyOf": [
               {
@@ -1076,6 +1098,7 @@
             "type": "object"
           },
           "needs_review": {
+            "default": false,
             "title": "Needs Review",
             "type": "boolean"
           },
@@ -1137,7 +1160,6 @@
           "end_reason",
           "messages",
           "intakes",
-          "needs_review",
           "tasks",
           "metrics",
           "estimated_cost"
@@ -1265,6 +1287,17 @@
             "title": "Channel",
             "type": "string"
           },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
           "end_reason": {
             "anyOf": [
               {
@@ -1296,6 +1329,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "needs_review": {
+            "default": false,
+            "title": "Needs Review",
+            "type": "boolean"
           },
           "person_id": {
             "anyOf": [
@@ -2138,6 +2176,13 @@
       },
       "MeResponse": {
         "properties": {
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/TenantResponse"
+            },
+            "title": "Memberships",
+            "type": "array"
+          },
           "tenant": {
             "$ref": "#/components/schemas/TenantResponse"
           },
@@ -2147,7 +2192,8 @@
         },
         "required": [
           "user",
-          "tenant"
+          "tenant",
+          "memberships"
         ],
         "title": "MeResponse",
         "type": "object"
@@ -2377,6 +2423,18 @@
       },
       "TaskSummary": {
         "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
           "due_at": {
             "anyOf": [
               {
@@ -2402,6 +2460,18 @@
             "additionalProperties": true,
             "title": "Payload",
             "type": "object"
+          },
+          "person_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Id"
           },
           "source": {
             "enum": [
@@ -4738,6 +4808,39 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assistant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assistant Id"
             }
           },
           {

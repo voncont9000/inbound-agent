@@ -1,5 +1,6 @@
 import hmac
 import logging
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -81,7 +82,7 @@ async def route_call(
         caller_phone = from_number
         if from_number:
             try:
-                caller_phone = normalise_phone(from_number)
+                caller_phone = normalise_phone(from_number, strict=False)
             except ValueError:
                 pass
         context_card = None
@@ -145,7 +146,7 @@ async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
         caller_phone = payload.from_number
         if caller_phone:
             try:
-                caller_phone = normalise_phone(caller_phone, allow_possible=True)
+                caller_phone = normalise_phone(caller_phone, strict=False)
             except ValueError:
                 pass
         try:
@@ -252,10 +253,19 @@ async def report_call(conversation_id: UUID, payload: CallReportRequest) -> Call
             task_payload = {
                 key: value for key, value in item.items() if key not in {"type", "kind", "source"}
             }
+            due_at = item.get("due_at")
+            if isinstance(due_at, str):
+                try:
+                    due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
+                except ValueError:
+                    due_at = None
+            if not isinstance(due_at, datetime) or due_at.tzinfo is None:
+                due_at = None
             session.add(
                 Task(
                     tenant_id=tenant_id,
                     conversation_id=conversation_id,
+                    due_at=due_at,
                     kind=kind,
                     status=TaskStatus.OPEN,
                     payload=task_payload,
@@ -285,6 +295,7 @@ async def report_call(conversation_id: UUID, payload: CallReportRequest) -> Call
         conversation.status = ConversationStatus.COMPLETED
         conversation.ended_at = payload.ended_at
         conversation.end_reason = payload.end_reason
+        conversation.summary = payload.summary
         conversation.metrics = {**(conversation.metrics or {}), **payload.metrics}
         conversation.estimated_cost = payload.estimated_cost
         await enqueue(session, "graph_ingest", {"conversation_id": str(conversation_id)})

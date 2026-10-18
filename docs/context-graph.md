@@ -104,3 +104,11 @@ The model above supports chasing outstanding payments without schema changes:
 1. **Spike (1 week):** take 50 synthetic multi-channel conversations. Compare (a) our extraction prompt into Postgres with (b) Graphiti (Neo4j/FalkorDB driver) on identity linkage, fact accuracy, superseded-fact handling, ingestion cost per message, and retrieval latency. Decision record afterwards.
 2. Define `ContextGraph` interface and schema migrations with RLS policies and an erasure test.
 3. Context card builder with a latency budget test (≤ 150 ms p95 from cache, ≤ 400 ms cold).
+
+Phone parsing uses the shared core normalizer: caller and intake numbers accept possible
+E.164 values, while business-owned numbers require valid numbering metadata.
+
+When a conversation has no stored summary, the context card derives a one-line summary
+from its merged intake service and up to three high-confidence field values. Open context
+tasks omit control-only `end_call` and `knowledge_gap` items; dated callback tasks remain
+open commitments.

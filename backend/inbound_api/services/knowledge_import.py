@@ -23,7 +23,7 @@ from inbound_api.models import (
     KnowledgeDigest,
     KnowledgeSource,
 )
-from inbound_api.services.url_safety import is_public_http_url
+from inbound_api.services.url_safety import is_public_address, is_public_http_url
 from inbound_api.settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
@@ -63,12 +63,14 @@ async def knowledge_import(session: AsyncSession, payload: dict[str, Any]) -> di
     for source in sources:
         if source.kind == "url":
             allow_url = None if settings.knowledge_allow_private_urls else is_public_http_url
+            allow_address = None if settings.knowledge_allow_private_urls else is_public_address
             records = await asyncio.to_thread(
                 crawl_websites,
                 [source.uri],
                 max_pages=settings.knowledge_max_pages,
                 request_delay=settings.knowledge_request_delay,
                 allow_url=allow_url,
+                allow_address=allow_address,
             )
         else:
             stored_path = source.manifest.get("stored_path")
