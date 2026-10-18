@@ -82,6 +82,8 @@ def test_development_allows_default_voice_service_token() -> None:
     )
 
     assert settings.voice_service_token == DEFAULT_VOICE_SERVICE_TOKEN
+    assert settings.setup_draft_model == "gemini-3.1-flash-lite"
+    assert settings.setup_draft_max_pages == 10
 
 
 def test_speechify_api_key_is_optional_and_secret() -> None:

@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from inbound_api.db import session_factory
 from inbound_api.routers import (
+    assistant_setup,
     assistants,
     auth,
     calendar,
@@ -35,6 +36,7 @@ async def healthz() -> JSONResponse:
 
 for router in (
     auth.router,
+    assistant_setup.router,
     assistants.router,
     knowledge.router,
     conversations.router,

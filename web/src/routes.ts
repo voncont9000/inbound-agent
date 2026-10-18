@@ -3,6 +3,7 @@ export const routes = [
   { path: "/signup", label: "Sign up" },
   { path: "/", label: "Home" },
   { path: "/assistants", label: "Assistants" },
+  { path: "/assistants/new", label: "Set up assistant" },
   { path: "/assistants/:id/settings", label: "Assistant settings" },
   { path: "/assistants/:id/settings/:tab", label: "Assistant settings tab" },
   { path: "/assistants/:id/knowledge", label: "Assistant knowledge" },

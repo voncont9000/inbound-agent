@@ -500,6 +500,33 @@ export const templates: Schemas["TemplateResponse"][] = [
   { name: "blank", config: { ...plumbingConfig, business_name: "Your business", greeting: "Hello, how can I help?", instructions: "", services: {}, urgency_rules: [], policies: [], price_list: [], contacts: {}, knowledge: { faqs: [], max_digest_chars: 24000 }, live_actions: [], post_actions: [], readback: "off" } },
 ];
 
+export const setupDraftFixture: Schemas["SetupDraft"] = {
+  company_info: "## About\nHarbor Dental Studio provides general dental care for patients in Bristol.",
+  faqs: [
+    { question: "How can I book an appointment?", answer: "Call the practice to arrange an appointment." },
+  ],
+  office_hours: {
+    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    opens: "09:00",
+    closes: "17:00",
+    timezone: "Europe/London",
+  },
+  price_list: [
+    { service: "Dental check-up", price: "From £45", notes: "Contact the practice for details." },
+  ],
+  services: {
+    general_dental_enquiry: {
+      label: "General dental enquiry",
+      fields: [
+        { name: "caller_name", label: "Name", type: "string", required: true, critical: true, description: "" },
+        { name: "phone", label: "Phone number", type: "phone", required: true, critical: true, description: "" },
+        { name: "email", label: "Email address", type: "email", required: false, critical: false, description: "" },
+        { name: "reason_for_visit", label: "Reason for your visit", type: "string", required: true, critical: false, description: "" },
+      ],
+    },
+  },
+};
+
 export function cloneFixtures(): TenantFixture[] {
   return JSON.parse(JSON.stringify(tenantFixtures)) as TenantFixture[];
 }

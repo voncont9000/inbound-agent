@@ -2,11 +2,12 @@ import { http, HttpResponse } from "msw";
 import type { Schemas } from "../api/client";
 import type { paths } from "../api/schema";
 import { validateAssistantConfig, type Locale } from "../lib/config";
-import { authUser, templates, testCallResponse, voiceCatalogueFor } from "./fixtures";
+import { authUser, setupDraftFixture, templates, testCallResponse, voiceCatalogueFor } from "./fixtures";
 import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
 import type { TenantFixture } from "./fixtures";
 import assistantConfigSchema from "./assistant-config.schema.json";
+import type { AssistantConfig } from "../lib/config";
 
 const isoNow = () => new Date().toISOString();
 const requestJson = async <T>(request: Request) => (await request.json()) as T;
@@ -123,6 +124,77 @@ export const handlers = [
     HttpResponse.json<Record<string, unknown>>(assistantConfigSchema),
   ),
   http.get<never, never, Schemas["TemplateResponse"][]>("*/api/templates", () => HttpResponse.json<Schemas["TemplateResponse"][]>(templates)),
+  http.post<never, Schemas["AssistantSetupDraftCreate"], ApiResponse<Schemas["JobResponse"]>>("*/api/assistant-setup/drafts", async ({ request }) => {
+    const body = await requestJson<Schemas["AssistantSetupDraftCreate"]>(request);
+    mockDb.setupDraftRequests.push(body);
+    const id = crypto.randomUUID();
+    const createdAt = isoNow();
+    const job: Schemas["JobResponse"] = {
+      id,
+      kind: "assistant_setup_draft",
+      status: "queued",
+      payload: body,
+      result: null,
+      error: null,
+      attempts: 0,
+      run_after: createdAt,
+      created_at: createdAt,
+    };
+    mockDb.jobs[id] = { tenantId: selectedTenantId(request), assistantId: "", polls: 0, job };
+    return HttpResponse.json<Schemas["JobResponse"]>(job, { status: 202 });
+  }),
+  http.post<never, Schemas["AssistantSetupComplete"], ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistant-setup/complete", async ({ request }) => {
+    const body = await requestJson<Schemas["AssistantSetupComplete"]>(request);
+    mockDb.setupCompletions.push(structuredClone(body));
+    const tenant = selectedTenant(request);
+    const selectedTemplate = templates.find(({ name }) => name === body.template);
+    if (!selectedTemplate) return HttpResponse.json<ApiErrorResponse>({ detail: "Template not found" }, { status: 422 });
+    const config = structuredClone(selectedTemplate.config) as AssistantConfig;
+    config.business_name = body.business_name;
+    const accepted = body.accepted;
+    if (accepted?.office_hours) config.office_hours = structuredClone(accepted.office_hours);
+    if (accepted?.price_list) config.price_list = structuredClone(accepted.price_list);
+    if (accepted?.services) config.services = structuredClone(accepted.services);
+    if (accepted?.faqs) {
+      const acceptedQuestions = new Set(accepted.faqs.map(({ question }) => question.trim().toLocaleLowerCase()));
+      const knowledge = config.knowledge ?? { faqs: [], max_digest_chars: 24000 };
+      config.knowledge = {
+        ...knowledge,
+        faqs: [
+          ...(knowledge.faqs ?? []).filter(({ question }) => !acceptedQuestions.has(question.trim().toLocaleLowerCase())),
+          ...structuredClone(accepted.faqs),
+        ],
+      };
+    }
+    const baseAssistant = tenant.assistants[0];
+    const baseState = tenant.assistantData[baseAssistant.id];
+    const id = crypto.randomUUID();
+    const createdAt = isoNow();
+    const assistant: Schemas["AssistantResponse"] = {
+      id,
+      name: body.name,
+      template: body.template,
+      config,
+      version: 1,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+    tenant.assistants.push(assistant);
+    tenant.assistantData[id] = {
+      versions: [{ id: `${id}-version-1`, version: 1, config, created_by: authUser.id, created_at: createdAt }],
+      sources: body.website_url
+        ? [{ id: `${id}-source-1`, assistant_id: id, kind: "url", uri: body.website_url, status: "pending", manifest: {}, fetched_at: null, created_at: createdAt }]
+        : [],
+      digest: {
+        ...baseState.digest,
+        id: `${id}-digest`,
+        assistant_id: id,
+        content: accepted?.company_info ?? "",
+        created_at: createdAt,
+      },
+    };
+    return HttpResponse.json<Schemas["AssistantResponse"]>(assistant, { status: 201 });
+  }),
   http.post<never, Schemas["LoginRequest"], ApiResponse<Schemas["AuthResponse"]>>("*/api/auth/login", async ({ request }) => {
     const body = await requestJson<Schemas["LoginRequest"]>(request);
     if (body.password === "wrong") return HttpResponse.json<ApiErrorResponse>({ detail: "Invalid email or password" }, { status: 401 });
@@ -299,6 +371,22 @@ export const handlers = [
   http.get<{ id: string }, never, ApiResponse<Schemas["JobResponse"]>>("*/api/jobs/:id", ({ request, params }) => {
     const entry = mockDb.jobs[String(params.id)];
     if (!entry || entry.tenantId !== selectedTenantId(request)) return HttpResponse.json<ApiErrorResponse>({ detail: "Job not found" }, { status: 404 });
+    if (entry.job.kind === "assistant_setup_draft") {
+      entry.job = {
+        ...entry.job,
+        status: "succeeded",
+        attempts: 1,
+        result: {
+          draft: structuredClone(setupDraftFixture),
+          warnings: ["The website did not publish all requested details."],
+          pages: [{ url: "https://harbordental.example/", title: "Harbor Dental Studio" }],
+          model: "gemini-3.1-flash-lite",
+          usage: { input_tokens: 1200, output_tokens: 300 },
+          cost_usd: 0.00075,
+        },
+      };
+      return HttpResponse.json<Schemas["JobResponse"]>(entry.job);
+    }
     entry.polls += 1;
     const status = entry.polls < 2 ? "queued" : entry.polls < 3 ? "running" : "succeeded";
     entry.job = { ...entry.job, status, attempts: entry.polls, ...(status === "succeeded" ? { result: { imported: entry.assistantId } } : {}) };
