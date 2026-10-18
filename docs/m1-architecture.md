@@ -181,6 +181,13 @@ make test
 make lint
 ```
 
+For local HTTP development, `.env.example` sets `SESSION_COOKIE_SECURE=false` and
+allows the Vite origin `http://localhost:5173` in `ALLOWED_ORIGINS`. Use secure cookies
+and configure the trusted origins for HTTPS deployments.
+
+For an M1 end-to-end run, start the API on port 8000, the worker, and the Vite dev server
+on port 5173, then run `cd voice && uv run python ../scripts/m1_e2e.py`.
+
 The compose database is Postgres 16 with pgvector and remains available for local agents. Start the API separately with `docker compose up backend` or `uv run --directory backend uvicorn inbound_api.main:app --reload`. Run the web app outside compose using `cd web && npm ci && npm run dev`; Vite proxies `/api` to the backend. For an all-mock operator demo, use `cd web && npm run dev:mock` (`VITE_USE_MOCKS=1`). Regenerate the frontend contract with `cd web && npm run api:types`.
 
 ## Web app
