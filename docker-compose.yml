@@ -1,0 +1,38 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-inbound_migrator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inbound_migrator}
+      POSTGRES_DB: ${POSTGRES_DB:-inbound}
+    ports:
+      - "5432:5432"
+    volumes:
+      - inbound-postgres-data:/var/lib/postgresql/data
+      - ./backend/initdb/01-roles.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /app/backend
+    command: ["uv", "run", "uvicorn", "inbound_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://inbound_app_login:inbound_dev_only@db:5432/inbound
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:-dev-only-voice-service-token}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./core:/app/core
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  inbound-postgres-data:
