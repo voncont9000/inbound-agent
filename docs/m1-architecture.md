@@ -31,9 +31,13 @@ All tenant-scoped tables have a non-null `tenant_id` foreign key and are both RL
 tenant_id = current_setting('app.tenant_id', true)::uuid
 ```
 
-`tenant_session(tenant_id)` starts a transaction and applies a transaction-local tenant setting; missing tenant context therefore sees no tenant rows. The global `users` table has no RLS. Cross-tenant lookups are limited to two `SECURITY DEFINER` SQL functions owned by the migration owner: `resolve_channel(kind, external_id)` for inbound routing, and `lookup_user_memberships(email)` during login. The application role is `inbound_app` (`NOLOGIN`, `NOBYPASSRLS`); `inbound_app_login` is a member and has only DML privileges.
+`tenant_session(tenant_id)` starts a transaction and applies a transaction-local tenant setting; missing tenant context therefore sees no tenant rows. The global `users` table has no RLS. Cross-tenant lookups are limited to two `SECURITY DEFINER` SQL functions: `resolve_channel(kind, external_id)` for inbound routing, and `lookup_user_memberships(email)` during login. The application role is `inbound_app` (`NOLOGIN`, `NOBYPASSRLS`); `inbound_app_login` is a member and has only DML privileges.
 
-Migrations use `MIGRATION_DATABASE_URL`. The API and workers use `DATABASE_URL`, which must point to the non-superuser application role so RLS remains enforced. In local development, the Compose `inbound_migrator` role is the database superuser and owns the `SECURITY DEFINER` functions. Production should use a dedicated non-superuser migration owner instead of a superuser.
+Tenant-scoped references use composite foreign keys on `(tenant_id, id)` so a row cannot reference another tenant's record. The referenced tables have matching `UNIQUE (tenant_id, id)` constraints. `ON DELETE SET NULL` actions null only the referenced ID, preserving the row's tenant.
+
+The two cross-tenant lookup functions are owned by `inbound_lookup` (`NOLOGIN`, `NOBYPASSRLS`), which has `SELECT` access only to `channel_connections`, `memberships`, and `users`. Its `lookup_read` policies permit reads for that role while all tenant tables remain `FORCE ROW LEVEL SECURITY`. The application role can execute the lookup functions but cannot read those tables across tenants directly.
+
+Migrations use `MIGRATION_DATABASE_URL`. The API and workers use `DATABASE_URL`, which must point to the non-superuser application role so RLS remains enforced. In local development, the Compose `inbound_migrator` role is the database superuser and owns the remaining `SECURITY DEFINER` functions; the two cross-tenant lookup functions are owned by `inbound_lookup`. Production should use a dedicated non-superuser migration owner instead of a superuser.
 
 The Postgres-backed job queue is designed for worker claims using `FOR UPDATE SKIP LOCKED`.
 
@@ -94,13 +98,16 @@ are idempotent by channel and external call ID; report retries do not duplicate 
 records or graph jobs after completion. `conversation_tenant` is the narrow security-
 definer lookup used to route reports into the correct tenant session.
 
-Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `UPLOAD_DIR`,
+Settings include `APP_ENV`, `VOICE_SERVICE_TOKEN`, `SESSION_TTL_HOURS`,
+`SESSION_COOKIE_SECURE`, `UPLOAD_DIR`,
 `MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
 `KNOWLEDGE_REQUEST_DELAY`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
 `JOB_LEASE_SECONDS`, and `WORKER_POLL_SECONDS`.
 
-Production migration owners for `SECURITY DEFINER` functions that read RLS-protected rows
-must have `BYPASSRLS` or be superusers; local development uses the Compose migrator role.
+`APP_ENV` defaults to `development`. Outside `development` and `test`, `VOICE_SERVICE_TOKEN`
+must be non-empty and must not use the committed development default. The Makefile includes
+and exports `.env`; if `MIGRATION_DATABASE_URL` is not explicitly set there, it is built from
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
 
 ## Voice/API lifecycle
 

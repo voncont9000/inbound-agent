@@ -1,5 +1,11 @@
+-include .env
+export
+
+POSTGRES_USER ?= inbound_migrator
+POSTGRES_PASSWORD ?= inbound_migrator
+POSTGRES_DB ?= inbound
 DATABASE_URL ?= postgresql+psycopg://inbound_app_login:inbound_dev_only@localhost:5432/inbound
-MIGRATION_DATABASE_URL ?= postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound
+MIGRATION_DATABASE_URL ?= postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:5432/$(POSTGRES_DB)
 APP_DATABASE_URL ?= postgresql://inbound_app_login:inbound_dev_only@localhost:5432/inbound
 
 .PHONY: up migrate test lint
