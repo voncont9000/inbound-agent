@@ -27,7 +27,6 @@ describe("validateAssistantConfig", () => {
     expect(errors["urgency_rules.1.field"]).toMatch(/date field/);
     expect(errors["urgency_rules.1.minus_days"]).toBeDefined();
   });
-
   it("validates booking appointment keys, durations, and limits without coupling live actions", () => {
     const config = structuredClone(tenantFixtures[0].assistants[0].config);
     config.booking = {
@@ -51,5 +50,30 @@ describe("validateAssistantConfig", () => {
     expect(errors["booking.appointment_types.1.duration_minutes"]).toMatch(/480/);
     expect(errors["booking.appointment_types.0.key"]).toBeUndefined();
     expect(config.live_actions).not.toContain("book_appointment");
+  });
+
+  it("validates action keys, triggers, and service filters", () => {
+    const config = structuredClone(tenantFixtures[0].assistants[0].config);
+    config.post_actions = [
+      {
+        kind: "email_customer",
+        key: "confirmation",
+        enabled: true,
+        trigger: { events: [], channels: [], services: ["missing-service"] },
+        subject_template: "Thanks",
+        body_template: "Hello",
+      },
+      {
+        kind: "webhook",
+        key: "confirmation",
+        enabled: true,
+        trigger: { events: ["conversation_completed"], channels: [], services: [] },
+        url: "https://example.test/hook",
+      },
+    ];
+    const errors = validateAssistantConfig(config);
+    expect(errors["post_actions.0.trigger.events"]).toBeDefined();
+    expect(errors["post_actions.0.trigger.services"]).toBeDefined();
+    expect(errors["post_actions.1.key"]).toMatch(/unique/);
   });
 });

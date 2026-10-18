@@ -8,6 +8,7 @@ export interface MockDatabase {
   memberships: typeof memberships;
   jobs: Record<string, { tenantId: string; assistantId: string; polls: number; job: Schemas["JobResponse"] }>;
   channels: Record<string, Schemas["ChannelConnectionResponse"][]>;
+  postActionSecrets: Record<string, Schemas["WebhookSecretSummary"][]>;
 }
 
 function browserSession(): boolean {
@@ -23,6 +24,7 @@ function createDb(): MockDatabase {
     memberships: JSON.parse(JSON.stringify(memberships)) as typeof memberships,
     jobs: {},
     channels: {},
+    postActionSecrets: {},
   };
 }
 

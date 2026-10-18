@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, unwrap, uploadKnowledgeFile, type Schemas } from "../api/client";
 import { ApiError, fieldErrorsFrom422 } from "../api/errors";
 import { TestCallButton } from "../components/TestCallButton";
+import { PostActionsEditor } from "../components/PostActionsEditor";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
 import { enumAt, rangeAt } from "../lib/configSchema";
@@ -216,6 +217,7 @@ export function AssistantSettingsPage() {
     <form className="stack" onSubmit={saveConfig} noValidate>
       <ErrorSummary errors={summaryErrors} />
       {allErrors._form && <p role="alert">{allErrors._form}</p>}
+      <PostActionsEditor assistantId={id} config={config} update={update} />
       <section className="panel stack"><h2>Basics</h2>
         <Field path="assistant_name" label="Assistant name">{(fieldId) => <input id={fieldId} value={assistantName} onChange={(event) => setAssistantName(event.target.value)} />}</Field>
         <Field path="business_name" label="Business name" error={allErrors.business_name}>{(fieldId, describedBy) => <input id={fieldId} value={config.business_name} {...inputProps("business_name")} aria-describedby={describedBy} onChange={(event) => { clearFieldError("business_name"); update((draft) => { draft.business_name = event.target.value; }); }} />}</Field>

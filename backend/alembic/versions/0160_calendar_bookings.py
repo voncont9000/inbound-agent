@@ -1,13 +1,13 @@
 """Persist calendar bookings and classify commitments.
 
 Revision ID: 0160
-Revises: 0152
+Revises: 0153
 """
 
 from alembic import op
 
 revision = "0160"
-down_revision = "0152"
+down_revision = "0153"
 branch_labels = None
 depends_on = None
 

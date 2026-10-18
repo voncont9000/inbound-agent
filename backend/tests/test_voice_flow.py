@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from inbound_api.db import tenant_session
 from inbound_api.jobs import run_next_job
 from inbound_api.models import (
+    ActionRun,
     Conversation,
     ConversationChannel,
     ConversationStatus,
@@ -16,6 +17,13 @@ from inbound_api.models import (
     Message,
     Person,
     Task,
+    TaskSource,
+    TaskStatus,
+)
+from inbound_api.post_actions.providers import FakeEmailSender
+from inbound_api.post_actions.service import (
+    execute_conversation_action,
+    plan_conversation_actions,
 )
 from inbound_api.services import job_handlers as _job_handlers  # noqa: F401
 from inbound_api.services.review import merged_needs_review
@@ -315,6 +323,150 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert job.json()["status"] == "succeeded"
     assert job.json()["attempts"] == 1
     assert job.json()["error"] is None
+
+
+async def test_voice_post_actions_refire_for_new_event(tenant_pair, tmp_path) -> None:
+    account = tenant_pair["first"]
+    client = account["client"]
+    templates = (await client.get("/templates")).json()
+    config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    config["post_actions"] = [
+        {
+            "kind": "notify_staff",
+            "key": "callback-alert",
+            "trigger": {"events": ["callback_requested", "urgent"]},
+            "to": ["staff@example.com"],
+            "subject_template": "New {{service}} enquiry",
+            "body_template": "{{summary}}",
+        },
+        {
+            "kind": "email_customer",
+            "key": "customer-confirmation",
+            "trigger": {"events": ["conversation_completed"]},
+            "subject_template": "Thanks",
+            "body_template": "Hello {{contact.name}}",
+        },
+    ]
+    assistant = await client.post(
+        "/assistants",
+        json={"name": "Post-action voice assistant", "template": "uk_law_firm", "config": config},
+    )
+    assert assistant.status_code == 201, assistant.text
+    assistant_id = UUID(assistant.json()["id"])
+    tenant_id = UUID(account["tenant_id"])
+    conversation_id = uuid4()
+    async with tenant_session(tenant_id) as session:
+        session.add(
+            Conversation(
+                id=conversation_id,
+                tenant_id=tenant_id,
+                assistant_id=assistant_id,
+                channel=ConversationChannel.PHONE,
+                external_ref=str(conversation_id),
+                status=ConversationStatus.COMPLETED,
+                started_at=datetime.now(UTC),
+                ended_at=datetime.now(UTC),
+                summary="The caller requested a return call.",
+            )
+        )
+        session.add(
+            Intake(
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                version=IntakeVersion.MERGED,
+                data={"service": "conveyancing", "fields": {}},
+            )
+        )
+        session.add(
+            Task(
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                kind="callback",
+                status=TaskStatus.OPEN,
+                source=TaskSource.LIVE,
+                payload={"reason": "Caller requested a callback"},
+            )
+        )
+
+    async with tenant_session(tenant_id) as session:
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 2}
+    async with tenant_session(tenant_id) as session:
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 0}
+        runs = {
+            run.action_key: run
+            for run in await session.scalars(
+                select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+            )
+        }
+        execute_jobs = list(
+            await session.scalars(select(Job).where(Job.kind == "post_action_execute"))
+        )
+    assert len(execute_jobs) == 2
+    assert runs["callback-alert"].fire_count == 1
+    assert runs["callback-alert"].pending_events == ["callback_requested"]
+    assert runs["customer-confirmation"].pending_events == ["conversation_completed"]
+
+    async with tenant_session(tenant_id) as session:
+        customer_result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="customer-confirmation",
+            fire_count=1,
+        )
+    async with tenant_session(tenant_id) as session:
+        staff_result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="callback-alert",
+            fire_count=1,
+            email_sender=FakeEmailSender(tmp_path),
+        )
+    assert customer_result["status"] == "skipped"
+    assert staff_result["status"] == "succeeded"
+    assert (tmp_path / "emails.jsonl").is_file()
+
+    async with tenant_session(tenant_id) as session:
+        session.add(
+            Task(
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                kind="urgent",
+                status=TaskStatus.OPEN,
+                source=TaskSource.LIVE,
+                payload={"reason": "Urgent follow up"},
+            )
+        )
+        await session.flush()
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 1}
+        runs = {
+            run.action_key: run
+            for run in await session.scalars(
+                select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+            )
+        }
+        execute_jobs = list(
+            await session.scalars(select(Job).where(Job.kind == "post_action_execute"))
+        )
+    assert len(execute_jobs) == 3
+    assert [job.payload for job in execute_jobs if job.payload.get("fire_count") == 2] == [
+        {
+            "conversation_id": str(conversation_id),
+            "action_key": "callback-alert",
+            "fire_count": 2,
+        }
+    ]
+    assert runs["callback-alert"].fire_count == 2
+    assert runs["customer-confirmation"].fire_count == 1
+    async with tenant_session(tenant_id) as session:
+        refire_result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="callback-alert",
+            fire_count=2,
+            email_sender=FakeEmailSender(tmp_path),
+        )
+    assert refire_result["status"] == "succeeded"
+    assert len((tmp_path / "emails.jsonl").read_text().splitlines()) == 2
 
 
 async def test_sql_review_filter_matches_python_review_policy(tenant_pair) -> None:

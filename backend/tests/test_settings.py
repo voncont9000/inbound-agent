@@ -20,6 +20,9 @@ def test_production_accepts_configured_voice_service_token() -> None:
         whatsapp_access_token="configured-access-token",
         gmail_mode="off",
         calendar_mode="off",
+        email_sender="off",
+        sheets_writer="off",
+        webhook_sender="off",
     )
 
     assert settings.voice_service_token == "configured-service-token"
@@ -32,6 +35,9 @@ def test_production_accepts_whatsapp_off_without_credentials() -> None:
         whatsapp_mode="off",
         gmail_mode="off",
         calendar_mode="off",
+        email_sender="off",
+        sheets_writer="off",
+        webhook_sender="off",
     )
 
     assert settings.whatsapp_mode == "off"
@@ -76,6 +82,42 @@ def test_development_allows_default_voice_service_token() -> None:
     )
 
     assert settings.voice_service_token == DEFAULT_VOICE_SERVICE_TOKEN
+
+
+def _valid_production_settings(**overrides) -> Settings:
+    values = {
+        "app_env": "production",
+        "voice_service_token": "configured-service-token",
+        "whatsapp_mode": "graph",
+        "whatsapp_app_secret": "configured-app-secret",
+        "whatsapp_verify_token": "configured-verify-token",
+        "whatsapp_access_token": "configured-access-token",
+        "gmail_mode": "off",
+        "email_sender": "off",
+        "sheets_writer": "off",
+        "webhook_sender": "off",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_production_rejects_fake_post_action_email_sender() -> None:
+    with pytest.raises(ValidationError, match="Fake post-action providers"):
+        _valid_production_settings(email_sender="fake")
+
+
+def test_production_allows_post_action_email_sender_off() -> None:
+    assert _valid_production_settings(email_sender="off").email_sender == "off"
+
+
+def test_production_requires_resend_credentials() -> None:
+    with pytest.raises(ValidationError, match="Resend requires"):
+        _valid_production_settings(email_sender="resend")
+
+
+def test_production_rejects_private_webhook_destinations() -> None:
+    with pytest.raises(ValidationError, match="Private webhook URLs"):
+        _valid_production_settings(post_action_webhook_allow_private_urls=True)
 
 
 @pytest.mark.asyncio

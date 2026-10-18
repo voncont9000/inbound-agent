@@ -200,6 +200,24 @@ describe("operator workflows", () => {
     await waitFor(() => expect(oauthFeatures).toEqual(["calendar"]));
   });
 
+  it("tests an after-conversation action and shows the rendered result", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.selectOptions(screen.getByLabelText("Add action"), "email_customer");
+    await user.click(screen.getByRole("button", { name: "Send test" }));
+    expect(await screen.findByText("Ready to send.")).toBeInTheDocument();
+    expect(screen.getByText(/Thanks for contacting Brightside Plumbing/)).toBeInTheDocument();
+  });
+
+  it("offers Google Sheets connection when a sheet action has no Sheets scope", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.selectOptions(screen.getByLabelText("Add action"), "sheets_row");
+    expect(await screen.findByRole("button", { name: "Connect Google Sheets" })).toBeInTheDocument();
+  });
+
   it("rejects duplicate contact keys without overwriting a contact", async () => {
     const user = userEvent.setup();
     const contacts = mockDb.tenants[0].assistants[0].config.contacts;
@@ -259,6 +277,7 @@ describe("operator workflows", () => {
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
     await screen.findByRole("heading", { name: /Boiler not firing, no hot water/ });
     expect(screen.getByText("Test call")).toBeInTheDocument();
+    expect(screen.getByText(/staff-alert · notify_staff/)).toBeInTheDocument();
     const intakeTable = screen.getByRole("table", { name: "Intake comparison by field" });
     expect(within(intakeTable).getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Field", "Live", "Post-call", "Merged"]);
     expect(within(intakeTable).getAllByRole("row")).toHaveLength(4);

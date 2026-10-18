@@ -166,6 +166,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistants/{assistant_id}/post-actions/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Post Action */
+        post: operations["test_post_action_assistants__assistant_id__post_actions_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/post-actions/webhook-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Webhook Secrets */
+        get: operations["list_webhook_secrets_assistants__assistant_id__post_actions_webhook_secrets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistants/{assistant_id}/post-actions/{action_key}/webhook-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Webhook Secret */
+        post: operations["rotate_webhook_secret_assistants__assistant_id__post_actions__action_key__webhook_secret_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants/{assistant_id}/test-calls": {
         parameters: {
             query?: never;
@@ -608,6 +659,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/post-actions/variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Post Action Variables */
+        get: operations["list_post_action_variables_post_actions_variables_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks": {
         parameters: {
             query?: never;
@@ -698,6 +766,42 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActionRunSummary */
+        ActionRunSummary: {
+            /** Action Key */
+            action_key: string;
+            /** Action Kind */
+            action_kind: string;
+            /** Attempts */
+            attempts: number;
+            /** Fire Count */
+            fire_count: number;
+            /** Fired Events */
+            fired_events: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            };
+            /** Pending Events */
+            pending_events: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "succeeded" | "failed" | "skipped";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** AppointmentType */
         AppointmentType: {
             /** Duration Minutes */
@@ -738,6 +842,8 @@ export interface components {
             office_hours: components["schemas"]["OfficeHours"];
             /** Policies */
             policies: string[];
+            /** Post Actions */
+            post_actions?: (components["schemas"]["EmailCustomerAction"] | components["schemas"]["NotifyStaffAction"] | components["schemas"]["SheetsRowAction"] | components["schemas"]["WebhookAction"])[];
             /** Price List */
             price_list: components["schemas"]["PriceItem"][];
             /**
@@ -797,6 +903,8 @@ export interface components {
             office_hours: components["schemas"]["OfficeHours"];
             /** Policies */
             policies: string[];
+            /** Post Actions */
+            post_actions?: (components["schemas"]["EmailCustomerAction"] | components["schemas"]["NotifyStaffAction"] | components["schemas"]["SheetsRowAction"] | components["schemas"]["WebhookAction"])[];
             /** Price List */
             price_list: components["schemas"]["PriceItem"][];
             /**
@@ -1335,6 +1443,8 @@ export interface components {
         };
         /** ConversationDetailResponse */
         ConversationDetailResponse: {
+            /** Action Runs */
+            action_runs?: components["schemas"]["ActionRunSummary"][];
             /**
              * Assistant Id
              * Format: uuid
@@ -1507,6 +1617,26 @@ export interface components {
             type: "date_deadline";
             /** Urgent Within Days */
             urgent_within_days: number;
+        };
+        /** EmailCustomerAction */
+        EmailCustomerAction: {
+            /** Body Template */
+            body_template: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Key */
+            key: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "email_customer";
+            /** Subject Template */
+            subject_template: string;
+            trigger: components["schemas"]["PostActionTrigger"];
         };
         /** FactResponse */
         FactResponse: {
@@ -1869,6 +1999,28 @@ export interface components {
              */
             ts: string;
         };
+        /** NotifyStaffAction */
+        NotifyStaffAction: {
+            /** Body Template */
+            body_template: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Key */
+            key: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "notify_staff";
+            /** Subject Template */
+            subject_template: string;
+            /** To */
+            to: string[];
+            trigger: components["schemas"]["PostActionTrigger"];
+        };
         /** OfficeHours */
         OfficeHours: {
             /** Closes */
@@ -1882,6 +2034,47 @@ export interface components {
              * @default Europe/London
              */
             timezone: string;
+        };
+        /** PostActionTestRequest */
+        PostActionTestRequest: {
+            /** Action */
+            action: components["schemas"]["EmailCustomerAction"] | components["schemas"]["NotifyStaffAction"] | components["schemas"]["SheetsRowAction"] | components["schemas"]["WebhookAction"];
+            /** Conversation Id */
+            conversation_id?: string | null;
+        };
+        /** PostActionTestResponse */
+        PostActionTestResponse: {
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /** Events */
+            events: string[];
+            /** Matched Events */
+            matched_events: string[];
+            /** Rendered */
+            rendered: {
+                [key: string]: unknown;
+            };
+            /** Would Skip */
+            would_skip: string | null;
+        };
+        /** PostActionTrigger */
+        PostActionTrigger: {
+            /** Channels */
+            channels?: ("phone" | "web" | "gmail" | "whatsapp")[];
+            /** Events */
+            events: ("conversation_completed" | "urgent" | "callback_requested" | "needs_human" | "complaint")[];
+            /** Services */
+            services?: string[];
+        };
+        /** PostActionVariable */
+        PostActionVariable: {
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
         };
         /** PriceItem */
         PriceItem: {
@@ -1921,6 +2114,38 @@ export interface components {
             fields: components["schemas"]["FieldSpec"][];
             /** Label */
             label: string;
+        };
+        /** SheetColumn */
+        SheetColumn: {
+            /** Header */
+            header: string;
+            /** Value Template */
+            value_template: string;
+        };
+        /** SheetsRowAction */
+        SheetsRowAction: {
+            /** Columns */
+            columns: components["schemas"]["SheetColumn"][];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Key */
+            key: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sheets_row";
+            /**
+             * Sheet Name
+             * @default Sheet1
+             */
+            sheet_name: string;
+            /** Spreadsheet Id */
+            spreadsheet_id: string;
+            trigger: components["schemas"]["PostActionTrigger"];
         };
         /** SignupRequest */
         SignupRequest: {
@@ -2090,6 +2315,54 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WebhookAction */
+        WebhookAction: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Key */
+            key: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "webhook";
+            trigger: components["schemas"]["PostActionTrigger"];
+            /**
+             * Url
+             * Format: uri
+             */
+            url: string;
+        };
+        /** WebhookSecretCreateResponse */
+        WebhookSecretCreateResponse: {
+            /** Action Key */
+            action_key: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Secret */
+            secret: string;
+        };
+        /** WebhookSecretListResponse */
+        WebhookSecretListResponse: {
+            /** Items */
+            items: components["schemas"]["WebhookSecretSummary"][];
+        };
+        /** WebhookSecretSummary */
+        WebhookSecretSummary: {
+            /** Action Key */
+            action_key: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
     };
     responses: never;
@@ -2620,6 +2893,110 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_post_action_assistants__assistant_id__post_actions_test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostActionTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostActionTestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_webhook_secrets_assistants__assistant_id__post_actions_webhook_secrets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookSecretListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_webhook_secret_assistants__assistant_id__post_actions__action_key__webhook_secret_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+                action_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookSecretCreateResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3488,6 +3865,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_post_action_variables_post_actions_variables_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostActionVariable"][];
                 };
             };
             /** @description Validation Error */

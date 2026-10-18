@@ -165,6 +165,48 @@
       "title": "DateDeadlineUrgencyRule",
       "type": "object"
     },
+    "EmailCustomerAction": {
+      "additionalProperties": false,
+      "properties": {
+        "body_template": {
+          "minLength": 1,
+          "title": "Body Template",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "email_customer",
+          "title": "Kind",
+          "type": "string"
+        },
+        "subject_template": {
+          "minLength": 1,
+          "title": "Subject Template",
+          "type": "string"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "subject_template",
+        "body_template"
+      ],
+      "title": "EmailCustomerAction",
+      "type": "object"
+    },
     "FieldSpec": {
       "additionalProperties": false,
       "properties": {
@@ -361,6 +403,58 @@
       "title": "KnowledgeSource",
       "type": "object"
     },
+    "NotifyStaffAction": {
+      "additionalProperties": false,
+      "properties": {
+        "body_template": {
+          "minLength": 1,
+          "title": "Body Template",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "notify_staff",
+          "title": "Kind",
+          "type": "string"
+        },
+        "subject_template": {
+          "minLength": 1,
+          "title": "Subject Template",
+          "type": "string"
+        },
+        "to": {
+          "items": {
+            "format": "email",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "To",
+          "type": "array"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "to",
+        "subject_template",
+        "body_template"
+      ],
+      "title": "NotifyStaffAction",
+      "type": "object"
+    },
     "OfficeHours": {
       "additionalProperties": false,
       "properties": {
@@ -391,6 +485,51 @@
         "closes"
       ],
       "title": "OfficeHours",
+      "type": "object"
+    },
+    "PostActionTrigger": {
+      "additionalProperties": false,
+      "properties": {
+        "channels": {
+          "items": {
+            "enum": [
+              "phone",
+              "web",
+              "gmail",
+              "whatsapp"
+            ],
+            "type": "string"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "enum": [
+              "conversation_completed",
+              "urgent",
+              "callback_requested",
+              "needs_human",
+              "complaint"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        },
+        "services": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Services",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "title": "PostActionTrigger",
       "type": "object"
     },
     "PriceItem": {
@@ -439,6 +578,77 @@
       "title": "ServiceConfig",
       "type": "object"
     },
+    "SheetColumn": {
+      "additionalProperties": false,
+      "properties": {
+        "header": {
+          "minLength": 1,
+          "title": "Header",
+          "type": "string"
+        },
+        "value_template": {
+          "title": "Value Template",
+          "type": "string"
+        }
+      },
+      "required": [
+        "header",
+        "value_template"
+      ],
+      "title": "SheetColumn",
+      "type": "object"
+    },
+    "SheetsRowAction": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/SheetColumn"
+          },
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "sheets_row",
+          "title": "Kind",
+          "type": "string"
+        },
+        "sheet_name": {
+          "default": "Sheet1",
+          "minLength": 1,
+          "title": "Sheet Name",
+          "type": "string"
+        },
+        "spreadsheet_id": {
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Spreadsheet Id",
+          "type": "string"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "spreadsheet_id",
+        "columns"
+      ],
+      "title": "SheetsRowAction",
+      "type": "object"
+    },
     "TransferTarget": {
       "additionalProperties": false,
       "properties": {
@@ -472,6 +682,43 @@
         "when_to_use"
       ],
       "title": "TransferTarget",
+      "type": "object"
+    },
+    "WebhookAction": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "webhook",
+          "title": "Kind",
+          "type": "string"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        },
+        "url": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "url"
+      ],
+      "title": "WebhookAction",
       "type": "object"
     }
   },
@@ -541,6 +788,35 @@
         "type": "string"
       },
       "title": "Policies",
+      "type": "array"
+    },
+    "post_actions": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "email_customer": "#/$defs/EmailCustomerAction",
+            "notify_staff": "#/$defs/NotifyStaffAction",
+            "sheets_row": "#/$defs/SheetsRowAction",
+            "webhook": "#/$defs/WebhookAction"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/EmailCustomerAction"
+          },
+          {
+            "$ref": "#/$defs/NotifyStaffAction"
+          },
+          {
+            "$ref": "#/$defs/SheetsRowAction"
+          },
+          {
+            "$ref": "#/$defs/WebhookAction"
+          }
+        ]
+      },
+      "title": "Post Actions",
       "type": "array"
     },
     "price_list": {
