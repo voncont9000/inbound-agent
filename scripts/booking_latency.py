@@ -42,6 +42,7 @@ async def benchmark() -> None:
     from inbound_api.integrations.calendar import CalendarEvent
     from inbound_api.main import app
     from inbound_api.routers import internal_voice
+    from inbound_api.services import booking as booking_service
     from inbound_api.settings import get_settings
 
     settings = get_settings()
@@ -115,10 +116,13 @@ async def benchmark() -> None:
 
         original_route = internal_voice.route_call
         original_provider_factory = calendar.calendar_provider_for
+        original_booking_provider_factory = booking_service.calendar_provider_for
         internal_voice.route_call = route_call
         provider_results: dict[str, dict[str, list[float]]] = {}
 
         class GoogleCalendarProvider:
+            name = "google"
+
             def __init__(self) -> None:
                 self.events: list[tuple[datetime, datetime]] = []
 
@@ -146,10 +150,12 @@ async def benchmark() -> None:
                         return google_provider
 
                     calendar.calendar_provider_for = use_google_provider
+                    booking_service.calendar_provider_for = use_google_provider
                 else:
                     with tempfile.TemporaryDirectory(prefix="booking-calendar-") as directory:
                         settings.calendar_fake_path = Path(directory) / "calendar.json"
                         calendar.calendar_provider_for = original_provider_factory
+                        booking_service.calendar_provider_for = original_booking_provider_factory
                         provider_results[provider_name] = await measure_provider(
                             client,
                             settings.voice_service_token,
@@ -167,6 +173,7 @@ async def benchmark() -> None:
                 )
         internal_voice.route_call = original_route
         calendar.calendar_provider_for = original_provider_factory
+        booking_service.calendar_provider_for = original_booking_provider_factory
 
         local_result = subprocess.run(
             [

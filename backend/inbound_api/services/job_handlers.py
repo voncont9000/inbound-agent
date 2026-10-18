@@ -7,10 +7,12 @@ from uuid import UUID
 import httpx
 from google.genai import types
 from inbound_core.booking import (
+    Slot,
     alternatives_for,
     format_slot_text,
     generate_slots,
     parse_preference,
+    parse_slot_id,
     select_offered_slots,
 )
 from inbound_core.config import AssistantConfig
@@ -48,6 +50,21 @@ from inbound_api.services.knowledge_import import make_genai_client
 from inbound_api.settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _slot_from_id(appointment_types, slot_id: str) -> Slot:
+    appointment_key, start = parse_slot_id(slot_id)
+    appointment = next(
+        (item for item in appointment_types if item.key == appointment_key),
+        None,
+    )
+    if appointment is None:
+        raise ValueError("Unknown appointment type.")
+    return Slot(
+        appointment_type=appointment,
+        start=start,
+        end=start + timedelta(minutes=appointment.duration_minutes),
+    )
 
 
 @register("graph_ingest")
@@ -146,6 +163,62 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
             }
         )
     booking_ctx = await booking_context(session, conversation.assistant_id, config)
+    offered = {}
+    offered_text = {}
+    latest_offering_message_id = None
+    latest_offering: dict[str, str] = {}
+    if booking_ctx is not None:
+        for item in thread:
+            if item.role != MessageRole.ASSISTANT:
+                continue
+            message_offers = {}
+            for tool_call in (item.meta or {}).get("tool_calls", []):
+                if not isinstance(tool_call, dict):
+                    continue
+                tool_result = tool_call.get("result")
+                if not isinstance(tool_result, dict):
+                    continue
+                if tool_call.get("name") == "check_availability":
+                    slot_results = tool_result.get("slots", [])
+                    if not isinstance(slot_results, list):
+                        continue
+                    for offered_slot in slot_results:
+                        if not isinstance(offered_slot, dict):
+                            continue
+                        slot_id = offered_slot.get("slot_id")
+                        if not isinstance(slot_id, str):
+                            continue
+                        try:
+                            slot = _slot_from_id(booking_ctx.booking.appointment_types, slot_id)
+                        except ValueError:
+                            continue
+                        text_value = offered_slot.get("when")
+                        text_value = text_value if isinstance(text_value, str) else ""
+                        offered[slot_id] = slot
+                        offered_text[slot_id] = text_value
+                        message_offers[slot_id] = text_value
+                elif tool_call.get("name") == "book_appointment":
+                    alternatives = tool_result.get("alternatives", [])
+                    if not isinstance(alternatives, list):
+                        continue
+                    for alternative in alternatives:
+                        if not isinstance(alternative, dict):
+                            continue
+                        slot_id = alternative.get("slot_id")
+                        if not isinstance(slot_id, str):
+                            continue
+                        try:
+                            slot = _slot_from_id(booking_ctx.booking.appointment_types, slot_id)
+                        except ValueError:
+                            continue
+                        text_value = alternative.get("text")
+                        text_value = text_value if isinstance(text_value, str) else ""
+                        offered[slot_id] = slot
+                        offered_text[slot_id] = text_value
+                        message_offers[slot_id] = text_value
+            if message_offers:
+                latest_offering_message_id = item.id
+                latest_offering = message_offers
     business_context = render_business_context(
         config,
         context_card=route.context_card,
@@ -167,7 +240,15 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
         MessageRole.SYSTEM: "Note",
         MessageRole.ASSISTANT: "Assistant",
     }
-    history = "\n".join(f"{history_labels[item.role]}: {item.text}" for item in thread)
+    history_lines = []
+    for item in thread:
+        history_lines.append(f"{history_labels[item.role]}: {item.text}")
+        if item.id == latest_offering_message_id:
+            offers = "; ".join(
+                f"{slot_id}: {text_value}" for slot_id, text_value in latest_offering.items()
+            )
+            history_lines.append(f"Note: slots offered — {offers}")
+    history = "\n".join(history_lines)
     prompt = (
         f"{business_context}\n\n"
         "WHATSAPP MESSAGE RULES\n"
@@ -254,7 +335,6 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
             contents = [prompt]
-            offered = {}
             response = await client.aio.models.generate_content(
                 model=settings.text_agent_model,
                 contents=contents,
@@ -268,86 +348,111 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
                 function_responses = []
                 for call in calls:
                     started = time.perf_counter()
-                    arguments = dict(call.args or {})
-                    if call.name == "check_availability":
-                        appointment_type = arguments["appointment_type"]
-                        now_for_booking = datetime.now(UTC)
-                        _, busy, provider_ms = await fetch_busy(booking_ctx, now_for_booking)
-                        preference = arguments.get("preference_text", "")
-                        windows = (
-                            parse_preference(
-                                preference,
-                                now_for_booking,
-                                booking_ctx.timezone,
-                                booking_ctx.booking.horizon_days,
-                            )
-                            if preference.strip()
-                            else None
-                        )
-                        slots = generate_slots(
-                            config, appointment_type, busy, now_for_booking, windows
-                        )
-                        matched = True
-                        if windows is not None and not slots:
-                            slots = alternatives_for(
-                                config,
-                                appointment_type,
-                                busy,
-                                now_for_booking,
-                                windows[0].start,
-                                booking_ctx.booking.max_slots_offered,
-                            )
-                            matched = False
-                        selected = select_offered_slots(
-                            slots, booking_ctx.booking.max_slots_offered
-                        )
-                        offered.update({item.slot_id: item for item in selected})
-                        result = {
-                            "ok": True,
-                            "appointment": next(
-                                item.label
-                                for item in appointment_types
-                                if item.key == appointment_type
-                            ),
-                            "slots": [
-                                {
-                                    "slot_id": item.slot_id,
-                                    "when": format_slot_text(item, booking_ctx.timezone),
-                                }
-                                for item in selected
-                            ],
-                            "matched_preference": matched,
-                        }
-                        tool_timings.append({"name": call.name, "provider_ms": provider_ms})
-                    elif call.name == "book_appointment":
-                        slot_id = arguments["slot_id"]
-                        if slot_id not in offered:
-                            result = {
-                                "ok": False,
-                                "error": "Offer a slot from check_availability first.",
-                            }
-                        else:
-                            booked = await book_slot(
-                                session,
-                                conversation.tenant_id,
-                                conversation,
-                                booking_ctx,
-                                slot_id=slot_id,
-                                name=arguments["name"],
-                                email=arguments.get("email"),
-                                phone=known_phone,
-                            )
-                            result = booked.model_dump(mode="json")
-                            for alternative in booked.alternatives:
-                                original = offered[slot_id]
-                                offered[alternative.slot_id] = original.model_copy(
-                                    update={
-                                        "start": alternative.start,
-                                        "end": alternative.end,
-                                    }
+                    arguments = {}
+                    try:
+                        arguments = dict(call.args or {})
+                        if call.name == "check_availability":
+                            appointment_type = arguments.get("appointment_type")
+                            if appointment_type not in {item.key for item in appointment_types}:
+                                result = {"ok": False, "error": "Unknown appointment type."}
+                            else:
+                                now_for_booking = datetime.now(UTC)
+                                _, busy, provider_ms = await fetch_busy(
+                                    booking_ctx, now_for_booking
                                 )
-                    else:
-                        result = {"ok": False, "error": "Unknown booking action."}
+                                preference = str(arguments.get("preference_text") or "")
+                                windows = (
+                                    parse_preference(
+                                        preference,
+                                        now_for_booking,
+                                        booking_ctx.timezone,
+                                        booking_ctx.booking.horizon_days,
+                                    )
+                                    if preference.strip()
+                                    else None
+                                )
+                                slots = generate_slots(
+                                    config, appointment_type, busy, now_for_booking, windows
+                                )
+                                matched = True
+                                if windows is not None and not slots:
+                                    slots = alternatives_for(
+                                        config,
+                                        appointment_type,
+                                        busy,
+                                        now_for_booking,
+                                        windows[0].start,
+                                        booking_ctx.booking.max_slots_offered,
+                                    )
+                                    matched = False
+                                selected = select_offered_slots(
+                                    slots, booking_ctx.booking.max_slots_offered
+                                )
+                                offered.update({item.slot_id: item for item in selected})
+                                slot_texts = {
+                                    item.slot_id: format_slot_text(item, booking_ctx.timezone)
+                                    for item in selected
+                                }
+                                offered_text.update(slot_texts)
+                                result = {
+                                    "ok": True,
+                                    "appointment": next(
+                                        item.label
+                                        for item in appointment_types
+                                        if item.key == appointment_type
+                                    ),
+                                    "slots": [
+                                        {"slot_id": slot_id, "when": text_value}
+                                        for slot_id, text_value in slot_texts.items()
+                                    ],
+                                    "matched_preference": matched,
+                                }
+                                tool_timings.append({"name": call.name, "provider_ms": provider_ms})
+                        elif call.name == "book_appointment":
+                            slot_id = arguments.get("slot_id")
+                            name = arguments.get("name")
+                            if not isinstance(slot_id, str) or slot_id not in offered:
+                                result = {
+                                    "ok": False,
+                                    "error": "Offer a slot from check_availability first.",
+                                }
+                            elif not isinstance(name, str) or not name.strip():
+                                result = {"ok": False, "error": "A name is required."}
+                            else:
+                                booked = await book_slot(
+                                    session,
+                                    conversation.tenant_id,
+                                    conversation,
+                                    booking_ctx,
+                                    slot_id=slot_id,
+                                    name=name,
+                                    email=arguments.get("email"),
+                                    phone=known_phone,
+                                )
+                                if booked.status == "error":
+                                    result = {
+                                        "ok": False,
+                                        "error": "The diary can't be checked right now.",
+                                    }
+                                else:
+                                    result = booked.model_dump(mode="json")
+                                    for alternative in booked.alternatives:
+                                        try:
+                                            alternative_slot = _slot_from_id(
+                                                appointment_types, alternative.slot_id
+                                            )
+                                        except ValueError:
+                                            continue
+                                        offered[alternative.slot_id] = alternative_slot
+                                        offered_text[alternative.slot_id] = alternative.text
+                        else:
+                            result = {"ok": False, "error": "Unknown booking action."}
+                    except Exception:
+                        LOGGER.warning("WhatsApp booking tool %s failed", call.name, exc_info=True)
+                        result = {
+                            "ok": False,
+                            "error": "The diary can't be checked right now.",
+                        }
                     tool_calls.append({"name": call.name, "arguments": arguments, "result": result})
                     tool_timings.append(
                         {
@@ -366,6 +471,18 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
                     model=settings.text_agent_model,
                     contents=contents,
                     config=generation_config,
+                )
+                add_usage(response)
+            if (getattr(response, "function_calls", None) or []) and not (
+                getattr(response, "text", None) or ""
+            ).strip():
+                final_contents = list(contents)
+                candidates = getattr(response, "candidates", None) or []
+                if candidates:
+                    final_contents.append(candidates[0].content)
+                response = await client.aio.models.generate_content(
+                    model=settings.text_agent_model,
+                    contents=final_contents,
                 )
                 add_usage(response)
     finally:

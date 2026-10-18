@@ -381,6 +381,148 @@ async def test_gmail_off_rejects_webhook_and_oauth_and_skips_sync(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_gmail_draft_generation_never_passes_booking_tools(graph_env, monkeypatch, tmp_path):
+    from sqlalchemy import select
+
+    from inbound_api.db import tenant_session
+    from inbound_api.models import Message
+
+    config_path = (
+        Path(__file__).resolve().parents[2] / "voice" / "config" / "assistants" / "demo_firm.yaml"
+    )
+    base_config = load_assistant_config(config_path)
+    config = type(base_config).model_validate(
+        {
+            **base_config.model_dump(mode="json"),
+            "live_actions": ["check_availability", "book_appointment"],
+            "booking": {
+                "calendar_id": "primary",
+                "appointment_types": [
+                    {
+                        "key": "consultation",
+                        "label": "Consultation",
+                        "duration_minutes": 30,
+                        "when_to_use": "Initial appointment",
+                    }
+                ],
+            },
+        }
+    )
+    graph_env["execute"](
+        "UPDATE assistants SET config = %s::jsonb WHERE id = %s",
+        (json.dumps(config.model_dump(mode="json")), graph_env["assistant_id"]),
+    )
+    connection_id = uuid4()
+    graph_env["execute"](
+        "INSERT INTO channel_connections "
+        "(id, tenant_id, assistant_id, kind, external_id, status, settings) "
+        "VALUES (%s, %s, %s, 'gmail', 'booking@example.test', 'active', '{}')",
+        (connection_id, graph_env["tenant_id"], graph_env["assistant_id"]),
+    )
+    conversation_id, message_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    graph_env["execute"](
+        "INSERT INTO conversations "
+        "(id, tenant_id, assistant_id, channel, external_ref, status, started_at, metrics) "
+        "VALUES (%s, %s, %s, 'gmail', 'gmail-booking-thread', 'active', %s, %s::jsonb)",
+        (
+            conversation_id,
+            graph_env["tenant_id"],
+            graph_env["assistant_id"],
+            now,
+            json.dumps(
+                {
+                    "gmail_thread_id": "thread-booking",
+                    "channel_connection_id": str(connection_id),
+                    "from_email": "alex@example.test",
+                    "contact_name": "Alex",
+                    "subject": "Appointment",
+                }
+            ),
+        ),
+    )
+    graph_env["execute"](
+        "INSERT INTO messages "
+        "(id, tenant_id, conversation_id, role, text, ts, meta) "
+        "VALUES (%s, %s, %s, 'caller', 'Please book a consultation.', %s, %s::jsonb)",
+        (
+            message_id,
+            graph_env["tenant_id"],
+            conversation_id,
+            now,
+            json.dumps(
+                {
+                    "from": "alex@example.test",
+                    "subject": "Appointment",
+                    "gmail_message_id": "gmail-message",
+                }
+            ),
+        ),
+    )
+    settings = SimpleNamespace(
+        gmail_mode="fake",
+        google_api_key="test-key",
+        text_agent_model="gemini-test",
+        message_extract_delay_seconds=120,
+        price_table_path=tmp_path / "missing-prices.yaml",
+    )
+    monkeypatch.setattr(gmail_jobs, "get_settings", lambda: settings)
+
+    async def load_route(*_args, **_kwargs):
+        return SimpleNamespace(config=config, digest=None, context_card=None)
+
+    monkeypatch.setattr(gmail_jobs, "load_assistant_route", load_route)
+    generation_calls = []
+
+    class Models:
+        async def generate_content(self, **kwargs):
+            generation_calls.append(kwargs)
+            return SimpleNamespace(
+                text=json.dumps({"category": "enquiry", "reply": "Your consultation is booked."}),
+                usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=1),
+            )
+
+    monkeypatch.setattr(
+        gmail_jobs,
+        "make_genai_client",
+        lambda _key: SimpleNamespace(
+            aio=SimpleNamespace(models=Models(), aclose=AsyncMock(return_value=None))
+        ),
+    )
+
+    class GmailClient:
+        async def create_draft(self, thread_id, _raw):
+            assert thread_id == "thread-booking"
+            return "draft-1"
+
+        async def ensure_label(self, name):
+            return name
+
+        async def add_labels(self, _message_id, _labels):
+            return None
+
+        async def delete_draft(self, _draft_id):
+            return None
+
+    monkeypatch.setattr(gmail_jobs, "gmail_client_for", lambda *_args: GmailClient())
+    async with tenant_session(graph_env["tenant_id"]) as session:
+        await gmail_jobs.email_draft(
+            session,
+            {"conversation_id": str(conversation_id), "message_id": str(message_id)},
+        )
+        draft = await session.scalar(
+            select(Message).where(
+                Message.conversation_id == conversation_id,
+                Message.role == MessageRole.ASSISTANT,
+            )
+        )
+
+    assert len(generation_calls) == 1
+    assert "tools" not in generation_calls[0]
+    assert draft is not None and draft.meta["draft"] is True
+
+
+@pytest.mark.asyncio
 async def test_push_wakes_queued_reconciliation_job():
     scheduled_for = datetime.now(UTC) + timedelta(minutes=5)
     job = SimpleNamespace(run_after=scheduled_for, payload={"connection_id": "connection"})

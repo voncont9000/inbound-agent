@@ -518,10 +518,6 @@ def create_function_schemas(
     ):
 
         async def handler(params: FunctionCallParams, tool_name: str = spec["name"]) -> None:
-            result = call_tools.dispatch(tool_name, params.arguments)
-            should_end = tool_name == "end_call" or (
-                tool_name == "transfer_call" and result.get("ok") is True
-            )
             if tool_name in {"check_availability", "book_appointment"}:
                 started = time.perf_counter()
 
@@ -541,15 +537,18 @@ def create_function_schemas(
                 else:
                     count = 0
                 booking_config = call_tools.config.booking
-                message = (
-                    booking_config.check_message
-                    if tool_name == "check_availability" and booking_config is not None
-                    else booking_config.book_message
-                    if booking_config is not None
-                    else "Let me check the diary."
-                    if tool_name == "check_availability"
-                    else "One moment while I book that."
-                )
+                if booking_config is None:
+                    message = (
+                        "Let me check the diary."
+                        if tool_name == "check_availability"
+                        else "One moment while I book that."
+                    )
+                else:
+                    message = (
+                        booking_config.check_message
+                        if tool_name == "check_availability"
+                        else booking_config.book_message
+                    )
                 await params.llm.push_frame(TTSSpeakFrame(message))
                 if speech_tracker is not None:
                     speech_task = asyncio.create_task(speech_tracker.wait_for_utterance(count))
@@ -559,6 +558,10 @@ def create_function_schemas(
                     result = await tool_task
                 await params.result_callback(result)
                 return
+            result = call_tools.dispatch(tool_name, params.arguments)
+            should_end = tool_name == "end_call" or (
+                tool_name == "transfer_call" and result.get("ok") is True
+            )
             if should_end:
                 await params.result_callback(
                     result,

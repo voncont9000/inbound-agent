@@ -84,7 +84,7 @@ class CallBooking:
             )
             matched = False
         chosen = select_offered_slots(slots, booking.max_slots_offered)
-        self._offered = {slot.slot_id: slot for slot in chosen}
+        self._offered.update({slot.slot_id: slot for slot in chosen})
         return {
             "ok": True,
             "appointment": appointment.label,

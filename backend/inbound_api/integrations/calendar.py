@@ -25,6 +25,8 @@ class CalendarEvent:
 
 
 class CalendarProvider(Protocol):
+    name: str
+
     async def free_busy(
         self, calendar_id: str, start: datetime, end: datetime
     ) -> list[BusyBlock]: ...
@@ -49,6 +51,8 @@ _FAKE_CALENDAR_LOCK = asyncio.Lock()
 
 
 class FakeCalendarProvider:
+    name = "fake"
+
     def __init__(self, path: str | Path, delay_ms: int = 0) -> None:
         self.path = Path(path)
         self.delay_ms = delay_ms
@@ -132,6 +136,8 @@ class FakeCalendarProvider:
 
 
 class GoogleCalendarProvider:
+    name = "google"
+
     def __init__(
         self,
         access_token: str,

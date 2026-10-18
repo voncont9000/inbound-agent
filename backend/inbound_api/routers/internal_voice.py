@@ -11,6 +11,7 @@ from inbound_core.booking import (
     BookResponse,
 )
 from inbound_core.call_report import RouteResponse
+from inbound_core.config import AssistantConfig
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -283,8 +284,6 @@ async def book(payload: BookRequest) -> BookResponse:
         assistant = await session.get(Assistant, conversation.assistant_id)
         if assistant is None:
             return BookResponse(status="invalid", reason="booking_disabled")
-        from inbound_core.config import AssistantConfig
-
         config = AssistantConfig.model_validate(assistant.config)
         context = await booking_context(session, assistant.id, config)
         if context is None:

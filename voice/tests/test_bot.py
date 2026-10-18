@@ -719,9 +719,7 @@ def test_empty_live_actions_create_context_without_tools(tmp_path) -> None:
         ("book_appointment", "Saving your appointment now."),
     ],
 )
-def test_booking_tool_speaks_configured_filler_concurrently(
-    tmp_path, monkeypatch, tool_name, message
-) -> None:
+def test_booking_tool_speaks_configured_filler_concurrently(tmp_path, tool_name, message) -> None:
     async def run() -> list:
         events = []
         tracker = FastBotSpeechTracker()
@@ -743,15 +741,26 @@ def test_booking_tool_speaks_configured_filler_concurrently(
                 ),
             }
         )
-        call_tools = CallTools(sink, config, booking_available=True)
 
-        async def dispatch(name, arguments):
+        async def dispatch(name, **_arguments):
             events.append(("tool_started", name))
             await asyncio.sleep(0.02)
             events.append(("tool_finished", name))
             return {"ok": True}
 
-        monkeypatch.setattr(call_tools, "dispatch_async", dispatch)
+        class FakeBooking:
+            async def check_availability(self, **arguments):
+                return await dispatch("check_availability", **arguments)
+
+            async def book_appointment(self, **arguments):
+                return await dispatch("book_appointment", **arguments)
+
+        call_tools = CallTools(
+            sink,
+            config,
+            booking=FakeBooking(),
+            booking_available=True,
+        )
 
         class FakeLLM:
             async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
@@ -778,6 +787,11 @@ def test_booking_tool_speaks_configured_filler_concurrently(
             if schema.name == tool_name
         )
         await handler(FakeParams())
+        tool_calls = [
+            json.loads(line)
+            for line in (sink.directory / "tool_calls.jsonl").read_text().splitlines()
+        ]
+        assert [entry["name"] for entry in tool_calls] == [tool_name]
         return events
 
     events = asyncio.run(run())

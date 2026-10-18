@@ -498,6 +498,9 @@ export function ChannelConnections({ assistantId, bookingEnabled = false }: { as
     queryKey: ["assistant-channels", assistantId],
     queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/channels", { params: { path: { assistant_id: assistantId } } })),
   });
+  const calendarConnected = channels.data?.items.some((channel) => (
+    channel.kind === "gmail" && channel.google_features.includes("calendar")
+  )) ?? false;
   const add = useMutation({
     mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/channels", {
       params: { path: { assistant_id: assistantId } },
@@ -524,16 +527,20 @@ export function ChannelConnections({ assistantId, bookingEnabled = false }: { as
     </div>}
     {gmailMode.data?.mode === "off" && <p className="help">Gmail is not enabled for this deployment.</p>}
     {bookingEnabled && calendarMode.data?.mode === "off" && <p className="help">Calendar booking is not enabled for this deployment. Ask your administrator to enable Calendar integration.</p>}
-    {bookingEnabled && calendarMode.data?.mode === "fake" && <p className="help">The fake Calendar provider is enabled for this deployment.</p>}
+    {bookingEnabled && calendarMode.data?.mode === "fake" && <p className="help">
+      The fake Calendar provider is enabled for this deployment. {calendarConnected
+        ? "Google Calendar is connected for this assistant."
+        : "Google Calendar is not connected for this assistant."}
+    </p>}
     {bookingEnabled && calendarMode.data?.mode === "google" && <>
       {gmailMode.data?.mode !== "google" && <p className="help" role="alert">Google Calendar requires Gmail Google mode to be enabled for this deployment.</p>}
       {gmailMode.data?.mode === "google" && <>
-        {channels.data?.items.some((channel) => channel.kind === "gmail" && channel.google_features.includes("calendar"))
+        {calendarConnected
           ? <p className="help">Google Calendar is connected for this assistant.</p>
           : <p className="help" role="alert">Calendar is disconnected. Connect Google Calendar to enable live booking.</p>}
-        <button className="button-primary" type="button" disabled={startCalendarOAuth.isPending} onClick={() => startCalendarOAuth.mutate()}>
-          {startCalendarOAuth.isPending ? "Connecting…" : "Connect Calendar"}
-        </button>
+        {!calendarConnected && <button className="button-primary" type="button" disabled={startCalendarOAuth.isPending} onClick={() => startCalendarOAuth.mutate()}>
+          {startCalendarOAuth.isPending ? "Connecting…" : "Connect Google Calendar"}
+        </button>}
       </>}
     </>}
     {gmailMode.data?.mode !== "off" && (gmailMode.data?.mode !== "google" || kind !== "gmail") && <form className="form-grid" onSubmit={(event) => {

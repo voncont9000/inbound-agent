@@ -93,6 +93,7 @@ def _valid_production_settings(**overrides) -> Settings:
         "whatsapp_verify_token": "configured-verify-token",
         "whatsapp_access_token": "configured-access-token",
         "gmail_mode": "off",
+        "calendar_mode": "off",
         "email_sender": "off",
         "sheets_writer": "off",
         "webhook_sender": "off",

@@ -22,6 +22,21 @@ const channels = ["phone", "web", "gmail", "whatsapp"] as const;
 const statuses = ["active", "completed", "failed"] as const;
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
 
+function formatBookingStart(value: unknown, timezone: unknown) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: typeof timezone === "string" ? timezone : "UTC",
+    }).format(date);
+  } catch {
+    return null;
+  }
+}
+
 function conversationQuery(filters: { channel: string; status: string; reviewOnly: boolean }, cursor?: string | null) {
   return {
     channel: channels.find((channel) => channel === filters.channel),
@@ -89,6 +104,7 @@ export function ConversationPage() {
   const booking = bookingValue && typeof bookingValue === "object"
     ? bookingValue as Record<string, unknown>
     : null;
+  const bookingStart = booking ? formatBookingStart(booking.start, booking.timezone) : null;
   const intakes = useMemo(() => {
     const result: Partial<Record<"live" | "post_call" | "merged", IntakeRecord>> = {};
     detail?.intakes.forEach((intake) => { result[intake.version] = intake.data as IntakeRecord; });
@@ -128,6 +144,11 @@ export function ConversationPage() {
       <p><strong>{String(booking.label ?? booking.appointment_type ?? "Appointment")}</strong></p>
       <p>{String(booking.text ?? booking.speech ?? "Booking details unavailable.")}</p>
       <p>Status: {String(booking.status ?? "booked")}</p>
+      {bookingStart && <p><strong>Start</strong>: {bookingStart} ({String(booking.timezone ?? "UTC")})</p>}
+      {(typeof booking.attendee_name === "string" || typeof booking.attendee_email === "string") && <p>
+        <strong>Attendee</strong>: {typeof booking.attendee_name === "string" ? booking.attendee_name : "—"}
+        {typeof booking.attendee_email === "string" && <> · {booking.attendee_email}</>}
+      </p>}
       {typeof booking.event_link === "string" && <p><a href={booking.event_link} target="_blank" rel="noreferrer">Open Calendar event</a></p>}
     </section>}
     {detail.transfer && <section className="panel"><h2>Transfer</h2><div className="card-grid"><div><strong>Target</strong><p>{detail.transfer.target_key}</p></div><div><strong>Status</strong><p>{detail.transfer.status}</p></div><div><strong>Latency</strong><p>{detail.transfer.latency_ms == null ? "—" : `${detail.transfer.latency_ms} ms`}</p></div></div></section>}

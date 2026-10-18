@@ -80,10 +80,22 @@ def test_security_definer_functions_have_non_bypass_owners() -> None:
 def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
     tenant_a, tenant_b = uuid4(), uuid4()
     task_id = uuid4()
+    assistant_id, conversation_id, booking_id = uuid4(), uuid4(), uuid4()
     with psycopg.connect(OWNER_DATABASE_URL) as connection:
         connection.execute(
             "INSERT INTO tenants (id, name) VALUES (%s, %s), (%s, %s)",
             (tenant_a, "Tenant A", tenant_b, "Tenant B"),
+        )
+        _set_tenant(connection, tenant_a)
+        connection.execute(
+            "INSERT INTO assistants (id, tenant_id, name, config) VALUES (%s, %s, %s, '{}')",
+            (assistant_id, tenant_a, "Booking assistant"),
+        )
+        connection.execute(
+            "INSERT INTO conversations "
+            "(id, tenant_id, assistant_id, channel, external_ref, status, started_at) "
+            "VALUES (%s, %s, %s, 'phone', 'booking-rls', 'active', now())",
+            (conversation_id, tenant_a, assistant_id),
         )
     try:
         with psycopg.connect(APP_DATABASE_URL) as connection:
@@ -93,6 +105,14 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                     "INSERT INTO tasks (id, tenant_id, kind, source) VALUES (%s, %s, %s, %s)",
                     (task_id, tenant_a, "callback", "manual"),
                 )
+                connection.execute(
+                    "INSERT INTO calendar_bookings "
+                    "(id, tenant_id, assistant_id, conversation_id, calendar_id, provider, "
+                    "event_id, appointment_type, slot_id, start_at, end_at, attendee_name) "
+                    "VALUES (%s, %s, %s, %s, 'primary', 'fake', 'event-rls', 'consultation', "
+                    "'consultation@20261019T0800Z', now(), now() + interval '30 minutes', 'Alex')",
+                    (booking_id, tenant_a, assistant_id, conversation_id),
+                )
             with connection.transaction():
                 connection.execute(f"SET LOCAL app.tenant_id = '{tenant_b}'")
                 assert (
@@ -101,7 +121,20 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                 )
                 assert (
                     connection.execute(
+                        "SELECT id FROM calendar_bookings WHERE id = %s", (booking_id,)
+                    ).fetchall()
+                    == []
+                )
+                assert (
+                    connection.execute(
                         "UPDATE tasks SET kind = 'changed' WHERE id = %s", (task_id,)
+                    ).rowcount
+                    == 0
+                )
+                assert (
+                    connection.execute(
+                        "UPDATE calendar_bookings SET attendee_name = 'Changed' WHERE id = %s",
+                        (booking_id,),
                     ).rowcount
                     == 0
                 )
@@ -113,7 +146,20 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                 )
                 assert (
                     connection.execute(
+                        "SELECT id FROM calendar_bookings WHERE id = %s", (booking_id,)
+                    ).fetchall()
+                    == []
+                )
+                assert (
+                    connection.execute(
                         "UPDATE tasks SET kind = 'changed' WHERE id = %s", (task_id,)
+                    ).rowcount
+                    == 0
+                )
+                assert (
+                    connection.execute(
+                        "UPDATE calendar_bookings SET attendee_name = 'Changed' WHERE id = %s",
+                        (booking_id,),
                     ).rowcount
                     == 0
                 )

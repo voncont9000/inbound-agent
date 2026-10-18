@@ -105,6 +105,25 @@ async def test_unavailable_prefetch_falls_back_to_one_live_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_slot_from_earlier_availability_check_remains_bookable() -> None:
+    api = FakeApi(book=BookResponse(status="booked"))
+    booking = _booking(api)
+
+    earlier_offer = await booking.check_availability("consultation", "Tuesday")
+    earlier_slot_id = earlier_offer["slots"][0]["slot_id"]
+    later_offer = await booking.check_availability("consultation", "Wednesday")
+
+    assert earlier_slot_id not in {slot["slot_id"] for slot in later_offer["slots"]}
+    assert earlier_slot_id in booking._offered
+
+    result = await booking.book_appointment(earlier_slot_id, "Alex")
+
+    assert result["ok"] is True
+    assert result["status"] == "booked"
+    assert api.book_calls[0].slot_id == earlier_slot_id
+
+
+@pytest.mark.asyncio
 async def test_booking_refuses_slots_not_offered_in_this_call() -> None:
     api = FakeApi()
     booking = _booking(api)

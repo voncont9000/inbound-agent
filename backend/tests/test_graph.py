@@ -322,6 +322,7 @@ async def test_ingest_is_idempotent_and_creates_callback_commitment(graph_env):
         assert first_counts[3] == 1
         commitment = await session.scalar(select(Commitment))
         assert commitment.what == "Call back: reschedule"
+        assert commitment.kind == "callback"
         assert commitment.source_message_id == message_id
         assert commitment.due_at == due_at
         assert await session.scalar(
