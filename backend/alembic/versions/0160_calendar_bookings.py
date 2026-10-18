@@ -37,6 +37,7 @@ def upgrade() -> None:
             status text NOT NULL DEFAULT 'booked'
                 CHECK (status IN ('booked', 'cancelled')),
             created_at timestamptz NOT NULL DEFAULT now(),
+            updated_at timestamptz NOT NULL DEFAULT now(),
             UNIQUE (conversation_id, slot_id)
         )
         """
