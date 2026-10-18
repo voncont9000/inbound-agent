@@ -362,3 +362,94 @@ pause.
 
 Scripted A/B calls use synthetic TTS caller audio band-limited to 8 kHz; this is not a
 substitute for real UK callers.
+
+## API mode
+
+Set both `API_BASE_URL` and `VOICE_SERVICE_TOKEN` to enable tenant-aware API routing and
+call reporting. The voice service sends `X-Service-Token` on the internal route, start, and
+report requests. `ROUTE_TIMEOUT_SECONDS` defaults to 2 seconds. WebRTC calls also require
+`WEB_CALL_TO_NUMBER`; without it the runner uses the local `ASSISTANT_CONFIG`. Phone calls
+use the dialled `To` number supplied by Twilio.
+
+The route lookup runs before the greeting. If routing fails or times out, the call uses the
+local assistant YAML, while retaining the API call metadata so the start and report are
+still attempted. The call-start request is started asynchronously after pipeline setup.
+After intake finalization and metrics persistence, the voice service posts the report.
+Start and report requests retry up to five times on transport errors, timeouts, HTTP 408,
+429, and 5xx responses, with 0.5, 1, 2, and 4 second backoffs. Route lookup is a single
+attempt; it does not add retry latency before the greeting.
+
+If the report cannot be delivered, one atomic JSON record is written to `VOICE_SPOOL_DIR`
+(default `voice/spool/`) using the external call ID as its filename. The spool stores the
+call start, report, conversation ID when available, last error, and spool timestamp; it
+never stores the service token. Retry delivery with:
+
+```sh
+uv run python -m inbound_voice.api_client resend [--spool-dir DIR]
+```
+
+The command reports sent and remaining records and exits nonzero while any remain. Local
+`runs/<call_id>/` artifacts are written in both API and local modes.
+
+## Twilio phone transport
+
+Run the standalone server from `voice/` and point the Twilio Voice webhook at
+`https://<public-host>/twilio/voice`:
+
+```sh
+uv run phone_server.py --host 0.0.0.0 --port 7861
+```
+
+The server exposes `/healthz`, a form webhook at `/twilio/voice`, and a Media Streams
+WebSocket at `/twilio/ws`. Set `TWILIO_AUTH_TOKEN` to validate `X-Twilio-Signature`; set
+`PUBLIC_BASE_URL` when running behind a proxy or tunnel so signature validation and the
+generated `wss://` stream URL use the public origin. Without `PUBLIC_BASE_URL`, the server
+honors `X-Forwarded-Proto` and `X-Forwarded-Host`. Signature validation is skipped with a
+warning when no auth token is configured; production deployments must configure it.
+`TWILIO_ACCOUNT_SID` plus `TWILIO_AUTH_TOKEN` enable REST hang-up. Without both, the
+WebSocket is closed when the pipeline ends.
+
+The phone pipeline uses 8 kHz mono PCM internally and the Pipecat Twilio serializer
+converts to/from Twilio's 8 kHz G.711 μ-law frames. Pipecat 1.12.0 source inspection found
+the selected provider services can be configured for these 8 kHz paths:
+
+| Component | Phone rate | Pipecat 1.12.0 finding |
+|---|---:|---|
+| Twilio Media Streams | 8 kHz μ-law | Serializer decodes/encodes at 8 kHz |
+| AssemblyAI STT | 8 kHz input | `sample_rate` is passed to its realtime connection |
+| Soniox STT | 8 kHz input | `sample_rate` is passed in the service audio settings |
+| Deepgram STT | 8 kHz input | `sample_rate` is passed to its realtime service |
+| Silero VAD | 8 kHz input | Supports 8 and 16 kHz |
+| Local Smart Turn v3 | 8 kHz input | Resamples internally to 16 kHz |
+| Speechify HTTP TTS | 8 kHz output | Supports PCM output at the requested rate |
+| ElevenLabs HTTP and WebSocket TTS | 8 kHz output | Maps 8 kHz to `pcm_8000` |
+| Deepgram TTS | 8 kHz output | Sends the configured rate in the request query |
+
+No provider-specific rate override is needed for phone audio. The browser pipeline keeps
+its existing 16 kHz input and 24 kHz output rates. These findings verify Pipecat's
+sample-rate configuration paths; provider account/model acceptance was not exercised
+against live services.
+
+## Local Twilio simulator
+
+`eval.twilio_sim` signs and posts the webhook, parses the returned TwiML, opens a local
+WebSocket, and sends paced 20 ms μ-law frames. It writes `caller_audio.wav`,
+`bot_audio.wav`, and a caller timeline compatible with the existing evaluation scorer.
+Caller utterances are resampled from the cached 48 kHz synthetic audio. To run the fake
+API as a standalone process for development:
+
+```sh
+uv run python -m eval.fake_api --port 8010 --token dev-token --to +441234567890
+```
+
+The matrix runner can start its own fake API and the phone server:
+
+```sh
+uv run python -m eval.run_matrix \
+  --stt soniox --tts speechify --llm google \
+  --scenario employment --reps 1 --transport twilio --fake-api
+```
+
+Results include the transport and whether the matching external call report was delivered.
+The same runner also supports `--transport webrtc --fake-api`. A standalone call can be
+driven with `uv run python -m eval.twilio_sim --scenario employment --output-dir DIR`.

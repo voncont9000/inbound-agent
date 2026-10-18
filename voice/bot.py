@@ -49,6 +49,8 @@ from pipecat.turns.user_start import VADUserTurnStartStrategy
 from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
+from inbound_voice.call_report import build_call_report
+from inbound_voice.call_setup import PreparedCall, prepare_call
 from inbound_voice.config import load_assistant_config
 from inbound_voice.extraction import (
     DEFAULT_EXTRACTION_MODEL,
@@ -66,6 +68,8 @@ from inbound_voice.turns import incomplete_phone_number
 
 ROOT = Path(__file__).resolve().parent
 ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
+PHONE_SAMPLE_RATE = 8000
+WEB_SAMPLE_RATE = 16000
 EXTRACTION_TIMEOUT_SECONDS = 60
 GOODBYE_HANGUP_SECONDS = 1.5
 IDLE_PROMPT_DEFAULT_SECONDS = 8.0
@@ -459,12 +463,30 @@ async def run_bot(
     transport: object,
     telephony: bool = False,
     caller_id: str | None = None,
+    prepared: PreparedCall | None = None,
+    call_id: str | None = None,
 ) -> None:
+    if prepared is None:
+        prepared = PreparedCall(
+            assistant=load_assistant_config(
+                Path(os.environ.get("ASSISTANT_CONFIG", str(ASSISTANT_CONFIG)))
+            ),
+            context_card=None,
+            api=None,
+            call_start=None,
+            route=None,
+        )
     providers = resolve_providers(os.environ)
-    call_id = str(uuid.uuid4())
-    sink = LocalFilesCallSink(ROOT / "runs", call_id)
-    assistant_path = Path(os.environ.get("ASSISTANT_CONFIG", str(ASSISTANT_CONFIG)))
-    assistant = load_assistant_config(assistant_path)
+    run_id = str(uuid.uuid4())
+    sink = LocalFilesCallSink(ROOT / "runs", run_id)
+    assistant = prepared.assistant
+    external_call_id = (
+        prepared.call_start.external_call_id
+        if prepared.call_start is not None
+        else (call_id or run_id)
+    )
+    input_sample_rate = PHONE_SAMPLE_RATE if telephony else WEB_SAMPLE_RATE
+    output_sample_rate = PHONE_SAMPLE_RATE if telephony else 24000
     call_tools = CallTools(sink, assistant)
     metrics_observer = CallMetricsObserver(
         sink,
@@ -480,24 +502,29 @@ async def run_bot(
     )
 
     async with aiohttp.ClientSession() as session:
-        stt = create_stt(providers, os.environ)
+        stt = create_stt(providers, os.environ, sample_rate=input_sample_rate)
         llm = create_llm(
             providers,
             os.environ,
-            render_system_prompt(assistant, caller_id=caller_id),
+            render_system_prompt(
+                assistant,
+                caller_id=caller_id,
+                context_card=prepared.context_card,
+            ),
         )
-        tts = create_tts(providers, os.environ, session)
+        tts = create_tts(providers, os.environ, session, sample_rate=output_sample_rate)
         context = create_llm_context(call_tools)
         context_aggregators = LLMContextAggregatorPair(
             context,
             user_params=LLMUserAggregatorParams(
-                vad_analyzer=SileroVADAnalyzer(),
+                vad_analyzer=SileroVADAnalyzer(sample_rate=input_sample_rate),
                 user_turn_strategies=UserTurnStrategies(
                     start=[VADUserTurnStartStrategy(enable_interruptions=True)],
                     stop=[
                         IncompletePhoneNumberTurnStopStrategy(
                             turn_analyzer=LocalSmartTurnAnalyzerV3(
-                                params=SmartTurnParams(stop_secs=smart_turn_stop_secs(os.environ))
+                                sample_rate=input_sample_rate,
+                                params=SmartTurnParams(stop_secs=smart_turn_stop_secs(os.environ)),
                             ),
                             hold_seconds=number_hold_secs(os.environ),
                             metrics_observer=metrics_observer,
@@ -535,11 +562,24 @@ async def run_bot(
         task = PipelineTask(
             pipeline,
             params=PipelineParams(
+                audio_in_sample_rate=input_sample_rate,
+                audio_out_sample_rate=output_sample_rate,
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
             observers=[metrics_observer, goodbye_hangup, idle_hangup],
         )
+        start_call_task: asyncio.Task[uuid.UUID | None] | None = None
+        if prepared.api is not None and prepared.call_start is not None:
+
+            async def start_call_safely() -> uuid.UUID | None:
+                try:
+                    return await prepared.api.start_call(prepared.call_start)
+                except Exception as error:
+                    logger.warning("Could not start voice API call: {}", error)
+                    return None
+
+            start_call_task = asyncio.create_task(start_call_safely())
 
         @transport.event_handler("on_client_connected")
         async def on_client_connected(_transport: object, _client: object) -> None:
@@ -562,6 +602,25 @@ async def run_bot(
                 caller_id=caller_id,
             )
             metrics_observer.persist()
+            if prepared.api is not None and prepared.call_start is not None:
+                conversation_id = None
+                if start_call_task is not None:
+                    try:
+                        conversation_id = await start_call_task
+                    except Exception as error:
+                        logger.warning("Could not complete voice API call start: {}", error)
+                try:
+                    report = build_call_report(
+                        sink.directory,
+                        external_call_id,
+                    )
+                    await prepared.api.post_report(
+                        conversation_id,
+                        prepared.call_start,
+                        report,
+                    )
+                except Exception as error:
+                    logger.warning("Could not post voice API call report: {}", error)
 
 
 async def finalize_call_intake(
@@ -658,12 +717,49 @@ async def bot(runner_args: RunnerArguments) -> None:
         },
     )
     telephony = getattr(runner_args, "transport_type", None) == "twilio"
-    caller_id = resolve_caller_id(
-        getattr(runner_args, "call_data", None),
-        os.environ,
-        telephony=telephony,
+    call_data = getattr(runner_args, "call_data", None)
+    caller_id = resolve_caller_id(call_data, os.environ, telephony=telephony)
+    call_id = (
+        _runner_external_call_id(call_data)
+        if telephony
+        else str(getattr(runner_args, "call_id", None) or uuid.uuid4())
     )
-    await run_bot(transport, telephony=telephony, caller_id=caller_id)
+    to_number, from_number = _runner_call_numbers(call_data)
+    prepared = await prepare_call(
+        os.environ,
+        channel="phone" if telephony else "web",
+        to_number=to_number if telephony else os.environ.get("WEB_CALL_TO_NUMBER"),
+        from_number=from_number or caller_id,
+        external_call_id=call_id,
+    )
+    await run_bot(
+        transport,
+        telephony=telephony,
+        caller_id=caller_id,
+        prepared=prepared,
+        call_id=call_id,
+    )
+
+
+def _runner_external_call_id(call_data: Any) -> str:
+    call_id = (
+        call_data.get("call_id")
+        if isinstance(call_data, Mapping)
+        else getattr(call_data, "call_id", None)
+    )
+    return str(call_id or uuid.uuid4())
+
+
+def _runner_call_numbers(call_data: Any) -> tuple[str | None, str | None]:
+    if isinstance(call_data, Mapping):
+        body = call_data.get("body", {})
+    else:
+        body = getattr(call_data, "body", {})
+    body = body if isinstance(body, Mapping) else {}
+    return (
+        body.get("To") or body.get("to") or body.get("to_number"),
+        body.get("From") or body.get("from") or body.get("from_number"),
+    )
 
 
 def resolve_caller_id(
