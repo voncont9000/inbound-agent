@@ -10,7 +10,7 @@ const assistantId = "20000000-0000-4000-8000-000000000001";
 describe("assistant test calls", () => {
   it("connects a WhatsApp channel using its phone number ID", async () => {
     const user = userEvent.setup();
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/advanced`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.selectOptions(screen.getByLabelText("Channel"), "whatsapp");
     await user.type(screen.getByLabelText("WhatsApp phone_number_id"), "123456789");

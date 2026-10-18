@@ -1,4 +1,5 @@
 import type { AssistantConfig } from "../lib/config";
+import { Field } from "./settings/fields";
 
 type RulesConfig = NonNullable<AssistantConfig["rules"]>;
 type Update = (change: (draft: AssistantConfig) => void) => void;
@@ -23,9 +24,11 @@ function updateRules(update: Update, change: (rules: RulesConfig) => void) {
 export function RulePresetsEditor({
   config,
   update,
+  errors = {},
 }: {
   config: AssistantConfig;
   update: Update;
+  errors?: Record<string, string>;
 }) {
   const rules = config.rules ?? DEFAULT_RULES;
   const pronunciations = rules.pronunciations ?? [];
@@ -110,6 +113,7 @@ export function RulePresetsEditor({
 
     <div className="stack">
       <h3>Custom rules</h3>
+      <p className="help">Plain-language rules the assistant always follows, in priority order.</p>
       {config.policies.map((policy, index) => <div className="inline-editor" key={`policy-${index}`}>
         <label className="field">
           <span>Custom rule {index + 1}</span>
@@ -119,9 +123,17 @@ export function RulePresetsEditor({
             onChange={(event) => update((draft) => { draft.policies[index] = event.target.value; })}
           />
         </label>
-        <button type="button" onClick={() => update((draft) => { draft.policies.splice(index, 1); })}>
-          Remove custom rule
-        </button>
+        <div className="button-row">
+          <button type="button" onClick={() => update((draft) => {
+            [draft.policies[index - 1], draft.policies[index]] = [draft.policies[index], draft.policies[index - 1]];
+          })} disabled={index === 0}>Move up</button>
+          <button type="button" onClick={() => update((draft) => {
+            [draft.policies[index + 1], draft.policies[index]] = [draft.policies[index], draft.policies[index + 1]];
+          })} disabled={index === config.policies.length - 1}>Move down</button>
+          <button type="button" onClick={() => update((draft) => { draft.policies.splice(index, 1); })}>
+            Remove custom rule
+          </button>
+        </div>
       </div>)}
       <button type="button" onClick={() => update((draft) => { draft.policies.push(""); })}>
         Add custom rule
@@ -170,18 +182,22 @@ export function RulePresetsEditor({
     <div className="stack">
       <h3>Urgent if…</h3>
       {sentenceRules.map(({ rule, index }) => <div className="inline-editor" key={`sentence-rule-${index}`}>
-        <label className="field">
-          <span>Urgency condition</span>
-          <input
-            aria-label={`Urgency condition ${index + 1}`}
+        <Field
+          path={`urgency_rules.${index}.text`}
+          label={`Urgency condition ${index + 1}`}
+          error={errors[`urgency_rules.${index}.text`]}
+        >
+          {(fieldId, describedBy) => <input
+            id={fieldId}
             placeholder="Urgent if a deadline is within 4 weeks"
             value={rule.text}
+            aria-describedby={describedBy}
             onChange={(event) => update((draft) => {
               const current = draft.urgency_rules[index];
               if (current?.type === "sentence") current.text = event.target.value;
             })}
-          />
-        </label>
+          />}
+        </Field>
         <button type="button" onClick={() => update((draft) => { draft.urgency_rules.splice(index, 1); })}>
           Remove urgent rule
         </button>

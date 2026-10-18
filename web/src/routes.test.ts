@@ -6,8 +6,10 @@ describe("web route contracts", () => {
     expect(routes.map(({ path }) => path)).toEqual([
       "/login",
       "/signup",
+      "/",
       "/assistants",
       "/assistants/:id/settings",
+      "/assistants/:id/settings/:tab",
       "/assistants/:id/knowledge",
       "/inbox",
       "/conversations/:id",

@@ -157,7 +157,65 @@ See [context-graph.md](./context-graph.md) for research and design.
 - FR-L9: **Supervision and audit.** The firm stays responsible for the service under SRA rules. Every conversation keeps its transcript, the knowledge sources used and the actions taken. The firm can review and correct them. The SRA's [AI warning notice](https://www.sra.org.uk/solicitors/guidance/misuse-ai/) focuses on inaccurate information and client confidentiality, which drive FR-L1, FR-L5 and the vendor DPAs.
 - Out of scope for v1: AML/ID verification for client onboarding, engagement letters, taking payments.
 
-### 7.12 Rule presets and sentence urgency
+### 7.12 Settings simplification and feature parity (2026-10-18)
+Agreed after a Fonio screenshot review (see [fonio-teardown.md](./fonio-teardown.md)). Goal: a business
+can go live by reviewing generated settings instead of filling in technical fields. Behaviour stays
+template- and prompt-driven and vertical-neutral.
+
+**Settings structure**
+- FR-S1: Assistant settings are split into tabs: **General** (name, language, voice, greeting),
+  **Rules**, **Knowledge**, **Abilities**, **Channels**, **Advanced**. The current single form is retired.
+- FR-S2: Progressive disclosure. Each tab shows only essential fields; low-level values (booking
+  notice, horizon, buffer, slot step, max slots, holding lines, transfer messages, review threshold,
+  readback mode) live under **Advanced** with template defaults.
+- FR-S3: **Abilities as cards** (calendar booking, call forwarding, after-conversation actions,
+  callbacks/tasks, readback). Every card is off until switched on and shows at most 2-3 required
+  fields; the rest are defaulted.
+- FR-S4: **No technical keys in the UI.** Service keys, field names, appointment-type keys and contact
+  keys are generated from the human label (slugified, unique per assistant) and stay stable when the
+  label is later edited.
+- FR-S5: Intake fields and urgency rules come from the chosen template. Urgency rules can be written
+  as plain sentences ("Urgent if a tribunal deadline is within 4 weeks"); keyword rules remain
+  available under Advanced.
+- FR-S6: A persistent **Test call / Test chat** control on every assistant page.
+
+*Status (FR-S1–S4, FR-S6):* built in the web app. Settings live at `/assistants/:id/settings/:tab`
+(`general`, `rules`, `knowledge`, `abilities`, `channels`, `advanced`); `/assistants/:id/settings`
+and the old `/assistants/:id/knowledge` page redirect to these tabs. One **Save changes** button saves the whole config
+from any tab, and tabs that have validation errors show a count. Knowledge sources and the digest still save on their own.
+Ability cards switch the matching live actions on or off (booking: `check_availability` and
+`book_appointment`; forwarding: `transfer_call`). Keys are generated in the browser
+(`web/src/lib/keys.ts`) and match the backend key patterns. Saved keys never change. Post-action
+keys are generated the same way. Voice selection on General (FR-S8) is not built here. Rule presets (FR-S13) go into the slot marked in `web/src/components/settings/RulesTab.tsx`.
+
+**Website-based setup**
+- FR-S7: Creating an assistant asks for business name, website URL and template. The website is crawled
+  and an LLM drafts company info, FAQs, opening hours, price list and suggested services. The business
+  reviews and accepts each draft section; nothing generated is used until accepted. Setup without a
+  website remains possible.
+
+**Languages and voices**
+- FR-S8: `language` becomes a structured locale (e.g. `en-GB`, `de-DE`) or `multi`. Speech recognition
+  language hints, TTS voice and the prompt's language line are all derived from it, so they cannot
+  disagree.
+- FR-S9: Voice picker filtered by language, with name, accent, gender and a short audio preview.
+  The catalogue only lists voices the configured TTS provider supports for that language.
+- FR-S10: `multi` mode lets the agent answer in the caller's language when the provider supports
+  multilingual recognition and synthesis; otherwise the option is hidden.
+
+**Call settings and recording**
+- FR-S11: Per-assistant call settings: maximum call length, silence hang-up (with a configurable
+  "are you still there?" prompt), speech speed, interruption sensitivity, uninterruptible greeting,
+  and technical terms (names, streets, product names) passed to recognition as hints.
+- FR-S12: Optional call recording, off by default. When on, the greeting includes a consent line,
+  recordings are stored per tenant, playable from the conversation, and deleted automatically after a
+  configurable retention period (default 30 days).
+
+**Rule presets**
+- FR-S13: The **Rules** tab offers presets that render into the generated prompt: AI disclosure (when
+  asked / always at start), communication style (formal / friendly), off-topic handling, angry caller
+  (de-escalate, offer staff), sales and competitor calls, pronunciation dictionary, plus custom rules.
+  This implements FR-A2.
 
 **Implementation status (FR-A2 / FR-S13 / sentence-rule portion of FR-S5):** Assistant
 configuration now has defaulted, optional-to-set conversation presets and pronunciation
@@ -167,6 +225,20 @@ and available target. Pronunciation uses provider-agnostic TTS text substitution
 instructions. Configured plain-sentence urgency rules are evaluated in the existing post-call
 extraction request and create urgent tasks with a reason and evidence. Keyword and date-based
 urgency behavior is unchanged.
+
+**Home dashboard**
+- FR-S14: A home page with selectable time range: conversations by channel, handled by the assistant
+  vs passed to staff, bookings made, callbacks/tasks created, estimated time saved, median response
+  latency, and AI/telephony cost.
+
+  **Implementation status (FR-S14):** `GET /dashboard/summary` (tenant-scoped, staff role) returns
+  these metrics for `today`, `7d`, `30d` or a `custom` date range in the browser's time zone, with an
+  optional assistant filter, and a per-hour/per-day series by channel. Practice calls are excluded
+  unless `include_test=true`. The web app's Home page at `/` shows stat cards, an SVG chart, and the
+  range/assistant filters; the inbox stays at `/inbox`. Definitions and formulas are in
+  [m1-architecture.md](m1-architecture.md#home-dashboard).
+
+**Later:** website chat widget, SMS, DTMF tones, background office sound, team invites.
 
 ## 8. Non-functional requirements
 - **Latency:** see metrics. Stream everything. Region-pinned processing (EU first).
@@ -193,6 +265,7 @@ urgency behavior is unchanged.
 | M3 WhatsApp | Embedded signup, 24h replies, templates, voice notes, takeover. |
 | M4 Ops | Knowledge gaps, analytics and per-answered-call billing, notifications. |
 | M5 Actions | Call transfer/forwarding, WhatsApp sends from calls, web search, webhooks, practice management integration. |
+| M6 Simpler settings and parity | Tabbed settings with ability cards and generated keys, website-based setup, language and voice picker, call settings and recording, rule presets, home dashboard ([7.12](#712-settings-simplification-and-feature-parity-2026-10-18)). |
 
 **Production deployment status (2026-10-18):** the single-server Hetzner stack, HTTPS edge routing,
 production guards, and backup/restore runbook are implemented. Gmail v1 is implemented as

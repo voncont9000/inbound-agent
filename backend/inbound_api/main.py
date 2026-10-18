@@ -9,6 +9,7 @@ from inbound_api.routers import (
     calendar,
     contacts,
     conversations,
+    dashboard,
     gmail,
     internal_voice,
     knowledge,
@@ -43,6 +44,7 @@ for router in (
     gmail.router,
     calendar.router,
     post_actions.router,
+    dashboard.router,
 ):
     app.include_router(router)
 

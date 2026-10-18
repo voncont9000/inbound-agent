@@ -1458,6 +1458,32 @@
         "title": "ChannelConnectionsResponse",
         "type": "object"
       },
+      "ChannelCounts": {
+        "properties": {
+          "gmail": {
+            "default": 0,
+            "title": "Gmail",
+            "type": "integer"
+          },
+          "phone": {
+            "default": 0,
+            "title": "Phone",
+            "type": "integer"
+          },
+          "web": {
+            "default": 0,
+            "title": "Web",
+            "type": "integer"
+          },
+          "whatsapp": {
+            "default": 0,
+            "title": "Whatsapp",
+            "type": "integer"
+          }
+        },
+        "title": "ChannelCounts",
+        "type": "object"
+      },
       "CommitmentResponse": {
         "properties": {
           "due_at": {
@@ -2154,6 +2180,246 @@
           "end_reason"
         ],
         "title": "ConversationSummary",
+        "type": "object"
+      },
+      "DashboardCost": {
+        "properties": {
+          "ai": {
+            "title": "Ai",
+            "type": "number"
+          },
+          "conversations_costed": {
+            "title": "Conversations Costed",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "telephony": {
+            "title": "Telephony",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          }
+        },
+        "required": [
+          "currency",
+          "total",
+          "ai",
+          "telephony",
+          "conversations_costed"
+        ],
+        "title": "DashboardCost",
+        "type": "object"
+      },
+      "DashboardLatency": {
+        "properties": {
+          "calls_measured": {
+            "title": "Calls Measured",
+            "type": "integer"
+          },
+          "median_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Seconds"
+          }
+        },
+        "required": [
+          "median_seconds",
+          "calls_measured"
+        ],
+        "title": "DashboardLatency",
+        "type": "object"
+      },
+      "DashboardRange": {
+        "properties": {
+          "bucket": {
+            "enum": [
+              "hour",
+              "day"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "preset": {
+            "enum": [
+              "today",
+              "7d",
+              "30d",
+              "custom"
+            ],
+            "title": "Preset",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preset",
+          "start",
+          "end",
+          "timezone",
+          "bucket"
+        ],
+        "title": "DashboardRange",
+        "type": "object"
+      },
+      "DashboardSeriesPoint": {
+        "properties": {
+          "gmail": {
+            "default": 0,
+            "title": "Gmail",
+            "type": "integer"
+          },
+          "phone": {
+            "default": 0,
+            "title": "Phone",
+            "type": "integer"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "web": {
+            "default": 0,
+            "title": "Web",
+            "type": "integer"
+          },
+          "whatsapp": {
+            "default": 0,
+            "title": "Whatsapp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start"
+        ],
+        "title": "DashboardSeriesPoint",
+        "type": "object"
+      },
+      "DashboardSummary": {
+        "properties": {
+          "assistant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant Id"
+          },
+          "bookings": {
+            "title": "Bookings",
+            "type": "integer"
+          },
+          "by_channel": {
+            "$ref": "#/components/schemas/ChannelCounts"
+          },
+          "callbacks": {
+            "title": "Callbacks",
+            "type": "integer"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/DashboardCost"
+          },
+          "handled_by_assistant": {
+            "title": "Handled By Assistant",
+            "type": "integer"
+          },
+          "include_test": {
+            "title": "Include Test",
+            "type": "boolean"
+          },
+          "minutes_saved_per_conversation": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Minutes Saved Per Conversation",
+            "type": "object"
+          },
+          "passed_to_staff": {
+            "title": "Passed To Staff",
+            "type": "integer"
+          },
+          "passed_to_staff_credit": {
+            "title": "Passed To Staff Credit",
+            "type": "number"
+          },
+          "range": {
+            "$ref": "#/components/schemas/DashboardRange"
+          },
+          "response_latency": {
+            "$ref": "#/components/schemas/DashboardLatency"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardSeriesPoint"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "tasks": {
+            "title": "Tasks",
+            "type": "integer"
+          },
+          "time_saved_minutes": {
+            "title": "Time Saved Minutes",
+            "type": "number"
+          }
+        },
+        "required": [
+          "range",
+          "assistant_id",
+          "include_test",
+          "conversations",
+          "by_channel",
+          "handled_by_assistant",
+          "passed_to_staff",
+          "bookings",
+          "callbacks",
+          "tasks",
+          "time_saved_minutes",
+          "minutes_saved_per_conversation",
+          "passed_to_staff_credit",
+          "response_latency",
+          "cost",
+          "series"
+        ],
+        "title": "DashboardSummary",
         "type": "object"
       },
       "DateDeadlineUrgencyRule": {
@@ -6195,6 +6461,143 @@
         "summary": "Create Review",
         "tags": [
           "conversations"
+        ]
+      }
+    },
+    "/dashboard/summary": {
+      "get": {
+        "operationId": "get_dashboard_summary_dashboard_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "default": "7d",
+              "enum": [
+                "today",
+                "7d",
+                "30d",
+                "custom"
+              ],
+              "title": "Range",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timezone",
+            "required": false,
+            "schema": {
+              "default": "UTC",
+              "maxLength": 64,
+              "title": "Timezone",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assistant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assistant Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Dashboard Summary",
+        "tags": [
+          "dashboard"
         ]
       }
     },

@@ -18,8 +18,8 @@ const initialConfig = {
   urgency_rules: [],
 } as unknown as AssistantConfig;
 
-function EditorHarness() {
-  const [config, setConfig] = useState(initialConfig);
+function EditorHarness({ initial = initialConfig }: { initial?: AssistantConfig } = {}) {
+  const [config, setConfig] = useState(initial);
   const update = (change: (draft: AssistantConfig) => void) => {
     setConfig((current) => {
       const draft = structuredClone(current);
@@ -61,5 +61,14 @@ describe("RulePresetsEditor", () => {
     expect(screen.getByTestId("config")).toHaveTextContent(
       '"type":"sentence","text":"Urgent if a deadline is within 4 weeks"',
     );
+  });
+
+  it("keeps custom rules in priority order with move controls", async () => {
+    const user = userEvent.setup();
+    render(<EditorHarness initial={{ ...initialConfig, policies: ["First rule", "Second rule"] } as AssistantConfig} />);
+
+    await user.click(screen.getAllByRole("button", { name: "Move down" })[0]);
+
+    expect(screen.getByTestId("config")).toHaveTextContent('"policies":["Second rule","First rule"]');
   });
 });
