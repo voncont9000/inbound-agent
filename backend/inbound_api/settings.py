@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     knowledge_max_pages: int = 50
     knowledge_request_delay: float = 0.5
     knowledge_allow_private_urls: bool = False
+    setup_draft_model: str = "gemini-3.1-flash-lite"
+    setup_draft_max_pages: int = 10
     job_max_attempts: int = 3
     job_retry_base_seconds: float = 10
     job_lease_seconds: int = 900

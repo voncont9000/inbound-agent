@@ -41,6 +41,7 @@ from inbound_api.models import (
     TaskStatus,
 )
 from inbound_api.post_actions import jobs as _post_action_jobs  # noqa: F401
+from inbound_api.services import assistant_setup as _assistant_setup  # noqa: F401
 from inbound_api.services import files_cleanup as _files_cleanup  # noqa: F401
 from inbound_api.services import gmail_jobs as _gmail_jobs  # noqa: F401
 from inbound_api.services import knowledge_import as knowledge_import_service  # noqa: F401
