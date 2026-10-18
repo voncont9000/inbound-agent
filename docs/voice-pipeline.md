@@ -397,8 +397,12 @@ Run the standalone server from `voice/` and point the Twilio Voice webhook at
 `https://<public-host>/twilio/voice`:
 
 ```sh
-uv run phone_server.py --host 0.0.0.0 --port 7861
+uv run phone_server.py --port 7861
 ```
+
+The server binds to `127.0.0.1` by default; a local tunnel or reverse proxy can forward
+the public webhook and media stream to that loopback listener. Use `--host 0.0.0.0` only
+when direct network access is intentional and protected by the surrounding network.
 
 The server exposes `/healthz`, a form webhook at `/twilio/voice`, and a Media Streams
 WebSocket at `/twilio/ws`. Set `TWILIO_AUTH_TOKEN` to validate `X-Twilio-Signature`; set
@@ -406,6 +410,10 @@ WebSocket at `/twilio/ws`. Set `TWILIO_AUTH_TOKEN` to validate `X-Twilio-Signatu
 generated `wss://` stream URL use the public origin. Without `PUBLIC_BASE_URL`, the server
 honors `X-Forwarded-Proto` and `X-Forwarded-Host`. Signature validation is skipped with a
 warning when no auth token is configured; production deployments must configure it.
+With the token configured, the webhook adds a `StreamToken` HMAC-SHA256 parameter bound to
+the Twilio Call SID and the `To`/`From` numbers. The media-stream WebSocket verifies it
+before preparing a call and closes unauthorized streams with code 1008. Without the token,
+both webhook signature and stream-token validation are skipped for local development.
 `TWILIO_ACCOUNT_SID` plus `TWILIO_AUTH_TOKEN` enable REST hang-up. Without both, the
 WebSocket is closed when the pipeline ends.
 
@@ -441,6 +449,10 @@ API as a standalone process for development:
 ```sh
 uv run python -m eval.fake_api --port 8010 --token dev-token --to +441234567890
 ```
+
+The fake API also binds to `127.0.0.1` by default; pass `--host` to choose another
+interface. Its `/_fake/state` inspection endpoint requires the same `X-Service-Token`
+header as the voice routes.
 
 The matrix runner can start its own fake API and the phone server:
 

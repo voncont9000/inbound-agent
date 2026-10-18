@@ -1,7 +1,21 @@
 import inspect
+from pathlib import Path
 
 from bot import SMART_TURN_STOP_DEFAULT_SECS
-from eval.run_matrix import build_parser, run_matrix
+from eval.run_matrix import _fake_api_digest, build_parser, run_matrix
+from inbound_voice.config import load_assistant_config
+
+ASSISTANT_PATH = Path(__file__).parents[1] / "config" / "assistants" / "demo_firm.yaml"
+
+
+def test_fake_api_uses_fixture_knowledge_digest(tmp_path: Path) -> None:
+    digest_path = tmp_path / "digest.md"
+    digest_content = "Imported fixture knowledge"
+    digest_path.write_text(digest_content, encoding="utf-8")
+    assistant = load_assistant_config(ASSISTANT_PATH)
+
+    assert _fake_api_digest(assistant, digest_path) == digest_content
+    assert _fake_api_digest(assistant, None) == assistant.knowledge.digest_content
 
 
 def test_smart_turn_stop_defaults_match_bot_default() -> None:

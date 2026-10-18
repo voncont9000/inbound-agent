@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from inbound_core.call_report import CallReport, CallStart, RouteResponse
 
+from eval.fake_api import build_parser as build_fake_api_parser
 from eval.fake_api import create_fake_api
 from inbound_voice.api_client import ApiSettings, VoiceApiClient, api_settings_from_env
 from inbound_voice.call_report import build_call_report
@@ -83,9 +85,20 @@ async def test_fake_api_rejects_missing_and_invalid_service_tokens() -> None:
             params={"to": "+441234567890"},
             headers={"X-Service-Token": "wrong-token"},
         )
+        missing_state_token = await client.get("/_fake/state")
+        authorized_state = await client.get(
+            "/_fake/state",
+            headers={"X-Service-Token": "test-service-token"},
+        )
 
     assert missing.status_code == 401
     assert invalid.status_code == 401
+    assert missing_state_token.status_code == 401
+    assert authorized_state.status_code == 200
+
+
+def test_fake_api_host_defaults_to_loopback() -> None:
+    assert build_fake_api_parser().parse_args([]).host == "127.0.0.1"
 
 
 @pytest.mark.asyncio
@@ -145,6 +158,31 @@ async def test_non_retryable_report_failure_spools_without_sleep(tmp_path: Path)
         is False
     )
     assert (tmp_path / "CA-test-call.json").exists()
+
+
+def test_spool_hashes_unsafe_external_call_ids_into_spool_directory(tmp_path: Path) -> None:
+    client = VoiceApiClient(
+        ApiSettings("http://fake", "test-service-token"),
+        spool_dir=tmp_path,
+        sleep=_async_noop,
+    )
+    external_call_ids = ("../../evil", "a/b")
+
+    for external_call_id in external_call_ids:
+        call_start = _call_start().model_copy(update={"external_call_id": external_call_id})
+        report = _report().model_copy(update={"external_call_id": external_call_id})
+        client._spool(call_start, report, None, "API unavailable")
+        digest = hashlib.sha256(external_call_id.encode("utf-8")).hexdigest()[:16]
+        spool_file = tmp_path / f"call-{digest}.json"
+
+        assert spool_file.exists()
+        assert spool_file.parent.resolve() == tmp_path.resolve()
+        assert (
+            json.loads(spool_file.read_text(encoding="utf-8"))["call_start"]["external_call_id"]
+            == external_call_id
+        )
+
+    assert len(list(tmp_path.glob("*.json"))) == 2
 
 
 @pytest.mark.asyncio

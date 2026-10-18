@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -201,7 +203,13 @@ class VoiceApiClient:
         conversation_id: UUID | None,
         last_error: str,
     ) -> None:
-        path = self.spool_dir / f"{call_start.external_call_id}.json"
+        external_call_id = call_start.external_call_id
+        if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", external_call_id):
+            filename = external_call_id
+        else:
+            digest = hashlib.sha256(external_call_id.encode("utf-8")).hexdigest()[:16]
+            filename = f"call-{digest}"
+        path = self.spool_dir / f"{filename}.json"
         payload = {
             "conversation_id": str(conversation_id) if conversation_id else None,
             "call_start": call_start.model_dump(mode="json"),

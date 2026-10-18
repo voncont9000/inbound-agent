@@ -33,17 +33,30 @@ def validate_signature(
     return hmac.compare_digest(compute_signature(auth_token, url, params), signature)
 
 
+def stream_token(auth_token: str, call_sid: str, to_number: str, from_number: str) -> str:
+    message = f"{call_sid}\n{to_number}\n{from_number}"
+    return hmac.new(auth_token.encode(), message.encode(), hashlib.sha256).hexdigest()
+
+
+def verify_stream_token(
+    auth_token: str,
+    call_sid: str,
+    to_number: str,
+    from_number: str,
+    token: str,
+) -> bool:
+    return hmac.compare_digest(
+        stream_token(auth_token, call_sid, to_number, from_number),
+        token,
+    )
+
+
 def build_stream_twiml(ws_url: str, parameters: dict[str, str]) -> str:
     response = ET.Element("Response")
     connect = ET.SubElement(response, "Connect")
     stream = ET.SubElement(connect, "Stream", {"url": ws_url})
-    for name in ("To", "From"):
-        if name in parameters:
-            ET.SubElement(
-                stream,
-                "Parameter",
-                {"name": name, "value": parameters[name]},
-            )
+    for name, value in parameters.items():
+        ET.SubElement(stream, "Parameter", {"name": name, "value": value})
     return ET.tostring(response, encoding="unicode")
 
 

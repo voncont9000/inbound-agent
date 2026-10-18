@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
+
 import pytest
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
@@ -10,6 +12,7 @@ from inbound_voice.twilio import (
     build_stream_twiml,
     compute_signature,
     parse_start_message,
+    stream_token,
 )
 from phone_server import create_app
 
@@ -55,6 +58,13 @@ def test_twiml_signature_validation_and_public_websocket_url() -> None:
     assert 'url="wss://voice.example.com/twilio/ws"' in response.text
     assert 'name="To" value="+449876543210"' in response.text
     assert 'name="From" value="+441234567890"' in response.text
+    expected_stream_token = stream_token(
+        AUTH_TOKEN,
+        "CA1234",
+        "+449876543210",
+        "+441234567890",
+    )
+    assert f'name="StreamToken" value="{expected_stream_token}"' in response.text
     assert invalid_signature.status_code == 403
     assert missing_signature.status_code == 403
 
@@ -108,6 +118,10 @@ def test_webhook_skips_signature_when_token_is_not_configured() -> None:
 
     assert response.status_code == 200
     assert 'url="ws://testserver/twilio/ws"' in response.text
+
+
+def test_phone_server_host_defaults_to_loopback() -> None:
+    assert phone_server.build_parser().parse_args([]).host == "127.0.0.1"
 
 
 def test_webhook_uses_forwarded_scheme_and_host_for_signature() -> None:
@@ -191,3 +205,126 @@ def test_websocket_closes_when_pipeline_returns_after_end_frame(
                 websocket.receive_json()
 
     assert completed == [True]
+
+
+def test_websocket_accepts_signed_stream_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    token = "stream-auth-token"
+    form = {
+        "CallSid": "CA123",
+        "AccountSid": "AC123",
+        "From": "+441234567890",
+        "To": "+449876543210",
+    }
+    prepared_call = object()
+    prepared_calls = []
+    run_calls = []
+
+    async def prepare_call(*args, **kwargs):
+        prepared_calls.append(kwargs)
+        return prepared_call
+
+    async def run_bot(*args, **kwargs):
+        run_calls.append(kwargs)
+
+    monkeypatch.setattr(phone_server, "prepare_call", prepare_call)
+    monkeypatch.setattr(phone_server, "run_bot", run_bot)
+    voice_url = "https://voice.example.com/twilio/voice"
+
+    with TestClient(
+        create_app(
+            {
+                "TWILIO_AUTH_TOKEN": token,
+                "PUBLIC_BASE_URL": "https://voice.example.com",
+            }
+        )
+    ) as client:
+        response = client.post(
+            "/twilio/voice",
+            data=form,
+            headers={"X-Twilio-Signature": compute_signature(token, voice_url, form)},
+        )
+        params = {
+            parameter.get("name", ""): parameter.get("value", "")
+            for parameter in ET.fromstring(response.text).findall(".//Parameter")
+        }
+        assert params["StreamToken"] == stream_token(
+            token, form["CallSid"], form["To"], form["From"]
+        )
+
+        with client.websocket_connect("/twilio/ws") as websocket:
+            websocket.send_json({"event": "connected"})
+            websocket.send_json(
+                {
+                    "event": "start",
+                    "streamSid": "MZ123",
+                    "start": {
+                        "accountSid": form["AccountSid"],
+                        "callSid": form["CallSid"],
+                        "streamSid": "MZ123",
+                        "customParameters": params,
+                    },
+                }
+            )
+            with pytest.raises(WebSocketDisconnect):
+                websocket.receive_json()
+
+    assert len(prepared_calls) == 1
+    assert prepared_calls[0]["external_call_id"] == form["CallSid"]
+    assert len(run_calls) == 1
+    assert run_calls[0]["prepared"] is prepared_call
+
+
+@pytest.mark.parametrize("invalid_token", ["missing", "forged", "tampered_from"])
+def test_websocket_rejects_invalid_stream_token_before_preparing_call(
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_token: str,
+) -> None:
+    token = "stream-auth-token"
+    call_sid = "CA123"
+    to_number = "+449876543210"
+    from_number = "+441234567890"
+    custom_parameters = {
+        "To": to_number,
+        "From": from_number,
+        "StreamToken": stream_token(token, call_sid, to_number, from_number),
+    }
+    if invalid_token == "missing":
+        del custom_parameters["StreamToken"]
+    elif invalid_token == "forged":
+        custom_parameters["StreamToken"] = "forged-token"
+    else:
+        custom_parameters["From"] = "+441111111111"
+
+    prepared_calls = []
+
+    async def prepare_call(*args, **kwargs):
+        prepared_calls.append(kwargs)
+        return object()
+
+    async def run_bot(*args, **kwargs):
+        pytest.fail("run_bot must not be called for an invalid stream token")
+
+    monkeypatch.setattr(phone_server, "prepare_call", prepare_call)
+    monkeypatch.setattr(phone_server, "run_bot", run_bot)
+    with TestClient(create_app({"TWILIO_AUTH_TOKEN": token})) as client:
+        with client.websocket_connect("/twilio/ws") as websocket:
+            websocket.send_json({"event": "connected"})
+            websocket.send_json(
+                {
+                    "event": "start",
+                    "streamSid": "MZ123",
+                    "start": {
+                        "accountSid": "AC123",
+                        "callSid": call_sid,
+                        "streamSid": "MZ123",
+                        "customParameters": custom_parameters,
+                    },
+                }
+            )
+            with pytest.raises(WebSocketDisconnect) as disconnect:
+                websocket.receive_json()
+
+    assert disconnect.value.code == 1008
+    assert prepared_calls == []

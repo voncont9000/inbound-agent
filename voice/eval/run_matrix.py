@@ -29,7 +29,7 @@ from eval.fake_api import create_fake_api
 from eval.score import render_summary, score_call
 from eval.synth_callers import AUDIO_DIR, load_scenarios, synthesize_scenarios
 from eval.twilio_sim import run_twilio_call
-from inbound_voice.config import load_assistant_config
+from inbound_voice.config import AssistantConfig, load_assistant_config
 from inbound_voice.providers import LLM_DEFAULT_MODELS, LLM_PROVIDERS, STT_PROVIDERS, TTS_PROVIDERS
 
 VOICE_ROOT = Path(__file__).resolve().parents[1]
@@ -176,6 +176,7 @@ async def _wait_for_http(
     *,
     process: asyncio.subprocess.Process | None = None,
     lines: list[str] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> None:
     deadline = time.monotonic() + timeout
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
@@ -183,7 +184,10 @@ async def _wait_for_http(
             if process is not None and process.returncode is not None:
                 break
             try:
-                async with session.get(f"{base_url.rstrip('/')}{path}") as response:
+                async with session.get(
+                    f"{base_url.rstrip('/')}{path}",
+                    headers=headers,
+                ) as response:
                     if response.status == 200:
                         return
             except (aiohttp.ClientError, TimeoutError):
@@ -196,7 +200,10 @@ async def _wait_for_http(
 
 
 @asynccontextmanager
-async def _running_fake_api(to_number: str = FAKE_API_TO_NUMBER):
+async def _running_fake_api(
+    to_number: str = FAKE_API_TO_NUMBER,
+    knowledge_digest_path: str | None = None,
+):
     with socket.socket() as server_socket:
         server_socket.bind(("127.0.0.1", 0))
         port = server_socket.getsockname()[1]
@@ -205,18 +212,32 @@ async def _running_fake_api(to_number: str = FAKE_API_TO_NUMBER):
         tenant_id=UUID("10000000-0000-0000-0000-000000000001"),
         assistant_id=UUID("20000000-0000-0000-0000-000000000002"),
         config=assistant,
-        digest=assistant.knowledge.digest_content,
+        digest=_fake_api_digest(assistant, knowledge_digest_path),
     )
     app = create_fake_api(route_response, FAKE_API_TOKEN, to_number=to_number)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     task = asyncio.create_task(server.serve())
     api_url = f"http://127.0.0.1:{port}"
     try:
-        await _wait_for_http(api_url, "/_fake/state", 10)
+        await _wait_for_http(
+            api_url,
+            "/_fake/state",
+            10,
+            headers={"X-Service-Token": FAKE_API_TOKEN},
+        )
         yield api_url
     finally:
         server.should_exit = True
         await asyncio.gather(task, return_exceptions=True)
+
+
+def _fake_api_digest(
+    assistant: AssistantConfig,
+    knowledge_digest_path: str | Path | None,
+) -> str | None:
+    if knowledge_digest_path is not None:
+        return Path(knowledge_digest_path).read_text(encoding="utf-8")
+    return assistant.knowledge.digest_content
 
 
 async def _fake_api_state(api_url: str) -> dict[str, Any]:
@@ -383,7 +404,7 @@ async def _run_matrix_with_options(
     if transport not in {"webrtc", "twilio"}:
         raise ValueError("transport must be 'webrtc' or 'twilio'")
     if fake_api:
-        async with _running_fake_api() as api_base_url:
+        async with _running_fake_api(knowledge_digest_path=knowledge_digest_path) as api_base_url:
             return await _run_matrix_calls(
                 stt_providers,
                 tts_providers,
