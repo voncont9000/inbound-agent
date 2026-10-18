@@ -153,6 +153,9 @@
             "title": "Contacts",
             "type": "object"
           },
+          "email_triage": {
+            "$ref": "#/components/schemas/EmailTriageConfig"
+          },
           "greeting": {
             "title": "Greeting",
             "type": "string"
@@ -333,6 +336,9 @@
             },
             "title": "Contacts",
             "type": "object"
+          },
+          "email_triage": {
+            "$ref": "#/components/schemas/EmailTriageConfig"
           },
           "greeting": {
             "title": "Greeting",
@@ -2221,6 +2227,33 @@
           "body_template"
         ],
         "title": "EmailCustomerAction",
+        "type": "object"
+      },
+      "EmailTriageConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "enquiry": {
+            "default": "A customer or prospective customer asking about the business's services, prices, availability or their own case, which you can answer or move forward from the business context.",
+            "title": "Enquiry",
+            "type": "string"
+          },
+          "needs_human": {
+            "default": "A person must decide or act: complaints, disputes, threats or safety concerns, requests the business context does not cover, or anything you cannot answer without inventing facts.",
+            "title": "Needs Human",
+            "type": "string"
+          },
+          "not_relevant": {
+            "default": "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+            "title": "Not Relevant",
+            "type": "string"
+          },
+          "spam": {
+            "default": "Unsolicited marketing, phishing, scams or automated bulk mail.",
+            "title": "Spam",
+            "type": "string"
+          }
+        },
+        "title": "EmailTriageConfig",
         "type": "object"
       },
       "FactResponse": {

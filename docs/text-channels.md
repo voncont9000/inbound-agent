@@ -88,6 +88,15 @@ badge. Needs-human messages get an `AI/Needs human` label and task; spam and unr
 messages are labelled and completed. **The service never sends email and never attaches
 files to a reply.** A human reviews and sends drafts.
 
+The assistant's editable `email_triage` configuration defines what counts as `enquiry`,
+`needs_human`, `spam`, and `not_relevant`; these definitions are included in the classifier
+prompt instead of being hard-coded business policy. When uncertain whether a message is
+spam or not relevant rather than an enquiry or a request for human attention, the classifier
+is instructed to choose `needs_human`. It returns a short staff-facing reason with the
+category. Needs-human tasks use that reason (or “Email requires human review” if it is
+missing), and every category and reason is stored in `conversation.metrics.email_triage`.
+The conversation detail page displays the saved category and reason.
+
 OAuth uses `openid email https://www.googleapis.com/auth/gmail.modify`. `gmail.modify`
 is a restricted Google scope, but is the narrowest single Gmail scope that supports
 reading messages/history, creating drafts, and applying labels. Production use requires

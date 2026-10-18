@@ -62,6 +62,12 @@ const plumbingConfig: AssistantConfig = {
   transfer_targets: [],
   transfer_handoff_message: "I'm putting you through now, please hold.",
   transfer_failed_message: "Sorry, nobody is available to take your call right now.",
+  email_triage: {
+    enquiry: "A customer or prospective customer asking about the business's services, prices, availability or their own case, which you can answer or move forward from the business context.",
+    needs_human: "A person must decide or act: complaints, disputes, threats or safety concerns, requests the business context does not cover, or anything you cannot answer without inventing facts.",
+    spam: "Unsolicited marketing, phishing, scams or automated bulk mail.",
+    not_relevant: "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+  },
   review_confidence_threshold: 0.7,
 };
 
@@ -167,6 +173,12 @@ in response.`,
   ],
   transfer_handoff_message: "I'm putting you through now, please hold.",
   transfer_failed_message: "Sorry, nobody is available to take your call right now.",
+  email_triage: {
+    enquiry: "Someone asking about the firm's services, fees or their own employment or property matter, including \"do I have a claim?\"-type questions, which get a reply that gives no legal advice and offers the next step.",
+    needs_human: "Complaints about the firm or another solicitor, existing clients chasing a live matter, threats, opposing parties or their representatives, press, and anything urgent or sensitive the context doesn't cover.",
+    spam: "Unsolicited marketing, phishing, scams or automated bulk mail.",
+    not_relevant: "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+  },
   review_confidence_threshold: 0.7,
 };
 

@@ -5,21 +5,21 @@ from email.parser import BytesParser
 from email.policy import default
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import httpx
 import pytest
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
-from inbound_core.config import load_assistant_config
+from inbound_core.config import EmailTriageConfig, load_assistant_config
 from inbound_core.extraction import build_intake_artifacts, extract_intake
 from starlette.requests import Request
 
 from inbound_api.channels import credentials, gmail_messages
 from inbound_api.channels.gmail_client import FakeGmailClient
 from inbound_api.channels.gmail_oauth_state import issue_state, verify_state
-from inbound_api.models import MessageRole
+from inbound_api.models import ConversationStatus, Message, MessageRole, Task
 from inbound_api.routers import gmail as gmail_router
 from inbound_api.routers import webhooks
 from inbound_api.routers.gmail import exchange_google_code
@@ -238,6 +238,7 @@ def test_email_draft_prompt_requires_greeting_for_every_reply():
         "Siobhan McAllister",
         "Demo & Co",
         "Customer: What is the fee?",
+        EmailTriageConfig(),
     )
 
     assert (
@@ -247,6 +248,181 @@ def test_email_draft_prompt_requires_greeting_for_every_reply():
     assert 'Use the customer\'s name if known (for example, "Dear Siobhan,")' in prompt
     assert 'otherwise start with "Hello,".' in prompt
     assert "Customer name, if known: Siobhan McAllister." in prompt
+
+
+def test_email_draft_prompt_includes_configured_triage_criteria_and_unsure_rule():
+    triage = EmailTriageConfig(
+        needs_human="A staff member must review a complaint about an ongoing matter."
+    )
+    prompt = _build_email_draft_prompt(
+        "Business context",
+        None,
+        "Demo & Co",
+        "Customer: I am unhappy with the service.",
+        triage,
+    )
+
+    assert (
+        "- needs_human: A staff member must review a complaint about an ongoing matter." in prompt
+    )
+    assert (
+        "- If you are unsure whether an email is spam or not_relevant rather than enquiry or "
+        "needs_human, choose needs_human."
+    ) in prompt
+    assert (
+        "Return JSON only with category, reason (one short sentence saying why you chose the "
+        "category, for staff) and reply (the email body for enquiry, otherwise null)."
+    ) in prompt
+
+
+async def _run_email_draft_result(monkeypatch, result):
+    now = datetime.now(UTC)
+    inbound = SimpleNamespace(
+        id=uuid4(),
+        role=MessageRole.CALLER,
+        text="Could you tell me your prices?",
+        ts=now,
+        meta={
+            "gmail_message_id": "message-1",
+            "from": "customer@example.test",
+            "subject": "Question",
+            "message_id": "<message-1@example.test>",
+        },
+    )
+    conversation = SimpleNamespace(
+        id=uuid4(),
+        tenant_id=uuid4(),
+        assistant_id=uuid4(),
+        person_id=None,
+        status=ConversationStatus.ACTIVE,
+        ended_at=None,
+        metrics={
+            "channel_connection_id": str(uuid4()),
+            "from_email": "customer@example.test",
+            "gmail_thread_id": "thread-1",
+        },
+    )
+    connection = SimpleNamespace(settings={"signature": "Demo & Co"})
+    config = SimpleNamespace(
+        business_name="Demo & Co",
+        email_triage=EmailTriageConfig(
+            needs_human="A staff member must review a complaint about an ongoing matter."
+        ),
+    )
+    route = SimpleNamespace(config=config, digest=None, context_card=None)
+    additions = Mock()
+    session = SimpleNamespace(
+        get=AsyncMock(
+            side_effect=lambda model, _id: {
+                gmail_jobs.Conversation: conversation,
+                gmail_jobs.Message: inbound,
+                gmail_jobs.Assistant: SimpleNamespace(),
+                gmail_jobs.ChannelConnection: connection,
+            }[model]
+        ),
+        scalar=AsyncMock(side_effect=[inbound, None]),
+        scalars=AsyncMock(return_value=[inbound]),
+        add=additions,
+    )
+    generated = AsyncMock(
+        return_value=SimpleNamespace(text=json.dumps(result), usage_metadata=None)
+    )
+    genai_client = SimpleNamespace(
+        aio=SimpleNamespace(
+            models=SimpleNamespace(generate_content=generated),
+            aclose=AsyncMock(),
+        )
+    )
+    gmail_client = SimpleNamespace(
+        create_draft=AsyncMock(return_value="draft-1"),
+        delete_draft=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        gmail_jobs,
+        "get_settings",
+        lambda: SimpleNamespace(
+            gmail_mode="fake",
+            google_api_key="test-key",
+            text_agent_model="test-model",
+            message_extract_delay_seconds=30,
+        ),
+    )
+    monkeypatch.setattr(gmail_jobs, "load_assistant_route", AsyncMock(return_value=route))
+    monkeypatch.setattr(gmail_jobs, "render_business_context", lambda *args, **kwargs: "Context")
+    monkeypatch.setattr(gmail_jobs, "make_genai_client", lambda _key: genai_client)
+    monkeypatch.setattr(gmail_jobs, "gmail_client_for", lambda *_args: gmail_client)
+    monkeypatch.setattr(gmail_jobs, "_label", AsyncMock())
+    monkeypatch.setattr(gmail_jobs, "enqueue", AsyncMock())
+
+    await gmail_jobs.email_draft(
+        session,
+        {"conversation_id": str(conversation.id), "message_id": str(inbound.id)},
+    )
+    return conversation, additions, generated
+
+
+@pytest.mark.asyncio
+async def test_email_draft_response_schema_requires_reason(monkeypatch):
+    _, _, generated = await _run_email_draft_result(
+        monkeypatch,
+        {"category": "spam", "reason": "Bulk marketing.", "reply": None},
+    )
+
+    schema = generated.await_args.kwargs["config"]["response_schema"]
+    assert "reason" in schema["properties"]
+    assert schema["properties"]["reason"] == {"type": "STRING"}
+    assert schema["required"] == ["category", "reason", "reply"]
+
+
+@pytest.mark.asyncio
+async def test_needs_human_task_uses_stripped_model_reason(monkeypatch):
+    conversation, additions, _ = await _run_email_draft_result(
+        monkeypatch,
+        {
+            "category": "needs_human",
+            "reason": "  A person should review this complaint. \n",
+            "reply": None,
+        },
+    )
+
+    tasks = [call.args[0] for call in additions.call_args_list if isinstance(call.args[0], Task)]
+    assert len(tasks) == 1
+    assert tasks[0].payload == {"reason": "A person should review this complaint."}
+    assert conversation.metrics["email_triage"] == {
+        "category": "needs_human",
+        "reason": "A person should review this complaint.",
+    }
+
+
+@pytest.mark.parametrize("reason", ["", None])
+@pytest.mark.asyncio
+async def test_needs_human_task_falls_back_when_reason_is_blank_or_missing(monkeypatch, reason):
+    result = {"category": "needs_human", "reply": None}
+    if reason is not None:
+        result["reason"] = reason
+    conversation, additions, _ = await _run_email_draft_result(monkeypatch, result)
+
+    tasks = [call.args[0] for call in additions.call_args_list if isinstance(call.args[0], Task)]
+    assert len(tasks) == 1
+    assert tasks[0].payload == {"reason": "Email requires human review"}
+    assert conversation.metrics["email_triage"] == {"category": "needs_human", "reason": ""}
+
+
+@pytest.mark.asyncio
+async def test_spam_stores_triage_metrics_without_task_or_draft(monkeypatch):
+    conversation, additions, _ = await _run_email_draft_result(
+        monkeypatch,
+        {"category": "spam", "reason": "Unsolicited bulk marketing.", "reply": None},
+    )
+
+    added = [call.args[0] for call in additions.call_args_list]
+    assert not any(isinstance(item, Task) for item in added)
+    assert not any(isinstance(item, Message) for item in added)
+    assert conversation.metrics["email_triage"] == {
+        "category": "spam",
+        "reason": "Unsolicited bulk marketing.",
+    }
+    assert conversation.status == ConversationStatus.COMPLETED
 
 
 def test_oauth_state_and_credentials(monkeypatch):

@@ -1,6 +1,14 @@
 from pathlib import Path
 
-from inbound_core.config import AssistantConfig, assistant_config_json_schema, load_assistant_config
+import pytest
+from pydantic import ValidationError
+
+from inbound_core.config import (
+    AssistantConfig,
+    EmailTriageConfig,
+    assistant_config_json_schema,
+    load_assistant_config,
+)
 
 
 def test_template_resolution_and_deep_merge(tmp_path: Path) -> None:
@@ -88,3 +96,27 @@ def test_transfer_handoff_message_has_a_spoken_default() -> None:
         AssistantConfig.model_fields["transfer_handoff_message"].default
         == "I'm putting you through now, please hold."
     )
+
+
+def test_email_triage_defaults_and_rejects_extra_fields() -> None:
+    config = EmailTriageConfig()
+
+    assert config.enquiry == (
+        "A customer or prospective customer asking about the business's services, prices, "
+        "availability or their own case, which you can answer or move forward from the "
+        "business context."
+    )
+    assert config.needs_human == (
+        "A person must decide or act: complaints, disputes, threats or safety concerns, "
+        "requests the business context does not cover, or anything you cannot answer "
+        "without inventing facts."
+    )
+    assert config.spam == "Unsolicited marketing, phishing, scams or automated bulk mail."
+    assert config.not_relevant == (
+        "Genuine mail that needs no reply, such as a thank-you with no question, a delivery "
+        "receipt, or a message clearly meant for a different business."
+    )
+    assert AssistantConfig.model_fields["email_triage"].default_factory is EmailTriageConfig
+
+    with pytest.raises(ValidationError):
+        EmailTriageConfig(unknown="not allowed")
