@@ -39,12 +39,28 @@ The Postgres-backed job queue is designed for worker claims using `FOR UPDATE SK
 
 ## Voice/API lifecycle
 
-1. **Route at ring:** voice calls `GET /internal/voice/route?to=...&from=...`; the API resolves the tenant and assistant by dialled channel number and returns config, digest, and context card.
-2. **Start:** voice posts `CallStart` to `POST /internal/voice/calls`; the API returns a conversation ID.
-3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`.
+1. **Route before greeting:** voice calls `GET /internal/voice/route?to=...&from=...`; the API resolves the tenant and assistant by dialled channel number and returns config, digest, and context card. Routing is a single bounded attempt; if it fails, voice uses local YAML while keeping API reporting enabled.
+2. **Start:** after pipeline setup, voice starts `POST /internal/voice/calls` asynchronously so call setup does not block the greeting.
+3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`. Transient failures are retried; an undelivered report is atomically spooled for later resend.
 4. **Graph ingest:** the report handler stores the conversation and enqueues `graph_ingest`; the worker calls the graph seam to ingest the conversation.
 
 All internal voice routes require `X-Service-Token`, checked against `VOICE_SERVICE_TOKEN`.
+
+## Voice integration (agent D)
+
+API mode is enabled by `API_BASE_URL` and `VOICE_SERVICE_TOKEN`; web calls additionally
+need `WEB_CALL_TO_NUMBER`. Route failure falls back to `ASSISTANT_CONFIG`, and report
+delivery failures are retained under `VOICE_SPOOL_DIR` for
+`python -m inbound_voice.api_client resend`. The local call artifacts remain available
+regardless of API mode.
+
+The shared `voice/bot.py` pipeline serves browser WebRTC and phone calls. The standalone
+`voice/phone_server.py` exposes Twilio's form webhook and WebSocket media stream, validates
+Twilio signatures when configured, and can run behind a proxy with `PUBLIC_BASE_URL`.
+Twilio audio is 8 kHz G.711 μ-law at the edge and 8 kHz PCM through the phone pipeline;
+the browser pipeline retains its existing sample rates. `voice/eval/twilio_sim.py` and
+`voice/eval/fake_api.py` support local integration and evaluation through
+`eval.run_matrix --transport twilio --fake-api`.
 
 ## Local run
 
