@@ -129,6 +129,11 @@ expose database or Redis ports to the Internet.
   `GOOGLE_OAUTH_REDIRECT_URL`; set the Pub/Sub authenticated push audience to the value of
   `GMAIL_PUBSUB_AUDIENCE`. Caddy already routes `/webhooks/*` and `/oauth/*` to the backend.
   Keep `GMAIL_MODE=off` until Google OAuth, Pub/Sub, and credential encryption are configured.
+- **Post-conversation actions:** keep `EMAIL_SENDER`, `SHEETS_WRITER`, and `WEBHOOK_SENDER` set
+  to `off` until their providers are configured. Resend requires `RESEND_API_KEY` and `EMAIL_FROM`;
+  Gmail and Sheets require Google OAuth and the corresponding connection scopes. Webhook delivery
+  signs requests and blocks private destinations in production. Set `APP_BASE_URL` to the public
+  HTTPS origin so action templates can include conversation links.
 
 ## Backups and recovery
 

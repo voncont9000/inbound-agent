@@ -48,6 +48,39 @@ function toContactSummary(detail: Schemas["ContactDetailResponse"]): Schemas["Co
 }
 
 export const handlers = [
+  http.get<never, never, Schemas["PostActionVariable"][]>("*/api/post-actions/variables", () =>
+    HttpResponse.json<Schemas["PostActionVariable"][]>([
+      { name: "contact.name", description: "The customer's name." },
+      { name: "summary", description: "Conversation summary." },
+    ]),
+  ),
+  http.post<{ id: string }, Schemas["PostActionTestRequest"], ApiResponse<Schemas["PostActionTestResponse"]>>("*/api/assistants/:id/post-actions/test", async ({ request, params }) => {
+    const body = await requestJson<Schemas["PostActionTestRequest"]>(request);
+    const action = body.action;
+    const conversation = selectedTenant(request).conversations.find(({ assistant_id }) => assistant_id === params.id);
+    if (!conversation) return HttpResponse.json<ApiErrorResponse>({ detail: "Conversation not found" }, { status: 404 });
+    const rendered = action.kind === "email_customer" || action.kind === "notify_staff"
+      ? { to: action.kind === "notify_staff" ? action.to : ["jamie.morgan@example.com"], subject: action.subject_template.replace("{{business_name}}", "Brightside Plumbing & Heating"), body: action.body_template.replace("{{summary}}", conversation.summary ?? "") }
+      : action.kind === "sheets_row"
+        ? { spreadsheet_id: action.spreadsheet_id, sheet_name: action.sheet_name, headers: action.columns.map(({ header }) => header), row: action.columns.map(({ value_template }) => value_template) }
+        : { url: action.url, payload: { event_id: "dry-run", action_key: action.key, events: ["conversation_completed"], conversation_id: conversation.id, context: {} } };
+    return HttpResponse.json<Schemas["PostActionTestResponse"]>({
+      conversation_id: conversation.id,
+      events: ["conversation_completed"],
+      matched_events: ["conversation_completed"],
+      would_skip: null,
+      rendered,
+    });
+  }),
+  http.get<{ id: string }, never, Schemas["WebhookSecretListResponse"]>("*/api/assistants/:id/post-actions/webhook-secrets", ({ params }) =>
+    HttpResponse.json<Schemas["WebhookSecretListResponse"]>({ items: mockDb.postActionSecrets[String(params.id)] ?? [] }),
+  ),
+  http.post<{ id: string; action_key: string }, never, ApiResponse<Schemas["WebhookSecretCreateResponse"]>>("*/api/assistants/:id/post-actions/:action_key/webhook-secret", ({ params }) => {
+    const secret = { action_key: String(params.action_key), secret: "mock-secret-value", created_at: isoNow() };
+    const current = mockDb.postActionSecrets[String(params.id)] ?? [];
+    mockDb.postActionSecrets[String(params.id)] = [...current.filter(({ action_key }) => action_key !== secret.action_key), { action_key: secret.action_key, created_at: secret.created_at }];
+    return HttpResponse.json<Schemas["WebhookSecretCreateResponse"]>(secret);
+  }),
   http.get<never, never, { mode: "off" | "fake" | "google" }>(
     "*/api/channels/gmail/mode",
     () => HttpResponse.json<{ mode: "off" | "fake" | "google" }>({ mode: "fake" }),

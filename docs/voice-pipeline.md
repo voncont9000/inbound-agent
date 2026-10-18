@@ -1,5 +1,8 @@
 # Voice pipeline (M0)
 
+Voice report results can enqueue the shared after-conversation actions documented in
+[After-conversation actions](actions.md).
+
 ## Architecture
 
 ```text

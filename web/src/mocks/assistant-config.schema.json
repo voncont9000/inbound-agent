@@ -3,34 +3,34 @@
     "DateDeadlineUrgencyRule": {
       "additionalProperties": false,
       "properties": {
-        "type": {
-          "const": "date_deadline",
-          "title": "Type",
+        "add_months": {
+          "title": "Add Months",
+          "type": "integer"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "minus_days": {
+          "title": "Minus Days",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
           "type": "string"
         },
         "service": {
           "title": "Service",
           "type": "string"
         },
-        "field": {
-          "title": "Field",
+        "type": {
+          "const": "date_deadline",
+          "title": "Type",
           "type": "string"
-        },
-        "add_months": {
-          "title": "Add Months",
-          "type": "integer"
-        },
-        "minus_days": {
-          "title": "Minus Days",
-          "type": "integer"
         },
         "urgent_within_days": {
           "title": "Urgent Within Days",
           "type": "integer"
-        },
-        "reason": {
-          "title": "Reason",
-          "type": "string"
         }
       },
       "required": [
@@ -45,32 +45,51 @@
       "title": "DateDeadlineUrgencyRule",
       "type": "object"
     },
+    "EmailCustomerAction": {
+      "additionalProperties": false,
+      "properties": {
+        "body_template": {
+          "minLength": 1,
+          "title": "Body Template",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "email_customer",
+          "title": "Kind",
+          "type": "string"
+        },
+        "subject_template": {
+          "minLength": 1,
+          "title": "Subject Template",
+          "type": "string"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "subject_template",
+        "body_template"
+      ],
+      "title": "EmailCustomerAction",
+      "type": "object"
+    },
     "FieldSpec": {
       "additionalProperties": false,
       "properties": {
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "label": {
-          "title": "Label",
-          "type": "string"
-        },
-        "type": {
-          "enum": [
-            "string",
-            "email",
-            "phone",
-            "date",
-            "boolean",
-            "integer",
-            "number",
-            "enum",
-            "list"
-          ],
-          "title": "Type",
-          "type": "string"
-        },
         "choices": {
           "anyOf": [
             {
@@ -86,11 +105,6 @@
           "default": null,
           "title": "Choices"
         },
-        "required": {
-          "default": false,
-          "title": "Required",
-          "type": "boolean"
-        },
         "critical": {
           "default": false,
           "title": "Critical",
@@ -99,6 +113,34 @@
         "description": {
           "default": "",
           "title": "Description",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "email",
+            "phone",
+            "date",
+            "boolean",
+            "integer",
+            "number",
+            "enum",
+            "list"
+          ],
+          "title": "Type",
           "type": "string"
         }
       },
@@ -113,11 +155,6 @@
     "KeywordUrgencyRule": {
       "additionalProperties": false,
       "properties": {
-        "type": {
-          "const": "keyword",
-          "title": "Type",
-          "type": "string"
-        },
         "phrases": {
           "items": {
             "type": "string"
@@ -127,6 +164,11 @@
         },
         "reason": {
           "title": "Reason",
+          "type": "string"
+        },
+        "type": {
+          "const": "keyword",
+          "title": "Type",
           "type": "string"
         }
       },
@@ -141,19 +183,17 @@
     "KnowledgeConfig": {
       "additionalProperties": false,
       "properties": {
-        "sources": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeSource"
-          },
-          "title": "Sources",
-          "type": "array"
-        },
-        "faqs": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeFAQ"
-          },
-          "title": "Faqs",
-          "type": "array"
+        "digest_content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest Content"
         },
         "digest_path": {
           "anyOf": [
@@ -167,23 +207,25 @@
           "default": null,
           "title": "Digest Path"
         },
+        "faqs": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeFAQ"
+          },
+          "title": "Faqs",
+          "type": "array"
+        },
         "max_digest_chars": {
           "default": 24000,
           "exclusiveMinimum": 0,
           "title": "Max Digest Chars",
           "type": "integer"
         },
-        "digest_content": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Digest Content"
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeSource"
+          },
+          "title": "Sources",
+          "type": "array"
         }
       },
       "title": "KnowledgeConfig",
@@ -192,12 +234,12 @@
     "KnowledgeFAQ": {
       "additionalProperties": false,
       "properties": {
-        "question": {
-          "title": "Question",
-          "type": "string"
-        },
         "answer": {
           "title": "Answer",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
           "type": "string"
         }
       },
@@ -211,6 +253,18 @@
     "KnowledgeSource": {
       "additionalProperties": false,
       "properties": {
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File"
+        },
         "url": {
           "anyOf": [
             {
@@ -224,26 +278,70 @@
           ],
           "default": null,
           "title": "Url"
-        },
-        "file": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "File"
         }
       },
       "title": "KnowledgeSource",
       "type": "object"
     },
+    "NotifyStaffAction": {
+      "additionalProperties": false,
+      "properties": {
+        "body_template": {
+          "minLength": 1,
+          "title": "Body Template",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "notify_staff",
+          "title": "Kind",
+          "type": "string"
+        },
+        "subject_template": {
+          "minLength": 1,
+          "title": "Subject Template",
+          "type": "string"
+        },
+        "to": {
+          "items": {
+            "format": "email",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "To",
+          "type": "array"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "to",
+        "subject_template",
+        "body_template"
+      ],
+      "title": "NotifyStaffAction",
+      "type": "object"
+    },
     "OfficeHours": {
       "additionalProperties": false,
       "properties": {
+        "closes": {
+          "title": "Closes",
+          "type": "string"
+        },
         "days": {
           "items": {
             "type": "string"
@@ -253,10 +351,6 @@
         },
         "opens": {
           "title": "Opens",
-          "type": "string"
-        },
-        "closes": {
-          "title": "Closes",
           "type": "string"
         },
         "timezone": {
@@ -273,19 +367,64 @@
       "title": "OfficeHours",
       "type": "object"
     },
+    "PostActionTrigger": {
+      "additionalProperties": false,
+      "properties": {
+        "channels": {
+          "items": {
+            "enum": [
+              "phone",
+              "web",
+              "gmail",
+              "whatsapp"
+            ],
+            "type": "string"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "enum": [
+              "conversation_completed",
+              "urgent",
+              "callback_requested",
+              "needs_human",
+              "complaint"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        },
+        "services": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Services",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "title": "PostActionTrigger",
+      "type": "object"
+    },
     "PriceItem": {
       "additionalProperties": false,
       "properties": {
-        "service": {
-          "title": "Service",
+        "notes": {
+          "title": "Notes",
           "type": "string"
         },
         "price": {
           "title": "Price",
           "type": "string"
         },
-        "notes": {
-          "title": "Notes",
+        "service": {
+          "title": "Service",
           "type": "string"
         }
       },
@@ -300,16 +439,16 @@
     "ServiceConfig": {
       "additionalProperties": false,
       "properties": {
-        "label": {
-          "title": "Label",
-          "type": "string"
-        },
         "fields": {
           "items": {
             "$ref": "#/$defs/FieldSpec"
           },
           "title": "Fields",
           "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
         }
       },
       "required": [
@@ -317,6 +456,77 @@
         "fields"
       ],
       "title": "ServiceConfig",
+      "type": "object"
+    },
+    "SheetColumn": {
+      "additionalProperties": false,
+      "properties": {
+        "header": {
+          "minLength": 1,
+          "title": "Header",
+          "type": "string"
+        },
+        "value_template": {
+          "title": "Value Template",
+          "type": "string"
+        }
+      },
+      "required": [
+        "header",
+        "value_template"
+      ],
+      "title": "SheetColumn",
+      "type": "object"
+    },
+    "SheetsRowAction": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/SheetColumn"
+          },
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "sheets_row",
+          "title": "Kind",
+          "type": "string"
+        },
+        "sheet_name": {
+          "default": "Sheet1",
+          "minLength": 1,
+          "title": "Sheet Name",
+          "type": "string"
+        },
+        "spreadsheet_id": {
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Spreadsheet Id",
+          "type": "string"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "spreadsheet_id",
+        "columns"
+      ],
+      "title": "SheetsRowAction",
       "type": "object"
     },
     "TransferTarget": {
@@ -331,6 +541,11 @@
           "title": "Label",
           "type": "string"
         },
+        "office_hours_only": {
+          "default": true,
+          "title": "Office Hours Only",
+          "type": "boolean"
+        },
         "phone": {
           "title": "Phone",
           "type": "string"
@@ -338,11 +553,6 @@
         "when_to_use": {
           "title": "When To Use",
           "type": "string"
-        },
-        "office_hours_only": {
-          "default": true,
-          "title": "Office Hours Only",
-          "type": "boolean"
         }
       },
       "required": [
@@ -353,18 +563,57 @@
       ],
       "title": "TransferTarget",
       "type": "object"
+    },
+    "WebhookAction": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "webhook",
+          "title": "Kind",
+          "type": "string"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        },
+        "url": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "trigger",
+        "kind",
+        "url"
+      ],
+      "title": "WebhookAction",
+      "type": "object"
     }
   },
   "additionalProperties": false,
   "properties": {
-    "language": {
-      "default": "English",
-      "title": "Language",
-      "type": "string"
-    },
     "business_name": {
       "title": "Business Name",
       "type": "string"
+    },
+    "contacts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Contacts",
+      "type": "object"
     },
     "greeting": {
       "title": "Greeting",
@@ -374,6 +623,75 @@
       "default": "",
       "title": "Instructions",
       "type": "string"
+    },
+    "knowledge": {
+      "$ref": "#/$defs/KnowledgeConfig"
+    },
+    "language": {
+      "default": "English",
+      "title": "Language",
+      "type": "string"
+    },
+    "live_actions": {
+      "items": {
+        "enum": [
+          "confirm_critical_fields",
+          "flag_urgent",
+          "request_callback",
+          "log_complaint",
+          "end_call",
+          "transfer_call"
+        ],
+        "type": "string"
+      },
+      "title": "Live Actions",
+      "type": "array"
+    },
+    "office_hours": {
+      "$ref": "#/$defs/OfficeHours"
+    },
+    "policies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Policies",
+      "type": "array"
+    },
+    "post_actions": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "email_customer": "#/$defs/EmailCustomerAction",
+            "notify_staff": "#/$defs/NotifyStaffAction",
+            "sheets_row": "#/$defs/SheetsRowAction",
+            "webhook": "#/$defs/WebhookAction"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/EmailCustomerAction"
+          },
+          {
+            "$ref": "#/$defs/NotifyStaffAction"
+          },
+          {
+            "$ref": "#/$defs/SheetsRowAction"
+          },
+          {
+            "$ref": "#/$defs/WebhookAction"
+          }
+        ]
+      },
+      "title": "Post Actions",
+      "type": "array"
+    },
+    "price_list": {
+      "items": {
+        "$ref": "#/$defs/PriceItem"
+      },
+      "title": "Price List",
+      "type": "array"
     },
     "readback": {
       "default": "off",
@@ -385,29 +703,12 @@
       "title": "Readback",
       "type": "string"
     },
-    "office_hours": {
-      "$ref": "#/$defs/OfficeHours"
-    },
-    "price_list": {
-      "items": {
-        "$ref": "#/$defs/PriceItem"
-      },
-      "title": "Price List",
-      "type": "array"
-    },
-    "policies": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Policies",
-      "type": "array"
-    },
-    "contacts": {
-      "additionalProperties": {
-        "type": "string"
-      },
-      "title": "Contacts",
-      "type": "object"
+    "review_confidence_threshold": {
+      "default": 0.7,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Review Confidence Threshold",
+      "type": "number"
     },
     "services": {
       "additionalProperties": {
@@ -415,6 +716,23 @@
       },
       "title": "Services",
       "type": "object"
+    },
+    "transfer_failed_message": {
+      "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "title": "Transfer Failed Message",
+      "type": "string"
+    },
+    "transfer_handoff_message": {
+      "default": "I'm putting you through now, please hold.",
+      "title": "Transfer Handoff Message",
+      "type": "string"
+    },
+    "transfer_targets": {
+      "items": {
+        "$ref": "#/$defs/TransferTarget"
+      },
+      "title": "Transfer Targets",
+      "type": "array"
     },
     "urgency_rules": {
       "items": {
@@ -436,48 +754,6 @@
       },
       "title": "Urgency Rules",
       "type": "array"
-    },
-    "knowledge": {
-      "$ref": "#/$defs/KnowledgeConfig"
-    },
-    "live_actions": {
-      "items": {
-        "enum": [
-          "confirm_critical_fields",
-          "flag_urgent",
-          "request_callback",
-          "log_complaint",
-          "end_call",
-          "transfer_call"
-        ],
-        "type": "string"
-      },
-      "title": "Live Actions",
-      "type": "array"
-    },
-    "transfer_targets": {
-      "items": {
-        "$ref": "#/$defs/TransferTarget"
-      },
-      "title": "Transfer Targets",
-      "type": "array"
-    },
-    "transfer_handoff_message": {
-      "default": "I'm putting you through now, please hold.",
-      "title": "Transfer Handoff Message",
-      "type": "string"
-    },
-    "transfer_failed_message": {
-      "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
-      "title": "Transfer Failed Message",
-      "type": "string"
-    },
-    "review_confidence_threshold": {
-      "default": 0.7,
-      "maximum": 1,
-      "minimum": 0,
-      "title": "Review Confidence Threshold",
-      "type": "number"
     }
   },
   "required": [

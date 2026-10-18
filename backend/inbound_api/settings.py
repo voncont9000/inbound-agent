@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     fake_outbox_path: Path = BACKEND_ROOT / "var" / "whatsapp-outbox.jsonl"
     gmail_mode: Literal["off", "fake", "google"] = "fake"
     gmail_fake_dir: Path = BACKEND_ROOT / "var" / "gmail-fake"
+    email_sender: Literal["off", "fake", "gmail", "resend"] = "fake"
+    resend_api_key: str | None = None
+    email_from: str | None = None
+    resend_base_url: str = "https://api.resend.com"
+    sheets_writer: Literal["off", "fake", "google"] = "fake"
+    webhook_sender: Literal["off", "fake", "http"] = "fake"
+    post_actions_fake_dir: Path = BACKEND_ROOT / "var" / "post-actions"
+    post_action_webhook_allow_private_urls: bool = False
+    app_base_url: str = "http://localhost:5173"
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: str | None = None
     google_oauth_redirect_url: str | None = None
@@ -75,6 +84,12 @@ class Settings(BaseSettings):
     @field_validator("gmail_fake_dir", mode="before")
     @classmethod
     def resolve_gmail_fake_dir(cls, value: str | Path) -> Path:
+        path = Path(value)
+        return path if path.is_absolute() else BACKEND_ROOT.parent / path
+
+    @field_validator("post_actions_fake_dir", mode="before")
+    @classmethod
+    def resolve_post_actions_fake_dir(cls, value: str | Path) -> Path:
         path = Path(value)
         return path if path.is_absolute() else BACKEND_ROOT.parent / path
 
@@ -128,6 +143,30 @@ class Settings(BaseSettings):
                 "Gmail production google mode requires Google OAuth/Pub/Sub settings "
                 "and CREDENTIALS_ENCRYPTION_KEY"
             )
+        if self.app_env not in {"development", "test"}:
+            if (
+                self.email_sender == "fake"
+                or self.sheets_writer == "fake"
+                or self.webhook_sender == "fake"
+            ):
+                raise ValueError(
+                    "Fake post-action providers are only allowed in development and test"
+                )
+            if self.email_sender == "resend" and (
+                not (self.resend_api_key or "").strip() or not (self.email_from or "").strip()
+            ):
+                raise ValueError("Resend requires RESEND_API_KEY and EMAIL_FROM")
+            if (
+                self.email_sender == "gmail" or self.sheets_writer == "google"
+            ) and self.gmail_mode != "google":
+                raise ValueError("Google post-action providers require GMAIL_MODE=google")
+            if self.post_action_webhook_allow_private_urls:
+                raise ValueError("Private webhook URLs are only allowed in development and test")
+            if (
+                self.webhook_sender == "http"
+                and not (self.credentials_encryption_key or "").strip()
+            ):
+                raise ValueError("Webhook signing requires CREDENTIALS_ENCRYPTION_KEY")
         return self
 
 

@@ -101,4 +101,22 @@ transfer_failed_message: "Sorry, nobody is available to take your call right now
 #     phone: "+447700900123"
 #     when_to_use: The caller explicitly asks to speak to a person now.
 #     office_hours_only: true
+post_actions: []
+# Example actions can be configured per assistant:
+# post_actions:
+#   - kind: notify_staff
+#     key: urgent_staff_alert
+#     enabled: true
+#     trigger:
+#       events: [urgent, complaint]
+#     to: [team@example.com]
+#     subject_template: "Customer needs attention: {{ contact.name }}"
+#     body_template: "Review conversation {{ conversation.link }}."
+#   - kind: email_customer
+#     key: customer_confirmation
+#     enabled: true
+#     trigger:
+#       events: [conversation_completed]
+#     subject_template: "Thanks for contacting {{ business_name }}"
+#     body_template: "We have received your enquiry."
 review_confidence_threshold: 0.7

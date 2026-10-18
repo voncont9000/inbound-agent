@@ -1,6 +1,91 @@
 {
   "components": {
     "schemas": {
+      "ActionRunSummary": {
+        "properties": {
+          "action_key": {
+            "title": "Action Key",
+            "type": "string"
+          },
+          "action_kind": {
+            "title": "Action Kind",
+            "type": "string"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "fire_count": {
+            "title": "Fire Count",
+            "type": "integer"
+          },
+          "fired_events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fired Events",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "output": {
+            "additionalProperties": true,
+            "title": "Output",
+            "type": "object"
+          },
+          "pending_events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Events",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "succeeded",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action_key",
+          "action_kind",
+          "status",
+          "attempts",
+          "fire_count",
+          "pending_events",
+          "last_error",
+          "output",
+          "fired_events",
+          "updated_at"
+        ],
+        "title": "ActionRunSummary",
+        "type": "object"
+      },
       "AssistantConfig-Input": {
         "additionalProperties": false,
         "properties": {
@@ -55,6 +140,35 @@
               "type": "string"
             },
             "title": "Policies",
+            "type": "array"
+          },
+          "post_actions": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "email_customer": "#/components/schemas/EmailCustomerAction",
+                  "notify_staff": "#/components/schemas/NotifyStaffAction",
+                  "sheets_row": "#/components/schemas/SheetsRowAction",
+                  "webhook": "#/components/schemas/WebhookAction"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/EmailCustomerAction"
+                },
+                {
+                  "$ref": "#/components/schemas/NotifyStaffAction"
+                },
+                {
+                  "$ref": "#/components/schemas/SheetsRowAction"
+                },
+                {
+                  "$ref": "#/components/schemas/WebhookAction"
+                }
+              ]
+            },
+            "title": "Post Actions",
             "type": "array"
           },
           "price_list": {
@@ -195,6 +309,35 @@
               "type": "string"
             },
             "title": "Policies",
+            "type": "array"
+          },
+          "post_actions": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "email_customer": "#/components/schemas/EmailCustomerAction",
+                  "notify_staff": "#/components/schemas/NotifyStaffAction",
+                  "sheets_row": "#/components/schemas/SheetsRowAction",
+                  "webhook": "#/components/schemas/WebhookAction"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/EmailCustomerAction"
+                },
+                {
+                  "$ref": "#/components/schemas/NotifyStaffAction"
+                },
+                {
+                  "$ref": "#/components/schemas/SheetsRowAction"
+                },
+                {
+                  "$ref": "#/components/schemas/WebhookAction"
+                }
+              ]
+            },
+            "title": "Post Actions",
             "type": "array"
           },
           "price_list": {
@@ -1104,6 +1247,13 @@
       },
       "ConversationDetailResponse": {
         "properties": {
+          "action_runs": {
+            "items": {
+              "$ref": "#/components/schemas/ActionRunSummary"
+            },
+            "title": "Action Runs",
+            "type": "array"
+          },
           "assistant_id": {
             "format": "uuid",
             "title": "Assistant Id",
@@ -1547,6 +1697,48 @@
           "reason"
         ],
         "title": "DateDeadlineUrgencyRule",
+        "type": "object"
+      },
+      "EmailCustomerAction": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "minLength": 1,
+            "title": "Body Template",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "const": "email_customer",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subject_template": {
+            "minLength": 1,
+            "title": "Subject Template",
+            "type": "string"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/PostActionTrigger"
+          }
+        },
+        "required": [
+          "key",
+          "trigger",
+          "kind",
+          "subject_template",
+          "body_template"
+        ],
+        "title": "EmailCustomerAction",
         "type": "object"
       },
       "FactResponse": {
@@ -2369,6 +2561,58 @@
         "title": "MessageResponse",
         "type": "object"
       },
+      "NotifyStaffAction": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "minLength": 1,
+            "title": "Body Template",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "const": "notify_staff",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subject_template": {
+            "minLength": 1,
+            "title": "Subject Template",
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "To",
+            "type": "array"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/PostActionTrigger"
+          }
+        },
+        "required": [
+          "key",
+          "trigger",
+          "kind",
+          "to",
+          "subject_template",
+          "body_template"
+        ],
+        "title": "NotifyStaffAction",
+        "type": "object"
+      },
       "OfficeHours": {
         "additionalProperties": false,
         "properties": {
@@ -2399,6 +2643,164 @@
           "closes"
         ],
         "title": "OfficeHours",
+        "type": "object"
+      },
+      "PostActionTestRequest": {
+        "properties": {
+          "action": {
+            "discriminator": {
+              "mapping": {
+                "email_customer": "#/components/schemas/EmailCustomerAction",
+                "notify_staff": "#/components/schemas/NotifyStaffAction",
+                "sheets_row": "#/components/schemas/SheetsRowAction",
+                "webhook": "#/components/schemas/WebhookAction"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EmailCustomerAction"
+              },
+              {
+                "$ref": "#/components/schemas/NotifyStaffAction"
+              },
+              {
+                "$ref": "#/components/schemas/SheetsRowAction"
+              },
+              {
+                "$ref": "#/components/schemas/WebhookAction"
+              }
+            ],
+            "title": "Action"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "PostActionTestRequest",
+        "type": "object"
+      },
+      "PostActionTestResponse": {
+        "properties": {
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "matched_events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Events",
+            "type": "array"
+          },
+          "rendered": {
+            "additionalProperties": true,
+            "title": "Rendered",
+            "type": "object"
+          },
+          "would_skip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Would Skip"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "events",
+          "matched_events",
+          "would_skip",
+          "rendered"
+        ],
+        "title": "PostActionTestResponse",
+        "type": "object"
+      },
+      "PostActionTrigger": {
+        "additionalProperties": false,
+        "properties": {
+          "channels": {
+            "items": {
+              "enum": [
+                "phone",
+                "web",
+                "gmail",
+                "whatsapp"
+              ],
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "events": {
+            "items": {
+              "enum": [
+                "conversation_completed",
+                "urgent",
+                "callback_requested",
+                "needs_human",
+                "complaint"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Events",
+            "type": "array"
+          },
+          "services": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Services",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "PostActionTrigger",
+        "type": "object"
+      },
+      "PostActionVariable": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "PostActionVariable",
         "type": "object"
       },
       "PriceItem": {
@@ -2491,6 +2893,77 @@
           "fields"
         ],
         "title": "ServiceConfig",
+        "type": "object"
+      },
+      "SheetColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "header": {
+            "minLength": 1,
+            "title": "Header",
+            "type": "string"
+          },
+          "value_template": {
+            "title": "Value Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header",
+          "value_template"
+        ],
+        "title": "SheetColumn",
+        "type": "object"
+      },
+      "SheetsRowAction": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/SheetColumn"
+            },
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "const": "sheets_row",
+            "title": "Kind",
+            "type": "string"
+          },
+          "sheet_name": {
+            "default": "Sheet1",
+            "minLength": 1,
+            "title": "Sheet Name",
+            "type": "string"
+          },
+          "spreadsheet_id": {
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Spreadsheet Id",
+            "type": "string"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/PostActionTrigger"
+          }
+        },
+        "required": [
+          "key",
+          "trigger",
+          "kind",
+          "spreadsheet_id",
+          "columns"
+        ],
+        "title": "SheetsRowAction",
         "type": "object"
       },
       "SignupRequest": {
@@ -2839,6 +3312,102 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WebhookAction": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "const": "webhook",
+            "title": "Kind",
+            "type": "string"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/PostActionTrigger"
+          },
+          "url": {
+            "format": "uri",
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "trigger",
+          "kind",
+          "url"
+        ],
+        "title": "WebhookAction",
+        "type": "object"
+      },
+      "WebhookSecretCreateResponse": {
+        "properties": {
+          "action_key": {
+            "title": "Action Key",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_key",
+          "secret",
+          "created_at"
+        ],
+        "title": "WebhookSecretCreateResponse",
+        "type": "object"
+      },
+      "WebhookSecretListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WebhookSecretSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "WebhookSecretListResponse",
+        "type": "object"
+      },
+      "WebhookSecretSummary": {
+        "properties": {
+          "action_key": {
+            "title": "Action Key",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_key",
+          "created_at"
+        ],
+        "title": "WebhookSecretSummary",
         "type": "object"
       }
     }
@@ -3779,6 +4348,202 @@
         "summary": "Create Source",
         "tags": [
           "knowledge"
+        ]
+      }
+    },
+    "/assistants/{assistant_id}/post-actions/test": {
+      "post": {
+        "operationId": "test_post_action_assistants__assistant_id__post_actions_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostActionTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostActionTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Post Action",
+        "tags": [
+          "post-actions"
+        ]
+      }
+    },
+    "/assistants/{assistant_id}/post-actions/webhook-secrets": {
+      "get": {
+        "operationId": "list_webhook_secrets_assistants__assistant_id__post_actions_webhook_secrets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSecretListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Webhook Secrets",
+        "tags": [
+          "post-actions"
+        ]
+      }
+    },
+    "/assistants/{assistant_id}/post-actions/{action_key}/webhook-secret": {
+      "post": {
+        "operationId": "rotate_webhook_secret_assistants__assistant_id__post_actions__action_key__webhook_secret_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action_key",
+            "required": true,
+            "schema": {
+              "title": "Action Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSecretCreateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Webhook Secret",
+        "tags": [
+          "post-actions"
         ]
       }
     },
@@ -5238,6 +6003,59 @@
         "summary": "Gmail Oauth Callback",
         "tags": [
           "gmail"
+        ]
+      }
+    },
+    "/post-actions/variables": {
+      "get": {
+        "operationId": "list_post_action_variables_post_actions_variables_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PostActionVariable"
+                  },
+                  "title": "Response List Post Action Variables Post Actions Variables Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Post Action Variables",
+        "tags": [
+          "post-actions"
         ]
       }
     },

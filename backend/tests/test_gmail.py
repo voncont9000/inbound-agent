@@ -328,6 +328,9 @@ def test_production_allows_gmail_off_without_google_settings():
         whatsapp_verify_token="verify-token",
         whatsapp_access_token="access-token",
         gmail_mode="off",
+        email_sender="off",
+        sheets_writer="off",
+        webhook_sender="off",
     )
     assert settings.gmail_mode == "off"
 

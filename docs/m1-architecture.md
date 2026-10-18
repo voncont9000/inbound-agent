@@ -87,7 +87,7 @@ reviews retain previous values and record reviewer, timestamp, note, and provena
 
 ## Jobs and worker
 
-Call reports and knowledge imports enqueue durable jobs inside their write transaction.
+Call reports, text extraction, and knowledge imports enqueue durable jobs inside their write transaction.
 The worker claims one job through the `claim_next_job` security-definer function using
 `FOR UPDATE SKIP LOCKED`. Each claim receives a lease token; a heartbeat extends the
 lease while the handler runs, and token-guarded updates prevent stale workers from
@@ -96,6 +96,9 @@ Transient failures retry with exponential backoff up to `JOB_MAX_ATTEMPTS`. Perm
 errors, unimplemented handlers, and exhausted retries are marked failed.
 
 Run the worker with `uv run --directory backend python -m inbound_api.worker`.
+
+Post-action planning and execution use `post_actions_run` and `post_action_execute` jobs;
+see [After-conversation actions](actions.md) for provider and delivery semantics.
 
 ## Knowledge import
 

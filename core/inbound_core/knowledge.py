@@ -209,6 +209,10 @@ def _build_opener(*handlers: Any, allow_address: AllowAddress | None = None) -> 
     )
 
 
+def pinned_opener(allow_address: AllowAddress) -> Any:
+    return _build_opener(_NoRedirectHandler(), allow_address=allow_address)
+
+
 class _RequestPacer:
     def __init__(self, delay_seconds: float) -> None:
         self.delay_seconds = delay_seconds

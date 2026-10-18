@@ -2,9 +2,11 @@ import asyncio
 import hashlib
 import hmac
 import json
+import threading
 from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -13,12 +15,21 @@ from sqlalchemy import select
 
 from inbound_api import graph
 from inbound_api.db import tenant_session
-from inbound_api.jobs import PermanentJobError
+from inbound_api.jobs import PermanentJobError, run_next_job
 from inbound_api.models import (
+    ActionRun,
+    ChannelConnection,
     Conversation,
+    Job,
     KnowledgeDigest,
+    Message,
     Task,
     TaskStatus,
+)
+from inbound_api.post_actions.providers import FakeEmailSender
+from inbound_api.post_actions.service import (
+    execute_conversation_action,
+    plan_conversation_actions,
 )
 from inbound_api.routers.webhooks import _store_inbound_message
 from inbound_api.services.conversation_results import persist_extracted_results
@@ -936,6 +947,335 @@ async def test_message_extract_persists_results_and_tasks(graph_env, monkeypatch
     ) == [("Can you confirm the fee?",)]
 
 
+@pytest.mark.asyncio
+async def test_message_extract_replans_actions_only_for_new_text_events(
+    graph_env, monkeypatch, tmp_path
+):
+    from inbound_api.services import job_handlers
+
+    tenant_id = graph_env["tenant_id"]
+    config = _assistant_config()
+    config["urgency_rules"] = [
+        {
+            "type": "date_deadline",
+            "service": "general",
+            "field": "deadline",
+            "add_months": 0,
+            "minus_days": 0,
+            "urgent_within_days": 30,
+            "reason": "Deadline is approaching",
+        }
+    ]
+    config["post_actions"] = [
+        {
+            "kind": "notify_staff",
+            "key": "completed-only",
+            "trigger": {"events": ["conversation_completed"]},
+            "to": ["staff@example.com"],
+            "subject_template": "Completed",
+            "body_template": "{{summary}}",
+        },
+        {
+            "kind": "notify_staff",
+            "key": "completed-and-urgent",
+            "trigger": {"events": ["conversation_completed", "urgent"]},
+            "to": ["staff@example.com"],
+            "subject_template": "Follow up",
+            "body_template": "{{summary}}",
+        },
+    ]
+    graph_env["execute"](
+        "UPDATE assistants SET config = %s::jsonb WHERE id = %s",
+        (json.dumps(config), graph_env["assistant_id"]),
+    )
+    monkeypatch.setattr(
+        job_handlers,
+        "get_settings",
+        lambda: SimpleNamespace(
+            google_api_key="test-key",
+            extraction_model="gemini-3.8-flash",
+            message_extract_delay_seconds=120,
+        ),
+    )
+
+    class Aio:
+        async def aclose(self):
+            return None
+
+    monkeypatch.setattr(job_handlers, "make_genai_client", lambda _key: SimpleNamespace(aio=Aio()))
+    extraction_count = 0
+
+    async def extract(*_args, **_kwargs):
+        nonlocal extraction_count
+        extraction_count += 1
+        fields = {}
+        if extraction_count == 2:
+            fields["deadline"] = {
+                "value": (datetime.now(UTC) + timedelta(days=5)).date().isoformat(),
+                "confidence": 0.99,
+            }
+        return {
+            "status": "ok",
+            "service": "general",
+            "model": "gemini-3.8-flash",
+            "summary": "Customer needs help.",
+            "fields": fields,
+            "callback_requested": {"requested": False},
+            "complaint": {"made": False},
+            "unanswered_questions": [],
+        }
+
+    monkeypatch.setattr(job_handlers, "extract_intake", extract)
+    _, conversation_id = await _insert_test_message(
+        graph_env, datetime.now(UTC) - timedelta(seconds=180), "wamid.actions.first"
+    )
+    async with tenant_session(tenant_id) as session:
+        await job_handlers.message_extract(session, {"conversation_id": str(conversation_id)})
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 2}
+    for action_key in ("completed-only", "completed-and-urgent"):
+        async with tenant_session(tenant_id) as session:
+            result = await execute_conversation_action(
+                session,
+                conversation_id=conversation_id,
+                action_key=action_key,
+                fire_count=1,
+                email_sender=FakeEmailSender(tmp_path),
+            )
+        assert result["status"] == "succeeded"
+    async with tenant_session(tenant_id) as session:
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 0}
+        execute_jobs = list(
+            await session.scalars(select(Job).where(Job.kind == "post_action_execute"))
+        )
+    assert len(execute_jobs) == 2
+    assert {job.payload["fire_count"] for job in execute_jobs} == {1}
+
+    _, later_conversation_id = await _insert_test_message(
+        graph_env, datetime.now(UTC) - timedelta(seconds=180), "wamid.actions.urgent"
+    )
+    assert later_conversation_id == conversation_id
+    async with tenant_session(tenant_id) as session:
+        await job_handlers.message_extract(session, {"conversation_id": str(conversation_id)})
+    assert extraction_count == 2
+    async with tenant_session(tenant_id) as session:
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 1}
+        execute_jobs = list(
+            await session.scalars(select(Job).where(Job.kind == "post_action_execute"))
+        )
+        runs = {
+            run.action_key: run
+            for run in await session.scalars(
+                select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+            )
+        }
+        urgent_tasks = list(
+            await session.scalars(
+                select(Task).where(
+                    Task.conversation_id == conversation_id,
+                    Task.kind == "urgent",
+                )
+            )
+        )
+    assert len(urgent_tasks) == 1
+    assert len(execute_jobs) == 3
+    assert [job.payload for job in execute_jobs if job.payload["fire_count"] == 2] == [
+        {
+            "conversation_id": str(conversation_id),
+            "action_key": "completed-and-urgent",
+            "fire_count": 2,
+        }
+    ]
+    assert runs["completed-only"].fire_count == 1
+    assert runs["completed-and-urgent"].fire_count == 2
+    async with tenant_session(tenant_id) as session:
+        result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="completed-and-urgent",
+            fire_count=2,
+            email_sender=FakeEmailSender(tmp_path),
+        )
+    assert result["status"] == "succeeded"
+    assert len((tmp_path / "emails.jsonl").read_text().splitlines()) == 3
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_fake_actions_complete_and_are_visible(tenant_pair, monkeypatch, tmp_path):
+    from cryptography.fernet import Fernet
+
+    from inbound_api.post_actions import service as post_action_service
+    from inbound_api.services import job_handlers
+    from inbound_api.settings import Settings, get_settings
+
+    received = []
+
+    class Receiver(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            received.append((body, self.headers.get("X-Inbound-Signature")))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Receiver)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        account = tenant_pair["first"]
+        client = account["client"]
+        templates = (await client.get("/templates")).json()
+        config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+        service_name = next(iter(config["services"]))
+        service_fields = config["services"][service_name]["fields"]
+        if not any(field["name"] == "email" for field in service_fields):
+            service_fields.append({"name": "email", "label": "Email address", "type": "email"})
+        config["post_actions"] = [
+            {
+                "kind": "email_customer",
+                "key": "customer-email",
+                "trigger": {"events": ["conversation_completed"]},
+                "subject_template": "Thanks",
+                "body_template": "Hello {{contact.email}}",
+            },
+            {
+                "kind": "sheets_row",
+                "key": "customer-sheet",
+                "trigger": {"events": ["conversation_completed"]},
+                "spreadsheet_id": "fake-sheet",
+                "sheet_name": "Enquiries",
+                "columns": [
+                    {"header": "Email", "value_template": "{{contact.email}}"},
+                    {"header": "Summary", "value_template": "{{summary}}"},
+                ],
+            },
+            {
+                "kind": "webhook",
+                "key": "customer-hook",
+                "trigger": {"events": ["conversation_completed"]},
+                "url": f"http://127.0.0.1:{server.server_port}/hook",
+            },
+        ]
+        assistant_response = await client.post(
+            "/assistants",
+            json={"name": "WhatsApp actions", "template": "uk_law_firm", "config": config},
+        )
+        assert assistant_response.status_code == 201, assistant_response.text
+        assistant_id = UUID(assistant_response.json()["id"])
+        channel_response = await client.post(
+            f"/assistants/{assistant_id}/channels",
+            json={"kind": "whatsapp", "external_id": "123456"},
+        )
+        assert channel_response.status_code == 201, channel_response.text
+        channel_id = UUID(channel_response.json()["id"])
+        settings = Settings(
+            app_env="test",
+            whatsapp_mode="fake",
+            fake_outbox_path=tmp_path / "whatsapp.jsonl",
+            email_sender="fake",
+            sheets_writer="fake",
+            webhook_sender="http",
+            post_actions_fake_dir=tmp_path,
+            post_action_webhook_allow_private_urls=True,
+            google_api_key="test-key",
+            message_extract_delay_seconds=0,
+        )
+        monkeypatch.setattr(
+            get_settings(), "credentials_encryption_key", Fernet.generate_key().decode()
+        )
+        secret_response = await client.post(
+            f"/assistants/{assistant_id}/post-actions/customer-hook/webhook-secret"
+        )
+        assert secret_response.status_code == 200, secret_response.text
+        secret = secret_response.json()["secret"]
+
+        tenant_id = UUID(account["tenant_id"])
+        async with tenant_session(tenant_id) as session:
+            session.add(
+                ChannelConnection(
+                    tenant_id=tenant_id,
+                    assistant_id=assistant_id,
+                    kind="gmail",
+                    external_id="firm@example.com",
+                    status="active",
+                    settings={"google_features": ["sheets"]},
+                )
+            )
+        monkeypatch.setattr(job_handlers, "get_settings", lambda: settings)
+        monkeypatch.setattr(post_action_service, "get_settings", lambda: settings)
+        monkeypatch.setattr("inbound_api.jobs.get_settings", lambda: settings)
+        _fake_genai(monkeypatch, job_handlers, [])
+
+        async def extract(*_args, **_kwargs):
+            return {
+                "status": "ok",
+                "service": service_name,
+                "model": "gemini-3.8-flash",
+                "summary": "The customer needs a conveyancing quote.",
+                "fields": {
+                    "email": {"value": "caller@example.com", "confidence": 0.99},
+                },
+                "callback_requested": {"requested": False},
+                "complaint": {"made": False},
+                "unanswered_questions": [],
+            }
+
+        monkeypatch.setattr(job_handlers, "extract_intake", extract)
+        wamid = "wamid.post-actions-e2e"
+        await _store_inbound_message(
+            tenant_id=tenant_id,
+            assistant_id=assistant_id,
+            connection_id=channel_id,
+            phone_number_id="123456",
+            message={
+                "id": wamid,
+                "from": "447700900123",
+                "timestamp": str(int((datetime.now(UTC) - timedelta(minutes=3)).timestamp())),
+                "type": "text",
+                "text": {"body": "Please send a quote"},
+            },
+            contact_name="Alex",
+        )
+        async with tenant_session(tenant_id) as session:
+            message = await session.scalar(select(Message).where(Message.external_id == wamid))
+            assert message is not None
+            conversation_id = message.conversation_id
+        for _ in range(20):
+            if not await run_next_job():
+                break
+
+        async with tenant_session(tenant_id) as session:
+            runs = list(
+                await session.scalars(
+                    select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+                )
+            )
+        assert {run.action_key: run.status for run in runs} == {
+            "customer-email": "succeeded",
+            "customer-sheet": "succeeded",
+            "customer-hook": "succeeded",
+        }
+        assert len((tmp_path / "emails.jsonl").read_text().splitlines()) == 1
+        assert len((tmp_path / "sheets.jsonl").read_text().splitlines()) == 1
+        assert len(received) == 1
+        body, signature = received[0]
+        expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        assert signature == expected
+        assert json.loads(body)["schema_version"] == "1"
+        detail = await client.get(f"/conversations/{conversation_id}")
+        assert detail.status_code == 200, detail.text
+        assert {run["action_key"]: run["status"] for run in detail.json()["action_runs"]} == {
+            "customer-email": "succeeded",
+            "customer-sheet": "succeeded",
+            "customer-hook": "succeeded",
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def test_production_requires_graph_whatsapp_credentials():
     from inbound_api.settings import Settings
 
@@ -949,5 +1289,8 @@ def test_production_requires_graph_whatsapp_credentials():
         whatsapp_verify_token="verify-token",
         whatsapp_access_token="access-token",
         gmail_mode="off",
+        email_sender="off",
+        sheets_writer="off",
+        webhook_sender="off",
     )
     assert configured.whatsapp_mode == "graph"

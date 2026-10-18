@@ -3,7 +3,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from inbound_core.call_report import CallReport, CallStart, CallTransferMetrics, RouteResponse
-from inbound_core.config import AssistantConfig
+from inbound_core.config import AssistantConfig, PostAction
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -292,6 +292,22 @@ class TaskSummary(BaseModel):
     person_id: UUID | None = None
 
 
+class ActionRunSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    action_key: str
+    action_kind: str
+    status: Literal["queued", "succeeded", "failed", "skipped"]
+    attempts: int
+    fire_count: int
+    pending_events: list[str]
+    last_error: str | None
+    output: dict[str, Any]
+    fired_events: list[str]
+    updated_at: datetime
+
+
 class ConversationDetailResponse(ConversationSummary):
     messages: list[MessageResponse]
     intakes: list[IntakeResponse]
@@ -299,6 +315,40 @@ class ConversationDetailResponse(ConversationSummary):
     transfer: CallTransferMetrics | None = None
     metrics: dict[str, Any]
     estimated_cost: dict[str, Any] | None
+    action_runs: list[ActionRunSummary] = Field(default_factory=list)
+
+
+class PostActionTestRequest(BaseModel):
+    action: PostAction
+    conversation_id: UUID | None = None
+
+
+class PostActionTestResponse(BaseModel):
+    conversation_id: UUID
+    events: list[str]
+    matched_events: list[str]
+    would_skip: str | None
+    rendered: dict[str, Any]
+
+
+class PostActionVariable(BaseModel):
+    name: str
+    description: str
+
+
+class WebhookSecretSummary(BaseModel):
+    action_key: str
+    created_at: datetime
+
+
+class WebhookSecretListResponse(BaseModel):
+    items: list[WebhookSecretSummary]
+
+
+class WebhookSecretCreateResponse(BaseModel):
+    action_key: str
+    secret: str
+    created_at: datetime
 
 
 class ConversationReviewCreate(BaseModel):

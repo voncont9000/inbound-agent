@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy import (
     text as sql_text,
 )
-from sqlalchemy.dialects.postgresql import CITEXT, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, CITEXT, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -537,6 +537,45 @@ class Task(UUIDPrimaryKeyMixin, TenantMixin, Base):
         JSONB, nullable=False, server_default=sql_text("'{}'::jsonb")
     )
     source: Mapped[TaskSource] = mapped_column(_enum(TaskSource, "task_source"), nullable=False)
+
+
+class ActionRun(UUIDPrimaryKeyMixin, TenantMixin, Base):
+    __tablename__ = "action_runs"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "action_key"),
+        Index("ix_action_runs_tenant_conversation", "tenant_id", "conversation_id"),
+        CheckConstraint("status IN ('queued', 'succeeded', 'failed', 'skipped')"),
+    )
+
+    conversation_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    action_key: Mapped[str] = mapped_column(Text, nullable=False)
+    action_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=sql_text("'queued'"))
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sql_text("0"))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    output: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=sql_text("'{}'::jsonb")
+    )
+    fired_events: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=sql_text("'{}'::text[]")
+    )
+    pending_events: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=sql_text("'{}'::text[]")
+    )
+    fire_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sql_text("0"))
+
+
+class PostActionSecret(UUIDPrimaryKeyMixin, TenantMixin, Base):
+    __tablename__ = "post_action_secrets"
+    __table_args__ = (UniqueConstraint("assistant_id", "action_key"),)
+
+    assistant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assistants.id", ondelete="CASCADE"), nullable=False
+    )
+    action_key: Mapped[str] = mapped_column(Text, nullable=False)
+    secret_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class Job(UUIDPrimaryKeyMixin, TenantMixin, Base):

@@ -58,6 +58,7 @@ const plumbingConfig: AssistantConfig = {
     { question: "Can you install a new boiler?", answer: "Yes, request a survey for an installation quote." },
   ], max_digest_chars: 24000 },
   live_actions: ["flag_urgent"],
+  post_actions: [],
   transfer_targets: [],
   transfer_handoff_message: "I'm putting you through now, please hold.",
   transfer_failed_message: "Sorry, nobody is available to take your call right now.",
@@ -160,6 +161,7 @@ in response.`,
     { question: "Can you check a conflict?", answer: "The team will complete any required checks." },
   ], digest_path: "knowledge/demo_firm/digest.md", max_digest_chars: 24000 },
   live_actions: ["transfer_call"],
+  post_actions: [],
   transfer_targets: [
     { key: "duty_solicitor", label: "Duty solicitor", phone: "+447700900123", when_to_use: "The caller explicitly asks to speak to a person now.", office_hours_only: false },
   ],
@@ -279,6 +281,19 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
     intakes, tasks,
     metrics: { call_duration_seconds: 185 + index * 10, providers: { stt: "mock-stt", tts: "mock-tts" }, turn_latency_summary: { p50_seconds: 0.42, p95_seconds: 0.81, max_seconds: 1.02 }, turn_end_latency_summary: { p50_seconds: 0.19, p95_seconds: 0.31, max_seconds: 0.44 }, usage: { stt_seconds: 180, tts_characters: 490 }, ...(transferred ? { transfer: { target_key: "duty_solicitor", status: "no-answer", latency_ms: 1200 } } : {}) },
     estimated_cost: { currency: "GBP", components: { stt: 0.01, tts: 0.02, llm_input: 0.01, llm_output: 0.02, twilio: 0.04, extraction: 0.005 }, total: 0.105, unknown_components: [] },
+    action_runs: index === 0 ? [{
+      id: `${id}-action-1`,
+      action_key: "staff-alert",
+      action_kind: "notify_staff",
+      status: "succeeded",
+      attempts: 1,
+      fire_count: 1,
+      pending_events: [],
+      last_error: null,
+      output: { message_id: "fake-message-1" },
+      fired_events: ["callback_requested"],
+      updated_at: date(index + 1),
+    }] : [],
   };
 }
 
@@ -392,7 +407,7 @@ export const tenantFixtures: TenantFixture[] = [makeTenant(0), makeTenant(1)];
 export const templates: Schemas["TemplateResponse"][] = [
   { name: "home_services", config: plumbingConfig },
   { name: "uk_law_firm", config: lawConfig },
-  { name: "blank", config: { ...plumbingConfig, business_name: "Your business", greeting: "Hello, how can I help?", instructions: "", services: {}, urgency_rules: [], policies: [], price_list: [], contacts: {}, knowledge: { faqs: [], max_digest_chars: 24000 }, live_actions: [], readback: "off" } },
+  { name: "blank", config: { ...plumbingConfig, business_name: "Your business", greeting: "Hello, how can I help?", instructions: "", services: {}, urgency_rules: [], policies: [], price_list: [], contacts: {}, knowledge: { faqs: [], max_digest_chars: 24000 }, live_actions: [], post_actions: [], readback: "off" } },
 ];
 
 export function cloneFixtures(): TenantFixture[] {
