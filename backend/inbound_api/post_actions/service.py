@@ -202,7 +202,7 @@ async def execute_conversation_action(
             _add_action_task(
                 session,
                 conversation,
-                kind="post_action_setup",
+                kind="action_setup_needed",
                 action_key=action.key,
                 details=error.setup_task,
             )
@@ -213,7 +213,7 @@ async def execute_conversation_action(
         _add_action_task(
             session,
             conversation,
-            kind="post_action_failed",
+            kind="action_failed",
             action_key=action.key,
             details={"message": str(error)},
         )
@@ -226,7 +226,7 @@ async def execute_conversation_action(
             _add_action_task(
                 session,
                 conversation,
-                kind="post_action_failed",
+                kind="action_failed",
                 action_key=action.key,
                 details={"message": "Action delivery failed after retries"},
             )
@@ -266,6 +266,8 @@ async def build_action_context(
 ) -> dict[str, str]:
     settings = settings or get_settings()
     intake = await _merged_intake(session, conversation.id)
+    fields = intake.get("fields", {})
+    fields = fields if isinstance(fields, dict) else {}
     service_key = _service_key(intake)
     service_config = config.services.get(service_key)
     service_label = service_config.label if service_config else service_key
@@ -282,6 +284,10 @@ async def build_action_context(
     email = next(
         (identity.value_normalized for identity in identities if identity.type.value == "email"), ""
     )
+    if not email:
+        email_field = fields.get("email")
+        email_value = email_field.get("value") if isinstance(email_field, dict) else email_field
+        email = str(email_value or "")
     phone = next(
         (identity.value_normalized for identity in identities if identity.type.value == "phone"), ""
     )
@@ -314,8 +320,7 @@ async def build_action_context(
         "conversation.id": str(conversation.id),
         "conversation.link": f"{settings.app_base_url.rstrip('/')}/conversations/{conversation.id}",
     }
-    fields = intake.get("fields", {})
-    for field, field_data in fields.items() if isinstance(fields, dict) else []:
+    for field, field_data in fields.items():
         key = str(field)
         value = field_data.get("value") if isinstance(field_data, dict) else field_data
         formatted = format_value(value)
@@ -400,6 +405,7 @@ async def _dispatch_action(
                 {"message": "Generate a signing secret for this webhook action"},
             )
         payload = {
+            "schema_version": "1",
             "event_id": f"{run.id}:{run.fire_count}",
             "action_key": action.key,
             "events": sorted(run.pending_events),

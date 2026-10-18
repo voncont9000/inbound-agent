@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from cryptography.fernet import Fernet
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from inbound_api.channels.credentials import decrypt_credential
 from inbound_api.db import tenant_session
@@ -129,3 +129,85 @@ async def test_post_action_dry_run_and_webhook_secret_lifecycle(tenant_pair, mon
     assert (
         await foreign.get(f"/assistants/{assistant_id}/post-actions/webhook-secrets")
     ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_action_runs_and_secrets_are_tenant_isolated(tenant_pair, monkeypatch):
+    owner = tenant_pair["first"]
+    foreign = tenant_pair["second"]
+    client = owner["client"]
+    templates = (await client.get("/templates")).json()
+    config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    config["post_actions"] = [
+        {
+            "kind": "webhook",
+            "key": "hook",
+            "trigger": {"events": ["conversation_completed"]},
+            "url": "https://example.test/hook",
+        }
+    ]
+    created = await client.post(
+        "/assistants",
+        json={"name": "Isolated actions", "template": "uk_law_firm", "config": config},
+    )
+    assert created.status_code == 201, created.text
+    assistant_id = UUID(created.json()["id"])
+    conversation_id = uuid4()
+    owner_tenant = UUID(owner["tenant_id"])
+    async with tenant_session(owner_tenant) as session:
+        session.add(
+            Conversation(
+                id=conversation_id,
+                tenant_id=owner_tenant,
+                assistant_id=assistant_id,
+                channel=ConversationChannel.WHATSAPP,
+                external_ref=str(conversation_id),
+                status=ConversationStatus.COMPLETED,
+                started_at=datetime.now(UTC),
+                ended_at=datetime.now(UTC),
+            )
+        )
+    monkeypatch.setattr(get_settings(), "credentials_encryption_key", Fernet.generate_key().decode())
+    generated = await client.post(
+        f"/assistants/{assistant_id}/post-actions/hook/webhook-secret"
+    )
+    assert generated.status_code == 200, generated.text
+    async with tenant_session(owner_tenant) as session:
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 1}
+        owner_run = await session.scalar(
+            select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+        )
+        owner_secret = await session.scalar(
+            select(PostActionSecret).where(PostActionSecret.assistant_id == assistant_id)
+        )
+    assert owner_run is not None and owner_secret is not None
+
+    foreign_tenant = UUID(foreign["tenant_id"])
+    async with tenant_session(foreign_tenant) as session:
+        assert (
+            await session.scalar(select(ActionRun).where(ActionRun.id == owner_run.id)) is None
+        )
+        assert (
+            await session.scalar(
+                select(PostActionSecret).where(PostActionSecret.id == owner_secret.id)
+            )
+            is None
+        )
+        action_updates = await session.execute(
+            update(ActionRun).where(ActionRun.id == owner_run.id).values(status="failed")
+        )
+        secret_updates = await session.execute(
+            update(PostActionSecret)
+            .where(PostActionSecret.id == owner_secret.id)
+            .values(secret_ciphertext="foreign-write")
+        )
+        assert action_updates.rowcount == 0
+        assert secret_updates.rowcount == 0
+    assert (
+        await foreign["client"].get(f"/conversations/{conversation_id}")
+    ).status_code == 404
+    async with tenant_session(owner_tenant) as session:
+        unchanged_run = await session.get(ActionRun, owner_run.id)
+        unchanged_secret = await session.get(PostActionSecret, owner_secret.id)
+    assert unchanged_run is not None and unchanged_run.status == "queued"
+    assert unchanged_secret is not None and unchanged_secret.secret_ciphertext != "foreign-write"

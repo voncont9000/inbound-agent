@@ -99,7 +99,8 @@ events, conversation ID, and rendered context:
 }
 ```
 
-Requests include `Content-Type: application/json`, a user agent, `X-Inbound-Event-Id`, and
+Requests include `schema_version: "1"`, `Content-Type: application/json`, a user agent,
+`X-Inbound-Event-Id`, and
 `X-Inbound-Signature: sha256=<hex>`. The signature is HMAC-SHA256 over the exact request body:
 
 ```python
@@ -121,8 +122,8 @@ External delivery is **at-least-once**: a worker crash after an external provide
 request but before the database transaction commits can repeat that send. Webhook consumers
 should use the stable event ID for deduplication. Transient failures retry with the regular
 worker backoff; permanent failures and skipped actions update the action run. Missing connection
-or signing setup creates a `post_action_setup` task where appropriate, while final delivery
-failures create a `post_action_failed` task. A missing customer email skips the confirmation
+or signing setup creates an `action_setup_needed` task where appropriate, while final delivery
+failures create an `action_failed` task. A missing customer email skips the confirmation
 without creating a setup task.
 
 The owner can dry-run an action against the latest or selected conversation. Dry runs render the
