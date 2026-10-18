@@ -147,8 +147,8 @@ The contacts API provides tenant-scoped list/search with cursor pagination, cont
 ## Voice/API lifecycle
 
 1. **Route before greeting:** voice calls `GET /internal/voice/route?to=...&from=...`; the API resolves the tenant and assistant by dialled channel number and returns config, digest, and context card. Routing is a single bounded attempt; if it fails, voice uses local YAML while keeping API reporting enabled.
-2. **Start:** after pipeline setup, voice starts `POST /internal/voice/calls` asynchronously so call setup does not block the greeting.
-3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`. Transient failures are retried; an undelivered report is atomically spooled for later resend.
+2. **Start:** after pipeline setup, voice starts `POST /internal/voice/calls` asynchronously so call setup does not block the greeting. The API stores a normalized caller number as `from_number` in conversation metrics when present.
+3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`. `end_call` control events are not stored as tasks, and report metrics are merged with the start metrics. Transient failures are retried; an undelivered report is atomically spooled for later resend.
 4. **Graph ingest:** the report handler stores the conversation and enqueues `graph_ingest`; the worker calls the graph seam to ingest the conversation.
 
 All internal voice routes require `X-Service-Token`, checked against `VOICE_SERVICE_TOKEN`.
