@@ -19,7 +19,14 @@ by its template and editable configuration; channel code does not add vertical-s
 Burst messages are coalesced so only the latest inbound message in a thread triggers a reply.
 Retries skip a send when an assistant message already follows the latest inbound message.
 After a quiet period, extraction runs over the thread and persists the summary, intake,
-follow-up tasks, knowledge gaps, and contact-graph ingestion.
+follow-up tasks, knowledge gaps, and contact-graph ingestion. Configured plain-sentence
+urgency rules are assessed during that existing extraction call and can create urgent tasks
+with the model's reason and evidence.
+
+The shared AI-disclosure setting controls WhatsApp: `at_start` adds a one-time first-reply
+disclosure (the default), while `when_asked` tells the assistant not to volunteer it and to
+answer honestly when asked. Gmail drafts receive no disclosure instruction because a human
+reviews and sends them.
 
 ## Response language
 

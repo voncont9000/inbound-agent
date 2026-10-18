@@ -963,6 +963,7 @@ export interface components {
              * @default 0.7
              */
             review_confidence_threshold: number;
+            rules?: components["schemas"]["RulesConfig"];
             /** Services */
             services: {
                 [key: string]: components["schemas"]["ServiceConfig"];
@@ -980,7 +981,7 @@ export interface components {
             /** Transfer Targets */
             transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */
-            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
+            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"] | components["schemas"]["SentenceUrgencyRule"])[];
             /** Voice Id */
             voice_id?: string | null;
         };
@@ -1030,6 +1031,7 @@ export interface components {
              * @default 0.7
              */
             review_confidence_threshold: number;
+            rules?: components["schemas"]["RulesConfig"];
             /** Services */
             services: {
                 [key: string]: components["schemas"]["ServiceConfig"];
@@ -1047,7 +1049,7 @@ export interface components {
             /** Transfer Targets */
             transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */
-            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
+            urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"] | components["schemas"]["SentenceUrgencyRule"])[];
             /** Voice Id */
             voice_id?: string | null;
         };
@@ -2437,6 +2439,13 @@ export interface components {
             /** Service */
             service: string;
         };
+        /** PronunciationEntry */
+        PronunciationEntry: {
+            /** Say As */
+            say_as: string;
+            /** Term */
+            term: string;
+        };
         /** RecordingSettings */
         RecordingSettings: {
             /**
@@ -2477,6 +2486,35 @@ export interface components {
              * Format: uuid
              */
             tenant_id: string;
+        };
+        /** RulesConfig */
+        RulesConfig: {
+            /**
+             * Ai Disclosure
+             * @default at_start
+             * @enum {string}
+             */
+            ai_disclosure: "at_start" | "when_asked";
+            /** Angry Caller */
+            angry_caller?: "de_escalate" | null;
+            /** Off Topic */
+            off_topic?: ("redirect" | "answer_briefly") | null;
+            /** Pronunciations */
+            pronunciations?: components["schemas"]["PronunciationEntry"][];
+            /** Sales Calls */
+            sales_calls?: ("decline" | "take_message") | null;
+            /** Style */
+            style?: ("formal" | "friendly" | "neutral") | null;
+        };
+        /** SentenceUrgencyRule */
+        SentenceUrgencyRule: {
+            /** Text */
+            text: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "sentence";
         };
         /** ServiceConfig */
         ServiceConfig: {

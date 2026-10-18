@@ -228,6 +228,15 @@ keys are generated the same way. Voice selection on General (FR-S8) is not built
   (de-escalate, offer staff), sales and competitor calls, pronunciation dictionary, plus custom rules.
   This implements FR-A2.
 
+**Implementation status (FR-A2 / FR-S13 / sentence-rule portion of FR-S5):** Assistant
+configuration now has defaulted, optional-to-set conversation presets and pronunciation
+entries, while existing free-text policies and stored configs remain compatible. Only enabled
+presets are rendered; phone handoff language additionally requires an enabled transfer action
+and available target. Pronunciation uses provider-agnostic TTS text substitution, not prompt
+instructions. Configured plain-sentence urgency rules are evaluated in the existing post-call
+extraction request and create urgent tasks with a reason and evidence. Keyword and date-based
+urgency behavior is unchanged.
+
 **Home dashboard**
 - FR-S14: A home page with selectable time range: conversations by channel, handled by the assistant
   vs passed to staff, bookings made, callbacks/tasks created, estimated time saved, median response

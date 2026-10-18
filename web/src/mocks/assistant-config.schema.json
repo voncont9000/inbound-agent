@@ -666,6 +666,27 @@
       "title": "PriceItem",
       "type": "object"
     },
+    "PronunciationEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "term": {
+          "minLength": 1,
+          "title": "Term",
+          "type": "string"
+        },
+        "say_as": {
+          "minLength": 1,
+          "title": "Say As",
+          "type": "string"
+        }
+      },
+      "required": [
+        "term",
+        "say_as"
+      ],
+      "title": "PronunciationEntry",
+      "type": "object"
+    },
     "RecordingSettings": {
       "additionalProperties": false,
       "properties": {
@@ -689,6 +710,112 @@
         }
       },
       "title": "RecordingSettings",
+      "type": "object"
+    },
+    "RulesConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "ai_disclosure": {
+          "default": "at_start",
+          "enum": [
+            "at_start",
+            "when_asked"
+          ],
+          "title": "Ai Disclosure",
+          "type": "string"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "enum": [
+                "formal",
+                "friendly",
+                "neutral"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Style"
+        },
+        "off_topic": {
+          "anyOf": [
+            {
+              "enum": [
+                "redirect",
+                "answer_briefly"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Off Topic"
+        },
+        "angry_caller": {
+          "anyOf": [
+            {
+              "const": "de_escalate",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Angry Caller"
+        },
+        "sales_calls": {
+          "anyOf": [
+            {
+              "enum": [
+                "decline",
+                "take_message"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sales Calls"
+        },
+        "pronunciations": {
+          "items": {
+            "$ref": "#/$defs/PronunciationEntry"
+          },
+          "title": "Pronunciations",
+          "type": "array"
+        }
+      },
+      "title": "RulesConfig",
+      "type": "object"
+    },
+    "SentenceUrgencyRule": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sentence",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "SentenceUrgencyRule",
       "type": "object"
     },
     "ServiceConfig": {
@@ -946,7 +1073,8 @@
         "discriminator": {
           "mapping": {
             "date_deadline": "#/$defs/DateDeadlineUrgencyRule",
-            "keyword": "#/$defs/KeywordUrgencyRule"
+            "keyword": "#/$defs/KeywordUrgencyRule",
+            "sentence": "#/$defs/SentenceUrgencyRule"
           },
           "propertyName": "type"
         },
@@ -956,11 +1084,17 @@
           },
           {
             "$ref": "#/$defs/DateDeadlineUrgencyRule"
+          },
+          {
+            "$ref": "#/$defs/SentenceUrgencyRule"
           }
         ]
       },
       "title": "Urgency Rules",
       "type": "array"
+    },
+    "rules": {
+      "$ref": "#/$defs/RulesConfig"
     },
     "post_actions": {
       "items": {

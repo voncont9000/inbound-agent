@@ -25,7 +25,7 @@ describe("assistant settings tabs", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
   });
 
-  it("puts the knowledge page content on the Knowledge tab and keeps a slot on Rules", async () => {
+  it("puts the knowledge page content on Knowledge and the rule editor on Rules", async () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings/knowledge`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
@@ -33,7 +33,8 @@ describe("assistant settings tabs", () => {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     }
     await user.click(screen.getByRole("link", { name: "Rules" }));
-    expect(screen.getByRole("heading", { name: "Policies" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Rules" })).toBeInTheDocument();
+    expect(screen.getByLabelText("AI disclosure")).toBeInTheDocument();
   });
 
   it("keeps abilities off until switched on and keeps unsaved edits across tabs", async () => {

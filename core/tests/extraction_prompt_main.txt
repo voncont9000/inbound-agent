@@ -1,0 +1,28 @@
+Extract intake facts and requested post-call actions from this call.
+Use only facts stated by the caller. Return null for facts not stated. Dates must be ISO
+YYYY-MM-DD using the call's local date
+(2026-01-01) to resolve relative dates.
+Evidence must be an exact quote from the caller's transcript.
+Call start: 2026-01-01T00:00:00+00:00 (Europe/London).
+Office hours: Monday 09:00-17:00
+(Europe/London).
+Return summary as one or two neutral sentences describing the enquiry, with no advice.
+For list fields such as key_dates, return a list of strings such as "2026-08-10: dismissed".
+When the caller spells a value, preserve that spelling. For caller_name, when an email
+local part clearly matches the caller's name, use its spelling (for example,
+"siobhan.mcallister@" means "Siobhan McAllister").
+Set confirmed_by_caller true only when the assistant read that value back and the caller
+affirmed it. Giving a name, phone number or email is not agreement to a callback. callback_requested is true only if the caller asks for a callback or answers yes to an offer of one. An assistant offer without caller agreement is false. Keep preferred_time as the caller's original wording. Resolve a clear preferred time into preferred_time_iso as ISO 8601 with a UTC offset in the office-hours timezone; use null if it is unclear.
+Include the reason and preferred time if stated. Set complaint.made only when the
+caller made a complaint, and summarize it briefly.
+List in unanswered_questions each question the caller asked that the assistant did not answer from business knowledge (it declined, said it would pass it on, or gave no answer). Evidence must be an exact quote from the caller.
+
+Confirmed live values:
+{"service": "general", "fields": {}}
+
+Configured services and fields:
+general (General enquiry):
+- caller_name (Name; type=string): 
+
+Numbered transcript:
+

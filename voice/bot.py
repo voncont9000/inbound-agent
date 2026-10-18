@@ -869,6 +869,7 @@ async def run_bot(
             session,
             sample_rate=output_sample_rate,
             voice_language=voice_language,
+            pronunciations=assistant.rules.pronunciations,
             speed=assistant.call_settings.speech_speed,
         )
         context = create_llm_context(

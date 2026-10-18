@@ -6,7 +6,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import aiohttp
-from inbound_core.config import OfficeHours, TransferTarget
+from inbound_core.config import OfficeHours, RulesConfig, TransferTarget
 
 from bot import complete_transfer
 from inbound_voice.config import load_assistant_config
@@ -117,6 +117,20 @@ def test_prompt_mentions_transfer_only_when_a_target_is_available() -> None:
     assert "call transfer_call straight away without announcing the transfer" in available
     assert "the system will tell the caller" in available
     assert "say one short sentence" not in available.lower()
+
+
+def test_angry_caller_transfer_offer_requires_an_enabled_available_target() -> None:
+    rules = RulesConfig(angry_caller="de_escalate")
+    unavailable = assistant_config(enabled=False, targets=False).model_copy(update={"rules": rules})
+    available = assistant_config().model_copy(update={"rules": rules})
+
+    unavailable_prompt = render_system_prompt(unavailable, now=NOW)
+    available_prompt = render_system_prompt(available, now=NOW)
+
+    assert "If the caller is angry or upset" in unavailable_prompt
+    assert "offer the transfer" not in unavailable_prompt
+    assert "If the caller is angry or upset" in available_prompt
+    assert "offer the transfer" in available_prompt
 
 
 def test_transfer_completion_records_failed_dial_and_metrics(tmp_path) -> None:

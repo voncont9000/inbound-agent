@@ -23,7 +23,10 @@ const advancedBooking = /^booking\.(check_message|book_message|min_notice_hours|
 export function tabForPath(path: string): SettingsTabId {
   const root = path.split(".")[0];
   if (advancedBooking.test(path)) return "advanced";
+  if (/^urgency_rules\.\d+\.text$/.test(path)) return "rules";
   switch (root) {
+    case "rules":
+      return "rules";
     case "language":
     case "voice_id":
       return "general";

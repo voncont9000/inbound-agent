@@ -45,7 +45,8 @@ export function AdvancedTab({ assistantId, config, update, errors, schema }: Set
       {actionOptions.map((action) => <label className="check-row" key={action}><input type="checkbox" checked={config.live_actions.includes(action as LiveAction)} onChange={(event) => update((draft) => { const value = action as LiveAction; draft.live_actions = event.target.checked ? [...draft.live_actions, value] : draft.live_actions.filter((item) => item !== value); })} /><span><strong>{action.replaceAll("_", " ")}</strong> — {liveActionHelp[action] ?? "Available during a live interaction."}</span></label>)}
     </section>
     <section className="panel stack" aria-labelledby="urgency-heading"><h2 id="urgency-heading">Urgency rules</h2>
-      {config.urgency_rules.map((rule, index) => <section className="inline-editor" key={`urgency-${index}`}>
+      {config.urgency_rules.flatMap((rule, index) => rule.type === "sentence" ? [] : [
+      <section className="inline-editor" key={`urgency-${index}`}>
         <Field path={`urgency_rules.${index}.type`} label="Rule type">{(fieldId) => <select id={fieldId} value={rule.type} onChange={(event) => {
           setPhraseText((current) => { const next = { ...current }; delete next[`urgency_rules.${index}.phrases`]; return next; });
           update((draft) => {
@@ -74,7 +75,7 @@ export function AdvancedTab({ assistantId, config, update, errors, schema }: Set
           <Field path={`urgency_rules.${index}.reason`} label="Reason" error={errors[`urgency_rules.${index}.reason`]}>{(fieldId, describedBy) => <input id={fieldId} value={rule.reason} {...invalidProps(errors, `urgency_rules.${index}.reason`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { const current = draft.urgency_rules[index]; if (current?.type === "date_deadline") current.reason = event.target.value; })} />}</Field>
         </>}
         <button type="button" onClick={() => { setPhraseText({}); update((draft) => { draft.urgency_rules.splice(index, 1); }); }}>Remove urgency rule</button>
-      </section>)}
+      </section>])}
       <button type="button" onClick={() => update((draft) => { draft.urgency_rules.push({ type: "keyword", phrases: [], reason: "" }); })}>Add urgency rule</button>
     </section>
     <section className="panel stack" aria-labelledby="review-heading"><h2 id="review-heading">Review threshold</h2>

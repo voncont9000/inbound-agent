@@ -18,6 +18,11 @@ function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
   }));
   result.urgency_rules.forEach((rule) => {
     if (rule.type === "keyword") rule.phrases = rule.phrases.map((phrase) => phrase.trim()).filter(Boolean);
+    if (rule.type === "sentence") rule.text = rule.text.trim();
+  });
+  (result.rules?.pronunciations ?? []).forEach((entry) => {
+    entry.term = entry.term.trim();
+    entry.say_as = entry.say_as.trim();
   });
   return result;
 }

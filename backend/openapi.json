@@ -270,6 +270,9 @@
             "title": "Review Confidence Threshold",
             "type": "number"
           },
+          "rules": {
+            "$ref": "#/components/schemas/RulesConfig"
+          },
           "services": {
             "additionalProperties": {
               "$ref": "#/components/schemas/ServiceConfig"
@@ -299,7 +302,8 @@
               "discriminator": {
                 "mapping": {
                   "date_deadline": "#/components/schemas/DateDeadlineUrgencyRule",
-                  "keyword": "#/components/schemas/KeywordUrgencyRule"
+                  "keyword": "#/components/schemas/KeywordUrgencyRule",
+                  "sentence": "#/components/schemas/SentenceUrgencyRule"
                 },
                 "propertyName": "type"
               },
@@ -309,6 +313,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DateDeadlineUrgencyRule"
+                },
+                {
+                  "$ref": "#/components/schemas/SentenceUrgencyRule"
                 }
               ]
             },
@@ -482,6 +489,9 @@
             "title": "Review Confidence Threshold",
             "type": "number"
           },
+          "rules": {
+            "$ref": "#/components/schemas/RulesConfig"
+          },
           "services": {
             "additionalProperties": {
               "$ref": "#/components/schemas/ServiceConfig"
@@ -511,7 +521,8 @@
               "discriminator": {
                 "mapping": {
                   "date_deadline": "#/components/schemas/DateDeadlineUrgencyRule",
-                  "keyword": "#/components/schemas/KeywordUrgencyRule"
+                  "keyword": "#/components/schemas/KeywordUrgencyRule",
+                  "sentence": "#/components/schemas/SentenceUrgencyRule"
                 },
                 "propertyName": "type"
               },
@@ -521,6 +532,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DateDeadlineUrgencyRule"
+                },
+                {
+                  "$ref": "#/components/schemas/SentenceUrgencyRule"
                 }
               ]
             },
@@ -3862,6 +3876,27 @@
         "title": "PriceItem",
         "type": "object"
       },
+      "PronunciationEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "say_as": {
+            "minLength": 1,
+            "title": "Say As",
+            "type": "string"
+          },
+          "term": {
+            "minLength": 1,
+            "title": "Term",
+            "type": "string"
+          }
+        },
+        "required": [
+          "term",
+          "say_as"
+        ],
+        "title": "PronunciationEntry",
+        "type": "object"
+      },
       "RecordingSettings": {
         "additionalProperties": false,
         "properties": {
@@ -3936,6 +3971,108 @@
           "config"
         ],
         "title": "RouteResponse",
+        "type": "object"
+      },
+      "RulesConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "ai_disclosure": {
+            "default": "at_start",
+            "enum": [
+              "at_start",
+              "when_asked"
+            ],
+            "title": "Ai Disclosure",
+            "type": "string"
+          },
+          "angry_caller": {
+            "anyOf": [
+              {
+                "const": "de_escalate",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Angry Caller"
+          },
+          "off_topic": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redirect",
+                  "answer_briefly"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Topic"
+          },
+          "pronunciations": {
+            "items": {
+              "$ref": "#/components/schemas/PronunciationEntry"
+            },
+            "title": "Pronunciations",
+            "type": "array"
+          },
+          "sales_calls": {
+            "anyOf": [
+              {
+                "enum": [
+                  "decline",
+                  "take_message"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sales Calls"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "enum": [
+                  "formal",
+                  "friendly",
+                  "neutral"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style"
+          }
+        },
+        "title": "RulesConfig",
+        "type": "object"
+      },
+      "SentenceUrgencyRule": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "sentence",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "SentenceUrgencyRule",
         "type": "object"
       },
       "ServiceConfig": {

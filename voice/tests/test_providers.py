@@ -3,7 +3,8 @@ from pathlib import Path
 
 import aiohttp
 import pytest
-from inbound_core.config import AssistantConfig
+from inbound_core.config import AssistantConfig, PronunciationEntry
+from pipecat.frames.frames import AggregatedTextFrame, AggregationType, TTSTextFrame
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
@@ -13,6 +14,7 @@ from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.soniox.stt import SonioxSTTService
 from pipecat.services.speechify.tts import SpeechifyHttpTTSService
 
+from inbound_voice.pronunciation import PronunciationTransform
 from inbound_voice.providers import (
     KEYTERMS,
     VoiceProviders,
@@ -315,6 +317,80 @@ def test_create_tts() -> None:
     assert deepgram._settings.voice == "aura-2-pandora-en"
     assert deepgram._settings.speed == 1.2
     assert deepgram_default._settings.speed is None
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [
+        ("speechify", None),
+        ("elevenlabs", "eleven_v4_turbo"),
+        ("elevenlabs", "eleven_flash_v2_5"),
+        ("deepgram", None),
+    ],
+)
+def test_create_tts_attaches_pronunciation_transform(provider: str, model: str | None) -> None:
+    async def create_service():
+        async with aiohttp.ClientSession() as session:
+            environment = _environment(TTS_PROVIDER=provider)
+            if provider == "elevenlabs":
+                environment["TTS_VOICE"] = "elevenlabs-voice-id"
+                environment["ELEVENLABS_MODEL"] = model or "eleven_v4_turbo"
+            return create_tts(
+                resolve_providers(environment),
+                environment,
+                session,
+                pronunciations=[PronunciationEntry(term="ACAS", say_as="Ay-cass")],
+            )
+
+    service = asyncio.run(create_service())
+
+    assert len(service._text_transforms) == 1
+    aggregation_type, transform = service._text_transforms[0]
+    assert aggregation_type == "*"
+    assert isinstance(transform, PronunciationTransform)
+
+
+def test_deepgram_keeps_original_text_in_context_frame() -> None:
+    async def exercise() -> list[object]:
+        async with aiohttp.ClientSession() as session:
+            environment = _environment(TTS_PROVIDER="deepgram")
+            service = create_tts(
+                resolve_providers(environment),
+                environment,
+                session,
+                pronunciations=[PronunciationEntry(term="ACAS", say_as="Ay-cass")],
+            )
+
+        frames = []
+
+        async def record_frame(context_id, frame):
+            frames.append(frame)
+
+        async def run_tts(text, context_id):
+            assert text == "Ay-cass "
+            if False:
+                yield None
+
+        async def no_op(*args, **kwargs):
+            pass
+
+        service.append_to_audio_context = record_frame
+        service.run_tts = run_tts
+        service.create_audio_context = no_op
+        service.start_ttfb_metrics = no_op
+        service.start_processing_metrics = no_op
+        service.stop_processing_metrics = no_op
+        service.push_frame = no_op
+        assert service._push_text_frames is True
+        await service._push_tts_frames(
+            AggregatedTextFrame("ACAS", aggregated_by=AggregationType.SENTENCE)
+        )
+        return frames
+
+    text_frames = [frame for frame in asyncio.run(exercise()) if isinstance(frame, TTSTextFrame)]
+
+    assert len(text_frames) == 1
+    assert text_frames[0].text == "ACAS"
 
 
 def test_create_llm() -> None:

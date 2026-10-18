@@ -10,7 +10,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ValidationError
 
-from inbound_core.config import AssistantConfig, DateDeadlineUrgencyRule
+from inbound_core.config import (
+    AssistantConfig,
+    DateDeadlineUrgencyRule,
+    SentenceUrgencyRule,
+)
 from inbound_core.intake import days_until_deadline
 from inbound_core.phone import normalise_phone
 
@@ -48,6 +52,7 @@ async def extract_intake(
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
             "unanswered_questions": [],
+            "urgency_matches": [],
             "usage": {"input_tokens": 0, "output_tokens": 0},
         }
     try:
@@ -95,6 +100,33 @@ async def extract_intake(
                 "confirmed_by_caller": bool(item.get("confirmed_by_caller", False)),
                 **({"invalid": True} if invalid else {}),
             }
+        sentence_rules = {
+            index
+            for index, rule in enumerate(config.urgency_rules)
+            if isinstance(rule, SentenceUrgencyRule)
+        }
+        urgency_matches = []
+        for item in parsed.get("urgency_matches", []):
+            if not isinstance(item, dict):
+                continue
+            rule_index = item.get("rule")
+            reason = item.get("reason")
+            if (
+                isinstance(rule_index, bool)
+                or not isinstance(rule_index, int)
+                or rule_index not in sentence_rules
+                or not isinstance(reason, str)
+                or not reason.strip()
+            ):
+                continue
+            evidence = item.get("evidence")
+            urgency_matches.append(
+                {
+                    "rule": rule_index,
+                    "reason": reason.strip(),
+                    "evidence": evidence if isinstance(evidence, str) else "",
+                }
+            )
         return {
             "status": "completed",
             "service": service_name,
@@ -104,6 +136,7 @@ async def extract_intake(
             "callback_requested": _callback_request(parsed.get("callback_requested")),
             "complaint": _complaint(parsed.get("complaint")),
             "unanswered_questions": _unanswered_questions(parsed.get("unanswered_questions")),
+            "urgency_matches": urgency_matches,
             "usage": _usage(response),
         }
     except Exception as error:
@@ -116,6 +149,7 @@ async def extract_intake(
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
             "unanswered_questions": [],
+            "urgency_matches": [],
             "usage": {"input_tokens": 0, "output_tokens": 0},
             "error": f"{type(error).__name__}: {error}",
         }
@@ -284,6 +318,7 @@ def build_intake_artifacts(
         "fields": extracted_fields,
         "callback_requested": _callback_request(result.get("callback_requested")),
         "complaint": _complaint(result.get("complaint")),
+        "urgency_matches": list(result.get("urgency_matches", [])),
     }
     service_model = (
         _service_model(config.services[service_name]) if service_name in config.services else None
@@ -323,6 +358,32 @@ def build_post_call_tasks(
     service_name = merged.get("service")
     fields = merged.get("fields", {})
     for index, rule in enumerate(config.urgency_rules):
+        if isinstance(rule, SentenceUrgencyRule):
+            for match in post_call.get("urgency_matches", []):
+                rule_index = match.get("rule") if isinstance(match, dict) else None
+                if (
+                    isinstance(rule_index, bool)
+                    or not isinstance(rule_index, int)
+                    or rule_index != index
+                    or not isinstance(match.get("reason"), str)
+                    or not match["reason"].strip()
+                    or any(
+                        task.get("type") == "urgent" and task.get("rule") == index
+                        for task in [*tasks, *generated]
+                    )
+                ):
+                    continue
+                generated.append(
+                    {
+                        "type": "urgent",
+                        "reason": match["reason"],
+                        "rule": index,
+                        "rule_text": rule.text,
+                        "evidence": match.get("evidence", ""),
+                        "source": "post_call",
+                    }
+                )
+            continue
         if not isinstance(rule, DateDeadlineUrgencyRule) or rule.service != service_name:
             continue
         entry = fields.get(rule.field, {})
@@ -530,7 +591,7 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
     field_names = sorted(
         {field.name for service in config.services.values() for field in service.fields}
     )
-    return {
+    schema = {
         "type": "object",
         "properties": {
             "service": {"type": "string", "enum": list(config.services)},
@@ -610,6 +671,22 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
         ],
         "additionalProperties": False,
     }
+    if any(isinstance(rule, SentenceUrgencyRule) for rule in config.urgency_rules):
+        schema["properties"]["urgency_matches"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "rule": {"type": "integer"},
+                    "reason": {"type": "string"},
+                    "evidence": {"type": "string"},
+                },
+                "required": ["rule", "reason", "evidence"],
+                "additionalProperties": False,
+            },
+        }
+        schema["required"].append("urgency_matches")
+    return schema
 
 
 def _extraction_prompt(
@@ -645,6 +722,22 @@ def _extraction_prompt(
         "answer from business knowledge (it declined, said it would pass it on, or gave no "
         "answer). Evidence must be an exact quote from the caller."
     )
+    sentence_rules = [
+        (index, rule)
+        for index, rule in enumerate(config.urgency_rules)
+        if isinstance(rule, SentenceUrgencyRule)
+    ]
+    urgency_instruction = ""
+    if sentence_rules:
+        urgency_instruction = (
+            "\nUrgency rules (judge each against the conversation; use the local date above for "
+            "time windows):\n"
+            + "\n".join(f"{index}. {rule.text}" for index, rule in sentence_rules)
+            + "\nList in urgency_matches each rule above that the conversation clearly meets, "
+            f"with rule set to its number, a one-sentence reason citing the facts, and an exact "
+            f"quote from the {'caller' if channel == 'phone' else 'customer'} as evidence. "
+            "Return an empty list if none apply."
+        )
     callback_requested_instruction = (
         "Giving a name, phone number or email is not agreement to a callback. "
         "callback_requested is true only if the caller asks for a callback or answers yes to an "
@@ -676,7 +769,7 @@ Set confirmed_by_caller true only when the assistant read that value back and th
 affirmed it. {callback_requested_instruction}
 Include the reason and preferred time if stated. Set complaint.made only when the
 caller made a complaint, and summarize it briefly.
-{unanswered_questions_instruction}
+{unanswered_questions_instruction}{urgency_instruction}
 
 Confirmed live values:
 {json.dumps(live_intake, ensure_ascii=False)}
