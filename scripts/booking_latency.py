@@ -7,7 +7,7 @@ import statistics
 import subprocess
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -49,19 +49,21 @@ async def benchmark() -> None:
     settings.gmail_mode = "fake"
     settings.voice_service_token = "booking-latency-token"
     config = load_assistant_config(ROOT / "voice/config/assistants/booking_firm.yaml")
+    config.booking.horizon_days = 60
+    buffer = timedelta(minutes=config.booking.buffer_minutes)
     now = datetime.now(UTC)
     candidates = generate_slots(config, "initial_consultation", [], now)
     slots = []
     for candidate in candidates:
         if all(
-            candidate.end <= selected.start or candidate.start >= selected.end
+            candidate.end + buffer <= selected.start or candidate.start >= selected.end + buffer
             for selected in slots
         ):
             slots.append(candidate)
-            if len(slots) == 30:
+            if len(slots) == 60:
                 break
-    if len(slots) < 30:
-        raise RuntimeError("Booking config did not produce 30 benchmark slots.")
+    if len(slots) < 60:
+        raise RuntimeError("Booking config did not produce 60 non-overlapping benchmark slots.")
 
     tenant_id, assistant_id = uuid4(), uuid4()
     phone = "+15555550123"
@@ -93,7 +95,7 @@ async def benchmark() -> None:
                 ),
             )
             conversations = []
-            for index in range(30):
+            for index in range(60):
                 conversation_id, external_ref = uuid4(), f"booking-benchmark-{index}"
                 connection.execute(
                     "INSERT INTO conversations "
@@ -149,11 +151,19 @@ async def benchmark() -> None:
                         settings.calendar_fake_path = Path(directory) / "calendar.json"
                         calendar.calendar_provider_for = original_provider_factory
                         provider_results[provider_name] = await measure_provider(
-                            client, settings.voice_service_token, phone, slots, conversations
+                            client,
+                            settings.voice_service_token,
+                            phone,
+                            slots[:30],
+                            conversations[:30],
                         )
                         continue
                 provider_results[provider_name] = await measure_provider(
-                    client, settings.voice_service_token, phone, slots, conversations
+                    client,
+                    settings.voice_service_token,
+                    phone,
+                    slots[30:],
+                    conversations[30:],
                 )
         internal_voice.route_call = original_route
         calendar.calendar_provider_for = original_provider_factory
