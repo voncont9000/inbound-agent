@@ -46,6 +46,7 @@ from inbound_api.services import knowledge_import as knowledge_import_service  #
 from inbound_api.services.assistant_context import load_assistant_route
 from inbound_api.services.booking import book_slot, booking_context, fetch_busy
 from inbound_api.services.conversation_results import persist_extracted_results
+from inbound_api.services.costs import add_conversation_cost
 from inbound_api.services.knowledge_import import make_genai_client
 from inbound_api.settings import get_settings
 
@@ -511,6 +512,7 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
             {"usage": usage, "providers": {"llm_model": model}},
             price_table,
         )
+    add_conversation_cost(conversation, cost)
     sender = sender_from_settings(settings)
     phone_number_id = (conversation.metrics or {}).get("whatsapp_phone_number_id")
     wa_id = (conversation.metrics or {}).get("whatsapp_wa_id")
