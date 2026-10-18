@@ -5,6 +5,7 @@ import asyncio
 import os
 import time
 from collections.abc import Mapping
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -22,6 +23,7 @@ from starlette.websockets import WebSocketState
 
 from bot import resolve_caller_id, run_bot
 from inbound_voice.call_setup import prepare_call
+from inbound_voice.replay import RedisReplayGuard, ReplayGuard, replay_guard_from_env
 from inbound_voice.twilio import (
     STREAM_TOKEN_MAX_AGE_SECONDS,
     build_stream_twiml,
@@ -34,9 +36,23 @@ from inbound_voice.twilio import (
 VOICE_ROOT = Path(__file__).resolve().parent
 
 
-def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
-    app = FastAPI()
-    app.state.accepted_call_sids = {}
+def create_app(
+    env: Mapping[str, str] = os.environ,
+    replay_guard: ReplayGuard | None = None,
+) -> FastAPI:
+    guard = replay_guard if replay_guard is not None else replay_guard_from_env(env)
+    owns_guard = replay_guard is None
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        try:
+            yield
+        finally:
+            if owns_guard and isinstance(guard, RedisReplayGuard):
+                await guard.client.aclose()
+
+    app = FastAPI(lifespan=lifespan)
+    app.state.replay_guard = guard
 
     @app.get("/healthz")
     async def healthz() -> dict[str, bool]:
@@ -102,16 +118,11 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
                 logger.warning("Rejected Twilio media stream with invalid StreamToken.")
                 await websocket.close(code=1008)
                 return
-            accepted_at = time.time()
             replay_window = STREAM_TOKEN_MAX_AGE_SECONDS + 30
-            for accepted_call_sid, accepted_time in list(app.state.accepted_call_sids.items()):
-                if accepted_at - accepted_time > replay_window:
-                    del app.state.accepted_call_sids[accepted_call_sid]
-            if start.call_sid in app.state.accepted_call_sids:
+            if not await guard.claim(f"twilio:{start.call_sid}", replay_window):
                 logger.warning("Rejected duplicate Twilio media stream for an accepted call.")
                 await websocket.close(code=1008)
                 return
-            app.state.accepted_call_sids[start.call_sid] = accepted_at
             caller_id = resolve_caller_id({"start": start_payload}, env, telephony=True)
             prepared = await prepare_call(
                 env,
