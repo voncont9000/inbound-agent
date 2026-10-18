@@ -44,7 +44,7 @@ export function DraftSectionCard({
       </> : status === "discarded" ? (
         <button type="button" onClick={onUndo}>Undo</button>
       ) : <>
-        <button className="button-primary" type="button" onClick={onAccept}>Accept</button>
+        {status === "pending" && <button className="button-primary" type="button" onClick={onAccept}>Accept</button>}
         <button type="button" onClick={onEdit}>Edit</button>
         <button type="button" onClick={onDiscard}>Discard</button>
       </>}

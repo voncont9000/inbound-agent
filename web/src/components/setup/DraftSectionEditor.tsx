@@ -5,6 +5,15 @@ export type DraftSectionName = keyof Schemas["SetupDraft"];
 
 const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+function ServiceIntakeFields({ fields, heading = true }: { fields: Schemas["FieldSpec"][]; heading?: boolean }) {
+  return <div>
+    {heading && <p className="field-label">Intake fields</p>}
+    {fields.length ? <ul>{fields.map((field) => <li key={field.name}>
+      {field.label}{field.critical && <> <Badge tone="warning">Critical</Badge></>}
+    </li>)}</ul> : <p className="muted">No intake fields suggested.</p>}
+  </div>;
+}
+
 export function DraftSectionEditor({
   section,
   value,
@@ -70,10 +79,7 @@ export function DraftSectionEditor({
   return <div className="stack">
     {Object.entries(services).map(([key, service]) => <div className="inline-editor" key={key}>
       <div className="field"><label htmlFor={`setup-service-${key}`}>Service name</label><input id={`setup-service-${key}`} value={service.label} onChange={(event) => onChange({ ...services, [key]: { ...service, label: event.target.value } })} /></div>
-      <p className="field-label">Intake fields</p>
-      {service.fields.length ? <ul>{service.fields.map((field) => <li key={field.name}>
-        {field.label}{field.critical && <> <Badge tone="warning">Critical</Badge></>}
-      </li>)}</ul> : <p className="muted">No intake fields suggested.</p>}
+      <ServiceIntakeFields fields={service.fields} />
       <button type="button" onClick={() => {
         const updated = { ...services };
         delete updated[key];
@@ -99,5 +105,8 @@ export function DraftSectionPreview({ section, value }: { section: DraftSectionN
     return prices.length ? <ul>{prices.map((item, index) => <li key={index}><strong>{item.service}: {item.price}</strong>{item.notes && ` — ${item.notes}`}</li>)}</ul> : <p className="muted">No published prices in this draft.</p>;
   }
   const services = value as Record<string, Schemas["ServiceConfig"]>;
-  return Object.keys(services).length ? <ul>{Object.entries(services).map(([key, service]) => <li key={key}>{service.label}</li>)}</ul> : <p className="muted">No services in this draft.</p>;
+  return Object.keys(services).length ? <ul>{Object.entries(services).map(([key, service]) => <li key={key}>
+    <strong>{service.label}</strong>
+    <ServiceIntakeFields fields={service.fields} heading={false} />
+  </li>)}</ul> : <p className="muted">No services in this draft.</p>;
 }

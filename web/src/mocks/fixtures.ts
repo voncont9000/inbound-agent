@@ -442,6 +442,8 @@ export const setupDraftFixture: Schemas["SetupDraft"] = {
       fields: [
         { name: "caller_name", label: "Name", type: "string", required: true, critical: true, description: "" },
         { name: "phone", label: "Phone number", type: "phone", required: true, critical: true, description: "" },
+        { name: "email", label: "Email address", type: "email", required: false, critical: false, description: "" },
+        { name: "reason_for_visit", label: "Reason for your visit", type: "string", required: true, critical: false, description: "" },
       ],
     },
   },

@@ -17,6 +17,8 @@ describe("website-based assistant setup", () => {
 
     const companyCard = await screen.findByRole("region", { name: "Company info" });
     await user.click(within(companyCard).getByRole("button", { name: "Accept" }));
+    expect(within(companyCard).queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+    expect(within(companyCard).getByRole("button", { name: "Edit" })).toBeInTheDocument();
 
     const faqCard = screen.getByRole("region", { name: "FAQs" });
     await user.click(within(faqCard).getByRole("button", { name: "Edit" }));
@@ -27,6 +29,16 @@ describe("website-based assistant setup", () => {
 
     const hoursCard = screen.getByRole("region", { name: "Opening hours" });
     await user.click(within(hoursCard).getByRole("button", { name: "Discard" }));
+
+    const servicesCard = screen.getByRole("region", { name: "Suggested services" });
+    expect(within(servicesCard).getByText("Name")).toBeInTheDocument();
+    expect(within(servicesCard).getByText("Phone number")).toBeInTheDocument();
+    expect(within(servicesCard).getByText("Email address")).toBeInTheDocument();
+    expect(within(servicesCard).getByText("Reason for your visit")).toBeInTheDocument();
+    expect(within(servicesCard).getAllByText("Critical")).toHaveLength(2);
+    await user.click(within(servicesCard).getByRole("button", { name: "Discard" }));
+    expect(screen.getByText("1 section not reviewed won't be used.")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Create assistant" }));
 
     await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings$/));

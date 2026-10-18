@@ -234,7 +234,7 @@ export function AssistantSetupPage() {
           </DraftSectionCard>;
         })}
         <section className="panel stack">
-          <p className="muted">{pendingCount} sections not reviewed won't be used.</p>
+          <p className="muted">{pendingCount} {pendingCount === 1 ? "section" : "sections"} not reviewed won't be used.</p>
           {complete.error && <ErrorState message={complete.error instanceof Error ? complete.error.message : "Assistant creation failed."} />}
           <button className="button-primary" type="button" onClick={acceptSections} disabled={complete.isPending}>
             {complete.isPending ? "Creating assistant…" : "Create assistant"}
