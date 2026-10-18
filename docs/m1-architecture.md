@@ -1,6 +1,6 @@
 # M1 shared foundation
 
-M1 establishes service boundaries, shared contracts, and a tenant-isolated persistence layer. Platform API behavior is implemented; the graph-owned `/contacts*` routes remain follow-on work.
+M1 establishes service boundaries, shared contracts, and a tenant-isolated persistence layer. Platform API behavior, the context graph, and the `/contacts*` routes are implemented.
 
 ## Services and layout
 
@@ -16,8 +16,8 @@ M1 establishes service boundaries, shared contracts, and a tenant-isolated persi
 
 | Agent | Owns | Migration range |
 |---|---|---|
-| A — platform API | `backend/inbound_api/routers/`, `auth.py`, `jobs.py`, API implementation and API tests | `0100+` |
-| B — context graph | `backend/inbound_api/graph/`, graph implementation and graph tests | `0200+` |
+| A — platform API | `backend/inbound_api/routers/` except `contacts.py`, `auth.py`, `jobs.py`, API implementation and API tests | `0100+` |
+| B — context graph | `backend/inbound_api/graph/`, `backend/inbound_api/routers/contacts.py`, graph/contact implementation and tests | `0200+` (none needed yet) |
 | C — web app | `web/` | None |
 | D — voice integration | `voice/` and voice/API integration tests | None |
 
@@ -117,6 +117,26 @@ Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `ALLOWED_ORIGINS`
 
 Production migration owners for `SECURITY DEFINER` functions that read RLS-protected rows
 must have `BYPASSRLS` or be superusers; local development uses the Compose migrator role.
+
+## Context graph
+
+The graph package implements a Postgres-native, tenant-isolated contact context store. It uses the existing `persons`, `identities`, `facts`, `commitments`, `edges`, and `identity_merge_log` tables; every tenant-scoped insert gets its tenant from `current_setting('app.tenant_id', true)` inside `tenant_session`, never from request or model output.
+
+### Identity and conversation ingestion
+
+Phone numbers are parsed with the UK region default and normalized to E.164 when their length and structure are possible. Emails are trimmed and lower-cased; WhatsApp phone identifiers have an optional `whatsapp:` prefix removed before phone normalisation. Identity resolution is deterministic: exact normalised phone takes precedence over exact email. A match to a previously merged person follows the merge chain to its survivor. When phone and email point to different people, resolution returns the phone match and records one active `possible_same_person` fact as a review suggestion. It never automatically merges people.
+
+Conversation ingestion reads the merged intake and the assistant's configured field types. It detects phone/email fields by their configured `type`, falling back to fields named `phone` and `email`. The first non-empty caller number is selected from conversation metrics (`from_number`, then `caller_id`), live intake (`caller_id`, then `from_number`), and the merged phone field (caller-ID source before its value). Display name is selected from `caller_name`, `name`, `full_name`, `contact_name`, or `customer_name`, then falls back to phone, email, or `Unknown caller`. Re-ingesting a conversation reuses its linked person and does not duplicate identities, edges, facts, or callback commitments.
+
+Each non-null merged field becomes a temporal fact with its source conversation, evidence, and confidence. A repeated value or already-ingested source conversation is skipped. A newer fact supersedes the previous active fact and sets its `valid_to`; a late-ingested older fact is written as already superseded. A lower-confidence value never replaces an active caller-confirmed value (`confidence = 1.0`): it is retained with status `rejected` and evidence prefixed with the conflict explanation. Callback tasks with a due time become open commitments linked to the latest caller message (or latest message of any role).
+
+### Retrieval and contact operations
+
+The plain-text context card follows merge links and includes known identities, up to three recent conversations, open tasks and commitments, and up to 20 active facts at confidence 0.5 or higher. Fact values are compacted to 160 characters, and the complete card is capped at 3,200 characters (approximately 800 tokens). A person not visible under the active tenant's RLS returns an empty card.
+
+Contact merges move the exact identity, person-fact, conversation, task, and commitment rows to a survivor, resolve active `possible_same_person` suggestions between the pair, and set `merged_into_id`. The operation writes an `identity_merge_log` snapshot and a `contact.merge` audit event. `POST /contacts/{contact_id}/merge/undo` appends a split log referring to the merge, restores only rows in that snapshot that remain on the survivor, reactivates resolved suggestions, and records `contact.merge.undo`; the original merge log remains immutable. A contact split moves selected identities and only conversations linked by `via_identity` edges to moved identities (and not retained identities), along with their sourced facts, tasks, and commitments. It records the moved IDs in the merge log and a `contact.split` audit event.
+
+The contacts API provides tenant-scoped list/search with cursor pagination, contact detail and context, and merge, merge-undo, and split actions. All contacts routes require an owner or staff membership via `require_role(MembershipRole.STAFF)`.
 
 ## Voice/API lifecycle
 
