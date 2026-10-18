@@ -45,6 +45,11 @@ WhatsApp or other text conversations. This is intentional: Gemini has been unrel
 to speak and call a tool in the same turn, sometimes producing a silent call or an announcement
 without a call.
 
+The booking handler returns the tool result as soon as the Calendar operation finishes; it does
+not wait for the holding message to finish playing. The output transport orders the result behind
+audio already queued, and a background marker wait logs whether the holding message reached the
+transport, with a 10-second timeout.
+
 ## Local testing
 
 Use `CALENDAR_MODE=fake` and the `CALENDAR_FAKE_PATH` state file (by default

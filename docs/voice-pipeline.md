@@ -513,15 +513,15 @@ channels do not expose it.
 
 On a successful tool call, the system speaks `transfer_handoff_message` (default:
 “I'm putting you through now, please hold.”); the model is instructed to call
-`transfer_call` without announcing the transfer. If the bot is already speaking, the
-handler waits until it has been quiet for 0.3 seconds, capped at 6 seconds, before pushing
-the handoff message. It then observes `BotStartedSpeakingFrame` and
-`BotStoppedSpeakingFrame` for the handoff: it waits up to 2 seconds for speech to start,
-then up to 4 seconds for it to stop, with a 0.2-second quiet grace period. If speech does
-not start or stop in time, transfer still proceeds and the result is logged.
+`transfer_call` without announcing the transfer. The handler pushes the handoff message
+followed by a speech marker. The marker reaches the tracker from the output transport only
+after earlier queued audio has been written, so model speech already in flight and the
+handoff line remain in output order. Transfer waits up to 10 seconds for the marker, then
+allows a 0.2-second grace period if it played. If the marker times out, transfer proceeds
+without the grace period and logs the outcome.
 
-After that bounded wait, the handler starts the Twilio call redirect before sending
-`EndWorkerFrame`. This ordering is required because Pipecat's FastAPI websocket transport
+The handler starts the Twilio call redirect before sending `EndWorkerFrame`. This ordering
+is required because Pipecat's FastAPI websocket transport
 closes the websocket when the pipeline ends on `EndFrame`; closing the `<Connect><Stream>`
 before the REST redirect would make Twilio hang up the call. The call-finalization path
 reuses the start result and waits for its outcome callback.
