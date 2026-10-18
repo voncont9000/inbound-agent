@@ -218,7 +218,15 @@ async def worker(*, stop: asyncio.Event | None = None) -> None:
     settings = get_settings()
     stop = stop or asyncio.Event()
     while not stop.is_set():
-        processed = await run_next_job()
+        try:
+            processed = await run_next_job()
+        except Exception:
+            LOGGER.exception("Worker failed while running the next job")
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_seconds)
+            except TimeoutError:
+                pass
+            continue
         if not processed:
             try:
                 await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_seconds)
