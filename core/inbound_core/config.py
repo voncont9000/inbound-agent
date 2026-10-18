@@ -268,6 +268,7 @@ class AssistantConfig(BaseModel):
             raise ValueError("Transfer target keys must be unique.")
         return self
 
+
 def assistant_config_json_schema() -> dict[str, Any]:
     return AssistantConfig.model_json_schema()
 

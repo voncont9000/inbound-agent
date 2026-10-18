@@ -167,10 +167,10 @@ async def test_action_runs_and_secrets_are_tenant_isolated(tenant_pair, monkeypa
                 ended_at=datetime.now(UTC),
             )
         )
-    monkeypatch.setattr(get_settings(), "credentials_encryption_key", Fernet.generate_key().decode())
-    generated = await client.post(
-        f"/assistants/{assistant_id}/post-actions/hook/webhook-secret"
+    monkeypatch.setattr(
+        get_settings(), "credentials_encryption_key", Fernet.generate_key().decode()
     )
+    generated = await client.post(f"/assistants/{assistant_id}/post-actions/hook/webhook-secret")
     assert generated.status_code == 200, generated.text
     async with tenant_session(owner_tenant) as session:
         assert await plan_conversation_actions(session, conversation_id) == {"queued": 1}
@@ -184,9 +184,7 @@ async def test_action_runs_and_secrets_are_tenant_isolated(tenant_pair, monkeypa
 
     foreign_tenant = UUID(foreign["tenant_id"])
     async with tenant_session(foreign_tenant) as session:
-        assert (
-            await session.scalar(select(ActionRun).where(ActionRun.id == owner_run.id)) is None
-        )
+        assert await session.scalar(select(ActionRun).where(ActionRun.id == owner_run.id)) is None
         assert (
             await session.scalar(
                 select(PostActionSecret).where(PostActionSecret.id == owner_secret.id)
@@ -203,9 +201,7 @@ async def test_action_runs_and_secrets_are_tenant_isolated(tenant_pair, monkeypa
         )
         assert action_updates.rowcount == 0
         assert secret_updates.rowcount == 0
-    assert (
-        await foreign["client"].get(f"/conversations/{conversation_id}")
-    ).status_code == 404
+    assert (await foreign["client"].get(f"/conversations/{conversation_id}")).status_code == 404
     async with tenant_session(owner_tenant) as session:
         unchanged_run = await session.get(ActionRun, owner_run.id)
         unchanged_secret = await session.get(PostActionSecret, owner_secret.id)

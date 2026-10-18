@@ -448,11 +448,7 @@ async def test_voice_post_actions_refire_for_new_event(tenant_pair, tmp_path) ->
             await session.scalars(select(Job).where(Job.kind == "post_action_execute"))
         )
     assert len(execute_jobs) == 3
-    assert [
-        job.payload
-        for job in execute_jobs
-        if job.payload.get("fire_count") == 2
-    ] == [
+    assert [job.payload for job in execute_jobs if job.payload.get("fire_count") == 2] == [
         {
             "conversation_id": str(conversation_id),
             "action_key": "callback-alert",

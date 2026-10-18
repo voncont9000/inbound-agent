@@ -172,7 +172,9 @@ async def test_execution_retries_transient_failure_then_fails_at_max_attempts(te
     finally:
         current_job.reset(token)
     async with tenant_session(tenant_id) as session:
-        run = await session.scalar(select(ActionRun).where(ActionRun.conversation_id == conversation_id))
+        run = await session.scalar(
+            select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+        )
         assert run is not None
         assert run.status == "queued"
         assert run.attempts == 1
@@ -195,8 +197,12 @@ async def test_execution_retries_transient_failure_then_fails_at_max_attempts(te
     finally:
         current_job.reset(token)
     async with tenant_session(tenant_id) as session:
-        run = await session.scalar(select(ActionRun).where(ActionRun.conversation_id == conversation_id))
-        tasks = list(await session.scalars(select(Task).where(Task.conversation_id == conversation_id)))
+        run = await session.scalar(
+            select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+        )
+        tasks = list(
+            await session.scalars(select(Task).where(Task.conversation_id == conversation_id))
+        )
     assert result["status"] == "failed"
     assert run is not None and run.status == "failed" and run.attempts == 3
     assert [task.kind for task in tasks] == ["action_failed"]
@@ -216,7 +222,9 @@ async def test_ssrf_block_is_failed_action_through_execution(tenant_pair, monkey
         tenant_pair, actions
     )
     tenant_id = UUID(account["tenant_id"])
-    monkeypatch.setattr(get_settings(), "credentials_encryption_key", Fernet.generate_key().decode())
+    monkeypatch.setattr(
+        get_settings(), "credentials_encryption_key", Fernet.generate_key().decode()
+    )
     secret = await account["client"].post(
         f"/assistants/{assistant_id}/post-actions/private-hook/webhook-secret"
     )
@@ -236,9 +244,13 @@ async def test_ssrf_block_is_failed_action_through_execution(tenant_pair, monkey
             ),
         )
     async with tenant_session(tenant_id) as session:
-        run = await session.scalar(select(ActionRun).where(ActionRun.conversation_id == conversation_id))
+        run = await session.scalar(
+            select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+        )
         task = await session.scalar(select(Task).where(Task.conversation_id == conversation_id))
-        stored_secret = await session.scalar(select(PostActionSecret).where(PostActionSecret.assistant_id == assistant_id))
+        stored_secret = await session.scalar(
+            select(PostActionSecret).where(PostActionSecret.assistant_id == assistant_id)
+        )
     assert secret.json()["secret"]
     assert stored_secret is not None
     assert result["status"] == "failed"

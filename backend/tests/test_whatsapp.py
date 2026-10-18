@@ -6,7 +6,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -1127,6 +1127,10 @@ async def test_whatsapp_fake_actions_complete_and_are_visible(tenant_pair, monke
         client = account["client"]
         templates = (await client.get("/templates")).json()
         config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+        service_name = next(iter(config["services"]))
+        service_fields = config["services"][service_name]["fields"]
+        if not any(field["name"] == "email" for field in service_fields):
+            service_fields.append({"name": "email", "label": "Email address", "type": "email"})
         config["post_actions"] = [
             {
                 "kind": "email_customer",
@@ -1177,7 +1181,9 @@ async def test_whatsapp_fake_actions_complete_and_are_visible(tenant_pair, monke
             google_api_key="test-key",
             message_extract_delay_seconds=0,
         )
-        monkeypatch.setattr(get_settings(), "credentials_encryption_key", Fernet.generate_key().decode())
+        monkeypatch.setattr(
+            get_settings(), "credentials_encryption_key", Fernet.generate_key().decode()
+        )
         secret_response = await client.post(
             f"/assistants/{assistant_id}/post-actions/customer-hook/webhook-secret"
         )
@@ -1204,7 +1210,7 @@ async def test_whatsapp_fake_actions_complete_and_are_visible(tenant_pair, monke
         async def extract(*_args, **_kwargs):
             return {
                 "status": "ok",
-                "service": "general",
+                "service": service_name,
                 "model": "gemini-3.8-flash",
                 "summary": "The customer needs a conveyancing quote.",
                 "fields": {
