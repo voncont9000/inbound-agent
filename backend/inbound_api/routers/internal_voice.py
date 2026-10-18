@@ -245,7 +245,9 @@ async def availability(payload: AvailabilityRequest) -> AvailabilityResponse:
         if context is None:
             return AvailabilityResponse(available=False, reason="booking_disabled")
         try:
-            window, busy, provider_ms = await fetch_busy(context, datetime.now(UTC))
+            window, busy, provider_ms = await fetch_busy(
+                session, context, route.assistant_id, datetime.now(UTC)
+            )
         except Exception:
             LOGGER.warning("Calendar availability lookup failed", exc_info=True)
             return AvailabilityResponse(available=False, reason="calendar_error")

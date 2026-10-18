@@ -62,6 +62,18 @@ PROVIDER_ERROR = re.compile(
 )
 
 
+def _rep_fake_state(
+    state_before: dict[str, Any] | None, state_after: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    if state_before is None or state_after is None:
+        return state_after
+    previous_booking_count = len(state_before.get("bookings", []))
+    return {
+        **state_after,
+        "bookings": state_after.get("bookings", [])[previous_booking_count:],
+    }
+
+
 async def _read_runner_output(
     stream: asyncio.StreamReader,
     process_env: dict[str, str],
@@ -581,6 +593,7 @@ async def _run_matrix_calls(
                                 if api_base_url is not None
                                 else None
                             )
+                            rep_fake_state = _rep_fake_state(state_before, state_after)
                             if run_dir is not None:
                                 for filename in (
                                     "bot_audio.wav",
@@ -590,10 +603,10 @@ async def _run_matrix_calls(
                                     source = scratch / filename
                                     if source.exists():
                                         shutil.copy2(source, run_dir / filename)
-                                scored = score_call(run_dir, scenario, fake_state=state_after)
+                                scored = score_call(run_dir, scenario, fake_state=rep_fake_state)
                                 scored["run_dir"] = str(run_dir)
                             else:
-                                scored = score_call(scratch, scenario, fake_state=state_after)
+                                scored = score_call(scratch, scenario, fake_state=rep_fake_state)
                                 scored["run_dir"] = None
                             scored.update(
                                 {

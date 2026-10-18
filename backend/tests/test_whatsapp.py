@@ -1404,7 +1404,7 @@ async def test_signed_whatsapp_jobs_preserve_booking_offers_across_messages(
         [
             _tool_response(
                 "check_availability",
-                {"appointment_type": "consultation", "preference_text": "any time"},
+                {"appointment_type": "consultation", "preference_text": "Tuesday"},
             ),
             _text_response("I can offer one of those times."),
         ]
@@ -1507,6 +1507,7 @@ async def test_signed_whatsapp_jobs_preserve_booking_offers_across_messages(
             for call in first_assistant.meta["tool_calls"]
             if call["name"] == "check_availability"
         )
+        assert availability_call["result"]["matched_preference"] is False
         offered_slot = availability_call["result"]["slots"][0]
 
     second_message_id, second_conversation_id = await signed_message(

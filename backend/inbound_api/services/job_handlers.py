@@ -358,7 +358,7 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
                             else:
                                 now_for_booking = datetime.now(UTC)
                                 _, busy, provider_ms = await fetch_busy(
-                                    booking_ctx, now_for_booking
+                                    session, booking_ctx, conversation.assistant_id, now_for_booking
                                 )
                                 preference = str(arguments.get("preference_text") or "")
                                 windows = (
@@ -382,7 +382,6 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
                                         busy,
                                         now_for_booking,
                                         windows[0].start,
-                                        booking_ctx.booking.max_slots_offered,
                                     )
                                     matched = False
                                 selected = select_offered_slots(

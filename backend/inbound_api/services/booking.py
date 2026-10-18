@@ -88,11 +88,22 @@ async def booking_available(
     return connection is not None and has_google_feature(connection, "calendar")
 
 
-async def fetch_busy(ctx: BookingContext, now: datetime):
+async def fetch_busy(session: AsyncSession, ctx: BookingContext, assistant_id: UUID, now: datetime):
     window = booking_window(ctx.booking, now)
     started = time.perf_counter()
     busy = await ctx.provider.free_busy(ctx.booking.calendar_id, window.start, window.end)
-    return window, busy, round((time.perf_counter() - started) * 1000)
+    provider_ms = round((time.perf_counter() - started) * 1000)
+    rows = await session.scalars(
+        select(CalendarBooking).where(
+            CalendarBooking.assistant_id == assistant_id,
+            CalendarBooking.calendar_id == ctx.booking.calendar_id,
+            CalendarBooking.status == "booked",
+            CalendarBooking.start_at < window.end,
+            CalendarBooking.end_at > window.start,
+        )
+    )
+    busy.extend(BusyBlock(start=row.start_at, end=row.end_at) for row in rows)
+    return window, busy, provider_ms
 
 
 def _booking_record(ctx: BookingContext, booking: CalendarBooking, now: datetime) -> BookingRecord:
@@ -169,18 +180,7 @@ async def book_slot(
         )
         if existing is not None:
             return BookResponse(status="booked", booking=_booking_record(ctx, existing, now))
-        window = booking_window(ctx.booking, now)
-        busy = await ctx.provider.free_busy(ctx.booking.calendar_id, window.start, window.end)
-        rows = await session.scalars(
-            select(CalendarBooking).where(
-                CalendarBooking.assistant_id == conversation.assistant_id,
-                CalendarBooking.calendar_id == ctx.booking.calendar_id,
-                CalendarBooking.status == "booked",
-                CalendarBooking.start_at < window.end,
-                CalendarBooking.end_at > window.start,
-            )
-        )
-        busy.extend(BusyBlock(start=row.start_at, end=row.end_at) for row in rows)
+        _, busy, _ = await fetch_busy(session, ctx, conversation.assistant_id, now)
         try:
             slot = validate_slot(ctx.config, slot_id, busy, now)
         except SlotUnavailable as error:

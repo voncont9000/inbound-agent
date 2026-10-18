@@ -63,6 +63,14 @@ def create_fake_api(
         if not x_service_token or not hmac.compare_digest(x_service_token, app.state.fake["token"]):
             raise HTTPException(status_code=401, detail="Invalid service token")
 
+    def busy_for_window(start: datetime, end: datetime) -> list[BusyBlock]:
+        busy = list(app.state.fake["busy"])
+        busy.extend(
+            BusyBlock(start=item["booking"]["start"], end=item["booking"]["end"])
+            for item in app.state.fake["bookings"]
+        )
+        return [block for block in busy if block.start < end and start < block.end]
+
     @app.post("/internal/voice/availability", response_model=AvailabilityResponse)
     async def availability(
         payload: AvailabilityRequest,
@@ -81,11 +89,7 @@ def create_fake_api(
             await asyncio.sleep(delay / 1000)
         now = datetime.now(UTC)
         window = booking_window(config.booking, now)
-        busy = [
-            item
-            for item in app.state.fake["busy"]
-            if item.start < window.end and window.start < item.end
-        ]
+        busy = busy_for_window(window.start, window.end)
         return AvailabilityResponse(
             available=True,
             timezone=config.office_hours.timezone,
@@ -124,14 +128,8 @@ def create_fake_api(
                 booking=BookingRecord.model_validate(existing["booking"]),
             )
         now = datetime.now(UTC)
-        busy = list(app.state.fake["busy"])
-        for item in app.state.fake["bookings"]:
-            busy.append(
-                BusyBlock(
-                    start=item["booking"]["start"],
-                    end=item["booking"]["end"],
-                )
-            )
+        window = booking_window(config.booking, now)
+        busy = busy_for_window(window.start, window.end)
         try:
             slot = validate_slot(config, payload.slot_id, busy, now)
         except SlotUnavailable as error:
@@ -147,7 +145,6 @@ def create_fake_api(
                 busy,
                 now,
                 requested_start,
-                config.booking.max_slots_offered,
             )
             return BookResponse(
                 status="unavailable",

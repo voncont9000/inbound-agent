@@ -80,7 +80,6 @@ class CallBooking:
                 self._busy,
                 now,
                 windows[0].start,
-                booking.max_slots_offered,
             )
             matched = False
         chosen = select_offered_slots(slots, booking.max_slots_offered)

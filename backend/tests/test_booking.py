@@ -126,6 +126,32 @@ def _slot(config: AssistantConfig):
     return slots[0]
 
 
+def _enable_internal_fake_calendar(graph_env, monkeypatch, tmp_path, config):
+    from inbound_api import settings as settings_module
+    from inbound_api.integrations import google_auth
+
+    calendar_path = tmp_path / "calendar.json"
+    _save_config(graph_env, config)
+    _insert_connection(
+        graph_env, "gmail", "booking@example.test", {"google_features": ["calendar"]}
+    )
+    _insert_connection(graph_env, "phone", "+442079460000")
+    monkeypatch.setattr(
+        booking_service, "get_settings", lambda: SimpleNamespace(calendar_mode="fake")
+    )
+    monkeypatch.setattr(google_auth, "get_settings", lambda: SimpleNamespace(gmail_mode="fake"))
+    monkeypatch.setattr(
+        settings_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            calendar_mode="fake",
+            calendar_fake_path=calendar_path,
+            calendar_fake_delay_ms=0,
+        ),
+    )
+    return calendar_path
+
+
 @pytest.mark.asyncio
 async def test_internal_availability_and_book_require_service_token(api_client):
     requests = [
@@ -240,6 +266,112 @@ async def test_booking_availability_gates_and_route_flag(graph_env, monkeypatch,
     response = await availability(AvailabilityRequest(channel="phone", to_number="+442079460000"))
     assert route.booking_available is True
     assert response.available is True
+
+
+@pytest.mark.asyncio
+async def test_internal_availability_slot_can_be_booked_when_unchanged(
+    graph_env, monkeypatch, tmp_path
+):
+    from inbound_core.booking import AvailabilityRequest
+
+    from inbound_api.routers.internal_voice import availability
+
+    config = _config()
+    calendar_path = _enable_internal_fake_calendar(graph_env, monkeypatch, tmp_path, config)
+    response = await availability(AvailabilityRequest(channel="phone", to_number="+442079460000"))
+    assert response.available is True
+    assert response.fetched_at is not None
+    slots = generate_slots(config, "consultation", response.busy, response.fetched_at)
+    assert slots
+    conversation_id = _insert_conversation(graph_env)
+
+    async with tenant_session(graph_env["tenant_id"]) as session:
+        conversation = await session.get(Conversation, conversation_id)
+        result = await book_slot(
+            session,
+            graph_env["tenant_id"],
+            conversation,
+            _context(config, FakeCalendarProvider(calendar_path)),
+            slot_id=slots[0].slot_id,
+            name="Alex",
+            email=None,
+            phone=None,
+            now=response.fetched_at,
+        )
+
+    assert result.status == "booked"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_calendar_event_remains_busy_from_booking_row(
+    graph_env, monkeypatch, tmp_path
+):
+    from inbound_core.booking import AvailabilityRequest
+
+    from inbound_api.routers.internal_voice import availability
+
+    config = _config()
+    calendar_path = _enable_internal_fake_calendar(graph_env, monkeypatch, tmp_path, config)
+    provider = FakeCalendarProvider(calendar_path)
+    first_availability = await availability(
+        AvailabilityRequest(channel="phone", to_number="+442079460000")
+    )
+    assert first_availability.fetched_at is not None
+    first_slots = generate_slots(
+        config, "consultation", first_availability.busy, first_availability.fetched_at
+    )
+    assert first_slots
+    taken_slot = first_slots[0]
+    first_conversation_id = _insert_conversation(graph_env)
+
+    async with tenant_session(graph_env["tenant_id"]) as session:
+        conversation = await session.get(Conversation, first_conversation_id)
+        first_booking = await book_slot(
+            session,
+            graph_env["tenant_id"],
+            conversation,
+            _context(config, provider),
+            slot_id=taken_slot.slot_id,
+            name="Alex",
+            email=None,
+            phone=None,
+            now=first_availability.fetched_at,
+        )
+    assert first_booking.status == "booked"
+    assert first_booking.booking is not None
+    await provider.cancel_event("primary", first_booking.booking.event_id)
+
+    second_availability = await availability(
+        AvailabilityRequest(channel="phone", to_number="+442079460000")
+    )
+    assert second_availability.available is True
+    assert second_availability.fetched_at is not None
+    assert any(
+        block.start < taken_slot.end and taken_slot.start < block.end
+        for block in second_availability.busy
+    )
+    second_slots = generate_slots(
+        config, "consultation", second_availability.busy, second_availability.fetched_at
+    )
+    assert taken_slot.slot_id not in {slot.slot_id for slot in second_slots}
+    assert second_slots
+    second_conversation_id = _insert_conversation(graph_env)
+
+    async with tenant_session(graph_env["tenant_id"]) as session:
+        conversation = await session.get(Conversation, second_conversation_id)
+        second_booking = await book_slot(
+            session,
+            graph_env["tenant_id"],
+            conversation,
+            _context(config, provider),
+            slot_id=second_slots[0].slot_id,
+            name="Jordan",
+            email=None,
+            phone=None,
+            now=second_availability.fetched_at,
+        )
+
+    assert second_booking.status == "booked"
 
 
 @pytest.mark.asyncio

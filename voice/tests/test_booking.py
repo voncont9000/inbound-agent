@@ -6,6 +6,7 @@ import pytest
 from inbound_core.booking import (
     AvailabilityResponse,
     BookResponse,
+    BusyBlock,
     SlotOffer,
 )
 from inbound_core.call_report import CallStart
@@ -121,6 +122,30 @@ async def test_slot_from_earlier_availability_check_remains_bookable() -> None:
     assert result["ok"] is True
     assert result["status"] == "booked"
     assert api.book_calls[0].slot_id == earlier_slot_id
+
+
+@pytest.mark.asyncio
+async def test_availability_falls_back_when_preference_has_no_slots() -> None:
+    api = FakeApi(
+        [
+            AvailabilityResponse(
+                available=True,
+                busy=[
+                    BusyBlock(
+                        start=datetime(2026, 10, 20, tzinfo=UTC),
+                        end=datetime(2026, 10, 21, tzinfo=UTC),
+                    )
+                ],
+            )
+        ]
+    )
+    booking = _booking(api)
+
+    result = await booking.check_availability("consultation", "Tuesday")
+
+    assert result["ok"] is True
+    assert result["matched_preference"] is False
+    assert result["slots"]
 
 
 @pytest.mark.asyncio

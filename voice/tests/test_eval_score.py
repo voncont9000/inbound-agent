@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from eval import twilio_sim
+from eval.run_matrix import _rep_fake_state
 from eval.score import aggregate_calls, render_summary, score_call
 from eval.synth_callers import load_scenarios
 from inbound_voice.config import load_assistant_config
@@ -204,6 +205,27 @@ def test_booking_checks_are_scored_from_fake_api_state(tmp_path) -> None:
     )
 
     assert all(item["passed"] for item in score["booking_checks"].values())
+
+
+def test_pre_repetition_booking_does_not_satisfy_booked_check(tmp_path) -> None:
+    run_dir = tmp_path / "booking-score"
+    shutil.copytree(FIXTURE, run_dir)
+    scenario = {"booking_checks": {"booked": True}}
+    prior_booking = {
+        "appointment_type": "initial_consultation",
+        "booking": {"status": "booked"},
+    }
+    state_before = {"bookings": [prior_booking]}
+    state_after = {"bookings": [prior_booking]}
+
+    score = score_call(
+        run_dir,
+        scenario,
+        fake_state=_rep_fake_state(state_before, state_after),
+    )
+
+    assert score["booking_checks"]["booked"]["actual"] is False
+    assert score["booking_checks"]["booked"]["passed"] is False
 
 
 def test_booking_scenario_assistant_fixture_enables_booking() -> None:
