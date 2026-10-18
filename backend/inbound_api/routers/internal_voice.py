@@ -145,7 +145,7 @@ async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
         caller_phone = payload.from_number
         if caller_phone:
             try:
-                caller_phone = normalise_phone(caller_phone)
+                caller_phone = normalise_phone(caller_phone, allow_possible=True)
             except ValueError:
                 pass
         try:
@@ -170,6 +170,8 @@ async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
             status=ConversationStatus.ACTIVE,
             started_at=payload.started_at,
         )
+        if caller_phone:
+            conversation.metrics = {"from_number": caller_phone}
         try:
             async with session.begin_nested():
                 session.add(conversation)
@@ -238,7 +240,10 @@ async def report_call(conversation_id: UUID, payload: CallReportRequest) -> Call
                 )
             )
         for item in payload.tasks:
-            if item.get("type") == "knowledge_gap" or item.get("kind") == "knowledge_gap":
+            if item.get("type") in {"knowledge_gap", "end_call"} or item.get("kind") in {
+                "knowledge_gap",
+                "end_call",
+            }:
                 continue
             kind = item.get("type") or item.get("kind") or "task"
             source = item.get("source")
@@ -280,7 +285,7 @@ async def report_call(conversation_id: UUID, payload: CallReportRequest) -> Call
         conversation.status = ConversationStatus.COMPLETED
         conversation.ended_at = payload.ended_at
         conversation.end_reason = payload.end_reason
-        conversation.metrics = payload.metrics
+        conversation.metrics = {**(conversation.metrics or {}), **payload.metrics}
         conversation.estimated_cost = payload.estimated_cost
         await enqueue(session, "graph_ingest", {"conversation_id": str(conversation_id)})
     return CallReportAccepted(accepted=True)

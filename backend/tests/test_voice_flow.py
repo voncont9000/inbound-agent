@@ -62,7 +62,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     started_at = "2026-03-01T12:00:00Z"
     start_payload = {
         "to_number": "020 7946 0000",
-        "from_number": "020 7946 0002",
+        "from_number": "07700 900456",
         "external_call_id": "voice-flow-call",
         "channel": "phone",
         "started_at": started_at,
@@ -106,6 +106,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
         "tasks": [
             {"type": "callback", "source": "live", "description": "Return the call"},
             {"type": "task", "source": "post_call", "description": "Check the details"},
+            {"type": "end_call", "source": "goodbye_detected"},
             {
                 "type": "knowledge_gap",
                 "question": "What is the completion estimate?",
@@ -127,6 +128,19 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
         headers=service_headers,
     )
     assert report_response.status_code == 202, report_response.text
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        conversation = await session.get(Conversation, UUID(conversation_id))
+        task_kinds = list(
+            await session.scalars(
+                select(Task.kind).where(Task.conversation_id == UUID(conversation_id))
+            )
+        )
+    assert conversation is not None
+    assert conversation.metrics == {
+        "from_number": "+447700900456",
+        "duration_seconds": 300,
+    }
+    assert "end_call" not in task_kinds
     first_detail_response = await client.get(f"/conversations/{conversation_id}")
     assert first_detail_response.status_code == 200, first_detail_response.text
     first_detail = first_detail_response.json()
