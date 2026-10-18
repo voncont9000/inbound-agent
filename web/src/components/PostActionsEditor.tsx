@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
 import type { AssistantConfig } from "../lib/config";
+import { keyFromLabel } from "../lib/keys";
 import { ErrorState, LoadingState } from "./States";
 
 type PostAction = NonNullable<AssistantConfig["post_actions"]>[number];
@@ -95,7 +96,7 @@ export function PostActionsEditor({
         const kind = event.target.value as ActionKind;
         update((draft) => {
           const postActions = (draft.post_actions ??= []);
-          postActions.push(createAction(kind, `action-${postActions.length + 1}`));
+          postActions.push(createAction(kind, keyFromLabel(kind, postActions.map(({ key }) => key), "action")));
         });
         event.target.value = "";
       }}>
@@ -118,7 +119,6 @@ export function PostActionsEditor({
     {actions.map((action, index) => <article className="inline-editor stack" key={`${action.key}-${index}`}>
       <div className="button-row"><h3>{action.kind.replaceAll("_", " ")}</h3><button type="button" onClick={() => update((draft) => { (draft.post_actions ??= []).splice(index, 1); })}>Remove action</button></div>
       <div className="form-grid">
-        <label className="field">Action key<input aria-label={`Action key ${index + 1}`} value={action.key} onChange={(event) => setAction(index, (current) => ({ ...current, key: event.target.value }))} /></label>
         <label className="check-row"><input type="checkbox" checked={action.enabled} onChange={(event) => setAction(index, (current) => ({ ...current, enabled: event.target.checked }))} />Enabled</label>
       </div>
       <fieldset><legend>Trigger events</legend><div className="button-row">

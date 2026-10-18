@@ -13,7 +13,7 @@ const transferConversationId = "50000000-0000-4000-8000-000000000011";
 const contactId = "30000000-0000-4000-8000-000000000001";
 
 describe("operator workflows", () => {
-  it("adds and saves a transfer target with the assistant configuration", async () => {
+  it("adds and saves a transfer target with a generated key", async () => {
     const user = userEvent.setup();
     let capturedBody: Record<string, unknown> | undefined;
     const listener = ({ request }: { request: Request }) => {
@@ -22,16 +22,18 @@ describe("operator workflows", () => {
       }
     };
     server.events.on("request:start", listener);
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    expect(screen.queryByLabelText("key")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "Call forwarding" }));
     await user.click(screen.getByRole("button", { name: "Add transfer target" }));
-    await user.type(screen.getByLabelText("key"), "duty_solicitor");
-    await user.type(screen.getByLabelText("label"), "Duty solicitor");
-    const phone = screen.getByLabelText("phone");
+    await user.type(screen.getByLabelText("Name"), "Duty solicitor");
+    const phone = screen.getByLabelText("Phone number");
     expect(phone).toHaveAttribute("type", "tel");
     await user.type(phone, "+447700900123");
     await user.type(screen.getByLabelText("When to use"), "The caller asks for a person.");
-    await user.click(screen.getByRole("checkbox", { name: /transfer call/i }));
+    await user.click(screen.getByRole("link", { name: "Advanced" }));
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     const handoffMessage = screen.getByLabelText("Handoff message");
     await user.clear(handoffMessage);
     await user.type(handoffMessage, "A colleague will speak with you shortly.");
@@ -67,7 +69,7 @@ describe("operator workflows", () => {
       }
     };
     server.events.on("request:start", listener);
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
 
     const needsPerson = screen.getByLabelText("Needs a person");
@@ -103,7 +105,7 @@ describe("operator workflows", () => {
     );
   });
 
-  it("validates settings, saves the complete config, and shows server validation paths", async () => {
+  it("validates settings across tabs, saves the complete config, and shows server validation paths", async () => {
     const user = userEvent.setup();
     const initialConfig = structuredClone(mockDb.tenants[0].assistants[0].config);
     let putCount = 0;
@@ -115,28 +117,27 @@ describe("operator workflows", () => {
       }
     };
     server.events.on("request:start", putListener);
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    expect(screen.queryByLabelText("Field name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Service key")).not.toBeInTheDocument();
 
-    const enumChoices = screen.getAllByLabelText("Choices")[0];
-    const fieldNames = screen.getAllByLabelText("Field name");
-    await user.clear(enumChoices);
-    await user.clear(fieldNames[1]);
-    await user.type(fieldNames[1], "caller_name");
+    await user.clear(screen.getAllByLabelText("Choices")[0]);
+    await user.click(screen.getByRole("link", { name: "General" }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/abilities`));
     expect(await screen.findByRole("heading", { name: /errors to fix/ })).toBeInTheDocument();
-    expect(enumChoices).toHaveAttribute("aria-invalid", "true");
-    expect(fieldNames[1]).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getAllByLabelText("Choices")[0]).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("link", { name: /Abilities.*1 to fix/ })).toBeInTheDocument();
     expect(putCount).toBe(0);
 
-    await user.clear(enumChoices);
-    await user.type(enumChoices, "a, b");
-    await user.clear(fieldNames[1]);
-    await user.type(fieldNames[1], "phone");
+    await user.type(screen.getAllByLabelText("Choices")[0], "a, b");
+    const serviceLabel = screen.getAllByLabelText("Service label")[0];
+    await user.clear(serviceLabel);
+    await user.type(serviceLabel, "Boiler servicing");
+    await user.click(screen.getByRole("link", { name: "Advanced" }));
     await user.clear(screen.getByLabelText("Phrases (comma or newline separated)"));
     await user.type(screen.getByLabelText("Phrases (comma or newline separated)"), "gas leak, flooding");
-    fireEvent.change(fieldNames[6], { target: { value: "requested_visit_date" } });
-    fireEvent.change(screen.getAllByLabelText("Service key")[0], { target: { value: "boiler_service" } });
     await user.click(screen.getByRole("radio", { name: /Read email addresses back letter by letter/ }));
     await user.click(screen.getByRole("radio", { name: /Read back every field marked critical/ }));
     await user.click(screen.getByRole("checkbox", { name: /request callback/ }));
@@ -153,10 +154,13 @@ describe("operator workflows", () => {
     expect(savedConfig.review_confidence_threshold).toBe(0.8);
     expect(savedConfig.knowledge).toEqual(initialConfig.knowledge);
     expect(savedConfig.price_list).toEqual(initialConfig.price_list);
-    const savedServices = savedConfig.services as Record<string, { fields: Array<Record<string, unknown>> }>;
-    expect(savedServices.boiler_service.fields[4].choices).toEqual(["a", "b"]);
+    const savedServices = savedConfig.services as Record<string, { label: string; fields: Array<Record<string, unknown>> }>;
+    expect(Object.keys(savedServices)).toEqual(Object.keys(initialConfig.services));
+    expect(savedServices.boiler_repair.label).toBe("Boiler servicing");
+    expect(savedServices.boiler_repair.fields[4].choices).toEqual(["a", "b"]);
+    expect(savedServices.boiler_repair.fields.map(({ name }) => name)).toEqual(initialConfig.services.boiler_repair.fields.map(({ name }) => name));
     expect((savedConfig.urgency_rules as Array<Record<string, unknown>>).find(({ type }) => type === "keyword")?.phrases).toEqual(["gas leak", "flooding"]);
-    expect((savedConfig.urgency_rules as Array<Record<string, unknown>>).find(({ type }) => type === "date_deadline")).toMatchObject({ service: "boiler_service", field: "requested_visit_date" });
+    expect(savedConfig.urgency_rules).toHaveLength(initialConfig.urgency_rules.length);
     for (const service of Object.values(savedServices)) {
       for (const field of service.fields) {
         if (field.type !== "enum") expect(field).not.toHaveProperty("choices");
@@ -164,17 +168,53 @@ describe("operator workflows", () => {
     }
 
     server.use(http.put<{ id: string }, Schemas["AssistantUpdate"], Schemas["HTTPValidationError"]>("*/api/assistants/:id", () => HttpResponse.json<Schemas["HTTPValidationError"]>({
-      detail: [{ loc: ["body", "config", "services", "boiler_service", "fields", 0, "label"], msg: "Label rejected by server.", type: "value_error" }],
+      detail: [{ loc: ["body", "config", "services", "boiler_repair", "fields", 0, "label"], msg: "Label rejected by server.", type: "value_error" }],
     }, { status: 422 })));
-    const firstLabel = screen.getAllByLabelText("Field label")[0];
-    await user.clear(firstLabel);
-    await user.type(firstLabel, "Caller name");
+    await user.click(screen.getByRole("link", { name: "General" }));
+    await user.type(screen.getByLabelText("Greeting"), " Welcome.");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/abilities`));
     await waitFor(() => expect(screen.getAllByText("Label rejected by server.")).toHaveLength(2));
+    const firstLabel = screen.getAllByLabelText("Field label")[0];
     expect(firstLabel).toHaveAttribute("aria-invalid", "true");
-    expect(document.getElementById(firstLabel.getAttribute("aria-describedby") ?? "")).toHaveTextContent("Label rejected by server.");
+    expect(document.getElementById(firstLabel.getAttribute("aria-describedby")?.split(" ")[0] ?? "")).toHaveTextContent("Label rejected by server.");
     server.events.removeListener("request:start", putListener);
-  }, 15000);
+  }, 20000);
+
+  it("generates unique keys for new services and fields and keeps them stable after saving", async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Add service" }));
+    const labels = screen.getAllByLabelText("Service label");
+    const newService = labels[labels.length - 1];
+    await user.type(newService, "Boiler repair");
+    const addFieldButtons = screen.getAllByRole("button", { name: "Add field" });
+    await user.click(addFieldButtons[addFieldButtons.length - 1]);
+    const fieldLabels = screen.getAllByLabelText("Field label");
+    await user.type(fieldLabels[fieldLabels.length - 1], "Caller name");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    const services = (capturedBody?.config as { services: Record<string, { label: string; fields: Array<{ name: string; label: string }> }> }).services;
+    expect(services.boiler_repair_2).toMatchObject({ label: "Boiler repair", fields: [{ name: "caller_name", label: "Caller name" }] });
+    expect(await screen.findByText("Saved version 4")).toBeInTheDocument();
+
+    capturedBody = undefined;
+    const savedLabels = screen.getAllByLabelText("Service label");
+    await user.type(savedLabels[savedLabels.length - 1], " and servicing");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    const renamed = ((capturedBody as Record<string, unknown> | undefined)?.config as { services: Record<string, { label: string }> }).services;
+    expect(renamed.boiler_repair_2.label).toBe("Boiler repair and servicing");
+    server.events.removeListener("request:start", listener);
+  }, 20000);
 
   it("configures an appointment type and saves booking settings", async () => {
     const user = userEvent.setup();
@@ -185,12 +225,20 @@ describe("operator workflows", () => {
       }
     };
     server.events.on("request:start", listener);
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    expect(screen.queryByLabelText("Duration (minutes)")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
+    expect(screen.queryByLabelText("Key")).not.toBeInTheDocument();
     const duration = screen.getByLabelText("Duration (minutes)");
     await user.clear(duration);
     await user.type(duration, "45");
+    await user.click(screen.getByRole("button", { name: "Add appointment type" }));
+    const labels = screen.getAllByLabelText("Appointment label");
+    await user.clear(labels[1]);
+    await user.type(labels[1], "Consultation");
+    await user.type(screen.getAllByLabelText("When to use this appointment type")[1], "Follow-up visits.");
+    await user.click(screen.getByRole("link", { name: "Advanced" }));
     const checkMessage = screen.getByLabelText("Availability holding message");
     await user.clear(checkMessage);
     await user.type(checkMessage, "Checking the diary now.");
@@ -204,8 +252,9 @@ describe("operator workflows", () => {
       calendar_id: "primary",
       check_message: "Checking the diary now.",
       book_message: "Booking that now.",
-      appointment_types: [{ key: "consultation", duration_minutes: 45 }],
+      appointment_types: [{ key: "consultation", duration_minutes: 45 }, { key: "consultation_2", label: "Consultation" }],
     });
+    expect(savedConfig?.live_actions).toEqual(expect.arrayContaining(["check_availability", "book_appointment"]));
     server.events.removeListener("request:start", listener);
   }, 15000);
 
@@ -225,9 +274,9 @@ describe("operator workflows", () => {
         },
       ),
     );
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/calendar is disconnected/i);
     await user.click(screen.getByRole("button", { name: "Connect Google Calendar" }));
     await waitFor(() => expect(oauthFeatures).toEqual(["calendar"]));
@@ -254,9 +303,9 @@ describe("operator workflows", () => {
         }),
       ),
     );
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
     expect(await screen.findByText("Google Calendar is connected for this assistant.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Google Calendar" })).not.toBeInTheDocument();
   });
@@ -282,17 +331,18 @@ describe("operator workflows", () => {
         }),
       ),
     );
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
     expect(await screen.findByText(/Google Calendar is connected for this assistant/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Google Calendar" })).not.toBeInTheDocument();
   });
 
   it("tests an after-conversation action and shows the rendered result", async () => {
     const user = userEvent.setup();
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
     await user.selectOptions(screen.getByLabelText("Add action"), "email_customer");
     await user.click(screen.getByRole("button", { name: "Send test" }));
     expect(await screen.findByText("Ready to send.")).toBeInTheDocument();
@@ -301,36 +351,36 @@ describe("operator workflows", () => {
 
   it("offers Google Sheets connection when a sheet action has no Sheets scope", async () => {
     const user = userEvent.setup();
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
     await user.selectOptions(screen.getByLabelText("Add action"), "sheets_row");
     expect(await screen.findByRole("button", { name: "Connect Google Sheets" })).toBeInTheDocument();
   });
 
-  it("rejects duplicate contact keys without overwriting a contact", async () => {
+  it("keeps saved contact keys and generates a unique key for a new contact", async () => {
     const user = userEvent.setup();
     const contacts = mockDb.tenants[0].assistants[0].config.contacts;
-    const keys = Object.keys(contacts);
-    const firstKey = keys[0]!;
-    const secondKey = keys[1]!;
-    let putCount = 0;
+    let capturedBody: Record<string, unknown> | undefined;
     const listener = ({ request }: { request: Request }) => {
-      if (request.method === "PUT" && request.url.includes("/assistants/")) putCount += 1;
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
     };
     server.events.on("request:start", listener);
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/knowledge`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    expect(screen.queryByLabelText("Contact key")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Office")).toHaveValue(contacts.office);
 
-    const firstContactKey = screen.getAllByLabelText("Contact key")[0];
-    fireEvent.change(firstContactKey, { target: { value: secondKey } });
-    expect(firstContactKey).toHaveValue(firstKey);
-    expect(firstContactKey).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getAllByText("Contact keys must be unique.")).toHaveLength(2);
-    expect(screen.getAllByLabelText("Contact value")[0]).toHaveValue(contacts[firstKey]);
-    expect(screen.getAllByLabelText("Contact value")[1]).toHaveValue(contacts[secondKey]);
-
+    await user.click(screen.getByRole("button", { name: "Add contact" }));
+    const name = screen.getByLabelText("Contact name");
+    await user.clear(name);
+    await user.type(name, "Office");
+    await user.type(screen.getByLabelText("Contact value"), "0161 000 0000");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
-    expect(putCount).toBe(0);
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    expect((capturedBody?.config as { contacts: Record<string, string> }).contacts).toEqual({ ...contacts, office_2: "0161 000 0000" });
     server.events.removeListener("request:start", listener);
   });
 
