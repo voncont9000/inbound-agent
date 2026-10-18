@@ -490,7 +490,6 @@ clear callback preference to `preferred_time_iso` using the configured office-ho
 timezone (Europe/London by default). Callback task `due_at` values must be aware and within
 14 days of call end; an out-of-hours time moves to the next opening, and missing or invalid
 preferences use the next opening when office hours are configured.
-
 ## Live call transfer
 
 Assistants can configure `transfer_targets` (key, label, phone, `when_to_use`, and
@@ -524,3 +523,12 @@ failure TwiML, but the original process reports the outcome as `unknown`.
 
 The `transfer_request` evaluation scenario uses fake call control and a signed Dial
 callback; the real provider scenario is not required for unit-test plumbing.
+
+## Production voice services
+
+The production Compose stack runs the phone and browser-call servers as separate containers behind
+Caddy. Set `TWILIO_MODE=off` until a production Twilio auth token and webhook are configured;
+`twilio` mode requires `TWILIO_AUTH_TOKEN`. In production the browser-call WebSocket requires a
+backend `call_token`, or a valid configured `WEB_CALL_TOKEN` for demo access. The proxy routes
+`/twilio/*` to the phone service and `/call/*` to the browser-call service; the two services are
+not published directly on the host.

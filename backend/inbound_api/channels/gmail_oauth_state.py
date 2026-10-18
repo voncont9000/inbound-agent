@@ -8,15 +8,26 @@ import secrets
 import time
 from uuid import UUID
 
+from inbound_api.integrations.google_auth import google_scopes_for_features
 from inbound_api.settings import get_settings
 
 
-def issue_state(tenant_id: UUID, assistant_id: UUID, user_id: UUID, ttl: int = 600) -> str:
+def issue_state(
+    tenant_id: UUID,
+    assistant_id: UUID,
+    user_id: UUID,
+    ttl: int = 600,
+    *,
+    features: list[str] | None = None,
+) -> str:
+    requested_features = list(dict.fromkeys(features or []))
+    google_scopes_for_features(requested_features)
     payload = json.dumps(
         {
             "tenant_id": str(tenant_id),
             "assistant_id": str(assistant_id),
             "user_id": str(user_id),
+            "features": requested_features,
             "nonce": secrets.token_urlsafe(18),
             "exp": int(time.time()) + ttl,
         },
@@ -32,6 +43,11 @@ def issue_state(tenant_id: UUID, assistant_id: UUID, user_id: UUID, ttl: int = 6
 
 
 def verify_state(token: str) -> tuple[UUID, UUID, UUID]:
+    tenant_id, assistant_id, user_id, _features = verify_state_with_features(token)
+    return tenant_id, assistant_id, user_id
+
+
+def verify_state_with_features(token: str) -> tuple[UUID, UUID, UUID, list[str]]:
     try:
         encoded, signed = token.split(".")
         signature = _decode(signed)
@@ -52,10 +68,15 @@ def verify_state(token: str) -> tuple[UUID, UUID, UUID]:
             or payload["exp"] <= int(time.time())
         ):
             raise ValueError("Expired or malformed OAuth state")
+        features = payload.get("features", [])
+        if not isinstance(features, list) or any(not isinstance(item, str) for item in features):
+            raise ValueError("Malformed OAuth state features")
+        google_scopes_for_features(features)
         return (
             UUID(payload["tenant_id"]),
             UUID(payload["assistant_id"]),
             UUID(payload["user_id"]),
+            features,
         )
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
         raise ValueError("Invalid Gmail OAuth state") from error

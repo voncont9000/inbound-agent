@@ -1,0 +1,314 @@
+name: inbound
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: inbound_migrator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: inbound
+      INBOUND_APP_PASSWORD: ${INBOUND_APP_PASSWORD:?Set INBOUND_APP_PASSWORD}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../backend/initdb/01-roles.sh:/docker-entrypoint-initdb.d/01-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inbound_migrator -d inbound"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  migrate:
+    image: inbound-backend:latest
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    user: app
+    restart: "no"
+    logging: *default-logging
+    working_dir: /app/backend
+    command: ["/opt/venv/bin/alembic", "upgrade", "head"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql+psycopg://inbound_app_login:${INBOUND_APP_PASSWORD:?Set INBOUND_APP_PASSWORD}@db:5432/inbound
+      MIGRATION_DATABASE_URL: postgresql+psycopg://inbound_migrator:${POSTGRES_PASSWORD}@db:5432/inbound
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
+      WHATSAPP_MODE: ${WHATSAPP_MODE:-off}
+      GMAIL_MODE: ${GMAIL_MODE:-off}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    image: inbound-backend:latest
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    user: app
+    restart: unless-stopped
+    logging: *default-logging
+    working_dir: /app/backend
+    command:
+      - /opt/venv/bin/uvicorn
+      - inbound_api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql+psycopg://inbound_app_login:${INBOUND_APP_PASSWORD}@db:5432/inbound
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
+      WEB_CALL_BASE_URL: https://${DOMAIN:?Set DOMAIN}/call/
+      ALLOWED_ORIGINS: '["https://${DOMAIN}"]'
+      SESSION_COOKIE_SECURE: "true"
+      WHATSAPP_MODE: ${WHATSAPP_MODE:-off}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_GRAPH_BASE_URL: ${WHATSAPP_GRAPH_BASE_URL:-https://graph.facebook.com/v26.0}
+      GMAIL_MODE: ${GMAIL_MODE:-off}
+      GMAIL_FAKE_DIR: ${GMAIL_FAKE_DIR:-/app/backend/var/gmail-fake}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URL: ${GOOGLE_OAUTH_REDIRECT_URL:-}
+      GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-}
+      GMAIL_PUBSUB_AUDIENCE: ${GMAIL_PUBSUB_AUDIENCE:-}
+      GMAIL_PUBSUB_SERVICE_ACCOUNT: ${GMAIL_PUBSUB_SERVICE_ACCOUNT:-}
+      GMAIL_PUSH_TOKEN: ${GMAIL_PUSH_TOKEN:-}
+      GMAIL_RECONCILE_INTERVAL_SECONDS: ${GMAIL_RECONCILE_INTERVAL_SECONDS:-300}
+      CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      TEXT_AGENT_MODEL: ${TEXT_AGENT_MODEL:-gemini-3.5-flash-lite}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gemini-3.8-flash}
+      KNOWLEDGE_MODEL: ${KNOWLEDGE_MODEL:-gemini-3.8-flash}
+      UPLOAD_DIR: /app/backend/var/uploads
+      FAKE_OUTBOX_PATH: /app/backend/var/whatsapp-outbox.jsonl
+    volumes:
+      - backend-var:/app/backend/var
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  worker:
+    image: inbound-backend:latest
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    user: app
+    restart: unless-stopped
+    logging: *default-logging
+    working_dir: /app/backend
+    command: ["python", "-m", "inbound_api.worker"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql+psycopg://inbound_app_login:${INBOUND_APP_PASSWORD}@db:5432/inbound
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
+      WHATSAPP_MODE: ${WHATSAPP_MODE:-off}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_GRAPH_BASE_URL: ${WHATSAPP_GRAPH_BASE_URL:-https://graph.facebook.com/v26.0}
+      GMAIL_MODE: ${GMAIL_MODE:-off}
+      GMAIL_FAKE_DIR: ${GMAIL_FAKE_DIR:-/app/backend/var/gmail-fake}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URL: ${GOOGLE_OAUTH_REDIRECT_URL:-}
+      GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-}
+      GMAIL_PUBSUB_AUDIENCE: ${GMAIL_PUBSUB_AUDIENCE:-}
+      GMAIL_PUBSUB_SERVICE_ACCOUNT: ${GMAIL_PUBSUB_SERVICE_ACCOUNT:-}
+      GMAIL_PUSH_TOKEN: ${GMAIL_PUSH_TOKEN:-}
+      GMAIL_RECONCILE_INTERVAL_SECONDS: ${GMAIL_RECONCILE_INTERVAL_SECONDS:-300}
+      CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      TEXT_AGENT_MODEL: ${TEXT_AGENT_MODEL:-gemini-3.5-flash-lite}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gemini-3.8-flash}
+      KNOWLEDGE_MODEL: ${KNOWLEDGE_MODEL:-gemini-3.8-flash}
+      UPLOAD_DIR: /app/backend/var/uploads
+      FAKE_OUTBOX_PATH: /app/backend/var/whatsapp-outbox.jsonl
+    volumes:
+      - backend-var:/app/backend/var
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os, psycopg; connection = psycopg.connect(os.environ['DATABASE_URL'].replace('+psycopg', ''), connect_timeout=3); connection.execute('SELECT 1'); connection.close()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  phone:
+    image: inbound-voice:latest
+    build:
+      context: ..
+      dockerfile: voice/Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["python", "phone_server.py", "--host", "0.0.0.0", "--port", "7861"]
+    environment: &voice-environment
+      APP_ENV: ${APP_ENV:-production}
+      TWILIO_MODE: ${TWILIO_MODE:-off}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      PUBLIC_BASE_URL: https://${DOMAIN:?Set DOMAIN}
+      API_BASE_URL: http://backend:8000
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
+      REDIS_URL: redis://redis:6379/0
+      VOICE_SPOOL_DIR: /app/voice/spool
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY:-}
+      SONIOX_API_KEY: ${SONIOX_API_KEY:-}
+      SPEECHIFY_API_KEY: ${SPEECHIFY_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      TTS_VOICE: ${TTS_VOICE:-}
+      ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_v4_turbo}
+      STT_PROVIDER: ${STT_PROVIDER:-assemblyai}
+      TTS_PROVIDER: ${TTS_PROVIDER:-speechify}
+      LLM_PROVIDER: ${LLM_PROVIDER:-google}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.5-flash-lite}
+      LLM_THINKING_LEVEL: ${LLM_THINKING_LEVEL:-minimal}
+      ASSISTANT_CONFIG: ${ASSISTANT_CONFIG:-config/assistants/demo_firm.yaml}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gemini-3.8-flash}
+      SMART_TURN_STOP_SECS: ${SMART_TURN_STOP_SECS:-0.7}
+      NUMBER_HOLD_SECS: ${NUMBER_HOLD_SECS:-2.0}
+      KNOWLEDGE_DIGEST_PATH: ${KNOWLEDGE_DIGEST_PATH:-}
+      IDLE_PROMPT_SECS: ${IDLE_PROMPT_SECS:-8}
+      WEB_CALL_TO_NUMBER: ${WEB_CALL_TO_NUMBER:-}
+    volumes:
+      - voice-spool:/app/voice/spool
+      - voice-runs:/app/voice/runs
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7861/healthz', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  webcall:
+    image: inbound-voice:latest
+    build:
+      context: ..
+      dockerfile: voice/Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["python", "web_call_server.py", "--host", "0.0.0.0", "--port", "7862"]
+    environment:
+      <<: *voice-environment
+      WEB_CALL_TOKEN: ${WEB_CALL_TOKEN:-}
+      WEB_CALL_MAX_CONCURRENT: ${WEB_CALL_MAX_CONCURRENT:-2}
+    volumes:
+      - voice-spool:/app/voice/spool
+      - voice-runs:/app/voice/runs
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7862/healthz', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  caddy:
+    image: inbound-web:latest
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend:
+        condition: service_started
+      phone:
+        condition: service_started
+      webcall:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1:2019/config/",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  pg-data:
+  backend-var:
+  voice-spool:
+  voice-runs:
+  caddy-data:
+  caddy-config:

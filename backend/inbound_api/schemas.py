@@ -4,7 +4,21 @@ from uuid import UUID
 
 from inbound_core.call_report import CallReport, CallStart, CallTransferMetrics, RouteResponse
 from inbound_core.config import AssistantConfig
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    computed_field,
+    field_serializer,
+    field_validator,
+)
+
+from inbound_api.integrations.google_auth import (
+    GOOGLE_SCOPE_SETS,
+    google_scopes_for_features,
+    has_google_feature,
+)
 
 
 class ErrorResponse(BaseModel):
@@ -109,6 +123,17 @@ class ChannelConnectionCreate(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
+class GmailOAuthStartRequest(BaseModel):
+    features: list[str] = Field(default_factory=list)
+
+    @field_validator("features")
+    @classmethod
+    def validate_features(cls, features: list[str]) -> list[str]:
+        requested = list(dict.fromkeys(features))
+        google_scopes_for_features(requested)
+        return requested
+
+
 class ChannelConnectionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -119,6 +144,19 @@ class ChannelConnectionResponse(BaseModel):
     status: str
     settings: dict[str, Any]
     created_at: datetime
+
+    @field_serializer("settings")
+    def serialize_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
+        if self.kind == "gmail":
+            return {key: value for key, value in settings.items() if key != "google_scopes"}
+        return settings
+
+    @computed_field
+    @property
+    def google_features(self) -> list[str]:
+        if self.kind != "gmail":
+            return []
+        return [feature for feature in GOOGLE_SCOPE_SETS if has_google_feature(self, feature)]
 
 
 class ChannelConnectionsResponse(BaseModel):

@@ -943,6 +943,8 @@ export interface components {
             created_at: string;
             /** External Id */
             external_id: string;
+            /** Google Features */
+            readonly google_features: string[];
             /**
              * Id
              * Format: uuid
@@ -1323,6 +1325,11 @@ export interface components {
              * @enum {string}
              */
             type: "string" | "email" | "phone" | "date" | "boolean" | "integer" | "number" | "enum" | "list";
+        };
+        /** GmailOAuthStartRequest */
+        GmailOAuthStartRequest: {
+            /** Features */
+            features?: string[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2107,7 +2114,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GmailOAuthStartRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

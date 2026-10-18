@@ -24,7 +24,7 @@ Backend environment variables:
 
 | Variable | Default / use |
 |---|---|
-| `WHATSAPP_MODE` | `fake` by default; use `graph` for Meta Cloud API |
+| `WHATSAPP_MODE` | `fake` by default; use `graph` for Meta Cloud API or `off` to disable |
 | `WHATSAPP_APP_SECRET` | Signs webhook payloads and simulator requests |
 | `WHATSAPP_VERIFY_TOKEN` | Shared token used for Meta webhook verification |
 | `WHATSAPP_ACCESS_TOKEN` | Bearer token for Graph sends |
@@ -38,9 +38,10 @@ Backend environment variables:
 
 The Graph base URL pins the sender to Graph API **v26.0** (the latest release we selected
 for this implementation; Meta's versioned changelog is
-<https://developers.facebook.com/docs/graph-api/changelog/>). Production startup requires
-`WHATSAPP_MODE=graph`, an app secret, and an access token. The current sender uses one
-global access token; per-connection tokens and embedded signup are later work.
+<https://developers.facebook.com/docs/graph-api/changelog/>). In production, `WHATSAPP_MODE=off`
+is the default and needs no Meta credentials. `fake` is rejected; `graph` requires an app secret,
+verify token, and access token. The current sender uses one global access token; per-connection
+tokens and embedded signup are later work.
 
 Run the API and worker, set `WHATSAPP_MODE=fake`, then add a WhatsApp channel connection
 using the `phone_number_id` from Meta Business settings. The simulator sends signed Meta
@@ -82,6 +83,14 @@ Google restricted-scope verification and any associated security assessment requ
 for the deployed application. Refresh tokens are Fernet-encrypted in
 `channel_connections.credentials_ciphertext`; they are never stored in connection
 settings or returned by the API.
+
+### Google features
+
+Gmail OAuth is the shared Google sign-in for connected Google features. The default
+request includes Gmail access; callers may additionally request the `sheets` or
+`calendar` feature. Granted scopes are stored internally and connection responses expose
+only derived feature names. Gmail uses `gmail.modify`, Sheets uses `spreadsheets`, and
+Calendar uses `calendar.events` plus `calendar.freebusy`.
 
 Deployments may set `GMAIL_MODE=off` before a Google project is available. In that mode
 the Gmail webhook returns 503, OAuth start reports that Gmail is not enabled, and queued

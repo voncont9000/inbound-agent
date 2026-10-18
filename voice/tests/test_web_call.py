@@ -75,6 +75,31 @@ def test_websocket_requires_configured_token() -> None:
     assert closed.value.code == 1008
 
 
+def test_production_websocket_requires_call_or_configured_demo_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with TestClient(web_call_server.create_app({"APP_ENV": "production"})) as client:
+        with client.websocket_connect("/ws") as websocket:
+            with pytest.raises(WebSocketDisconnect) as missing:
+                websocket.receive_text()
+
+    assert missing.value.code == 1008
+
+    async def prepare_call(*args, **kwargs):
+        return None
+
+    async def run_bot(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(web_call_server, "prepare_call", prepare_call)
+    monkeypatch.setattr(web_call_server, "run_bot", run_bot)
+    env = {"APP_ENV": "production", "WEB_CALL_TOKEN": "demo-secret"}
+    with TestClient(web_call_server.create_app(env)) as client:
+        with client.websocket_connect("/ws?token=demo-secret") as websocket:
+            with pytest.raises(WebSocketDisconnect):
+                websocket.receive_text()
+
+
 def test_websocket_enforces_concurrency_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     started = threading.Event()
     release = threading.Event()

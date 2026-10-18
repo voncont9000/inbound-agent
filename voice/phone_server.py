@@ -50,6 +50,16 @@ def create_app(
     replay_guard: ReplayGuard | None = None,
     call_control: TwilioCallControl | None = None,
 ) -> FastAPI:
+    app_env = env.get("APP_ENV", "development")
+    twilio_mode = env.get("TWILIO_MODE", "twilio")
+    if twilio_mode not in {"twilio", "off"}:
+        raise ValueError("TWILIO_MODE must be 'twilio' or 'off'")
+    if (
+        app_env not in {"development", "test"}
+        and twilio_mode == "twilio"
+        and not env.get("TWILIO_AUTH_TOKEN", "").strip()
+    ):
+        raise ValueError("TWILIO_AUTH_TOKEN is required in production when TWILIO_MODE=twilio")
     guard = replay_guard if replay_guard is not None else replay_guard_from_env(env)
     owns_guard = replay_guard is None
     selected_call_control = call_control if call_control is not None else call_control_from_env(env)
@@ -74,6 +84,8 @@ def create_app(
 
     @app.post("/twilio/voice")
     async def voice_webhook(request: Request) -> Response:
+        if twilio_mode == "off":
+            raise HTTPException(status_code=503, detail="Twilio is disabled")
         form = await request.form()
         params = _form_params(form)
         _verify_twilio_signature(request, params, env)
@@ -128,6 +140,9 @@ def create_app(
     @app.websocket("/twilio/ws")
     async def twilio_websocket(websocket: WebSocket) -> None:
         await websocket.accept()
+        if twilio_mode == "off":
+            await websocket.close(code=1013)
+            return
         try:
             start_payload = await _read_start_message(websocket)
             if start_payload is None:

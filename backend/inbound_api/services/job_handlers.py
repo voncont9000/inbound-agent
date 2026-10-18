@@ -16,7 +16,7 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api import graph
-from inbound_api.channels.whatsapp_client import sender_from_settings
+from inbound_api.channels.whatsapp_client import WhatsAppDisabledError, sender_from_settings
 from inbound_api.jobs import PermanentJobError, enqueue, register
 from inbound_api.models import (
     Assistant,
@@ -209,6 +209,8 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
         raise PermanentJobError("WhatsApp connection details are missing")
     try:
         external_id = await sender.send_text(phone_number_id, wa_id, reply)
+    except WhatsAppDisabledError as error:
+        raise PermanentJobError(str(error)) from error
     except httpx.HTTPStatusError as error:
         status = error.response.status_code
         if status != 429 and status < 500:

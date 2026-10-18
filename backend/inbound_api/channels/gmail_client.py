@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import json
-import time
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -10,7 +9,7 @@ from uuid import uuid4
 
 import httpx
 
-from inbound_api.channels.credentials import decrypt_credential
+from inbound_api.integrations import google_auth
 from inbound_api.jobs import PermanentJobError
 
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1"
@@ -48,28 +47,9 @@ class GoogleGmailClient:
         self.settings = settings
         if not connection.credentials_ciphertext:
             raise ValueError("Gmail refresh token is missing")
-        self.refresh_token = decrypt_credential(connection.credentials_ciphertext)
-        self._access_token: str | None = None
-        self._token_expires_at = 0.0
 
     async def _token(self) -> str:
-        if self._access_token and time.monotonic() < self._token_expires_at - 30:
-            return self._access_token
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(
-                "https://oauth2.googleapis.com/token",
-                data={
-                    "client_id": self.settings.google_oauth_client_id,
-                    "client_secret": self.settings.google_oauth_client_secret,
-                    "refresh_token": self.refresh_token,
-                    "grant_type": "refresh_token",
-                },
-            )
-        _raise_response(response)
-        data = response.json()
-        self._access_token = data["access_token"]
-        self._token_expires_at = time.monotonic() + int(data.get("expires_in", 3600))
-        return self._access_token
+        return await google_auth.google_access_token(self.connection)
 
     async def _request(self, method: str, path: str, *, allow_404: bool = False, **kwargs):
         token = await self._token()
