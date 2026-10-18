@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +15,7 @@ from inbound_api.settings import get_settings
 LOGGER = logging.getLogger(__name__)
 JobHandler = Callable[[AsyncSession, dict[str, Any]], Awaitable[dict[str, Any] | None]]
 HANDLERS: dict[str, JobHandler] = {}
+current_job: ContextVar[tuple[UUID, UUID] | None] = ContextVar("current_job", default=None)
 
 
 class _JobLeaseLost(Exception):
@@ -22,6 +24,21 @@ class _JobLeaseLost(Exception):
 
 class PermanentJobError(Exception):
     pass
+
+
+async def job_lease_held(session: AsyncSession) -> bool:
+    job = current_job.get()
+    if job is None:
+        return True
+    job_id, lease_token = job
+    result = await session.execute(
+        text(
+            "SELECT 1 FROM jobs WHERE id = :id AND lease_token = :token "
+            "AND status = 'running' FOR UPDATE"
+        ),
+        {"id": job_id, "token": lease_token},
+    )
+    return result.scalar_one_or_none() is not None
 
 
 def register(kind: str):
@@ -136,9 +153,11 @@ async def run_next_job() -> bool:
                     stop_heartbeat,
                 )
             )
+            context_token = current_job.set((job_id, lease_token))
             try:
                 result = await handler(session, job["payload"])
             finally:
+                current_job.reset(context_token)
                 stop_heartbeat.set()
                 await heartbeat
             update = await session.execute(

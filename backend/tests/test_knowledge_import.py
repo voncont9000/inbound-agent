@@ -1,16 +1,17 @@
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import psycopg
 from sqlalchemy import func, select
 
 from inbound_api.db import tenant_session
-from inbound_api.jobs import run_next_job
-from inbound_api.models import KnowledgeChunk, KnowledgeDigest, KnowledgeSource
+from inbound_api.jobs import current_job, enqueue, run_next_job
+from inbound_api.models import Job, KnowledgeChunk, KnowledgeDigest, KnowledgeSource
+from inbound_api.services import files_cleanup, knowledge_import
 from inbound_api.services import job_handlers as _job_handlers  # noqa: F401
-from inbound_api.services import knowledge_import
 from inbound_api.settings import get_settings
 
 
@@ -29,6 +30,13 @@ class _FakeClient:
 
     async def _aclose(self):
         return None
+
+
+async def _drain_claimable_jobs() -> None:
+    for _ in range(100):
+        if not await run_next_job():
+            return
+    raise AssertionError("Claimable jobs did not drain")
 
 
 async def test_file_import_writes_chunks_digest_and_replaces_chunks(
@@ -255,6 +263,63 @@ async def test_failed_refresh_retains_chunks_and_does_not_replace_digest(
     assert len(final_chunks) == sum(len(chunks) for chunks in original_chunks.values())
 
 
+async def test_failed_refresh_does_not_write_manifest_after_lease_loss(
+    tenant_pair, monkeypatch, owner_database_url
+) -> None:
+    await _drain_claimable_jobs()
+    account = tenant_pair["first"]
+    client = account["client"]
+    templates = (await client.get("/templates")).json()
+    config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    assistant = await client.post(
+        "/assistants",
+        json={"name": "Stale import assistant", "template": "uk_law_firm", "config": config},
+    )
+    assistant_id = assistant.json()["id"]
+    settings = get_settings()
+    monkeypatch.setattr(settings, "knowledge_allow_private_urls", True)
+    monkeypatch.setattr(settings, "google_api_key", "test-key")
+    monkeypatch.setattr(knowledge_import, "make_genai_client", lambda _key: _FakeClient())
+    source_response = await client.post(
+        f"/assistants/{assistant_id}/knowledge/sources",
+        json={"kind": "url", "uri": "https://example.com/stale-lease"},
+    )
+    assert source_response.status_code == 201, source_response.text
+    source_before = source_response.json()
+
+    def lose_lease(urls, **_kwargs):
+        job = current_job.get()
+        assert job is not None
+        with psycopg.connect(owner_database_url) as connection:
+            connection.execute(
+                "UPDATE jobs SET lease_token = %s WHERE id = %s",
+                (uuid4(), job[0]),
+            )
+        return [
+            {
+                "source": url,
+                "title": "stale-lease",
+                "text": "",
+                "fetched_at": datetime.now(UTC).isoformat(),
+                "status": "error",
+                "chars": 0,
+                "errors": ["Fixture fetch failed."],
+            }
+            for url in urls
+        ]
+
+    monkeypatch.setattr(knowledge_import, "crawl_websites", lose_lease)
+    import_response = await client.post(f"/assistants/{assistant_id}/knowledge/import")
+    assert import_response.status_code == 202, import_response.text
+    assert await run_next_job()
+    source_after = (await client.get(f"/assistants/{assistant_id}/knowledge/sources")).json()[
+        "items"
+    ][0]
+    assert source_after["status"] == source_before["status"]
+    assert source_after["manifest"] == source_before["manifest"]
+    assert source_after["fetched_at"] == source_before["fetched_at"]
+
+
 async def test_assistant_delete_cleans_uploaded_files(tenant_pair, monkeypatch, tmp_path) -> None:
     client = tenant_pair["first"]["client"]
     templates = (await client.get("/templates")).json()
@@ -275,6 +340,49 @@ async def test_assistant_delete_cleans_uploaded_files(tenant_pair, monkeypatch, 
     assert (await client.delete(f"/assistants/{assistant_id}")).status_code == 204
     assert await run_next_job()
     assert not directory.exists()
+
+
+async def test_cleanup_job_succeeds_when_directory_is_missing(
+    tenant_pair, monkeypatch, tmp_path
+) -> None:
+    await _drain_claimable_jobs()
+    tenant_id = UUID(tenant_pair["first"]["tenant_id"])
+    assistant_id = uuid4()
+    monkeypatch.setattr(get_settings(), "upload_dir", tmp_path)
+    async with tenant_session(tenant_id) as session:
+        job_id = await enqueue(
+            session, "knowledge_files_cleanup", {"assistant_id": str(assistant_id)}
+        )
+    assert await run_next_job()
+    async with tenant_session(tenant_id) as session:
+        job = await session.get(Job, job_id)
+    assert job is not None
+    assert job.status.value == "succeeded"
+
+
+async def test_cleanup_permission_error_retries_job(tenant_pair, monkeypatch, tmp_path) -> None:
+    await _drain_claimable_jobs()
+    tenant_id = UUID(tenant_pair["first"]["tenant_id"])
+    assistant_id = uuid4()
+    settings = get_settings()
+    monkeypatch.setattr(settings, "upload_dir", tmp_path)
+    monkeypatch.setattr(settings, "job_retry_base_seconds", 3600)
+
+    def deny_removal(*_args, **_kwargs):
+        raise PermissionError("cleanup denied")
+
+    monkeypatch.setattr(files_cleanup.shutil, "rmtree", deny_removal)
+    async with tenant_session(tenant_id) as session:
+        job_id = await enqueue(
+            session, "knowledge_files_cleanup", {"assistant_id": str(assistant_id)}
+        )
+    assert await run_next_job()
+    async with tenant_session(tenant_id) as session:
+        job = await session.get(Job, job_id)
+    assert job is not None
+    assert job.status.value == "queued"
+    assert job.attempts == 1
+    assert job.error == "PermissionError: cleanup denied"
 
 
 async def test_oversized_content_length_rejected_before_form_parse(

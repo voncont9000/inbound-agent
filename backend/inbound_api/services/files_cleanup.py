@@ -25,5 +25,8 @@ async def knowledge_files_cleanup(
     target = (root / str(tenant_id) / str(assistant_id)).resolve()
     if root not in target.parents:
         raise PermanentJobError("Cleanup path is outside UPLOAD_DIR")
-    await asyncio.to_thread(shutil.rmtree, target, True)
+    try:
+        await asyncio.to_thread(shutil.rmtree, target)
+    except FileNotFoundError:
+        pass
     return {"removed": True}

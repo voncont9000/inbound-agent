@@ -16,7 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.db import tenant_session
-from inbound_api.jobs import PermanentJobError, register
+from inbound_api.jobs import PermanentJobError, job_lease_held, register
 from inbound_api.models import (
     Assistant,
     KnowledgeChunk,
@@ -132,11 +132,12 @@ async def knowledge_import(session: AsyncSession, payload: dict[str, Any]) -> di
                 ],
             }
         async with tenant_session(sources[0].tenant_id) as error_session:
-            for source in sources:
-                failed_source = await error_session.get(KnowledgeSource, source.id)
-                if failed_source is not None:
-                    failed_source.status = "failed"
-                    failed_source.manifest = failed_manifests[source.id]
+            if await job_lease_held(error_session):
+                for source in sources:
+                    failed_source = await error_session.get(KnowledgeSource, source.id)
+                    if failed_source is not None:
+                        failed_source.status = "failed"
+                        failed_source.manifest = failed_manifests[source.id]
         raise PermanentJobError("No knowledge sources produced usable text.")
 
     all_records = [

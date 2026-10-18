@@ -60,6 +60,15 @@ async def test_csrf_checks_cookie_writes_but_allows_bearer(tenant_pair) -> None:
         "/assistants", json=payload, headers={"Origin": "https://attacker.example"}
     )
     assert bad_origin.status_code == 403
+    empty_bearer = await client.post(
+        "/assistants",
+        json=payload,
+        headers={
+            "Authorization": "Bearer ",
+            "Origin": "https://attacker.example",
+        },
+    )
+    assert empty_bearer.status_code == 403
     allowed_origin = await client.post(
         "/assistants", json=payload, headers={"Origin": "http://localhost:5173"}
     )

@@ -29,18 +29,22 @@ async def get_db_session():
 _DB_SESSION_DEPENDENCY = Depends(get_db_session)
 
 
-def _request_token(request: Request) -> str | None:
+def _request_token_and_source(request: Request) -> tuple[str | None, str | None]:
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.casefold() == "bearer" and token.strip():
-        return token.strip()
-    return request.cookies.get("inbound_session")
+        return token.strip(), "bearer"
+    cookie_token = request.cookies.get("inbound_session")
+    return cookie_token, "cookie" if cookie_token else None
+
+
+def _request_token(request: Request) -> str | None:
+    return _request_token_and_source(request)[0]
 
 
 def enforce_request_origin(request: Request, *, always: bool = False) -> None:
-    authorization = request.headers.get("authorization", "")
-    scheme = authorization.partition(" ")[0].casefold()
-    if not always and (scheme == "bearer" or not request.cookies.get("inbound_session")):
+    _, auth_source = _request_token_and_source(request)
+    if not always and auth_source != "cookie":
         return
     settings = get_settings()
     origin = request.headers.get("origin")

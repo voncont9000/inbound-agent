@@ -88,6 +88,9 @@ The shared crawler, document readers, chunking, digest prompt, and manifest logi
 `core/inbound_core/knowledge.py`; voice retains its CLI-compatible wrapper. Tenant uploads
 are stored under `UPLOAD_DIR` (default `backend/var/uploads`) with relative paths in source
 manifests and are removed by a tenant-scoped cleanup job when an assistant is deleted.
+Missing upload directories are treated as already cleaned; other filesystem errors trigger
+the normal job retry policy. Failed-source manifest updates are skipped after a job loses
+its lease.
 Failed refreshes retain existing chunks and their prior fetch timestamp. A partial refresh
 builds the digest from fresh content and retained chunks; a refresh with no usable fresh
 content fails without replacing the latest digest. URL sources and redirect hops are
