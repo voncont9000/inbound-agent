@@ -18,7 +18,13 @@ const initialConfig = {
   urgency_rules: [],
 } as unknown as AssistantConfig;
 
-function EditorHarness({ initial = initialConfig }: { initial?: AssistantConfig } = {}) {
+function EditorHarness({
+  initial = initialConfig,
+  errors = {},
+}: {
+  initial?: AssistantConfig;
+  errors?: Record<string, string>;
+} = {}) {
   const [config, setConfig] = useState(initial);
   const update = (change: (draft: AssistantConfig) => void) => {
     setConfig((current) => {
@@ -28,7 +34,7 @@ function EditorHarness({ initial = initialConfig }: { initial?: AssistantConfig 
     });
   };
   return <>
-    <RulePresetsEditor config={config} update={update} />
+    <RulePresetsEditor config={config} update={update} errors={errors} />
     <output data-testid="config">{JSON.stringify(config)}</output>
   </>;
 }
@@ -46,21 +52,52 @@ describe("RulePresetsEditor", () => {
 
   it("adds pronunciation and sentence urgency entries", async () => {
     const user = userEvent.setup();
-    render(<EditorHarness />);
+    const configWithKeyword = {
+      ...initialConfig,
+      urgency_rules: [{ type: "keyword", phrases: ["within 4 weeks"] }],
+    } as unknown as AssistantConfig;
+    render(<EditorHarness initial={configWithKeyword} />);
 
     await user.click(screen.getByRole("button", { name: "Add pronunciation" }));
     await user.type(screen.getByLabelText("Term 1"), "ACAS");
     await user.type(screen.getByLabelText("Say it as 1"), "Ay-cass");
     await user.click(screen.getByRole("button", { name: "Add urgent rule" }));
     await user.type(
-      screen.getByLabelText("Urgency condition 1"),
+      screen.getByLabelText("Urgent if… 1"),
       "Urgent if a deadline is within 4 weeks",
     );
 
     expect(screen.getByTestId("config")).toHaveTextContent('"term":"ACAS","say_as":"Ay-cass"');
     expect(screen.getByTestId("config")).toHaveTextContent(
+      '"type":"keyword","phrases":["within 4 weeks"]',
+    );
+    expect(screen.getByTestId("config")).toHaveTextContent(
       '"type":"sentence","text":"Urgent if a deadline is within 4 weeks"',
     );
+  });
+
+  it("shows pronunciation validation errors", () => {
+    render(
+      <EditorHarness
+        initial={{
+          ...initialConfig,
+          rules: {
+            ...initialConfig.rules,
+            ai_disclosure: initialConfig.rules?.ai_disclosure ?? "at_start",
+            pronunciations: [{ term: "", say_as: "" }],
+          },
+        }}
+        errors={{ "rules.pronunciations.0.term": "Enter a term." }}
+      />,
+    );
+
+    const termInput = screen.getByLabelText("Term 1");
+    expect(termInput).toHaveAttribute("aria-invalid", "true");
+    expect(termInput).toHaveAttribute(
+      "aria-describedby",
+      "field-rules.pronunciations.0.term-error",
+    );
+    expect(screen.getByText("Enter a term.")).toBeInTheDocument();
   });
 
   it("keeps custom rules in priority order with move controls", async () => {

@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import UTC, date, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -367,9 +368,16 @@ def test_sentence_urgency_extraction_and_task_deduplication() -> None:
 
 def test_sentence_urgency_schema_and_prompt_are_omitted_without_sentence_rules() -> None:
     config = _config()
+    args = (
+        [],
+        {"service": "general", "fields": {}},
+        config,
+        datetime(2026, 1, 1, tzinfo=UTC),
+    )
 
     schema = _extraction_schema(config)
-    prompt = _extraction_prompt([], {"service": "general", "fields": {}}, config)
+    prompt = _extraction_prompt(*args)
 
     assert "urgency_matches" not in schema["properties"]
     assert "Urgency rules" not in prompt
+    assert prompt == Path(__file__).with_name("extraction_prompt_main.txt").read_text()

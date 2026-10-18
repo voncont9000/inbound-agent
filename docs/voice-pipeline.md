@@ -129,7 +129,9 @@ drafts are human-reviewed and receive no disclosure rule.
 Sentence urgency conditions are evaluated in the existing post-conversation extraction
 request, without another model call. Matching reasons and evidence become urgent tasks.
 Pronunciation entries are case-insensitive whole-term substitutions in Pipecat's provider-
-agnostic TTS text filter and are not included in prompts.
+agnostic TTS text transform and are not included in prompts. Speechify and ElevenLabs return
+word timestamps for the spoken (respelled) text, so on those providers the respelling can
+appear in the assistant transcript/context; Deepgram keeps the original.
 
 The bot subclasses Pipecat's turn-analyzer stop strategy to hold finalization for
 `NUMBER_HOLD_SECS` (default 2 seconds) only when the caller's trailing digits resemble an

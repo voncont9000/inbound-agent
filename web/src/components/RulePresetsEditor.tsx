@@ -1,5 +1,7 @@
 import type { AssistantConfig } from "../lib/config";
+import { FieldError } from "./States";
 import { Field } from "./settings/fields";
+import { invalidProps } from "./settings/errors";
 
 type RulesConfig = NonNullable<AssistantConfig["rules"]>;
 type Update = (change: (draft: AssistantConfig) => void) => void;
@@ -146,31 +148,39 @@ export function RulePresetsEditor({
         <table>
           <thead><tr><th>Term</th><th>Say it as</th><th>Remove</th></tr></thead>
           <tbody>
-            {pronunciations.map((entry, index) => <tr key={`pronunciation-${index}`}>
-              <td>
-                <label className="sr-only" htmlFor={`pronunciation-term-${index}`}>Term {index + 1}</label>
-                <input
-                  id={`pronunciation-term-${index}`}
-                  value={entry.term}
-                  onChange={(event) => updateRules(update, (next) => {
-                    (next.pronunciations ??= [])[index].term = event.target.value;
-                  })}
-                />
-              </td>
-              <td>
-                <label className="sr-only" htmlFor={`pronunciation-say-as-${index}`}>Say it as {index + 1}</label>
-                <input
-                  id={`pronunciation-say-as-${index}`}
-                  value={entry.say_as}
-                  onChange={(event) => updateRules(update, (next) => {
-                    (next.pronunciations ??= [])[index].say_as = event.target.value;
-                  })}
-                />
-              </td>
-              <td><button type="button" onClick={() => updateRules(update, (next) => {
-                next.pronunciations?.splice(index, 1);
-              })}>Remove pronunciation</button></td>
-            </tr>)}
+            {pronunciations.map((entry, index) => {
+              const termPath = `rules.pronunciations.${index}.term`;
+              const sayAsPath = `rules.pronunciations.${index}.say_as`;
+              return <tr key={`pronunciation-${index}`}>
+                <td>
+                  <label className="sr-only" htmlFor={`pronunciation-term-${index}`}>Term {index + 1}</label>
+                  <input
+                    id={`pronunciation-term-${index}`}
+                    value={entry.term}
+                    {...invalidProps(errors, termPath)}
+                    onChange={(event) => updateRules(update, (next) => {
+                      (next.pronunciations ??= [])[index].term = event.target.value;
+                    })}
+                  />
+                  <FieldError id={`field-${termPath}-error`}>{errors[termPath]}</FieldError>
+                </td>
+                <td>
+                  <label className="sr-only" htmlFor={`pronunciation-say-as-${index}`}>Say it as {index + 1}</label>
+                  <input
+                    id={`pronunciation-say-as-${index}`}
+                    value={entry.say_as}
+                    {...invalidProps(errors, sayAsPath)}
+                    onChange={(event) => updateRules(update, (next) => {
+                      (next.pronunciations ??= [])[index].say_as = event.target.value;
+                    })}
+                  />
+                  <FieldError id={`field-${sayAsPath}-error`}>{errors[sayAsPath]}</FieldError>
+                </td>
+                <td><button type="button" onClick={() => updateRules(update, (next) => {
+                  next.pronunciations?.splice(index, 1);
+                })}>Remove pronunciation</button></td>
+              </tr>;
+            })}
           </tbody>
         </table>
       </div>
@@ -181,10 +191,13 @@ export function RulePresetsEditor({
 
     <div className="stack">
       <h3>Urgent if…</h3>
-      {sentenceRules.map(({ rule, index }) => <div className="inline-editor" key={`sentence-rule-${index}`}>
+      <p className="help">
+        Plain sentences checked after each conversation; a match creates an urgent task with the reason.
+      </p>
+      {sentenceRules.map(({ rule, index }, position) => <div className="inline-editor" key={`sentence-rule-${index}`}>
         <Field
           path={`urgency_rules.${index}.text`}
-          label={`Urgency condition ${index + 1}`}
+          label={`Urgent if… ${position + 1}`}
           error={errors[`urgency_rules.${index}.text`]}
         >
           {(fieldId, describedBy) => <input

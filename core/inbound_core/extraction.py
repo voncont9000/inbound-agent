@@ -730,7 +730,7 @@ def _extraction_prompt(
     urgency_instruction = ""
     if sentence_rules:
         urgency_instruction = (
-            "Urgency rules (judge each against the conversation; use the local date above for "
+            "\nUrgency rules (judge each against the conversation; use the local date above for "
             "time windows):\n"
             + "\n".join(f"{index}. {rule.text}" for index, rule in sentence_rules)
             + "\nList in urgency_matches each rule above that the conversation clearly meets, "
@@ -769,8 +769,7 @@ Set confirmed_by_caller true only when the assistant read that value back and th
 affirmed it. {callback_requested_instruction}
 Include the reason and preferred time if stated. Set complaint.made only when the
 caller made a complaint, and summarize it briefly.
-{unanswered_questions_instruction}
-{urgency_instruction}
+{unanswered_questions_instruction}{urgency_instruction}
 
 Confirmed live values:
 {json.dumps(live_intake, ensure_ascii=False)}
