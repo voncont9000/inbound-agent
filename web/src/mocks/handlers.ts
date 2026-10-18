@@ -38,6 +38,29 @@ function toConversationSummary(detail: Schemas["ConversationDetailResponse"]): S
   };
 }
 
+function makeSilentWav() {
+  const samples = 800;
+  const bytes = new ArrayBuffer(44 + samples * 2);
+  const view = new DataView(bytes);
+  const writeText = (offset: number, text: string) => [...text].forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
+  writeText(0, "RIFF");
+  view.setUint32(4, bytes.byteLength - 8, true);
+  writeText(8, "WAVE");
+  writeText(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 8000, true);
+  view.setUint32(28, 16000, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeText(36, "data");
+  view.setUint32(40, samples * 2, true);
+  return new Uint8Array(bytes);
+}
+
+const silentWav = makeSilentWav();
+
 function toContactSummary(detail: Schemas["ContactDetailResponse"]): Schemas["ContactSummary"] {
   return {
     id: detail.id,
@@ -338,6 +361,11 @@ export const handlers = [
   http.get<{ id: string }, never, ApiResponse<Schemas["ConversationDetailResponse"]>>("*/api/conversations/:id", ({ request, params }) => {
     const conversation = selectedTenant(request).conversations.find(({ id }) => id === params.id);
     return conversation ? HttpResponse.json<Schemas["ConversationDetailResponse"]>(conversation) : HttpResponse.json<ApiErrorResponse>({ detail: "Conversation not found" }, { status: 404 });
+  }),
+  http.get<{ id: string }>("*/api/conversations/:id/recording", ({ request, params }) => {
+    const conversation = selectedTenant(request).conversations.find(({ id }) => id === params.id);
+    if (!conversation?.recording) return HttpResponse.json<ApiErrorResponse>({ detail: "Recording not found" }, { status: 404 });
+    return new HttpResponse(silentWav, { headers: { "Content-Type": "audio/wav" } });
   }),
   http.post<{ id: string }, Schemas["ConversationReviewCreate"], ApiResponse<Schemas["ConversationReviewResponse"]>>("*/api/conversations/:id/reviews", async ({ request, params }) => {
     const body = await requestJson<Schemas["ConversationReviewCreate"]>(request);

@@ -455,6 +455,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversation_id}/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Conversation Recording */
+        get: operations["get_conversation_recording_conversations__conversation_id__recording_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/{conversation_id}/reviews": {
         parameters: {
             query?: never;
@@ -534,6 +551,23 @@ export interface paths {
         put?: never;
         /** Start Call */
         post: operations["start_call_internal_voice_calls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/voice/calls/{conversation_id}/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Call Recording */
+        post: operations["upload_call_recording_internal_voice_calls__conversation_id__recording_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -837,6 +871,7 @@ export interface components {
             booking?: components["schemas"]["BookingConfig"] | null;
             /** Business Name */
             business_name: string;
+            call_settings?: components["schemas"]["CallSettings"];
             /** Contacts */
             contacts: {
                 [key: string]: string;
@@ -870,6 +905,7 @@ export interface components {
              * @enum {string}
              */
             readback: "off" | "email" | "critical";
+            recording?: components["schemas"]["RecordingSettings"];
             /**
              * Review Confidence Threshold
              * @default 0.7
@@ -899,6 +935,7 @@ export interface components {
             booking?: components["schemas"]["BookingConfig"] | null;
             /** Business Name */
             business_name: string;
+            call_settings?: components["schemas"]["CallSettings"];
             /** Contacts */
             contacts: {
                 [key: string]: string;
@@ -932,6 +969,7 @@ export interface components {
              * @enum {string}
              */
             readback: "off" | "email" | "critical";
+            recording?: components["schemas"]["RecordingSettings"];
             /**
              * Review Confidence Threshold
              * @default 0.7
@@ -1199,6 +1237,25 @@ export interface components {
              */
             start: string;
         };
+        /** CallRecordingSummary */
+        CallRecordingSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Is Test */
+            is_test: boolean;
+            /** Size Bytes */
+            size_bytes: number;
+        };
         /** CallReportAccepted */
         CallReportAccepted: {
             /** Accepted */
@@ -1247,6 +1304,46 @@ export interface components {
             }[];
             /** Transcript */
             transcript: components["schemas"]["TranscriptTurn"][];
+        };
+        /** CallSettings */
+        CallSettings: {
+            /**
+             * Interruption Sensitivity
+             * @default normal
+             * @enum {string}
+             */
+            interruption_sensitivity: "low" | "normal" | "high";
+            /**
+             * Max Call Message
+             * @default We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.
+             */
+            max_call_message: string;
+            /** Max Call Minutes */
+            max_call_minutes?: number | null;
+            /**
+             * Silence Goodbye Message
+             * @default I'll end the call now. Thank you for calling. Goodbye.
+             */
+            silence_goodbye_message: string;
+            /** Silence Timeout Seconds */
+            silence_timeout_seconds?: number | null;
+            /**
+             * Speech Speed
+             * @default 1
+             */
+            speech_speed: number;
+            /**
+             * Still There Prompt
+             * @default Are you still there?
+             */
+            still_there_prompt: string;
+            /** Technical Terms */
+            technical_terms?: string[];
+            /**
+             * Uninterruptible Greeting
+             * @default false
+             */
+            uninterruptible_greeting: boolean;
         };
         /** CallStartRequest */
         CallStartRequest: {
@@ -1529,6 +1626,7 @@ export interface components {
             needs_review: boolean;
             /** Person Id */
             person_id: string | null;
+            recording?: components["schemas"]["CallRecordingSummary"] | null;
             /**
              * Started At
              * Format: date-time
@@ -2260,6 +2358,24 @@ export interface components {
             price: string;
             /** Service */
             service: string;
+        };
+        /** RecordingSettings */
+        RecordingSettings: {
+            /**
+             * Consent Message
+             * @default This call may be recorded for quality and training purposes.
+             */
+            consent_message: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Retention Days
+             * @default 30
+             */
+            retention_days: number;
         };
         /** RouteResponse */
         RouteResponse: {
@@ -3639,6 +3755,39 @@ export interface operations {
             };
         };
     };
+    get_conversation_recording_conversations__conversation_id__recording_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_review_conversations__conversation_id__reviews_post: {
         parameters: {
             query?: never;
@@ -3806,6 +3955,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_call_recording_internal_voice_calls__conversation_id__recording_post: {
+        parameters: {
+            query?: {
+                duration_seconds?: number | null;
+            };
+            header: {
+                "X-External-Call-ID": string;
+                "Content-Length"?: string | null;
+                "X-Service-Token": string;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
             /** @description Validation Error */
