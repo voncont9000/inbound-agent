@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import time
 import xml.etree.ElementTree as ET
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
+from inbound_core.config import TransferTarget
 
 import phone_server
 from bot import resolve_caller_id
+from inbound_voice.config import load_assistant_config
+from inbound_voice.transfer import FakeTwilioCallControl
 from inbound_voice.twilio import (
     STREAM_TOKEN_MAX_AGE_SECONDS,
     build_stream_twiml,
@@ -193,6 +198,203 @@ def test_webhook_uses_forwarded_scheme_and_host_for_signature() -> None:
     assert 'url="wss://public.example.com/twilio/ws"' in response.text
 
 
+@pytest.mark.parametrize("status", ["completed", "answered"])
+def test_transfer_status_hangs_up_after_completed_dial(status: str) -> None:
+    env = {
+        "TWILIO_AUTH_TOKEN": AUTH_TOKEN,
+        "PUBLIC_BASE_URL": "https://voice.example.com",
+    }
+    form = {"CallSid": "CA123", "DialCallStatus": status}
+    signature = compute_signature(
+        AUTH_TOKEN,
+        "https://voice.example.com/twilio/transfer-status",
+        form,
+    )
+
+    with TestClient(create_app(env)) as client:
+        response = client.post(
+            "/twilio/transfer-status",
+            data=form,
+            headers={"X-Twilio-Signature": signature},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/xml")
+    assert ET.tostring(ET.fromstring(response.text), encoding="unicode") == (
+        "<Response><Hangup /></Response>"
+    )
+
+
+@pytest.mark.parametrize("status", ["no-answer", "busy", "failed"])
+def test_transfer_status_speaks_default_message_when_dial_fails(status: str) -> None:
+    env = {
+        "TWILIO_AUTH_TOKEN": AUTH_TOKEN,
+        "PUBLIC_BASE_URL": "https://voice.example.com",
+    }
+    form = {"CallSid": "CA123", "DialCallStatus": status}
+    signature = compute_signature(
+        AUTH_TOKEN,
+        "https://voice.example.com/twilio/transfer-status",
+        form,
+    )
+
+    with TestClient(create_app(env)) as client:
+        response = client.post(
+            "/twilio/transfer-status",
+            data=form,
+            headers={"X-Twilio-Signature": signature},
+        )
+
+    root = ET.fromstring(response.text)
+    say = root.find("Say")
+    assert say is not None
+    assert say.text == (
+        "Sorry, nobody is available to take your call right now. Someone will call you back "
+        "as soon as possible. Goodbye."
+    )
+    assert root.find("Hangup") is not None
+
+
+def test_transfer_answered_callback_resolves_parent_call_and_returns_empty_response() -> None:
+    env = {
+        "TWILIO_AUTH_TOKEN": AUTH_TOKEN,
+        "PUBLIC_BASE_URL": "https://voice.example.com",
+    }
+    form = {"ParentCallSid": "CA123", "CallSid": "CA456"}
+    signature = compute_signature(
+        AUTH_TOKEN,
+        "https://voice.example.com/twilio/transfer-status?event=answered",
+        form,
+    )
+
+    with TestClient(create_app(env)) as client:
+        client.app.state.transfer_registry.register(
+            "CA123",
+            TransferTarget(
+                key="duty_solicitor",
+                label="Duty solicitor",
+                phone="+447700900123",
+                when_to_use="The caller explicitly asks to speak to a person now.",
+                office_hours_only=False,
+            ),
+            "Nobody can answer.",
+        )
+        response = client.post(
+            "/twilio/transfer-status?event=answered",
+            data=form,
+            headers={"X-Twilio-Signature": signature},
+        )
+        entry = client.app.state.transfer_registry.entry("CA123")
+
+    assert response.status_code == 200
+    assert response.text == "<Response/>"
+    assert entry is not None
+    assert entry.status == "answered"
+
+
+def test_transfer_status_rejects_bad_signature_and_includes_query_in_public_url() -> None:
+    env = {
+        "TWILIO_AUTH_TOKEN": AUTH_TOKEN,
+        "PUBLIC_BASE_URL": "https://voice.example.com",
+    }
+    form = {"CallSid": "CA123", "DialCallStatus": "no-answer"}
+    query = "event=answered"
+    good_signature = compute_signature(
+        AUTH_TOKEN,
+        f"https://voice.example.com/twilio/transfer-status?{query}",
+        form,
+    )
+
+    with TestClient(create_app(env)) as client:
+        good = client.post(
+            f"/twilio/transfer-status?{query}",
+            data=form,
+            headers={"X-Twilio-Signature": good_signature},
+        )
+        missing_query = client.post(
+            f"/twilio/transfer-status?{query}",
+            data=form,
+            headers={
+                "X-Twilio-Signature": compute_signature(
+                    AUTH_TOKEN,
+                    "https://voice.example.com/twilio/transfer-status",
+                    form,
+                )
+            },
+        )
+        invalid = client.post(
+            "/twilio/transfer-status",
+            data=form,
+            headers={"X-Twilio-Signature": "invalid"},
+        )
+
+    assert good.status_code == 200
+    assert missing_query.status_code == 403
+    assert invalid.status_code == 403
+    assert invalid.json()["detail"] == "Invalid Twilio signature"
+
+
+def test_transfer_status_uses_registered_failed_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    target = TransferTarget(
+        key="duty_solicitor",
+        label="Duty solicitor",
+        phone="+447700900123",
+        when_to_use="The caller explicitly asks to speak to a person now.",
+        office_hours_only=False,
+    )
+    assistant = load_assistant_config(
+        Path(__file__).resolve().parents[1] / "config" / "assistants" / "demo_firm.yaml"
+    ).model_copy(update={"transfer_failed_message": "Nobody & <no one> can answer."})
+
+    async def prepare_call(*args, **kwargs):
+        return type("Prepared", (), {"assistant": assistant})()
+
+    async def run_bot(*args, **kwargs):
+        await kwargs["call_transfer"].start(target, "Caller requests a person.")
+
+    monkeypatch.setattr(phone_server, "prepare_call", prepare_call)
+    monkeypatch.setattr(phone_server, "run_bot", run_bot)
+    control = FakeTwilioCallControl()
+
+    with TestClient(create_app({}, call_control=control)) as client:
+        with client.websocket_connect("/twilio/ws") as websocket:
+            _send_start(
+                websocket,
+                "CA123",
+                {"To": "+449876543210", "From": "+441234567890"},
+            )
+            with pytest.raises(WebSocketDisconnect):
+                websocket.receive_json()
+        response = client.post(
+            "/twilio/transfer-status",
+            data={"CallSid": "CA123", "DialCallStatus": "no-answer"},
+        )
+
+    say = ET.fromstring(response.text).find("Say")
+    assert say is not None
+    assert say.text == "Nobody & <no one> can answer."
+    assert control.updates[0][0] == "CA123"
+
+
+def test_websocket_callback_base_url_uses_public_and_forwarded_headers() -> None:
+    class Websocket:
+        headers = {
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "voice.example.com",
+            "host": "internal:7861",
+        }
+        url = type("URL", (), {"scheme": "ws", "netloc": "internal:7861"})()
+
+    assert phone_server._websocket_callback_base_url(Websocket(), {}) == "https://voice.example.com"
+    assert (
+        phone_server._websocket_callback_base_url(
+            Websocket(),
+            {"PUBLIC_BASE_URL": "https://configured.example.com/base/"},
+        )
+        == "https://configured.example.com/base"
+    )
+
+
 def test_parse_start_message_and_resolve_caller_id() -> None:
     start_payload = {
         "accountSid": "AC123",
@@ -266,7 +468,9 @@ def test_websocket_accepts_signed_stream_token(
         "From": "+441234567890",
         "To": "+449876543210",
     }
-    prepared_call = object()
+    prepared_call = SimpleNamespace(
+        assistant=SimpleNamespace(transfer_failed_message="Nobody is available.")
+    )
     prepared_calls = []
     run_calls = []
 
@@ -359,7 +563,9 @@ def test_websocket_rejects_invalid_stream_token_before_preparing_call(
 
     async def prepare_call(*args, **kwargs):
         prepared_calls.append(kwargs)
-        return object()
+        return SimpleNamespace(
+            assistant=SimpleNamespace(transfer_failed_message="Nobody is available.")
+        )
 
     async def run_bot(*args, **kwargs):
         pytest.fail("run_bot must not be called for an invalid stream token")
@@ -401,7 +607,9 @@ def test_websocket_rejects_reused_call_sid(
 
     async def prepare_call(*args, **kwargs):
         prepared_calls.append(kwargs)
-        return object()
+        return SimpleNamespace(
+            assistant=SimpleNamespace(transfer_failed_message="Nobody is available.")
+        )
 
     async def run_bot(*args, **kwargs):
         run_calls.append(kwargs)

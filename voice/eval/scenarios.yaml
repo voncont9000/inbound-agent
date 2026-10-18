@@ -108,3 +108,17 @@ scenarios:
     final_call_timeout_seconds: 35
     expected_end_call_source: idle
     expected_server_disconnect: true
+
+  transfer_request:
+    caller_voice: catriona
+    assistant: eval/fixtures/assistants/transfer_firm.yaml
+    caller_id: "07700900456"
+    utterances:
+      - "Hello, I'd like to speak to a person now. My number is oh seven seven zero zero, nine double oh, one two three."
+    transfer_dial_status: no-answer
+    expected_end_call_source: transferred
+    expected_transfer:
+      target_key: duty_solicitor
+      status: no-answer
+    task_checks:
+      transfer_failed: true

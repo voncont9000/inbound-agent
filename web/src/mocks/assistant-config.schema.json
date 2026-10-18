@@ -318,6 +318,41 @@
       ],
       "title": "ServiceConfig",
       "type": "object"
+    },
+    "TransferTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "pattern": "^[a-z0-9_]+$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "phone": {
+          "title": "Phone",
+          "type": "string"
+        },
+        "when_to_use": {
+          "title": "When To Use",
+          "type": "string"
+        },
+        "office_hours_only": {
+          "default": true,
+          "title": "Office Hours Only",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "phone",
+        "when_to_use"
+      ],
+      "title": "TransferTarget",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -412,12 +447,30 @@
           "flag_urgent",
           "request_callback",
           "log_complaint",
-          "end_call"
+          "end_call",
+          "transfer_call"
         ],
         "type": "string"
       },
       "title": "Live Actions",
       "type": "array"
+    },
+    "transfer_targets": {
+      "items": {
+        "$ref": "#/$defs/TransferTarget"
+      },
+      "title": "Transfer Targets",
+      "type": "array"
+    },
+    "transfer_handoff_message": {
+      "default": "I'm putting you through now, please hold.",
+      "title": "Transfer Handoff Message",
+      "type": "string"
+    },
+    "transfer_failed_message": {
+      "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "title": "Transfer Failed Message",
+      "type": "string"
     },
     "review_confidence_threshold": {
       "default": 0.7,

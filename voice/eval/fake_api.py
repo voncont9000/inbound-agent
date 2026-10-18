@@ -33,6 +33,20 @@ def create_fake_api(
         if not x_service_token or not hmac.compare_digest(x_service_token, app.state.fake["token"]):
             raise HTTPException(status_code=401, detail="Invalid service token")
 
+    @app.post("/_fake/assistant")
+    async def set_assistant(
+        payload: dict,
+        x_service_token: str | None = Header(default=None, alias="X-Service-Token"),
+    ) -> dict[str, bool]:
+        await require_token(x_service_token)
+        assistant_path = Path(__file__).resolve().parents[1] / payload["assistant"]
+        assistant = load_assistant_config(assistant_path)
+        current = app.state.fake["route_response"]
+        app.state.fake["route_response"] = current.model_copy(
+            update={"config": assistant, "digest": assistant.knowledge.digest_content}
+        )
+        return {"updated": True}
+
     @app.get("/internal/voice/route", response_model=RouteResponse, dependencies=[])
     async def route_call(
         to: str = Query(...),

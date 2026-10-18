@@ -39,7 +39,8 @@
                 "flag_urgent",
                 "request_callback",
                 "log_complaint",
-                "end_call"
+                "end_call",
+                "transfer_call"
               ],
               "type": "string"
             },
@@ -86,6 +87,23 @@
             },
             "title": "Services",
             "type": "object"
+          },
+          "transfer_failed_message": {
+            "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+            "title": "Transfer Failed Message",
+            "type": "string"
+          },
+          "transfer_handoff_message": {
+            "default": "I'm putting you through now, please hold.",
+            "title": "Transfer Handoff Message",
+            "type": "string"
+          },
+          "transfer_targets": {
+            "items": {
+              "$ref": "#/components/schemas/TransferTarget"
+            },
+            "title": "Transfer Targets",
+            "type": "array"
           },
           "urgency_rules": {
             "items": {
@@ -161,7 +179,8 @@
                 "flag_urgent",
                 "request_callback",
                 "log_complaint",
-                "end_call"
+                "end_call",
+                "transfer_call"
               ],
               "type": "string"
             },
@@ -208,6 +227,23 @@
             },
             "title": "Services",
             "type": "object"
+          },
+          "transfer_failed_message": {
+            "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+            "title": "Transfer Failed Message",
+            "type": "string"
+          },
+          "transfer_handoff_message": {
+            "default": "I'm putting you through now, please hold.",
+            "title": "Transfer Handoff Message",
+            "type": "string"
+          },
+          "transfer_targets": {
+            "items": {
+              "$ref": "#/components/schemas/TransferTarget"
+            },
+            "title": "Transfer Targets",
+            "type": "array"
           },
           "urgency_rules": {
             "items": {
@@ -628,6 +664,46 @@
           "started_at"
         ],
         "title": "CallStartRequest",
+        "type": "object"
+      },
+      "CallTransferMetrics": {
+        "properties": {
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "status": {
+            "enum": [
+              "answered",
+              "completed",
+              "no-answer",
+              "busy",
+              "failed",
+              "canceled",
+              "unknown",
+              "error",
+              "simulated"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target_key": {
+            "title": "Target Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_key",
+          "status"
+        ],
+        "title": "CallTransferMetrics",
         "type": "object"
       },
       "ChannelConnectionCreate": {
@@ -1170,6 +1246,16 @@
             "default": false,
             "title": "Test Call",
             "type": "boolean"
+          },
+          "transfer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallTransferMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2653,6 +2739,41 @@
           "timestamp"
         ],
         "title": "TranscriptTurn",
+        "type": "object"
+      },
+      "TransferTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "pattern": "^[a-z0-9_]+$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "office_hours_only": {
+            "default": true,
+            "title": "Office Hours Only",
+            "type": "boolean"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "when_to_use": {
+            "title": "When To Use",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "phone",
+          "when_to_use"
+        ],
+        "title": "TransferTarget",
         "type": "object"
       },
       "UserResponse": {

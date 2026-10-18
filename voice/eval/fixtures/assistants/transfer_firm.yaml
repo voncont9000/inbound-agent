@@ -1,0 +1,11 @@
+extends: uk_law_firm
+live_actions:
+  - transfer_call
+transfer_targets:
+  - key: duty_solicitor
+    label: Duty solicitor
+    phone: "+447700900123"
+    when_to_use: The caller explicitly asks to speak to a person now.
+    office_hours_only: false
+instructions: |
+  If the caller explicitly asks to speak to a person now, tell them you are transferring them and use the transfer tool.

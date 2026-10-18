@@ -81,3 +81,10 @@ def test_assistant_config_schema_is_available() -> None:
 
     assert schema == AssistantConfig.model_json_schema()
     assert "business_name" in schema["properties"]
+
+
+def test_transfer_handoff_message_has_a_spoken_default() -> None:
+    assert (
+        AssistantConfig.model_fields["transfer_handoff_message"].default
+        == "I'm putting you through now, please hold."
+    )
