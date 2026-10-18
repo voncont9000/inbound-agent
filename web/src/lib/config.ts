@@ -1,6 +1,7 @@
 import type { Schemas } from "../api/client";
 
 export type AssistantConfig = Schemas["AssistantConfig-Output"];
+export type Locale = AssistantConfig["language"];
 
 const fieldTypes = [
   "string",

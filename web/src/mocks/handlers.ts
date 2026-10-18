@@ -1,8 +1,8 @@
 import { http, HttpResponse } from "msw";
 import type { Schemas } from "../api/client";
 import type { paths } from "../api/schema";
-import { validateAssistantConfig } from "../lib/config";
-import { authUser, templates, testCallResponse } from "./fixtures";
+import { validateAssistantConfig, type Locale } from "../lib/config";
+import { authUser, templates, testCallResponse, voiceCatalogueFor } from "./fixtures";
 import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
 import type { TenantFixture } from "./fixtures";
@@ -63,6 +63,14 @@ export const handlers = [
     }, mockDb.tenants.indexOf(tenant) + 1, assistantId && !findAssistant(tenant, assistantId) ? 0 : 1);
     return HttpResponse.json<Schemas["DashboardSummary"]>(summary);
   }),
+  http.get<never, never, Schemas["VoiceCatalogueResponse"]>(
+    "*/api/voices",
+    ({ request }) => {
+      const locale = (new URL(request.url).searchParams.get("locale") ??
+        "en-GB") as Locale;
+      return HttpResponse.json(voiceCatalogueFor(locale));
+    },
+  ),
   http.get<never, never, Schemas["PostActionVariable"][]>("*/api/post-actions/variables", () =>
     HttpResponse.json<Schemas["PostActionVariable"][]>([
       { name: "contact.name", description: "The customer's name." },

@@ -9,6 +9,7 @@ from inbound_core.config import (
     assistant_config_json_schema,
     load_assistant_config,
 )
+from inbound_core.languages import DEFAULT_LOCALE, Locale, normalize_locale
 
 
 def test_template_resolution_and_deep_merge(tmp_path: Path) -> None:
@@ -89,6 +90,68 @@ def test_assistant_config_schema_is_available() -> None:
 
     assert schema == AssistantConfig.model_json_schema()
     assert "business_name" in schema["properties"]
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("English", "en-GB"),
+        ("British English", "en-GB"),
+        (" uk English ", "en-GB"),
+        ("EN_gb", "en-GB"),
+        ("American English", "en-US"),
+        ("German", "de-DE"),
+        ("de", "de-DE"),
+        ("Español", "es-ES"),
+        ("Mexican Spanish", "es-MX"),
+        ("Français", "fr-FR"),
+        ("Italian", "it-IT"),
+        ("Brazilian Portuguese", "pt-BR"),
+        ("multilingual", "multi"),
+        ("unknown language", "en-GB"),
+    ],
+)
+def test_legacy_language_values_normalize(value: str, expected: Locale) -> None:
+    assert normalize_locale(value) == expected
+
+
+def test_locale_config_compatibility_and_schema() -> None:
+    config = AssistantConfig.model_validate(
+        {
+            "business_name": "Example",
+            "greeting": "Hello",
+            "office_hours": {"days": ["Monday"], "opens": "09:00", "closes": "17:00"},
+            "price_list": [],
+            "policies": [],
+            "contacts": {},
+            "services": {},
+            "urgency_rules": [],
+            "live_actions": [],
+        }
+    )
+    assert config.language == DEFAULT_LOCALE
+    assert config.voice_id is None
+
+    without_voice = config.model_dump()
+    without_voice.pop("voice_id")
+    assert AssistantConfig.model_validate(without_voice).voice_id is None
+    assert (
+        AssistantConfig.model_validate({**without_voice, "language": "de-DE"}).language == "de-DE"
+    )
+
+    language_schema = assistant_config_json_schema()["properties"]["language"]
+    assert language_schema["default"] == DEFAULT_LOCALE
+    assert language_schema["enum"] == [
+        "en-GB",
+        "en-US",
+        "de-DE",
+        "es-ES",
+        "es-MX",
+        "fr-FR",
+        "it-IT",
+        "pt-BR",
+        "multi",
+    ]
 
 
 def test_transfer_handoff_message_has_a_spoken_default() -> None:

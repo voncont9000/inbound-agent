@@ -195,13 +195,23 @@ keys are generated the same way. Voice selection on General (FR-S8) is not built
   website remains possible.
 
 **Languages and voices**
-- FR-S8: `language` becomes a structured locale (e.g. `en-GB`, `de-DE`) or `multi`. Speech recognition
-  language hints, TTS voice and the prompt's language line are all derived from it, so they cannot
-  disagree.
-- FR-S9: Voice picker filtered by language, with name, accent, gender and a short audio preview.
-  The catalogue only lists voices the configured TTS provider supports for that language.
-- FR-S10: `multi` mode lets the agent answer in the caller's language when the provider supports
-  multilingual recognition and synthesis; otherwise the option is hidden.
+- FR-S8 **implemented**: `language` is a shared locale code (`en-GB`, `en-US`, `de-DE`, `es-ES`,
+  `es-MX`, `fr-FR`, `it-IT`, `pt-BR`, or `multi`). Legacy values are normalized and unknown
+  values default to `en-GB`. Speech prompts, STT settings, and TTS settings derive from this
+  configuration; text channels use the corresponding written-language instruction.
+- FR-S9 **implemented for Speechify**: the authenticated picker filters the shared voice
+  catalogue by locale and shows name, accent, gender, and preview. The backend caches results
+  for 24 hours and returns static Beatrice if no key is configured or Speechify is unavailable.
+  Voice precedence is assistant `voice_id`, `TTS_VOICE`, then `beatrice_32`. Simba 3.2 remains
+  the English model; non-English and `multi` use Simba 3.0.
+- FR-S10 **partially implemented for the Speechify path**: Soniox multilingual recognition enables language
+  identification across English, German, Spanish, French, Italian, and Portuguese. Speechify
+  switches to a supported detected language when transcript annotations are available; absent
+  annotations trigger a warning and retain the selected voice. Other TTS providers do not use
+  the runtime Speechify language switch, and provider-specific hiding of the `multi` option for
+  those TTS providers is not yet implemented. Deepgram Aura-2 keeps its English fallback for
+  Portuguese and `multi`; it warns and uses mapped voices for German, Spanish, French, and
+  Italian. Provider pricing is unchanged.
 
 **Call settings and recording**
 - FR-S11: Per-assistant call settings: maximum call length, silence hang-up (with a configurable

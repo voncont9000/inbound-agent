@@ -169,7 +169,18 @@
             "$ref": "#/components/schemas/KnowledgeConfig-Input"
           },
           "language": {
-            "default": "English",
+            "default": "en-GB",
+            "enum": [
+              "en-GB",
+              "en-US",
+              "de-DE",
+              "es-ES",
+              "es-MX",
+              "fr-FR",
+              "it-IT",
+              "pt-BR",
+              "multi"
+            ],
             "title": "Language",
             "type": "string"
           },
@@ -297,6 +308,17 @@
             },
             "title": "Urgency Rules",
             "type": "array"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
           }
         },
         "required": [
@@ -353,7 +375,18 @@
             "$ref": "#/components/schemas/KnowledgeConfig-Output"
           },
           "language": {
-            "default": "English",
+            "default": "en-GB",
+            "enum": [
+              "en-GB",
+              "en-US",
+              "de-DE",
+              "es-ES",
+              "es-MX",
+              "fr-FR",
+              "it-IT",
+              "pt-BR",
+              "multi"
+            ],
             "title": "Language",
             "type": "string"
           },
@@ -481,6 +514,17 @@
             },
             "title": "Urgency Rules",
             "type": "array"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
           }
         },
         "required": [
@@ -4145,6 +4189,141 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "VoiceCard": {
+        "properties": {
+          "accent": {
+            "title": "Accent",
+            "type": "string"
+          },
+          "gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Url"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "gender",
+          "accent",
+          "locale",
+          "preview_url",
+          "is_default"
+        ],
+        "title": "VoiceCard",
+        "type": "object"
+      },
+      "VoiceCatalogueResponse": {
+        "properties": {
+          "default_voice_id": {
+            "title": "Default Voice Id",
+            "type": "string"
+          },
+          "locale": {
+            "enum": [
+              "en-GB",
+              "en-US",
+              "de-DE",
+              "es-ES",
+              "es-MX",
+              "fr-FR",
+              "it-IT",
+              "pt-BR",
+              "multi"
+            ],
+            "title": "Locale",
+            "type": "string"
+          },
+          "locales": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceLocaleOption"
+            },
+            "title": "Locales",
+            "type": "array"
+          },
+          "provider": {
+            "const": "speechify",
+            "default": "speechify",
+            "title": "Provider",
+            "type": "string"
+          },
+          "voices": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceCard"
+            },
+            "title": "Voices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "locale",
+          "locales",
+          "default_voice_id",
+          "voices"
+        ],
+        "title": "VoiceCatalogueResponse",
+        "type": "object"
+      },
+      "VoiceLocaleOption": {
+        "properties": {
+          "code": {
+            "enum": [
+              "en-GB",
+              "en-US",
+              "de-DE",
+              "es-ES",
+              "es-MX",
+              "fr-FR",
+              "it-IT",
+              "pt-BR",
+              "multi"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "multilingual": {
+            "title": "Multilingual",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "multilingual"
+        ],
+        "title": "VoiceLocaleOption",
+        "type": "object"
+      },
       "WebhookAction": {
         "additionalProperties": false,
         "properties": {
@@ -7451,6 +7630,60 @@
         "summary": "List Templates",
         "tags": [
           "assistants"
+        ]
+      }
+    },
+    "/voices": {
+      "get": {
+        "operationId": "list_voices_voices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "locale",
+            "required": false,
+            "schema": {
+              "default": "en-GB",
+              "enum": [
+                "en-GB",
+                "en-US",
+                "de-DE",
+                "es-ES",
+                "es-MX",
+                "fr-FR",
+                "it-IT",
+                "pt-BR",
+                "multi"
+              ],
+              "title": "Locale",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceCatalogueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Voices",
+        "tags": [
+          "voices"
         ]
       }
     },

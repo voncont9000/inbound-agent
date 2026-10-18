@@ -99,6 +99,11 @@ setup. WhatsApp
 supplies the configured `WEB_CALL_TOKEN`. Enable each provider only after configuring its
 external credentials and public webhook settings.
 
+`SPEECHIFY_API_KEY` is optional and is passed to both the voice service (speech synthesis) and
+the backend (the authenticated voice catalogue). Keep it in the protected deployment
+environment, never in frontend configuration. If it is unset or the catalogue request fails,
+the picker returns only the static Beatrice default.
+
 Validate and deploy:
 
 ```sh

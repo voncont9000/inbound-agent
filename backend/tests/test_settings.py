@@ -84,6 +84,15 @@ def test_development_allows_default_voice_service_token() -> None:
     assert settings.voice_service_token == DEFAULT_VOICE_SERVICE_TOKEN
 
 
+def test_speechify_api_key_is_optional_and_secret() -> None:
+    missing = Settings(_env_file=None)
+    configured = Settings(_env_file=None, speechify_api_key="test-key")
+
+    assert missing.speechify_api_key is None
+    assert configured.speechify_api_key.get_secret_value() == "test-key"
+    assert "test-key" not in str(configured.speechify_api_key)
+
+
 def _valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",

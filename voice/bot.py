@@ -68,9 +68,18 @@ from inbound_voice.extraction import (
     build_post_call_tasks,
     extract_intake,
 )
+from inbound_voice.language_switch import LanguageSwitchProcessor
 from inbound_voice.metrics import CallMetricsObserver
 from inbound_voice.prompts import render_system_prompt
-from inbound_voice.providers import create_llm, create_stt, create_tts, resolve_providers
+from inbound_voice.providers import (
+    LANGUAGE_ANNOTATION_STT_PROVIDERS,
+    VoiceLanguage,
+    create_llm,
+    create_stt,
+    create_tts,
+    resolve_providers,
+    resolve_voice_language,
+)
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
 from inbound_voice.transfer import CallTransfer, SimulatedCallTransfer, TransferStart
@@ -743,6 +752,18 @@ async def run_bot(
     )
     sink = LocalFilesCallSink(ROOT / "runs", run_id, started_at=call_started_at)
     assistant = prepared.assistant
+    voice_language: VoiceLanguage = resolve_voice_language(assistant, providers, os.environ)
+    logger.info("Using configured voice locale {}.", voice_language.locale)
+    if (
+        voice_language.locale == "multi"
+        and providers.tts == "speechify"
+        and providers.stt not in LANGUAGE_ANNOTATION_STT_PROVIDERS
+    ):
+        logger.warning(
+            "STT provider {} does not provide language annotations; multilingual voice "
+            "switching is disabled and the configured voice locale and prompt are used.",
+            providers.stt,
+        )
     call_now = datetime.now(UTC)
     if call_transfer is None:
         call_transfer = SimulatedCallTransfer()
@@ -778,6 +799,7 @@ async def run_bot(
             "stt": providers.stt,
             "tts": providers.tts,
             "tts_voice": providers.tts_voice,
+            "language": voice_language.locale,
             "llm": providers.llm,
             "llm_model": providers.llm_model,
         },
@@ -800,7 +822,12 @@ async def run_bot(
         )
 
     async with aiohttp.ClientSession() as session:
-        stt = create_stt(providers, os.environ, sample_rate=input_sample_rate)
+        stt = create_stt(
+            providers,
+            os.environ,
+            sample_rate=input_sample_rate,
+            voice_language=voice_language,
+        )
         llm = create_llm(
             providers,
             os.environ,
@@ -812,7 +839,13 @@ async def run_bot(
                 now=call_now,
             ),
         )
-        tts = create_tts(providers, os.environ, session, sample_rate=output_sample_rate)
+        tts = create_tts(
+            providers,
+            os.environ,
+            session,
+            sample_rate=output_sample_rate,
+            voice_language=voice_language,
+        )
         context = create_llm_context(
             call_tools,
             call_transfer,
@@ -840,10 +873,11 @@ async def run_bot(
                 ),
             ),
         )
-        pipeline = Pipeline(
+        pipeline_processors = [transport.input(), stt]
+        if voice_language.locale == "multi" and providers.tts == "speechify":
+            pipeline_processors.append(LanguageSwitchProcessor(tts))
+        pipeline_processors.extend(
             [
-                transport.input(),
-                stt,
                 context_aggregators.user(),
                 llm,
                 tts,
@@ -851,6 +885,7 @@ async def run_bot(
                 context_aggregators.assistant(),
             ]
         )
+        pipeline = Pipeline(pipeline_processors)
         task: PipelineTask
 
         async def push_end_worker() -> None:

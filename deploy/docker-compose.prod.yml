@@ -82,6 +82,7 @@ services:
       DATABASE_URL: postgresql+psycopg://inbound_app_login:${INBOUND_APP_PASSWORD}@db:5432/inbound
       VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
       WEB_CALL_BASE_URL: https://${DOMAIN:?Set DOMAIN}/call/
+      SPEECHIFY_API_KEY: ${SPEECHIFY_API_KEY:-}
       ALLOWED_ORIGINS: '["https://${DOMAIN}"]'
       SESSION_COOKIE_SECURE: "true"
       WHATSAPP_MODE: ${WHATSAPP_MODE:-off}

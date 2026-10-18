@@ -49,13 +49,38 @@ isolated in `inbound_voice/providers.py`.
 | Component | Provider | Model/configuration | Voice/key |
 |---|---|---|---|
 | STT | AssemblyAI | Universal-3.6 Pro Realtime; legal keyterms | `ASSEMBLYAI_API_KEY` |
-| STT | Soniox | `stt-rt-v5`; English hint and legal context terms | `SONIOX_API_KEY` |
-| STT | Deepgram | Nova-3, `en-GB`, legal keyterms | `DEEPGRAM_API_KEY` |
+| STT | Soniox | `stt-rt-v5`; locale hint or multilingual identification, plus context terms | `SONIOX_API_KEY` |
+| STT | Deepgram | Nova-3; locale-specific language code and legal keyterms | `DEEPGRAM_API_KEY` |
 | LLM | Google Gemini API | `LLM_MODEL`, default `gemini-3.5-flash-lite` | `GOOGLE_API_KEY` |
 | LLM | OpenRouter (optional) | `LLM_MODEL`, default `google/gemini-2.5-flash` | `OPENROUTER_API_KEY` |
-| TTS | Speechify | Simba 3.2 | `SPEECHIFY_API_KEY`; optional `TTS_VOICE`, default `beatrice_32` (en-GB) |
+| TTS | Speechify | Simba 3.2 for English; Simba 3.0 for other locales and `multi` | `SPEECHIFY_API_KEY`; assistant `voice_id` > optional `TTS_VOICE` > `beatrice_32` |
 | TTS | ElevenLabs | `ELEVENLABS_MODEL`, default `eleven_v4_turbo` | `ELEVENLABS_API_KEY`; required `TTS_VOICE` ID; suggested Katie X `MzqUf1HbJ8UmQ0wUsx2p`, built-in Alice alternative `Xb7hH8MSUJpSbSDYk0k2` |
 | TTS | Deepgram | Aura-2 | `DEEPGRAM_API_KEY`; optional `TTS_VOICE`, default `aura-2-pandora-en` |
+
+### Locale and voice behavior
+
+Assistant `language` uses one of the shared locale codes `en-GB`, `en-US`, `de-DE`, `es-ES`,
+`es-MX`, `fr-FR`, `it-IT`, `pt-BR`, or `multi`. Existing human-readable values are normalized
+on load, and unknown stored values use the `en-GB` default. The phone prompt speaks the
+configured language; text-channel prompts use a separate written-language instruction.
+
+AssemblyAI configuration remains unchanged and uses its multilingual model. Soniox receives
+one base-language hint for a single locale; `multi` enables language identification with
+English, German, Spanish, French, Italian, and Portuguese hints. Deepgram Nova-3 receives
+`en-GB`, `en-US`, `pt-BR`, or `multi` as configured, and the base language for other locales.
+
+Speechify uses Simba 3.2 for English and Simba 3.0 for non-English and `multi`. The default
+`en-GB` path remains Simba 3.2 with Beatrice and no language override. For other single
+locales, the configured locale is sent to Speechify. In `multi`, the language-switch processor
+is inserted only for Speechify TTS and updates to Simba 3.0 when supported STT language
+annotations change. English resets without a language override. If annotations are missing,
+the processor warns and keeps the selected voice while the prompt retains multilingual
+behavior; it does not guess a caller language.
+
+For Deepgram Aura-2, German, Spanish (Spain and Mexico), French, and Italian use their mapped
+Aura-2 voices. Portuguese and `multi` warn and retain the existing English Pandora fallback.
+An explicit `TTS_VOICE` still overrides the mapped Deepgram voice. Provider selection and
+locale selection do not change the configured per-provider prices.
 
 Pipecat's ElevenLabs WebSocket `multi-stream-input` endpoint rejects
 `eleven_v4_turbo` with HTTP 400, so that model uses the HTTP streaming service instead;
