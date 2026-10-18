@@ -2005,6 +2005,25 @@
         "title": "KnowledgeSource",
         "type": "object"
       },
+      "KnowledgeSourceCreate": {
+        "properties": {
+          "kind": {
+            "const": "url",
+            "title": "Kind",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "uri"
+        ],
+        "title": "KnowledgeSourceCreate",
+        "type": "object"
+      },
       "KnowledgeSourceResponse": {
         "properties": {
           "assistant_id": {
@@ -3377,23 +3396,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "kind": {
-                    "const": "url",
-                    "title": "Kind",
-                    "type": "string"
-                  },
-                  "uri": {
-                    "title": "Uri",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "uri"
-                ],
-                "title": "KnowledgeSourceCreate",
-                "type": "object"
+                "$ref": "#/components/schemas/KnowledgeSourceCreate"
               }
             },
             "multipart/form-data": {
@@ -3423,6 +3426,12 @@
               }
             },
             "description": "Successful Response"
+          },
+          "411": {
+            "description": "Content-Length is required for multipart uploads"
+          },
+          "413": {
+            "description": "Knowledge upload is too large"
           },
           "422": {
             "content": {

@@ -311,3 +311,9 @@ async def test_sql_review_filter_matches_python_review_policy(tenant_pair) -> No
     sql_clear_ids = {item["id"] for item in clear_response.json()["items"]}
     assert sql_review_ids == expected_review_ids
     assert sql_clear_ids == expected_clear_ids
+
+
+async def test_malformed_list_cursors_return_400(tenant_pair) -> None:
+    client = tenant_pair["first"]["client"]
+    assert (await client.get("/tasks?cursor=A")).status_code == 400
+    assert (await client.get("/conversations?cursor=A")).status_code == 400
