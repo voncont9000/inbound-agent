@@ -6,6 +6,7 @@ from inbound_api.db import session_factory
 from inbound_api.routers import (
     assistants,
     auth,
+    calendar,
     contacts,
     conversations,
     gmail,
@@ -40,6 +41,7 @@ for router in (
     internal_voice.router,
     webhooks.router,
     gmail.router,
+    calendar.router,
     post_actions.router,
 ):
     app.include_router(router)

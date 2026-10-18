@@ -11,6 +11,7 @@ from inbound_core.config import TransferTarget
 from inbound_core.transfer import available_transfer_targets
 from pydantic import ValidationError
 
+from inbound_voice.booking import CallBooking
 from inbound_voice.config import (
     AssistantConfig,
     DateDeadlineUrgencyRule,
@@ -38,15 +39,20 @@ class CallTools:
         self,
         sink: CallSink,
         config: AssistantConfig | None = None,
+        booking: CallBooking | None = None,
+        booking_available: bool = False,
         now: datetime | None = None,
     ) -> None:
         self.sink = sink
         self.config = config or load_assistant_config(DEFAULT_CONFIG_PATH)
+        self.booking = booking
+        self.booking_available = booking_available
         self.now = now
         self.transfer_targets = available_transfer_targets(self.config, now)
         self.transfer_request: TransferRequest | None = None
         self.transfer_start: TransferStart | None = None
         self.transfer_started_at: float | None = None
+        self.transfer_accepted = False
         self.models = {
             name: build_service_model(service) for name, service in self.config.services.items()
         }
@@ -229,10 +235,26 @@ class CallTools:
         self.sink.append_tool_call(name, arguments, result)
         return result
 
+    async def dispatch_async(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if name not in {"check_availability", "book_appointment"}:
+            return self.dispatch(name, arguments)
+        if name not in self.config.live_actions:
+            result = {"ok": False, "error": "Action is not enabled."}
+        elif not self.booking_available or self.booking is None:
+            result = {"ok": False, "error": "Appointment booking is not available."}
+        else:
+            try:
+                result = await getattr(self.booking, name)(**arguments)
+            except (TypeError, ValueError) as error:
+                result = {"ok": False, "error": str(error)}
+        self.sink.append_tool_call(name, arguments, result)
+        return result
+
 
 def tool_specs(
     config: AssistantConfig | None = None,
     now: datetime | None = None,
+    booking_available: bool = False,
 ) -> list[dict[str, Any]]:
     assistant = config or load_assistant_config(DEFAULT_CONFIG_PATH)
     transfer_targets = available_transfer_targets(assistant, now)
@@ -292,7 +314,53 @@ def tool_specs(
             },
             "required": ["target_key", "reason"],
         }
-    return [{"name": name, **actions[name]} for name in assistant.live_actions if name in actions]
+    result = [{"name": name, **actions[name]} for name in assistant.live_actions if name in actions]
+    if booking_available and assistant.booking is not None:
+        appointment_types = assistant.booking.appointment_types
+        descriptions = "\n".join(
+            f"{item.key}: {item.label} — {item.when_to_use}" for item in appointment_types
+        )
+        booking_tools = {
+            "check_availability": {
+                "description": (
+                    "Call this tool immediately without announcing it; the system will say a short "
+                    "holding line. Offer only the returned slots, using their 'when' wording."
+                ),
+                "properties": {
+                    "appointment_type": {
+                        "type": "string",
+                        "enum": [item.key for item in appointment_types],
+                        "description": descriptions,
+                    },
+                    "preference_text": {
+                        "type": "string",
+                        "description": (
+                            "The caller's preferred day/time in their own words; empty if none."
+                        ),
+                    },
+                },
+                "required": ["appointment_type", "preference_text"],
+            },
+            "book_appointment": {
+                "description": (
+                    "Book a slot the caller chose. Before calling, read the chosen slot back once "
+                    "and get a yes. Then call this tool immediately without announcing it; the "
+                    "system will say a short holding line."
+                ),
+                "properties": {
+                    "slot_id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "email": {"type": "string"},
+                },
+                "required": ["slot_id", "name"],
+            },
+        }
+        result.extend(
+            {"name": name, **booking_tools[name]}
+            for name in ("check_availability", "book_appointment")
+            if name in assistant.live_actions
+        )
+    return result
 
 
 def _critical_fields_description(config: AssistantConfig) -> str:

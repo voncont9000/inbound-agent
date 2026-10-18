@@ -20,6 +20,7 @@ def score_call(
     run_dir: str | Path,
     scenario: dict[str, Any],
     prices: dict[str, Any] | None = None,
+    fake_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     directory = Path(run_dir)
     transcript_path = directory / "transcript.jsonl"
@@ -155,6 +156,31 @@ def score_call(
                 "passed": actual == expected,
             }
 
+    booking_checks = {}
+    bookings = (fake_state or {}).get("bookings", [])
+    for name, expected in scenario.get("booking_checks", {}).items():
+        if name == "booked":
+            actual = any(
+                item.get("booking", {}).get("status", "booked") == "booked" for item in bookings
+            )
+        elif name == "appointment_type":
+            actual = next(
+                (
+                    item.get("appointment_type") or item.get("booking", {}).get("appointment_type")
+                    for item in bookings
+                    if item.get("appointment_type") == expected
+                    or item.get("booking", {}).get("appointment_type") == expected
+                ),
+                None,
+            )
+        else:
+            actual = None
+        booking_checks[name] = {
+            "expected": expected,
+            "actual": actual,
+            "passed": actual is expected if isinstance(expected, bool) else actual == expected,
+        }
+
     knowledge_gaps = _read_json(directory / "knowledge_gaps.json", {})
     unanswered = knowledge_gaps.get("unanswered_questions", [])
     gap_text = " ".join(str(item.get("question", "")) for item in unanswered)
@@ -179,6 +205,7 @@ def score_call(
         *assistant_not_matches.values(),
         *intake_checks.values(),
         *task_checks.values(),
+        *booking_checks.values(),
         *transfer_checks.values(),
         *knowledge_gap_checks.values(),
     ]
@@ -212,6 +239,7 @@ def score_call(
         "post_call_intake_checks": post_call_intake_checks,
         "needs_review": intake.get("needs_review", []) if isinstance(intake, dict) else [],
         "task_checks": task_checks,
+        "booking_checks": booking_checks,
         "transfer_checks": transfer_checks,
         "checks_passed": sum(bool(check["passed"]) for check in checks),
         "checks_total": len(checks),

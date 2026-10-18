@@ -6,6 +6,7 @@ import re
 import time
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -19,8 +20,11 @@ from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    ControlFrame,
     EndWorkerFrame,
+    Frame,
     FunctionCallResultProperties,
+    InterruptionFrame,
     LLMRunFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
@@ -34,6 +38,7 @@ from pipecat.observers.base_observer import BaseObserver
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.aggregators import async_tool_messages
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
@@ -44,12 +49,15 @@ from pipecat.runner.run import main
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.llm_service import FunctionCallParams
+from pipecat.transports.base_output import BaseOutputTransport
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
+from pipecat.turns.user_mute import BaseUserMuteStrategy
 from pipecat.turns.user_start import VADUserTurnStartStrategy
 from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
+from inbound_voice.booking import CallBooking
 from inbound_voice.call_report import build_call_report
 from inbound_voice.call_setup import PreparedCall, prepare_call
 from inbound_voice.config import load_assistant_config
@@ -109,16 +117,58 @@ def should_goodbye_detected_end_call(
     )
 
 
+@dataclass
+class SpeechMarkerFrame(ControlFrame):
+    marker_id: str
+    interruptible: bool = field(default=False, init=False)
+
+
+@dataclass
+class _SpeechMarkerState:
+    event: asyncio.Event = field(default_factory=asyncio.Event)
+    result: Literal["played", "interrupted"] | None = None
+
+
+class CallTaskSet:
+    def __init__(self) -> None:
+        self._tasks: set[asyncio.Task[Any]] = set()
+
+    def start(self, coroutine: Any) -> asyncio.Task[Any]:
+        task = asyncio.create_task(coroutine)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
+
+    async def cancel_all(self) -> None:
+        tasks = tuple(self._tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+
 class BotSpeechTracker(BaseObserver):
     def __init__(self) -> None:
-        super().__init__(observe_every_push=False)
+        super().__init__(observe_every_push=True)
         self.speaking = False
         self.started_count = 0
         self.last_stopped_at: float | None = None
         self._seen_speaking_frame_siblings: set[frozenset[Any]] = set()
+        self._markers: dict[str, _SpeechMarkerState] = {}
 
     async def on_push_frame(self, data: Any) -> None:
         frame = data.frame
+        if isinstance(frame, InterruptionFrame):
+            if isinstance(data.source, BaseOutputTransport):
+                for marker in self._markers.values():
+                    self._resolve_marker(marker, "interrupted")
+            return
+        if isinstance(frame, SpeechMarkerFrame):
+            if isinstance(data.source, BaseOutputTransport):
+                marker = self._markers.get(frame.marker_id)
+                if marker is not None:
+                    self._resolve_marker(marker, "played")
+            return
         if isinstance(frame, (BotStartedSpeakingFrame, BotStoppedSpeakingFrame)):
             sibling_ids = frozenset((frame.id, getattr(frame, "broadcast_sibling_id", None)))
             if sibling_ids in self._seen_speaking_frame_siblings:
@@ -132,47 +182,42 @@ class BotSpeechTracker(BaseObserver):
             self.speaking = False
             self.last_stopped_at = time.monotonic()
 
-    async def wait_until_quiet(self, quiet_secs: float = 0.3, max_secs: float = 6.0) -> None:
-        quiet_secs = max(0.0, quiet_secs)
-        started_at = time.monotonic()
-        deadline = started_at + max(0.0, max_secs)
-        while True:
-            now = time.monotonic()
-            if not self.speaking:
-                quiet_since = self.last_stopped_at
-                if quiet_since is None:
-                    quiet_since = started_at
-                if now - quiet_since >= quiet_secs:
-                    return
-            if now >= deadline:
-                return
-            await asyncio.sleep(min(0.05, deadline - now))
+    def new_marker(self) -> str:
+        marker_id = str(uuid.uuid4())
+        self._markers[marker_id] = _SpeechMarkerState()
+        return marker_id
 
-    async def wait_for_utterance(
-        self,
-        after_count: int,
-        start_timeout: float = 2.0,
-        max_secs: float = 4.0,
-        grace_secs: float = 0.2,
-    ) -> Literal["spoken", "no_start", "timeout"]:
-        start_deadline = time.monotonic() + max(0.0, start_timeout)
-        while self.started_count <= after_count:
-            now = time.monotonic()
-            if now >= start_deadline:
-                return "no_start"
-            await asyncio.sleep(min(0.05, start_deadline - now))
+    @staticmethod
+    def _resolve_marker(
+        marker: _SpeechMarkerState, result: Literal["played", "interrupted"]
+    ) -> None:
+        if marker.result is None:
+            marker.result = result
+            marker.event.set()
 
-        utterance_started_at = time.monotonic()
-        deadline = utterance_started_at + max(0.0, max_secs)
-        grace_secs = max(0.0, grace_secs)
-        while True:
-            now = time.monotonic()
-            if not self.speaking and self.last_stopped_at is not None:
-                if now - self.last_stopped_at >= grace_secs:
-                    return "spoken"
-            if now >= deadline:
-                return "timeout"
-            await asyncio.sleep(min(0.05, deadline - now))
+    async def wait_for_marker(
+        self, marker_id: str, timeout: float
+    ) -> Literal["played", "interrupted", "timeout"]:
+        marker = self._markers.get(marker_id)
+        if marker is None:
+            return "timeout"
+        try:
+            await asyncio.wait_for(marker.event.wait(), timeout=max(0.0, timeout))
+        except TimeoutError:
+            return "timeout"
+        else:
+            return marker.result or "timeout"
+        finally:
+            self._markers.pop(marker_id, None)
+
+
+class TransferUserMuteStrategy(BaseUserMuteStrategy):
+    def __init__(self, call_tools: CallTools) -> None:
+        super().__init__()
+        self._call_tools = call_tools
+
+    async def process_frame(self, _frame: Frame) -> bool:
+        return self._call_tools.transfer_accepted
 
 
 class GoodbyeDetectedHangup(BaseObserver):
@@ -505,16 +550,98 @@ def create_function_schemas(
     call_tools: CallTools,
     call_transfer: CallTransfer | None = None,
     speech_tracker: BotSpeechTracker | None = None,
+    *,
+    metrics_observer: CallMetricsObserver | None = None,
+    tasks: CallTaskSet | None = None,
 ) -> list[FunctionSchema]:
+    tasks = tasks or CallTaskSet()
     schemas = []
     transfer = call_transfer or SimulatedCallTransfer()
-    for spec in tool_specs(call_tools.config, now=call_tools.now):
+    booking_dispatch_lock = asyncio.Lock()
+    for spec in tool_specs(
+        call_tools.config,
+        now=call_tools.now,
+        booking_available=call_tools.booking_available,
+    ):
 
         async def handler(params: FunctionCallParams, tool_name: str = spec["name"]) -> None:
+            if tool_name in {"check_availability", "book_appointment"}:
+                started = time.perf_counter()
+
+                async def dispatch_booking() -> dict[str, Any]:
+                    async with booking_dispatch_lock:
+                        result = await call_tools.dispatch_async(tool_name, params.arguments)
+                    if metrics_observer is not None:
+                        metrics_observer.record_tool_round_trip(
+                            tool_name, (time.perf_counter() - started) * 1000
+                        )
+                    return result
+
+                tool_task = asyncio.create_task(dispatch_booking())
+                booking_config = call_tools.config.booking
+                if booking_config is None:
+                    message = (
+                        "Let me check the diary."
+                        if tool_name == "check_availability"
+                        else "One moment while I book that."
+                    )
+                else:
+                    message = (
+                        booking_config.check_message
+                        if tool_name == "check_availability"
+                        else booking_config.book_message
+                    )
+                try:
+                    marker_id = speech_tracker.new_marker() if speech_tracker is not None else None
+                    await params.llm.push_frame(TTSSpeakFrame(message))
+                    if speech_tracker is not None:
+                        assert marker_id is not None
+                        await params.llm.push_frame(SpeechMarkerFrame(marker_id))
+
+                        async def log_holding_speech_result() -> None:
+                            speech_result = await speech_tracker.wait_for_marker(
+                                marker_id, timeout=10.0
+                            )
+                            logger.info("Booking holding speech result: {}", speech_result)
+
+                        tasks.start(log_holding_speech_result())
+                    result = await asyncio.shield(tool_task)
+                except asyncio.CancelledError:
+
+                    async def record_late_booking_result() -> None:
+                        try:
+                            late_result = await asyncio.shield(tool_task)
+                        except asyncio.CancelledError:
+                            tool_task.cancel()
+                            await asyncio.gather(tool_task, return_exceptions=True)
+                            raise
+                        except Exception as error:
+                            late_result = {
+                                "ok": False,
+                                "error": f"Booking dispatch failed: {type(error).__name__}",
+                            }
+                        content = json.dumps(
+                            {
+                                "result": late_result,
+                                "note": "Booking dispatch completed after the caller interrupted.",
+                            }
+                        )
+                        params.context.add_message(
+                            async_tool_messages.build_final_result_message(
+                                params.tool_call_id, content
+                            )
+                        )
+
+                    tasks.start(record_late_booking_result())
+                    raise
+                await params.result_callback(result)
+                return
             result = call_tools.dispatch(tool_name, params.arguments)
             should_end = tool_name == "end_call" or (
                 tool_name == "transfer_call" and result.get("ok") is True
             )
+            if tool_name == "transfer_call" and result.get("ok") is True:
+                call_tools.transfer_accepted = True
             if should_end:
                 await params.result_callback(
                     result,
@@ -523,28 +650,40 @@ def create_function_schemas(
             else:
                 await params.result_callback(result)
             if tool_name == "transfer_call" and result.get("ok") is True:
-                transfer.prepare()
                 request = call_tools.transfer_request
                 if request is not None:
-                    if speech_tracker is not None:
-                        if speech_tracker.speaking:
-                            await speech_tracker.wait_until_quiet()
-                        count = speech_tracker.started_count
-                    else:
-                        count = 0
-                    await params.llm.push_frame(
-                        TTSSpeakFrame(call_tools.config.transfer_handoff_message)
-                    )
-                    if speech_tracker is not None:
-                        speech_result = await speech_tracker.wait_for_utterance(count)
-                        logger.info("Transfer handoff speech result: {}", speech_result)
-                    try:
-                        start = await transfer.start(request.target, request.reason)
-                    except Exception as error:
-                        logger.warning("Could not start call transfer: {}", type(error).__name__)
-                        start = TransferStart("error", str(error))
-                    call_tools.transfer_start = start
-                    call_tools.transfer_started_at = time.monotonic()
+
+                    async def run_transfer_handoff() -> None:
+                        transfer.prepare()
+                        marker_id = (
+                            speech_tracker.new_marker() if speech_tracker is not None else None
+                        )
+                        await params.llm.push_frame(
+                            TTSSpeakFrame(call_tools.config.transfer_handoff_message)
+                        )
+                        if speech_tracker is not None:
+                            assert marker_id is not None
+                            await params.llm.push_frame(SpeechMarkerFrame(marker_id))
+                            speech_result = await speech_tracker.wait_for_marker(
+                                marker_id, timeout=10.0
+                            )
+                            logger.info("Transfer handoff speech result: {}", speech_result)
+                            if speech_result == "played":
+                                await asyncio.sleep(0.2)
+                        try:
+                            start = await transfer.start(request.target, request.reason)
+                        except Exception as error:
+                            logger.warning(
+                                "Could not start call transfer: {}", type(error).__name__
+                            )
+                            start = TransferStart("error", str(error))
+                        call_tools.transfer_start = start
+                        call_tools.transfer_started_at = time.monotonic()
+                        await params.llm.push_frame(EndWorkerFrame(), FrameDirection.UPSTREAM)
+
+                    tasks.start(run_transfer_handoff())
+                    await asyncio.sleep(0)
+                    return
             if should_end:
                 await params.llm.push_frame(EndWorkerFrame(), FrameDirection.UPSTREAM)
 
@@ -564,8 +703,18 @@ def create_llm_context(
     call_tools: CallTools,
     call_transfer: CallTransfer | None = None,
     speech_tracker: BotSpeechTracker | None = None,
+    *,
+    metrics_observer: CallMetricsObserver | None = None,
+    tasks: CallTaskSet | None = None,
 ) -> LLMContext:
-    schemas = create_function_schemas(call_tools, call_transfer, speech_tracker)
+    tasks = tasks or CallTaskSet()
+    schemas = create_function_schemas(
+        call_tools,
+        call_transfer,
+        speech_tracker,
+        metrics_observer=metrics_observer,
+        tasks=tasks,
+    )
     return LLMContext(tools=schemas) if schemas else LLMContext()
 
 
@@ -606,8 +755,21 @@ async def run_bot(
     )
     input_sample_rate = PHONE_SAMPLE_RATE if telephony else WEB_SAMPLE_RATE
     output_sample_rate = PHONE_SAMPLE_RATE if telephony else 24000
-    call_tools = CallTools(sink, assistant, now=call_now)
+    booking_available = bool(
+        prepared.route is not None
+        and prepared.route.booking_available
+        and assistant.booking is not None
+        and prepared.api is not None
+        and prepared.call_start is not None
+    )
+    call_tools = CallTools(
+        sink,
+        assistant,
+        booking_available=booking_available,
+        now=call_now,
+    )
     speech_tracker = BotSpeechTracker()
+    tasks = CallTaskSet()
     metrics_observer = CallMetricsObserver(
         sink,
         telephony=telephony,
@@ -620,6 +782,22 @@ async def run_bot(
             "llm_model": providers.llm_model,
         },
     )
+    start_call_task: asyncio.Task[uuid.UUID | None] | None = None
+
+    async def conversation_id_getter() -> uuid.UUID | None:
+        return await start_call_task if start_call_task is not None else None
+
+    if booking_available:
+        assert prepared.api is not None and prepared.call_start is not None
+        call_tools.booking = CallBooking(
+            assistant,
+            prepared.api,
+            prepared.call_start,
+            prepared.availability_task,
+            conversation_id_getter,
+            prepared.call_start.from_number,
+            metrics_observer,
+        )
 
     async with aiohttp.ClientSession() as session:
         stt = create_stt(providers, os.environ, sample_rate=input_sample_rate)
@@ -630,14 +808,22 @@ async def run_bot(
                 assistant,
                 caller_id=caller_id,
                 context_card=prepared.context_card,
+                booking_enabled=booking_available,
                 now=call_now,
             ),
         )
         tts = create_tts(providers, os.environ, session, sample_rate=output_sample_rate)
-        context = create_llm_context(call_tools, call_transfer, speech_tracker)
+        context = create_llm_context(
+            call_tools,
+            call_transfer,
+            speech_tracker,
+            metrics_observer=metrics_observer,
+            tasks=tasks,
+        )
         context_aggregators = LLMContextAggregatorPair(
             context,
             user_params=LLMUserAggregatorParams(
+                user_mute_strategies=[TransferUserMuteStrategy(call_tools)],
                 vad_analyzer=SileroVADAnalyzer(sample_rate=input_sample_rate),
                 user_turn_strategies=UserTurnStrategies(
                     start=[VADUserTurnStartStrategy(enable_interruptions=True)],
@@ -690,7 +876,6 @@ async def run_bot(
             ),
             observers=[metrics_observer, goodbye_hangup, idle_hangup, speech_tracker],
         )
-        start_call_task: asyncio.Task[uuid.UUID | None] | None = None
         if prepared.api is not None and prepared.call_start is not None:
 
             async def start_call_safely() -> uuid.UUID | None:
@@ -713,6 +898,7 @@ async def run_bot(
         try:
             await PipelineRunner().run(task)
         finally:
+            await tasks.cancel_all()
             if call_tools.transfer_request is not None:
                 await complete_transfer(
                     sink,

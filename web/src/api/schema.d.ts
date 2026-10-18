@@ -302,6 +302,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calendar/mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Calendar Mode */
+        get: operations["calendar_mode_calendar_mode_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/channels/gmail/mode": {
         parameters: {
             query?: never;
@@ -449,6 +466,40 @@ export interface paths {
         put?: never;
         /** Create Review */
         post: operations["create_review_conversations__conversation_id__reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/voice/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Availability */
+        post: operations["availability_internal_voice_availability_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/voice/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Book */
+        post: operations["book_internal_voice_book_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -751,8 +802,22 @@ export interface components {
              */
             updated_at: string;
         };
+        /** AppointmentType */
+        AppointmentType: {
+            /** Duration Minutes */
+            duration_minutes: number;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Location Or Link */
+            location_or_link?: string | null;
+            /** When To Use */
+            when_to_use: string;
+        };
         /** AssistantConfig */
         "AssistantConfig-Input": {
+            booking?: components["schemas"]["BookingConfig"] | null;
             /** Business Name */
             business_name: string;
             /** Contacts */
@@ -774,7 +839,7 @@ export interface components {
              */
             language: string;
             /** Live Actions */
-            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "transfer_call")[];
+            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment" | "transfer_call")[];
             office_hours: components["schemas"]["OfficeHours"];
             /** Policies */
             policies: string[];
@@ -814,6 +879,7 @@ export interface components {
         };
         /** AssistantConfig */
         "AssistantConfig-Output": {
+            booking?: components["schemas"]["BookingConfig"] | null;
             /** Business Name */
             business_name: string;
             /** Contacts */
@@ -835,7 +901,7 @@ export interface components {
              */
             language: string;
             /** Live Actions */
-            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "transfer_call")[];
+            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "check_availability" | "book_appointment" | "transfer_call")[];
             office_hours: components["schemas"]["OfficeHours"];
             /** Policies */
             policies: string[];
@@ -952,6 +1018,169 @@ export interface components {
             /** Tenants */
             tenants: components["schemas"]["TenantResponse"][];
             user: components["schemas"]["UserResponse"];
+        };
+        /** AvailabilityRequest */
+        AvailabilityRequest: {
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "phone" | "web";
+            /** To Number */
+            to_number?: string | null;
+            /** Web Call Token */
+            web_call_token?: string | null;
+        };
+        /** AvailabilityResponse */
+        AvailabilityResponse: {
+            /** Available */
+            available: boolean;
+            /** Busy */
+            busy?: components["schemas"]["BusyBlock"][];
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Provider Ms */
+            provider_ms?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+            /** Window End */
+            window_end?: string | null;
+            /** Window Start */
+            window_start?: string | null;
+        };
+        /** BookRequest */
+        BookRequest: {
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /** Email */
+            email?: string | null;
+            /** External Call Id */
+            external_call_id: string;
+            /** Name */
+            name: string;
+            /** Phone */
+            phone?: string | null;
+            /** Slot Id */
+            slot_id: string;
+        };
+        /** BookResponse */
+        BookResponse: {
+            /** Alternatives */
+            alternatives?: components["schemas"]["SlotOffer"][];
+            booking?: components["schemas"]["BookingRecord"] | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "booked" | "unavailable" | "invalid" | "error";
+        };
+        /** BookingConfig */
+        BookingConfig: {
+            /** Appointment Types */
+            appointment_types: components["schemas"]["AppointmentType"][];
+            /**
+             * Book Message
+             * @default One moment while I book that.
+             */
+            book_message: string;
+            /**
+             * Buffer Minutes
+             * @default 0
+             */
+            buffer_minutes: number;
+            /**
+             * Calendar Id
+             * @default primary
+             */
+            calendar_id: string;
+            /**
+             * Check Message
+             * @default Let me check the diary.
+             */
+            check_message: string;
+            /**
+             * Horizon Days
+             * @default 14
+             */
+            horizon_days: number;
+            /**
+             * Max Slots Offered
+             * @default 3
+             */
+            max_slots_offered: number;
+            /**
+             * Min Notice Hours
+             * @default 2
+             */
+            min_notice_hours: number;
+            /**
+             * Send Updates
+             * @default all
+             * @enum {string}
+             */
+            send_updates: "all" | "externalOnly" | "none";
+            /**
+             * Slot Step Minutes
+             * @default 30
+             */
+            slot_step_minutes: number;
+        };
+        /** BookingRecord */
+        BookingRecord: {
+            /** Appointment Type */
+            appointment_type: string;
+            /** Attendee Email */
+            attendee_email?: string | null;
+            /** Attendee Name */
+            attendee_name: string;
+            /** Booking Id */
+            booking_id: string;
+            /** Calendar Id */
+            calendar_id: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Event Id */
+            event_id: string;
+            /** Event Link */
+            event_link?: string | null;
+            /** Label */
+            label: string;
+            /** Provider */
+            provider: string;
+            /** Speech */
+            speech: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /** Text */
+            text: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** BusyBlock */
+        BusyBlock: {
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
         };
         /** CallReportAccepted */
         CallReportAccepted: {
@@ -1888,6 +2117,11 @@ export interface components {
              * Format: uuid
              */
             assistant_id: string;
+            /**
+             * Booking Available
+             * @default false
+             */
+            booking_available: boolean;
             config: components["schemas"]["AssistantConfig-Output"];
             /** Context Card */
             context_card?: string | null;
@@ -1951,6 +2185,29 @@ export interface components {
             password: string;
             /** Tenant Name */
             tenant_name: string;
+        };
+        /** SlotOffer */
+        SlotOffer: {
+            /** Appointment Type */
+            appointment_type: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Label */
+            label: string;
+            /** Slot Id */
+            slot_id: string;
+            /** Speech */
+            speech: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /** Text */
+            text: string;
         };
         /** TaskListResponse */
         TaskListResponse: {
@@ -2929,6 +3186,39 @@ export interface operations {
             };
         };
     };
+    calendar_mode_calendar_mode_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: "off" | "fake" | "google";
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     gmail_mode_channels_gmail_mode_get: {
         parameters: {
             query?: never;
@@ -3222,6 +3512,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationReviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    availability_internal_voice_availability_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Service-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    book_internal_voice_book_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Service-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookResponse"];
                 };
             };
             /** @description Validation Error */

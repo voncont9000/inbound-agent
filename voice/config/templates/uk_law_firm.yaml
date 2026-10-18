@@ -89,6 +89,21 @@ urgency_rules:
     minus_days: 1
     urgent_within_days: 28
     reason: "Employment tribunal time limit may be within 28 days."
+# Add check_availability and book_appointment to live_actions to enable booking.
+# booking:
+#   calendar_id: primary
+#   appointment_types:
+#     - key: initial_consultation
+#       label: Initial consultation
+#       duration_minutes: 30
+#       when_to_use: For callers seeking legal advice from a solicitor.
+#       location_or_link: Phone or video link
+#   min_notice_hours: 2
+#   horizon_days: 14
+#   buffer_minutes: 0
+#   max_slots_offered: 3
+#   slot_step_minutes: 30
+#   send_updates: all
 live_actions: []
 transfer_handoff_message: "I'm putting you through now, please hold."
 transfer_failed_message: "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye."

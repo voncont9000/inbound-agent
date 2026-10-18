@@ -7,19 +7,33 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from inbound_core.config import TransferTarget
+from inbound_core.config import AppointmentType, BookingConfig, TransferTarget
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     EndWorkerFrame,
+    InputAudioRawFrame,
+    InterruptionFrame,
     LLMTextFrame,
+    OutputAudioRawFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
     TTSTextFrame,
+    UserMuteStartedFrame,
     UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
+    VADUserStartedSpeakingFrame,
+    VADUserStoppedSpeakingFrame,
+)
+from pipecat.processors.aggregators.llm_context import LLMContext
+from pipecat.processors.aggregators.llm_response_universal import (
+    LLMContextAggregatorPair,
+    LLMUserAggregatorParams,
 )
 from pipecat.processors.frame_processor import FrameDirection
+from pipecat.tests.utils import run_test
+from pipecat.transports.base_output import BaseOutputTransport
+from pipecat.transports.base_transport import TransportParams
 from pipecat.utils.types import NOT_GIVEN
 
 from inbound_voice.sinks import LocalFilesCallSink
@@ -33,56 +47,44 @@ BOT_SPEC.loader.exec_module(BOT_MODULE)
 
 
 class FastBotSpeechTracker(BOT_MODULE.BotSpeechTracker):
-    def __init__(
-        self,
-        *,
-        start_timeout: float = 0.06,
-        max_secs: float = 0.15,
-        grace_secs: float = 0.01,
-        quiet_secs: float = 0.01,
-        quiet_max_secs: float = 0.2,
-    ) -> None:
+    def __init__(self, *, marker_timeout: float = 0.15) -> None:
         super().__init__()
-        self.start_timeout = start_timeout
-        self.max_secs = max_secs
-        self.grace_secs = grace_secs
-        self.quiet_secs = quiet_secs
-        self.quiet_max_secs = quiet_max_secs
+        self.marker_timeout = marker_timeout
 
-    async def wait_until_quiet(self, quiet_secs=None, max_secs=None):
-        return await super().wait_until_quiet(
-            self.quiet_secs if quiet_secs is None else quiet_secs,
-            self.quiet_max_secs if max_secs is None else max_secs,
-        )
-
-    async def wait_for_utterance(
-        self,
-        after_count,
-        start_timeout=None,
-        max_secs=None,
-        grace_secs=None,
-    ):
-        return await super().wait_for_utterance(
-            after_count,
-            self.start_timeout if start_timeout is None else start_timeout,
-            self.max_secs if max_secs is None else max_secs,
-            self.grace_secs if grace_secs is None else grace_secs,
+    async def wait_for_marker(self, marker_id, timeout=10.0):
+        return await super().wait_for_marker(
+            marker_id,
+            timeout=min(timeout, self.marker_timeout),
         )
 
 
 def _transfer_handler(tmp_path, events, tracker):
+    marker_pushed = asyncio.Event()
+    start_called = asyncio.Event()
+    tasks = BOT_MODULE.CallTaskSet()
+
     class FakeLLM:
         async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM) -> None:
             events.append(("push", frame, direction))
+            if isinstance(frame, BOT_MODULE.SpeechMarkerFrame):
+                marker_pushed.set()
 
     class FakeParams:
         arguments = {"target_key": "duty_solicitor", "reason": "Caller requests a person."}
 
         def __init__(self) -> None:
             self.llm = FakeLLM()
+            self.result_callback_complete = asyncio.Event()
+            self.marker_pushed = marker_pushed
+            self.start_called = start_called
+            self.transfer_accepted_at_result = None
+            self.transfer = transfer
+            self.tasks = tasks
 
         async def result_callback(self, result, *, properties=None) -> None:
             events.append(("result", result, properties))
+            self.transfer_accepted_at_result = getattr(call_tools, "transfer_accepted", False)
+            self.result_callback_complete.set()
 
     class FakeTransfer:
         def prepare(self) -> None:
@@ -90,6 +92,8 @@ def _transfer_handler(tmp_path, events, tracker):
 
         async def start(self, target, reason):
             events.append(("start", time.monotonic(), target.key, reason))
+            self.started_at = time.monotonic()
+            start_called.set()
             return BOT_MODULE.TransferStart("dialling")
 
     sink = LocalFilesCallSink(tmp_path, "transfer-tool-handler")
@@ -109,16 +113,122 @@ def _transfer_handler(tmp_path, events, tracker):
         }
     )
     call_tools = CallTools(sink, config)
+    transfer = FakeTransfer()
     handler = next(
         schema.handler
         for schema in BOT_MODULE.create_function_schemas(
             call_tools,
-            FakeTransfer(),
+            transfer,
             tracker,
+            tasks=tasks,
         )
         if schema.name == "transfer_call"
     )
     return handler, FakeParams(), call_tools
+
+
+def _booking_handler(
+    tmp_path,
+    events,
+    tracker,
+    tool_name,
+    *,
+    delay=0.0,
+    start_speaking_on_holding=False,
+):
+    sink = LocalFilesCallSink(tmp_path, f"booking-handler-{tool_name}")
+    message = (
+        "Checking the calendar now."
+        if tool_name == "check_availability"
+        else "Saving your appointment now."
+    )
+    config = CallTools(sink).config.model_copy(
+        update={
+            "live_actions": ["check_availability", "book_appointment"],
+            "booking": BookingConfig(
+                appointment_types=[
+                    AppointmentType(
+                        key="consultation",
+                        label="Consultation",
+                        duration_minutes=30,
+                        when_to_use="New callers",
+                    )
+                ],
+                check_message="Checking the calendar now.",
+                book_message="Saving your appointment now.",
+            ),
+        }
+    )
+
+    booking_records = []
+
+    async def dispatch(name, **_arguments):
+        events.append(("tool_started", name))
+        try:
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            events.append(("tool_cancelled", name))
+            raise
+        events.append(("tool_finished", name, time.monotonic()))
+        return {"ok": True}
+
+    class FakeBooking:
+        async def check_availability(self, **arguments):
+            return await dispatch("check_availability", **arguments)
+
+        async def book_appointment(self, **arguments):
+            result = await dispatch("book_appointment", **arguments)
+            booking_records.append(arguments)
+            return result
+
+    call_tools = CallTools(
+        sink,
+        config,
+        booking=FakeBooking(),
+        booking_available=True,
+    )
+    tasks = BOT_MODULE.CallTaskSet()
+
+    class FakeLLM:
+        async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
+            events.append(("frame", frame))
+            if start_speaking_on_holding and isinstance(frame, TTSSpeakFrame):
+                await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.messages = []
+            self.message_added = asyncio.Event()
+
+        def add_message(self, message) -> None:
+            self.messages.append(message)
+            self.message_added.set()
+
+    result_calls = []
+
+    class FakeParams:
+        def __init__(self) -> None:
+            self.arguments = {}
+            self.llm = FakeLLM()
+            self.context = FakeContext()
+            self.tool_call_id = f"booking-{tool_name}"
+            self.tasks = tasks
+            self.booking_records = booking_records
+
+        async def result_callback(self, result, *, properties=None):
+            result_calls.append((result, time.monotonic()))
+            events.append(("result_callback", result))
+
+    handler = next(
+        schema.handler
+        for schema in BOT_MODULE.create_function_schemas(
+            call_tools,
+            speech_tracker=tracker,
+            tasks=tasks,
+        )
+        if schema.name == tool_name
+    )
+    return handler, FakeParams(), sink, result_calls, message
 
 
 def test_smart_turn_stop_secs_parses_default_and_override() -> None:
@@ -429,35 +539,56 @@ def test_end_call_sends_end_worker_after_tool_result(tmp_path) -> None:
     assert events[1][2] is FrameDirection.UPSTREAM
 
 
-def test_transfer_handoff_speaks_then_starts_transfer_and_ends_worker(tmp_path) -> None:
+def test_transfer_handoff_survives_handler_interruption_and_waits_for_output_marker(
+    tmp_path,
+) -> None:
     events = []
-    tracker = FastBotSpeechTracker(max_secs=0.3, grace_secs=0.01)
+    tracker = FastBotSpeechTracker(marker_timeout=0.5)
     handler, params, call_tools = _transfer_handler(tmp_path, events, tracker)
 
-    async def feed_handoff_speech() -> None:
-        while not any(
-            event[0] == "push" and isinstance(event[1], TTSSpeakFrame) for event in events
-        ):
-            await asyncio.sleep(0.005)
-        events.append(("speech_started",))
-        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
-        await asyncio.sleep(0.01)
-        events.append(("speech_stopped",))
-        await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
-
     async def run() -> float:
-        feeder = asyncio.create_task(feed_handoff_speech())
-        started_at = time.monotonic()
-        await handler(params)
-        await feeder
-        return time.monotonic() - started_at
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+        handler_task = asyncio.create_task(handler(params))
+        await params.result_callback_complete.wait()
+        handler_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await handler_task
+        await asyncio.wait_for(params.marker_pushed.wait(), timeout=0.5)
+        marker_frame = next(
+            event[1]
+            for event in events
+            if event[0] == "push" and isinstance(event[1], BOT_MODULE.SpeechMarkerFrame)
+        )
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+        await tracker.on_push_frame(SimpleNamespace(frame=marker_frame, source=SimpleNamespace()))
+        await asyncio.sleep(0.01)
+        assert not params.start_called.is_set()
+        marker_arrived_at = time.monotonic()
+        events.append(("output_marker",))
+        await tracker.on_push_frame(
+            SimpleNamespace(
+                frame=marker_frame,
+                source=object.__new__(BaseOutputTransport),
+            )
+        )
+        await asyncio.wait_for(params.start_called.wait(), timeout=0.5)
+        await asyncio.sleep(0)
+        await params.tasks.cancel_all()
+        return marker_arrived_at
 
-    elapsed = asyncio.run(run())
+    marker_arrived_at = asyncio.run(run())
     handoff_index = next(
         index
         for index, event in enumerate(events)
         if event[0] == "push" and isinstance(event[1], TTSSpeakFrame)
     )
+    marker_index = next(
+        index
+        for index, event in enumerate(events)
+        if event[0] == "push" and isinstance(event[1], BOT_MODULE.SpeechMarkerFrame)
+    )
+    output_marker_index = events.index(("output_marker",))
     start_index = next(index for index, event in enumerate(events) if event[0] == "start")
     end_index = next(
         index
@@ -467,23 +598,29 @@ def test_transfer_handoff_speaks_then_starts_transfer_and_ends_worker(tmp_path) 
 
     assert events[0][0:2] == ("result", {"ok": True, "status": "Transferring the caller."})
     assert events[0][2].run_llm is False
+    assert params.transfer_accepted_at_result is True
     assert events[1] == ("prepare",)
     assert events[handoff_index][1].text == "A colleague will speak with you shortly."
-    assert events[handoff_index][2] is FrameDirection.DOWNSTREAM
-    assert handoff_index < events.index(("speech_started",)) < events.index(("speech_stopped",))
-    assert events.index(("speech_stopped",)) < start_index < end_index
+    assert marker_index == handoff_index + 1
+    assert output_marker_index < start_index < end_index
+    assert 0.19 <= events[start_index][1] - marker_arrived_at < 0.4
     assert events[start_index][2:] == ("duty_solicitor", "Caller requests a person.")
     assert events[end_index][2] is FrameDirection.UPSTREAM
     assert call_tools.transfer_start == BOT_MODULE.TransferStart("dialling")
     assert call_tools.transfer_started_at is not None
-    assert elapsed < 0.3
+    assert tracker._markers == {}
 
 
 def test_transfer_without_tracker_still_speaks_handoff(tmp_path) -> None:
     events = []
     handler, params, _ = _transfer_handler(tmp_path, events, None)
 
-    asyncio.run(handler(params))
+    async def run() -> None:
+        await handler(params)
+        await asyncio.wait_for(params.start_called.wait(), timeout=0.5)
+        await params.tasks.cancel_all()
+
+    asyncio.run(run())
     handoff_index = next(
         index
         for index, event in enumerate(events)
@@ -500,92 +637,53 @@ def test_transfer_without_tracker_still_speaks_handoff(tmp_path) -> None:
     assert handoff_index < start_index < end_index
 
 
-def test_transfer_starts_when_handoff_never_starts_speaking(tmp_path) -> None:
+def test_transfer_starts_at_marker_timeout_when_marker_never_arrives(tmp_path) -> None:
     events = []
-    tracker = FastBotSpeechTracker(start_timeout=0.06, max_secs=0.15)
+    tracker = FastBotSpeechTracker(marker_timeout=0.06)
     handler, params, _ = _transfer_handler(tmp_path, events, tracker)
 
     async def run() -> float:
-        started_at = time.monotonic()
         await handler(params)
-        return time.monotonic() - started_at
+        await asyncio.wait_for(params.marker_pushed.wait(), timeout=0.5)
+        marker_pushed_at = time.monotonic()
+        await asyncio.wait_for(params.start_called.wait(), timeout=0.5)
+        elapsed = params.transfer.started_at - marker_pushed_at
+        await params.tasks.cancel_all()
+        return elapsed
 
     elapsed = asyncio.run(run())
 
+    assert 0.05 <= elapsed < 0.5
     assert any(event[0] == "start" for event in events)
-    assert elapsed < 0.2
+    assert tracker._markers == {}
 
 
-def test_transfer_waits_for_prior_speech_then_speaks_handoff(tmp_path) -> None:
+def test_transfer_interruption_releases_marker_without_grace_period(tmp_path) -> None:
     events = []
-    tracker = FastBotSpeechTracker(max_secs=0.3, grace_secs=0.01)
-    asyncio.run(
-        tracker.on_push_frame(SimpleNamespace(frame=LLMTextFrame(text="I am transferring you.")))
-    )
-    asyncio.run(tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame())))
-    events.append(("prior_speech_started",))
+    tracker = FastBotSpeechTracker(marker_timeout=0.5)
     handler, params, _ = _transfer_handler(tmp_path, events, tracker)
 
-    async def feed_speech() -> None:
-        while ("prepare",) not in events:
-            await asyncio.sleep(0.005)
-        await asyncio.sleep(0.02)
-        events.append(("prior_speech_stopped",))
-        await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
-        while not any(
-            event[0] == "push" and isinstance(event[1], TTSSpeakFrame) for event in events
-        ):
-            await asyncio.sleep(0.005)
-        events.append(("handoff_speech_started",))
-        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
-        await asyncio.sleep(0.01)
-        events.append(("handoff_speech_stopped",))
-        await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
-
-    async def run() -> None:
-        feeder = asyncio.create_task(feed_speech())
+    async def run() -> float:
         await handler(params)
-        await feeder
+        await asyncio.wait_for(params.marker_pushed.wait(), timeout=0.5)
+        interrupted_at = time.monotonic()
+        await tracker.on_push_frame(
+            SimpleNamespace(
+                frame=InterruptionFrame(),
+                source=object.__new__(BaseOutputTransport),
+            )
+        )
+        await asyncio.wait_for(params.start_called.wait(), timeout=0.5)
+        elapsed = params.transfer.started_at - interrupted_at
+        await params.tasks.cancel_all()
+        return elapsed
 
-    asyncio.run(run())
-    handoff_index = next(
-        index
-        for index, event in enumerate(events)
-        if event[0] == "push" and isinstance(event[1], TTSSpeakFrame)
-    )
-    start_index = next(index for index, event in enumerate(events) if event[0] == "start")
+    elapsed = asyncio.run(run())
 
-    assert events.index(("prior_speech_stopped",)) < handoff_index
-    assert handoff_index < events.index(("handoff_speech_started",))
-    assert events.index(("handoff_speech_stopped",)) < start_index
-
-
-def test_transfer_starts_at_handoff_utterance_timeout_without_stop(tmp_path) -> None:
-    events = []
-    tracker = FastBotSpeechTracker(start_timeout=0.06, max_secs=0.12)
-    handler, params, _ = _transfer_handler(tmp_path, events, tracker)
-
-    async def feed_started_only() -> None:
-        while not any(
-            event[0] == "push" and isinstance(event[1], TTSSpeakFrame) for event in events
-        ):
-            await asyncio.sleep(0.005)
-        events.append(("handoff_speech_started", time.monotonic()))
-        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
-
-    async def run() -> None:
-        feeder = asyncio.create_task(feed_started_only())
-        await handler(params)
-        await feeder
-
-    asyncio.run(run())
-    started_at = next(event[1] for event in events if event[0] == "handoff_speech_started")
-    start_at = next(event[1] for event in events if event[0] == "start")
-
-    assert 0.1 <= start_at - started_at < 0.3
+    assert elapsed < 0.1
 
 
-def test_bot_speech_tracker_ignores_text_deduplicates_siblings_and_caps_quiet_wait() -> None:
+def test_bot_speech_tracker_deduplicates_siblings_and_filters_marker_sources() -> None:
     async def run() -> None:
         tracker = BOT_MODULE.BotSpeechTracker()
         await tracker.on_push_frame(SimpleNamespace(frame=LLMTextFrame(text="Not speaking yet.")))
@@ -612,10 +710,159 @@ def test_bot_speech_tracker_ignores_text_deduplicates_siblings_and_caps_quiet_wa
         await tracker.on_push_frame(SimpleNamespace(frame=stop_sibling))
         assert tracker.last_stopped_at == stopped_at
 
-        started_at = time.monotonic()
-        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
-        await tracker.wait_until_quiet(quiet_secs=0.5, max_secs=0.08)
-        assert 0.06 <= time.monotonic() - started_at < 0.3
+        marker_id = tracker.new_marker()
+        marker_frame = BOT_MODULE.SpeechMarkerFrame(marker_id=marker_id)
+        assert marker_frame.interruptible is False
+        await tracker.on_push_frame(SimpleNamespace(frame=marker_frame, source=SimpleNamespace()))
+        assert not tracker._markers[marker_id].event.is_set()
+        await tracker.on_push_frame(
+            SimpleNamespace(
+                frame=marker_frame,
+                source=object.__new__(BaseOutputTransport),
+            )
+        )
+        assert await tracker.wait_for_marker(marker_id, timeout=0.01) == "played"
+        assert marker_id not in tracker._markers
+
+        timed_out_marker = tracker.new_marker()
+        assert await tracker.wait_for_marker(timed_out_marker, timeout=0.01) == "timeout"
+        assert timed_out_marker not in tracker._markers
+
+    asyncio.run(run())
+
+
+def test_speech_marker_interruption_is_output_only_and_first_status_wins() -> None:
+    async def run() -> None:
+        tracker = BOT_MODULE.BotSpeechTracker()
+        marker_id = tracker.new_marker()
+        marker = BOT_MODULE.SpeechMarkerFrame(marker_id=marker_id)
+        output_transport = object.__new__(BaseOutputTransport)
+
+        await tracker.on_push_frame(
+            SimpleNamespace(frame=InterruptionFrame(), source=SimpleNamespace())
+        )
+        assert tracker._markers[marker_id].result is None
+        await tracker.on_push_frame(
+            SimpleNamespace(frame=InterruptionFrame(), source=output_transport)
+        )
+        await tracker.on_push_frame(SimpleNamespace(frame=marker, source=output_transport))
+
+        assert await tracker.wait_for_marker(marker_id, timeout=0.1) == "interrupted"
+        assert marker_id not in tracker._markers
+
+    asyncio.run(run())
+
+
+def test_transfer_user_mute_suppresses_interruption_and_new_user_turn_frames(tmp_path) -> None:
+    async def run() -> None:
+        call_tools = CallTools(LocalFilesCallSink(tmp_path, "transfer-user-mute"))
+        call_tools.transfer_accepted = True
+        context = LLMContext()
+        aggregators = LLMContextAggregatorPair(
+            context,
+            user_params=LLMUserAggregatorParams(
+                user_mute_strategies=[BOT_MODULE.TransferUserMuteStrategy(call_tools)]
+            ),
+        )
+        user_aggregator = aggregators.user()
+        down_frames, _ = await run_test(
+            user_aggregator,
+            frames_to_send=[
+                TTSTextFrame(text="The transfer was accepted.", aggregated_by="test"),
+                InputAudioRawFrame(audio=b"\x01" * 160, sample_rate=8000, num_channels=1),
+                InterruptionFrame(),
+                VADUserStartedSpeakingFrame(start_secs=0.2),
+                VADUserStoppedSpeakingFrame(stop_secs=0.2),
+                UserStartedSpeakingFrame(),
+                TranscriptionFrame(
+                    text="Please wait",
+                    user_id="caller",
+                    timestamp="2026-10-17T00:00:00Z",
+                    finalized=True,
+                ),
+                UserStoppedSpeakingFrame(),
+            ],
+        )
+
+        assert user_aggregator._user_is_muted
+        assert any(isinstance(frame, UserMuteStartedFrame) for frame in down_frames)
+        assert context.messages == []
+        assert not any(
+            isinstance(
+                frame,
+                (
+                    InputAudioRawFrame,
+                    InterruptionFrame,
+                    VADUserStartedSpeakingFrame,
+                    VADUserStoppedSpeakingFrame,
+                    UserStartedSpeakingFrame,
+                    UserStoppedSpeakingFrame,
+                    TranscriptionFrame,
+                ),
+            )
+            for frame in down_frames
+        )
+
+    asyncio.run(run())
+
+
+def test_output_transport_writes_audio_before_speech_marker() -> None:
+    async def run() -> None:
+        events = []
+
+        class StubOutputTransport(BaseOutputTransport):
+            def __init__(self) -> None:
+                super().__init__(
+                    TransportParams(
+                        audio_out_enabled=True,
+                        audio_out_sample_rate=8000,
+                        audio_out_10ms_chunks=1,
+                        audio_out_end_silence_secs=0,
+                    )
+                )
+
+            async def start(self, frame) -> None:
+                await self.set_transport_ready(frame)
+
+            async def write_audio_frame(self, frame) -> bool:
+                await asyncio.sleep(0.01)
+                events.append(("audio_written",))
+                return True
+
+            async def write_transport_frame(self, frame) -> None:
+                if isinstance(frame, BOT_MODULE.SpeechMarkerFrame):
+                    events.append(("marker_written",))
+                    assert any(event[0] == "audio_written" for event in events)
+
+        class RecordingTracker(BOT_MODULE.BotSpeechTracker):
+            async def on_push_frame(self, data) -> None:
+                if isinstance(data.frame, BOT_MODULE.SpeechMarkerFrame) and isinstance(
+                    data.source, BaseOutputTransport
+                ):
+                    events.append(("marker_left_output",))
+                await super().on_push_frame(data)
+
+        tracker = RecordingTracker()
+        marker_id = tracker.new_marker()
+        await run_test(
+            StubOutputTransport(),
+            frames_to_send=[
+                OutputAudioRawFrame(
+                    audio=b"\x01" * 640,
+                    sample_rate=8000,
+                    num_channels=1,
+                ),
+                BOT_MODULE.SpeechMarkerFrame(marker_id=marker_id),
+            ],
+            observers=[tracker],
+        )
+        assert await tracker.wait_for_marker(marker_id, timeout=0.1) == "played"
+
+        audio_indices = [index for index, event in enumerate(events) if event[0] == "audio_written"]
+        marker_index = events.index(("marker_written",))
+        marker_left_index = events.index(("marker_left_output",))
+        assert audio_indices
+        assert max(audio_indices) < marker_index < marker_left_index
 
     asyncio.run(run())
 
@@ -710,6 +957,266 @@ def test_empty_live_actions_create_context_without_tools(tmp_path) -> None:
     context = BOT_MODULE.create_llm_context(CallTools(LocalFilesCallSink(tmp_path, "no-tools")))
 
     assert context.tools is NOT_GIVEN
+
+
+@pytest.mark.parametrize(
+    "tool_name",
+    ["check_availability", "book_appointment"],
+)
+def test_booking_holding_line_precedes_result_for_slow_tool(tmp_path, tool_name) -> None:
+    async def run():
+        events = []
+        tracker = FastBotSpeechTracker(marker_timeout=0.5)
+        handler, params, sink, result_calls, message = _booking_handler(
+            tmp_path,
+            events,
+            tracker,
+            tool_name,
+            delay=0.1,
+        )
+        await handler(params)
+        tool_calls = [
+            json.loads(line)
+            for line in (sink.directory / "tool_calls.jsonl").read_text().splitlines()
+        ]
+        tool_finished = next(
+            event[2] for event in events if event[0] == "tool_finished" and event[1] == tool_name
+        )
+        result_index = next(
+            index for index, event in enumerate(events) if event[0] == "result_callback"
+        )
+        result = result_calls[0][0]
+        await params.tasks.cancel_all()
+        return events, tool_calls, result_index, result, tool_finished, result_calls, message
+
+    events, tool_calls, result_index, result, tool_finished, result_calls, message = asyncio.run(
+        run()
+    )
+    frame_index = next(
+        index for index, event in enumerate(events) if isinstance(event[1], TTSSpeakFrame)
+    )
+    marker_index = next(
+        index
+        for index, event in enumerate(events)
+        if isinstance(event[1], BOT_MODULE.SpeechMarkerFrame)
+    )
+
+    assert events[frame_index][1].text == message
+    assert marker_index == frame_index + 1 < result_index
+    assert [entry["name"] for entry in tool_calls] == [tool_name]
+    assert len(result_calls) == 1
+    assert result == {"ok": True}
+    assert 0 <= result_calls[0][1] - tool_finished < 0.05
+
+
+def test_booking_with_bot_already_speaking_returns_before_marker(tmp_path) -> None:
+    async def run():
+        events = []
+        tracker = FastBotSpeechTracker(marker_timeout=0.5)
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+        handler, params, sink, result_calls, message = _booking_handler(
+            tmp_path,
+            events,
+            tracker,
+            "book_appointment",
+        )
+        started_at = time.monotonic()
+        await handler(params)
+        elapsed = time.monotonic() - started_at
+        pending_marker_ids = set(tracker._markers)
+        tool_calls = [
+            json.loads(line)
+            for line in (sink.directory / "tool_calls.jsonl").read_text().splitlines()
+        ]
+        await params.tasks.cancel_all()
+        return events, result_calls, elapsed, pending_marker_ids, tool_calls, message
+
+    events, result_calls, elapsed, pending_marker_ids, tool_calls, message = asyncio.run(run())
+    frame_index = next(
+        index for index, event in enumerate(events) if isinstance(event[1], TTSSpeakFrame)
+    )
+    marker_index = next(
+        index
+        for index, event in enumerate(events)
+        if isinstance(event[1], BOT_MODULE.SpeechMarkerFrame)
+    )
+    result_index = next(
+        index for index, event in enumerate(events) if event[0] == "result_callback"
+    )
+
+    assert elapsed < 0.1
+    assert len(result_calls) == 1
+    assert marker_index == frame_index + 1 < result_index
+    assert events[frame_index][1].text == message
+    assert pending_marker_ids
+    assert [entry["name"] for entry in tool_calls] == ["book_appointment"]
+
+
+def test_booking_does_not_wait_for_speech_that_starts_after_call(tmp_path) -> None:
+    async def run():
+        events = []
+        tracker = FastBotSpeechTracker(marker_timeout=0.5)
+        assert not tracker.speaking
+        handler, params, sink, result_calls, message = _booking_handler(
+            tmp_path,
+            events,
+            tracker,
+            "book_appointment",
+            start_speaking_on_holding=True,
+        )
+        started_at = time.monotonic()
+        await handler(params)
+        elapsed = time.monotonic() - started_at
+        pending_marker_ids = set(tracker._markers)
+        tool_calls = [
+            json.loads(line)
+            for line in (sink.directory / "tool_calls.jsonl").read_text().splitlines()
+        ]
+        await params.tasks.cancel_all()
+        return (
+            events,
+            result_calls,
+            elapsed,
+            tracker.speaking,
+            pending_marker_ids,
+            tool_calls,
+            message,
+        )
+
+    events, result_calls, elapsed, speaking, pending_marker_ids, tool_calls, message = asyncio.run(
+        run()
+    )
+    frame_index = next(
+        index for index, event in enumerate(events) if isinstance(event[1], TTSSpeakFrame)
+    )
+    marker_index = next(
+        index
+        for index, event in enumerate(events)
+        if isinstance(event[1], BOT_MODULE.SpeechMarkerFrame)
+    )
+    result_index = next(
+        index for index, event in enumerate(events) if event[0] == "result_callback"
+    )
+
+    assert elapsed < 0.1
+    assert speaking
+    assert len(result_calls) == 1
+    assert marker_index == frame_index + 1 < result_index
+    assert events[frame_index][1].text == message
+    assert pending_marker_ids
+    assert [entry["name"] for entry in tool_calls] == ["book_appointment"]
+
+
+def test_cancelled_booking_dispatch_records_late_context_result(tmp_path) -> None:
+    async def run():
+        events = []
+        tracker = FastBotSpeechTracker(marker_timeout=0.5)
+        handler, params, sink, result_calls, _message = _booking_handler(
+            tmp_path,
+            events,
+            tracker,
+            "book_appointment",
+            delay=0.1,
+        )
+        context = params.context
+        handler_task = asyncio.create_task(handler(params))
+        while not any(event[0] == "tool_started" for event in events):
+            await asyncio.sleep(0)
+        handler_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await handler_task
+        await asyncio.wait_for(context.message_added.wait(), timeout=1.0)
+        tool_calls = [
+            json.loads(line)
+            for line in (sink.directory / "tool_calls.jsonl").read_text().splitlines()
+        ]
+        await params.tasks.cancel_all()
+        return (
+            events,
+            context.messages,
+            result_calls,
+            tool_calls,
+            params.tool_call_id,
+            params.booking_records,
+        )
+
+    events, messages, result_calls, tool_calls, tool_call_id, booking_records = asyncio.run(run())
+
+    assert not any(event[0] == "tool_cancelled" for event in events)
+    assert sum(event[0] == "tool_started" for event in events) == 1
+    assert sum(event[0] == "tool_finished" for event in events) == 1
+    assert len(tool_calls) == 1
+    assert len(booking_records) == 1
+    assert result_calls == []
+    assert len(messages) == 1
+    assert messages[0]["role"] == "developer"
+    payload = json.loads(messages[0]["content"])
+    assert payload["type"] == "async_tool"
+    assert payload["tool_call_id"] == tool_call_id
+    late_result = json.loads(payload["result"])
+    assert late_result["result"] == {"ok": True}
+    assert late_result["note"] == "Booking dispatch completed after the caller interrupted."
+
+
+def test_second_booking_dispatch_waits_for_cancelled_first_call(tmp_path) -> None:
+    async def run():
+        events = []
+        tracker = FastBotSpeechTracker(marker_timeout=0.5)
+        handler, params, _sink, result_calls, _message = _booking_handler(
+            tmp_path,
+            events,
+            tracker,
+            "book_appointment",
+            delay=0.1,
+        )
+        first_handler = asyncio.create_task(handler(params))
+        while not any(event[0] == "tool_started" for event in events):
+            await asyncio.sleep(0)
+        second_handler = asyncio.create_task(handler(params))
+        await asyncio.sleep(0.01)
+        assert sum(event[0] == "tool_started" for event in events) == 1
+        first_handler.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first_handler
+        await second_handler
+        await asyncio.wait_for(params.context.message_added.wait(), timeout=1.0)
+        starts = [index for index, event in enumerate(events) if event[0] == "tool_started"]
+        finishes = [index for index, event in enumerate(events) if event[0] == "tool_finished"]
+        await params.tasks.cancel_all()
+        return events, starts, finishes, result_calls
+
+    events, starts, finishes, result_calls = asyncio.run(run())
+
+    assert len(starts) == len(finishes) == 2
+    assert starts[0] < finishes[0] < starts[1] < finishes[1]
+    assert len(result_calls) == 1
+    assert not any(event[0] == "tool_cancelled" for event in events)
+
+
+def test_non_booking_tool_does_not_speak_filler(tmp_path) -> None:
+    sink = LocalFilesCallSink(tmp_path, "no-booking-filler")
+    config = CallTools(sink).config.model_copy(update={"live_actions": ["flag_urgent"]})
+    handler = next(
+        schema.handler
+        for schema in BOT_MODULE.create_function_schemas(CallTools(sink, config))
+        if schema.name == "flag_urgent"
+    )
+    frames = []
+
+    class FakeLLM:
+        async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
+            frames.append(frame)
+
+    class FakeParams:
+        arguments = {"reason": "Test"}
+        llm = FakeLLM()
+
+        async def result_callback(self, result, *, properties=None):
+            return None
+
+    asyncio.run(handler(FakeParams()))
+
+    assert not any(isinstance(frame, TTSSpeakFrame) for frame in frames)
 
 
 def test_idle_hangup_prompts_then_ends_after_bot_stops(tmp_path) -> None:

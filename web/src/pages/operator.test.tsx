@@ -176,6 +176,119 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", putListener);
   }, 15000);
 
+  it("configures an appointment type and saves booking settings", async () => {
+    const user = userEvent.setup();
+    let savedConfig: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { savedConfig = (body as { config: Record<string, unknown> }).config; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    const duration = screen.getByLabelText("Duration (minutes)");
+    await user.clear(duration);
+    await user.type(duration, "45");
+    const checkMessage = screen.getByLabelText("Availability holding message");
+    await user.clear(checkMessage);
+    await user.type(checkMessage, "Checking the diary now.");
+    const bookMessage = screen.getByLabelText("Booking holding message");
+    await user.clear(bookMessage);
+    await user.type(bookMessage, "Booking that now.");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(savedConfig).toBeDefined());
+
+    expect(savedConfig?.booking).toMatchObject({
+      calendar_id: "primary",
+      check_message: "Checking the diary now.",
+      book_message: "Booking that now.",
+      appointment_types: [{ key: "consultation", duration_minutes: 45 }],
+    });
+    server.events.removeListener("request:start", listener);
+  }, 15000);
+
+  it("requests Calendar OAuth scopes and warns when the calendar is disconnected", async () => {
+    const user = userEvent.setup();
+    let oauthFeatures: string[] | undefined;
+    server.use(
+      http.get("*/api/channels/gmail/mode", () => HttpResponse.json({ mode: "google" })),
+      http.get("*/api/calendar/mode", () => HttpResponse.json({ mode: "google" })),
+      http.post<{ id: string }, Schemas["GmailOAuthStartRequest"], Schemas["HTTPValidationError"]>(
+        "*/api/assistants/:id/channels/gmail/oauth-start",
+        async ({ request }) => {
+          oauthFeatures = (await request.json() as Schemas["GmailOAuthStartRequest"]).features;
+          return HttpResponse.json<Schemas["HTTPValidationError"]>({
+            detail: [{ loc: ["body"], msg: "OAuth unavailable", type: "value_error" }],
+          }, { status: 503 });
+        },
+      ),
+    );
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/calendar is disconnected/i);
+    await user.click(screen.getByRole("button", { name: "Connect Google Calendar" }));
+    await waitFor(() => expect(oauthFeatures).toEqual(["calendar"]));
+  });
+
+  it("hides Google Calendar connect once the assistant already has calendar access", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/api/channels/gmail/mode", () => HttpResponse.json({ mode: "google" })),
+      http.get("*/api/calendar/mode", () => HttpResponse.json({ mode: "google" })),
+      http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>(
+        "*/api/assistants/:id/channels",
+        () => HttpResponse.json({
+          items: [{
+            id: "gmail-calendar-connection",
+            assistant_id: assistantId,
+            kind: "gmail",
+            external_id: "calendar@example.test",
+            status: "active",
+            settings: {},
+            created_at: "2026-06-01T00:00:00Z",
+            google_features: ["calendar"],
+          }],
+        }),
+      ),
+    );
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    expect(await screen.findByText("Google Calendar is connected for this assistant.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect Google Calendar" })).not.toBeInTheDocument();
+  });
+
+  it("shows fake Calendar connection status from channel features without an OAuth button", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/api/channels/gmail/mode", () => HttpResponse.json({ mode: "fake" })),
+      http.get("*/api/calendar/mode", () => HttpResponse.json({ mode: "fake" })),
+      http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>(
+        "*/api/assistants/:id/channels",
+        () => HttpResponse.json({
+          items: [{
+            id: "fake-calendar-connection",
+            assistant_id: assistantId,
+            kind: "gmail",
+            external_id: "calendar@example.test",
+            status: "active",
+            settings: {},
+            created_at: "2026-06-01T00:00:00Z",
+            google_features: ["calendar"],
+          }],
+        }),
+      ),
+    );
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("checkbox", { name: /enable booking configuration/i }));
+    expect(await screen.findByText(/Google Calendar is connected for this assistant/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect Google Calendar" })).not.toBeInTheDocument();
+  });
+
   it("tests an after-conversation action and shows the rendered result", async () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
@@ -328,6 +441,34 @@ describe("operator workflows", () => {
     const triage = screen.getByRole("heading", { name: "Email triage" }).parentElement;
     expect(triage).toHaveTextContent("needs_human");
     expect(triage).toHaveTextContent("A person should review this enquiry.");
+  });
+
+  it("shows booking details from conversation metrics", async () => {
+    const conversation = structuredClone(mockDb.tenants[0].conversations[0]);
+    conversation.metrics = {
+      ...conversation.metrics,
+      booking: {
+        appointment_type: "consultation",
+        label: "Consultation",
+        text: "Tuesday 2 June at 10:00",
+        status: "booked",
+        start: "2026-06-02T09:00:00.000Z",
+        timezone: "Europe/London",
+        attendee_name: "Alex Example",
+        attendee_email: "alex@example.test",
+        event_link: "https://calendar.example/event",
+      },
+    };
+    server.use(http.get<{ id: string }, never, Schemas["ConversationDetailResponse"]>(
+      "*/api/conversations/:id",
+      () => HttpResponse.json<Schemas["ConversationDetailResponse"]>(conversation),
+    ));
+    renderApp(`/conversations/${conversationId}`, { loggedIn: true });
+    expect(await screen.findByRole("heading", { name: "Appointment booking" })).toBeInTheDocument();
+    expect(screen.getByText("Tuesday 2 June at 10:00")).toBeInTheDocument();
+    expect(screen.getByText(/2 June 2026 at 10:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Alex Example · alex@example.test/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Calendar event" })).toHaveAttribute("href", "https://calendar.example/event");
   });
 
   it("sends task filters to the server", async () => {

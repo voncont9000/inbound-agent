@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from inbound_core.booking import AvailabilityRequest, AvailabilityResponse
 from inbound_core.call_report import CallStart, RouteResponse
 from loguru import logger
 
@@ -26,6 +28,7 @@ class PreparedCall:
     api: VoiceApiClient | None
     call_start: CallStart | None
     route: RouteResponse | None
+    availability_task: asyncio.Task[AvailabilityResponse] | None = None
 
 
 async def prepare_call(
@@ -59,10 +62,17 @@ async def prepare_call(
             started_at=datetime.now(UTC),
             web_call_token=web_call_token,
         )
+        availability_task = asyncio.create_task(
+            api.availability(AvailabilityRequest(channel="web", web_call_token=web_call_token))
+        )
         try:
             route = await api.route_web_call(web_call_token)
         except Exception as error:
+            availability_task.cancel()
             raise RuntimeError("Could not route tokenized web call.") from error
+        if not route.booking_available:
+            availability_task.cancel()
+            availability_task = None
         assistant = route.config
         if route.digest is not None:
             assistant = assistant.model_copy(
@@ -78,6 +88,7 @@ async def prepare_call(
             api=api,
             call_start=call_start,
             route=route,
+            availability_task=availability_task,
         )
     if settings is None or (channel == "web" and not destination):
         if settings is not None and channel == "web" and not destination:
@@ -101,6 +112,9 @@ async def prepare_call(
         channel=channel,
         started_at=datetime.now(UTC),
     )
+    availability_task = asyncio.create_task(
+        api.availability(AvailabilityRequest(channel="phone", to_number=destination))
+    )
     try:
         route = await api.route(destination or "", from_number)
         assistant = route.config
@@ -112,14 +126,19 @@ async def prepare_call(
                     )
                 }
             )
+        if not route.booking_available:
+            availability_task.cancel()
+            availability_task = None
         return PreparedCall(
             assistant=assistant,
             context_card=route.context_card,
             api=api,
             call_start=call_start,
             route=route,
+            availability_task=availability_task,
         )
     except Exception as error:
+        availability_task.cancel()
         logger.warning(
             "Voice API route lookup failed; using local assistant configuration: {}", error
         )

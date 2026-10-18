@@ -85,6 +85,15 @@ spoken first. Client disconnects cancel the pipeline task. The `end_call` tool r
 result before sending `EndWorkerFrame` upstream, allowing the spoken goodbye to finish before
 the pipeline ends.
 
+When booking is enabled for a routed phone or tokenized web call, Calendar availability is
+prefetched while route lookup completes. The booking tools are exposed only when the assistant
+has booking configuration, the route reports Calendar availability, and the relevant live
+action is enabled. Voice booking uses cached prefetched results when possible and records
+tool round-trip timings in call metrics. For availability checks and bookings, the system starts
+the tool and speaks the configured holding message concurrently; the model calls immediately
+without announcing the action. This avoids the dead air or missed tool call that can occur when
+the speech model is asked to announce and call in one turn. Holding messages are voice-only.
+
 ## Turn-taking and safeguards
 
 Silero VAD detects speech activity and Pipecat's local Smart Turn v3 analyzer predicts
@@ -504,15 +513,23 @@ channels do not expose it.
 
 On a successful tool call, the system speaks `transfer_handoff_message` (default:
 “I'm putting you through now, please hold.”); the model is instructed to call
-`transfer_call` without announcing the transfer. If the bot is already speaking, the
-handler waits until it has been quiet for 0.3 seconds, capped at 6 seconds, before pushing
-the handoff message. It then observes `BotStartedSpeakingFrame` and
-`BotStoppedSpeakingFrame` for the handoff: it waits up to 2 seconds for speech to start,
-then up to 4 seconds for it to stop, with a 0.2-second quiet grace period. If speech does
-not start or stop in time, transfer still proceeds and the result is logged.
+`transfer_call` without announcing the transfer. Acceptance is recorded before the result
+callback. A call-scoped task then prepares the transfer, pushes the handoff line and marker,
+waits for playback, starts the redirect, and sends `EndWorkerFrame`. Pipecat may cancel the
+function handler on caller interruption, but cannot cancel this accepted-transfer sequence.
+The caller is muted by the user aggregator from the next input frame after acceptance and remains
+muted through pipeline end; this suppresses input audio, VAD/user-speaking frames, transcriptions,
+and interruption frames, preventing another user turn from reaching the LLM.
 
-After that bounded wait, the handler starts the Twilio call redirect before sending
-`EndWorkerFrame`. This ordering is required because Pipecat's FastAPI websocket transport
+The marker reaches the tracker from the output transport only after earlier queued audio has been
+written, so model speech already in flight and the handoff line remain in output order. Its status
+is `played`, `interrupted`, or `timeout`: an output-transport interruption resolves pending markers
+as interrupted, and a later marker cannot change that result. Transfer waits at most 10 seconds;
+it allows a 0.2-second grace period only when the line played. Interrupted and timed-out lines
+start the redirect immediately. The pipeline-end `complete_transfer` path remains a fallback.
+
+The handler starts the Twilio call redirect before sending `EndWorkerFrame`. This ordering
+is required because Pipecat's FastAPI websocket transport
 closes the websocket when the pipeline ends on `EndFrame`; closing the `<Connect><Stream>`
 before the REST redirect would make Twilio hang up the call. The call-finalization path
 reuses the start result and waits for its outcome callback.

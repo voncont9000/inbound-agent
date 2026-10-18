@@ -69,6 +69,15 @@ latency.
 Replies outside Meta's 24-hour customer-service window are not sent; the inbox receives a
 `whatsapp_template_needed` task instead. Approved template sends are not implemented yet.
 
+When Calendar booking is configured and the assistant has both booking live actions enabled,
+WhatsApp replies can check availability and book a confirmed slot. Tool calls are limited to
+three Gemini rounds. Offered slot IDs are stored in assistant-message tool-call metadata and
+restored into later message-reply jobs, so a customer can choose and book a slot in a separate
+message. Only returned slot IDs may be booked, and booking/tool timing details are stored with
+conversation metrics. WhatsApp has no spoken holding message. Without a connected Calendar
+context, the existing plain-text reply path is unchanged. Gmail drafts never receive booking
+tools.
+
 ## Gmail (draft only)
 
 Gmail uses Gmail History API plus Pub/Sub push notifications and periodic reconciliation.

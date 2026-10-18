@@ -574,6 +574,7 @@ async def ingest_conversation(session: AsyncSession, conversation_id: UUID) -> N
                             tenant_id=tenant_id,
                             person_id=person.id,
                             what=what,
+                            kind="callback",
                             due_at=task.due_at,
                             status=CommitmentStatus.OPEN,
                             source_message_id=source_message.id,

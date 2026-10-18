@@ -86,9 +86,62 @@
         "title": "ActionRunSummary",
         "type": "object"
       },
+      "AppointmentType": {
+        "additionalProperties": false,
+        "properties": {
+          "duration_minutes": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 480.0,
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "key": {
+            "pattern": "^[a-z0-9_]+$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "location_or_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Or Link"
+          },
+          "when_to_use": {
+            "title": "When To Use",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "duration_minutes",
+          "when_to_use"
+        ],
+        "title": "AppointmentType",
+        "type": "object"
+      },
       "AssistantConfig-Input": {
         "additionalProperties": false,
         "properties": {
+          "booking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookingConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "business_name": {
             "title": "Business Name",
             "type": "string"
@@ -128,6 +181,8 @@
                 "request_callback",
                 "log_complaint",
                 "end_call",
+                "check_availability",
+                "book_appointment",
                 "transfer_call"
               ],
               "type": "string"
@@ -261,6 +316,16 @@
       "AssistantConfig-Output": {
         "additionalProperties": false,
         "properties": {
+          "booking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookingConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "business_name": {
             "title": "Business Name",
             "type": "string"
@@ -300,6 +365,8 @@
                 "request_callback",
                 "log_complaint",
                 "end_call",
+                "check_availability",
+                "book_appointment",
                 "transfer_call"
               ],
               "type": "string"
@@ -634,6 +701,421 @@
           "access_token"
         ],
         "title": "AuthResponse",
+        "type": "object"
+      },
+      "AvailabilityRequest": {
+        "properties": {
+          "channel": {
+            "enum": [
+              "phone",
+              "web"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "to_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Number"
+          },
+          "web_call_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Call Token"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "AvailabilityRequest",
+        "type": "object"
+      },
+      "AvailabilityResponse": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "busy": {
+            "items": {
+              "$ref": "#/components/schemas/BusyBlock"
+            },
+            "title": "Busy",
+            "type": "array"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "provider_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Ms"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          },
+          "window_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window End"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "AvailabilityResponse",
+        "type": "object"
+      },
+      "BookRequest": {
+        "properties": {
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "external_call_id": {
+            "title": "External Call Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "external_call_id",
+          "slot_id",
+          "name"
+        ],
+        "title": "BookRequest",
+        "type": "object"
+      },
+      "BookResponse": {
+        "properties": {
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/SlotOffer"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "booking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookingRecord"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "booked",
+              "unavailable",
+              "invalid",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "BookResponse",
+        "type": "object"
+      },
+      "BookingConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "appointment_types": {
+            "items": {
+              "$ref": "#/components/schemas/AppointmentType"
+            },
+            "minItems": 1,
+            "title": "Appointment Types",
+            "type": "array"
+          },
+          "book_message": {
+            "default": "One moment while I book that.",
+            "title": "Book Message",
+            "type": "string"
+          },
+          "buffer_minutes": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Buffer Minutes",
+            "type": "integer"
+          },
+          "calendar_id": {
+            "default": "primary",
+            "title": "Calendar Id",
+            "type": "string"
+          },
+          "check_message": {
+            "default": "Let me check the diary.",
+            "title": "Check Message",
+            "type": "string"
+          },
+          "horizon_days": {
+            "default": 14,
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Horizon Days",
+            "type": "integer"
+          },
+          "max_slots_offered": {
+            "default": 3,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Max Slots Offered",
+            "type": "integer"
+          },
+          "min_notice_hours": {
+            "default": 2,
+            "minimum": 0.0,
+            "title": "Min Notice Hours",
+            "type": "integer"
+          },
+          "send_updates": {
+            "default": "all",
+            "enum": [
+              "all",
+              "externalOnly",
+              "none"
+            ],
+            "title": "Send Updates",
+            "type": "string"
+          },
+          "slot_step_minutes": {
+            "default": 30,
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Slot Step Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "appointment_types"
+        ],
+        "title": "BookingConfig",
+        "type": "object"
+      },
+      "BookingRecord": {
+        "properties": {
+          "appointment_type": {
+            "title": "Appointment Type",
+            "type": "string"
+          },
+          "attendee_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendee Email"
+          },
+          "attendee_name": {
+            "title": "Attendee Name",
+            "type": "string"
+          },
+          "booking_id": {
+            "title": "Booking Id",
+            "type": "string"
+          },
+          "calendar_id": {
+            "title": "Calendar Id",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Link"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "speech": {
+            "title": "Speech",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "booking_id",
+          "appointment_type",
+          "label",
+          "start",
+          "end",
+          "timezone",
+          "speech",
+          "text",
+          "event_id",
+          "calendar_id",
+          "attendee_name",
+          "provider"
+        ],
+        "title": "BookingRecord",
+        "type": "object"
+      },
+      "BusyBlock": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "BusyBlock",
         "type": "object"
       },
       "CallReportAccepted": {
@@ -2867,6 +3349,11 @@
             "title": "Assistant Id",
             "type": "string"
           },
+          "booking_available": {
+            "default": false,
+            "title": "Booking Available",
+            "type": "boolean"
+          },
           "config": {
             "$ref": "#/components/schemas/AssistantConfig-Output"
           },
@@ -3027,6 +3514,51 @@
           "tenant_name"
         ],
         "title": "SignupRequest",
+        "type": "object"
+      },
+      "SlotOffer": {
+        "properties": {
+          "appointment_type": {
+            "title": "Appointment Type",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "string"
+          },
+          "speech": {
+            "title": "Speech",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot_id",
+          "start",
+          "end",
+          "appointment_type",
+          "label",
+          "speech",
+          "text"
+        ],
+        "title": "SlotOffer",
         "type": "object"
       },
       "TaskListResponse": {
@@ -4801,6 +5333,64 @@
         ]
       }
     },
+    "/calendar/mode": {
+      "get": {
+        "operationId": "calendar_mode_calendar_mode_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "enum": [
+                      "off",
+                      "fake",
+                      "google"
+                    ],
+                    "type": "string"
+                  },
+                  "title": "Response Calendar Mode Calendar Mode Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Calendar Mode",
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
     "/channels/gmail/mode": {
       "get": {
         "operationId": "gmail_mode_channels_gmail_mode_get",
@@ -5468,6 +6058,110 @@
         "summary": "Create Review",
         "tags": [
           "conversations"
+        ]
+      }
+    },
+    "/internal/voice/availability": {
+      "post": {
+        "operationId": "availability_internal_voice_availability_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Service-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Service-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Availability",
+        "tags": [
+          "internal voice"
+        ]
+      }
+    },
+    "/internal/voice/book": {
+      "post": {
+        "operationId": "book_internal_voice_book_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Service-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Service-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Book",
+        "tags": [
+          "internal voice"
         ]
       }
     },

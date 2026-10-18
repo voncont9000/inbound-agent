@@ -12,6 +12,26 @@ import { diffConfigs } from "../lib/diff";
 import { Badge, EmptyState, ErrorState, ErrorSummary, FieldError, LoadingState } from "../components/States";
 
 type FieldSpec = Schemas["FieldSpec"];
+type BookingConfig = NonNullable<AssistantConfig["booking"]>;
+
+const DEFAULT_BOOKING_CONFIG: BookingConfig = {
+  calendar_id: "primary",
+  check_message: "Let me check the diary.",
+  book_message: "One moment while I book that.",
+  appointment_types: [{
+    key: "consultation",
+    label: "Consultation",
+    duration_minutes: 30,
+    when_to_use: "For callers requesting an initial consultation",
+    location_or_link: null,
+  }],
+  min_notice_hours: 2,
+  horizon_days: 14,
+  buffer_minutes: 0,
+  max_slots_offered: 3,
+  slot_step_minutes: 30,
+  send_updates: "all",
+};
 
 function Field({ path, label, error, help, children }: { path: string; label: string; error?: string; help?: string; children: (id: string, describedBy?: string) => ReactNode }) {
   const id = `field-${path}`;
@@ -119,7 +139,7 @@ export function AssistantSettingsPage() {
   }, [assistantQuery.data]);
 
   const readbackOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "readback", "enum"], ["off", "email", "critical"]), [schemaQuery.data]);
-  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "end_call", "transfer_call"]), [schemaQuery.data]);
+  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "check_availability", "book_appointment", "end_call", "transfer_call"]), [schemaQuery.data]);
   const typeOptions = useMemo(() => enumAt(schemaQuery.data, ["$defs", "FieldSpec", "properties", "type", "enum"], ["string", "email", "phone", "date", "boolean", "integer", "number", "enum", "list"]), [schemaQuery.data]);
   const thresholdRange = useMemo(() => rangeAt(schemaQuery.data), [schemaQuery.data]);
   const serverErrors = errors;
@@ -171,6 +191,7 @@ export function AssistantSettingsPage() {
     "aria-describedby": allErrors[path] ? `field-${path}-error` : undefined,
   });
   const serviceKeys = Object.keys(config.services);
+  const bookingConfig = config.booking;
 
   function saveConfig(event: FormEvent) {
     event.preventDefault();
@@ -190,7 +211,7 @@ export function AssistantSettingsPage() {
   const summaryErrors = Object.fromEntries(Object.entries(allErrors).filter(([path]) => path !== "_form"));
   return <main className="page" id="main-content">
     <p className="eyebrow">Assistant settings</p><h1>{baseline.name}</h1>
-    <ChannelConnections assistantId={id} />
+    <ChannelConnections assistantId={id} bookingEnabled={Boolean(config.booking)} />
     <TestCallButton assistantId={baseline.id} />
     <p className="muted">{isDirty ? "Unsaved changes" : `Version ${baseline.version} is up to date`}</p>
     <form className="stack" onSubmit={saveConfig} noValidate>
@@ -340,6 +361,45 @@ export function AssistantSettingsPage() {
           <Field path="office_hours.timezone" label="Timezone">{(fieldId) => <input id={fieldId} value={config.office_hours.timezone} onChange={(event) => update((draft) => { draft.office_hours.timezone = event.target.value; })} />}</Field>
         </div>
       </section>
+      <section className="panel stack"><h2>Calendar booking</h2>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={Boolean(bookingConfig)}
+            onChange={(event) => update((draft) => {
+              draft.booking = event.target.checked ? structuredClone(DEFAULT_BOOKING_CONFIG) : null;
+            })}
+          />
+          <span><strong>Enable booking configuration</strong> — bookings remain unavailable until Calendar is connected and both booking live actions are enabled.</span>
+        </label>
+        {bookingConfig && <>
+          <div className="form-grid">
+            <Field path="booking.calendar_id" label="Calendar ID" help="Use primary for the connected Google account's primary calendar.">{(fieldId) => <input id={fieldId} value={bookingConfig.calendar_id} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.calendar_id = event.target.value; })} />}</Field>
+            <Field path="booking.check_message" label="Availability holding message">{(fieldId) => <input id={fieldId} value={bookingConfig.check_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.check_message = event.target.value; })} />}</Field>
+            <Field path="booking.book_message" label="Booking holding message">{(fieldId) => <input id={fieldId} value={bookingConfig.book_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.book_message = event.target.value; })} />}</Field>
+            <Field path="booking.min_notice_hours" label="Minimum notice (hours)">{(fieldId) => <input id={fieldId} type="number" min="0" value={bookingConfig.min_notice_hours} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.min_notice_hours = Number(event.target.value); })} />}</Field>
+            <Field path="booking.horizon_days" label="Booking horizon (days)">{(fieldId) => <input id={fieldId} type="number" min="1" max="60" value={bookingConfig.horizon_days} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.horizon_days = Number(event.target.value); })} />}</Field>
+            <Field path="booking.buffer_minutes" label="Buffer between appointments (minutes)">{(fieldId) => <input id={fieldId} type="number" min="0" value={bookingConfig.buffer_minutes} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.buffer_minutes = Number(event.target.value); })} />}</Field>
+            <Field path="booking.slot_step_minutes" label="Slot step (minutes)">{(fieldId) => <input id={fieldId} type="number" min="5" max="240" value={bookingConfig.slot_step_minutes} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.slot_step_minutes = Number(event.target.value); })} />}</Field>
+            <Field path="booking.max_slots_offered" label="Maximum slots offered">{(fieldId) => <input id={fieldId} type="number" min="1" max="5" value={bookingConfig.max_slots_offered} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.max_slots_offered = Number(event.target.value); })} />}</Field>
+            <Field path="booking.send_updates" label="Calendar attendee updates">{(fieldId) => <select id={fieldId} value={bookingConfig.send_updates} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.send_updates = event.target.value as BookingConfig["send_updates"]; })}>
+              <option value="all">All attendees</option><option value="externalOnly">External attendees</option><option value="none">No updates</option>
+            </select>}</Field>
+          </div>
+          <h3>Appointment types</h3>
+          {bookingConfig.appointment_types.map((appointment, index) => <div className="inline-editor stack" key={`${appointment.key}-${index}`}>
+            <div className="form-grid">
+              <Field path={`booking.appointment_types.${index}.key`} label="Key" error={allErrors[`booking.appointment_types.${index}.key`]}>{(fieldId) => <input id={fieldId} value={appointment.key} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].key = event.target.value; })} />}</Field>
+              <Field path={`booking.appointment_types.${index}.label`} label="Appointment label">{(fieldId) => <input id={fieldId} value={appointment.label} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].label = event.target.value; })} />}</Field>
+              <Field path={`booking.appointment_types.${index}.duration_minutes`} label="Duration (minutes)">{(fieldId) => <input id={fieldId} type="number" min="1" max="480" value={appointment.duration_minutes} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].duration_minutes = Number(event.target.value); })} />}</Field>
+              <Field path={`booking.appointment_types.${index}.location_or_link`} label="Location or meeting link">{(fieldId) => <input id={fieldId} value={appointment.location_or_link ?? ""} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].location_or_link = event.target.value || null; })} />}</Field>
+              <Field path={`booking.appointment_types.${index}.when_to_use`} label="When to use this appointment type">{(fieldId) => <textarea id={fieldId} value={appointment.when_to_use} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].when_to_use = event.target.value; })} />}</Field>
+            </div>
+            <button type="button" onClick={() => update((draft) => { if (draft.booking) draft.booking.appointment_types.splice(index, 1); })}>Remove appointment type</button>
+          </div>)}
+          <button type="button" onClick={() => update((draft) => { if (draft.booking) draft.booking.appointment_types.push({ key: "appointment", label: "Appointment", duration_minutes: 30, when_to_use: "", location_or_link: null }); })}>Add appointment type</button>
+        </>}
+      </section>
       <section className="panel stack"><h2>Price list</h2>
         {config.price_list.map((item, index) => <div className="inline-editor" key={`price-${index}`}>
           <div className="form-grid">{(["service", "price", "notes"] as const).map((key) => <Field key={key} path={`price_list.${index}.${key}`} label={key.replaceAll("_", " ")}>{(fieldId) => key === "notes" ? <textarea id={fieldId} value={item[key]} onChange={(event) => update((draft) => { draft.price_list[index][key] = event.target.value; })} /> : <input id={fieldId} value={item[key]} onChange={(event) => update((draft) => { draft.price_list[index][key] = event.target.value; })} />}</Field>)}</div>
@@ -406,6 +466,8 @@ const liveActionHelp: Record<string, string> = {
   request_callback: "Create a callback request.",
   log_complaint: "Record a complaint for the team.",
   end_call: "End the interaction after a clear closing.",
+  check_availability: "Find real Calendar openings; requires booking configuration and Calendar access.",
+  book_appointment: "Create a confirmed Calendar event after the caller chooses and confirms a slot.",
   transfer_call: "Transfer the caller to a configured person; needs at least one transfer target.",
 };
 
@@ -413,7 +475,7 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-export function ChannelConnections({ assistantId }: { assistantId: string }) {
+export function ChannelConnections({ assistantId, bookingEnabled = false }: { assistantId: string; bookingEnabled?: boolean }) {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<Schemas["ChannelConnectionCreate"]["kind"]>("phone");
   const [externalId, setExternalId] = useState("");
@@ -422,6 +484,10 @@ export function ChannelConnections({ assistantId }: { assistantId: string }) {
     queryKey: ["gmail-mode"],
     queryFn: () => unwrap(api.GET("/channels/gmail/mode")),
   });
+  const calendarMode = useQuery({
+    queryKey: ["calendar-mode"],
+    queryFn: () => unwrap(api.GET("/calendar/mode")),
+  });
   const startGmailOAuth = useMutation({
     mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/channels/gmail/oauth-start", {
       params: { path: { assistant_id: assistantId } },
@@ -429,10 +495,21 @@ export function ChannelConnections({ assistantId }: { assistantId: string }) {
     onSuccess: ({ url }) => window.location.assign(url),
     onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to connect Gmail."),
   });
+  const startCalendarOAuth = useMutation({
+    mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/channels/gmail/oauth-start", {
+      params: { path: { assistant_id: assistantId } },
+      body: { features: ["calendar"] },
+    })),
+    onSuccess: ({ url }) => window.location.assign(url),
+    onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to connect Calendar."),
+  });
   const channels = useQuery({
     queryKey: ["assistant-channels", assistantId],
     queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/channels", { params: { path: { assistant_id: assistantId } } })),
   });
+  const calendarConnected = channels.data?.items.some((channel) => (
+    channel.kind === "gmail" && channel.google_features.includes("calendar")
+  )) ?? false;
   const add = useMutation({
     mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/channels", {
       params: { path: { assistant_id: assistantId } },
@@ -458,6 +535,23 @@ export function ChannelConnections({ assistantId }: { assistantId: string }) {
       </button>
     </div>}
     {gmailMode.data?.mode === "off" && <p className="help">Gmail is not enabled for this deployment.</p>}
+    {bookingEnabled && calendarMode.data?.mode === "off" && <p className="help">Calendar booking is not enabled for this deployment. Ask your administrator to enable Calendar integration.</p>}
+    {bookingEnabled && calendarMode.data?.mode === "fake" && <p className="help">
+      The fake Calendar provider is enabled for this deployment. {calendarConnected
+        ? "Google Calendar is connected for this assistant."
+        : "Google Calendar is not connected for this assistant."}
+    </p>}
+    {bookingEnabled && calendarMode.data?.mode === "google" && <>
+      {gmailMode.data?.mode !== "google" && <p className="help" role="alert">Google Calendar requires Gmail Google mode to be enabled for this deployment.</p>}
+      {gmailMode.data?.mode === "google" && <>
+        {calendarConnected
+          ? <p className="help">Google Calendar is connected for this assistant.</p>
+          : <p className="help" role="alert">Calendar is disconnected. Connect Google Calendar to enable live booking.</p>}
+        {!calendarConnected && <button className="button-primary" type="button" disabled={startCalendarOAuth.isPending} onClick={() => startCalendarOAuth.mutate()}>
+          {startCalendarOAuth.isPending ? "Connecting…" : "Connect Google Calendar"}
+        </button>}
+      </>}
+    </>}
     {gmailMode.data?.mode !== "off" && (gmailMode.data?.mode !== "google" || kind !== "gmail") && <form className="form-grid" onSubmit={(event) => {
       event.preventDefault();
       setError("");

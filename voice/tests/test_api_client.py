@@ -10,6 +10,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from inbound_core.booking import AvailabilityRequest, BookRequest
 from inbound_core.call_report import CallReport, CallStart, RouteResponse
 
 from eval.fake_api import build_parser as build_fake_api_parser
@@ -20,6 +21,7 @@ from inbound_voice.config import load_assistant_config
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "eval-call"
 ASSISTANT_PATH = Path(__file__).parents[1] / "config" / "assistants" / "demo_firm.yaml"
+BOOKING_ASSISTANT_PATH = Path(__file__).parents[1] / "config" / "assistants" / "booking_firm.yaml"
 
 
 def _route_response() -> RouteResponse:
@@ -121,6 +123,67 @@ async def test_fake_api_rejects_missing_and_invalid_service_tokens() -> None:
 
 def test_fake_api_host_defaults_to_loopback() -> None:
     assert build_fake_api_parser().parse_args([]).host == "127.0.0.1"
+    assert build_fake_api_parser().parse_args([]).calendar_delay_ms == 300
+
+
+@pytest.mark.asyncio
+async def test_fake_api_booking_endpoints_and_assistant_fixture(tmp_path: Path) -> None:
+    assistant = load_assistant_config(BOOKING_ASSISTANT_PATH)
+    route = _route_response().model_copy(update={"config": assistant})
+    app = create_fake_api(
+        route,
+        "test-service-token",
+        to_number="+441234567890",
+        calendar_delay_ms=0,
+    )
+    client = _client(app, tmp_path, sleep=_async_noop)
+    availability = await client.availability(
+        AvailabilityRequest(channel="phone", to_number="+441234567890")
+    )
+
+    assert availability.available
+    assert availability.timezone == "Europe/London"
+    assert app.state.fake["route_response"].booking_available
+
+    from datetime import datetime
+
+    from inbound_core.booking import generate_slots
+
+    slots = generate_slots(assistant, "initial_consultation", availability.busy, datetime.now(UTC))
+    assert slots
+    conversation_id = UUID("30000000-0000-0000-0000-000000000003")
+    request = BookRequest(
+        conversation_id=conversation_id,
+        external_call_id="CA-booking",
+        slot_id=slots[0].slot_id,
+        name="Alex Morgan",
+    )
+    result = await client.book(request)
+    retry = await client.book(request)
+    async with httpx.AsyncClient(
+        base_url="http://fake",
+        transport=httpx.ASGITransport(app=app),
+        headers={"X-Service-Token": "test-service-token"},
+    ) as state_client:
+        state = await state_client.get("/_fake/state")
+
+    assert result.status == retry.status == "booked"
+    assert result.booking is not None
+    assert state.json()["bookings"][0]["appointment_type"] == "initial_consultation"
+    assert len(state.json()["bookings"]) == 1
+
+
+def test_fake_api_can_switch_assistant_fixture() -> None:
+    app = create_fake_api(_route_response(), "test-service-token")
+    with TestClient(app) as client:
+        response = client.post(
+            "/_fake/assistant",
+            headers={"X-Service-Token": "test-service-token"},
+            json={"assistant": "config/assistants/booking_firm.yaml"},
+        )
+
+    assert response.status_code == 200
+    assert app.state.fake["route_response"].booking_available
 
 
 @pytest.mark.asyncio

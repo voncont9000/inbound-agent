@@ -6,6 +6,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import httpx
@@ -23,6 +24,7 @@ from inbound_api.models import (
     Job,
     KnowledgeDigest,
     Message,
+    MessageRole,
     Task,
     TaskStatus,
 )
@@ -1289,8 +1291,366 @@ def test_production_requires_graph_whatsapp_credentials():
         whatsapp_verify_token="verify-token",
         whatsapp_access_token="access-token",
         gmail_mode="off",
+        calendar_mode="off",
         email_sender="off",
         sheets_writer="off",
         webhook_sender="off",
     )
     assert configured.whatsapp_mode == "graph"
+
+
+def _whatsapp_booking_config() -> dict:
+    return {
+        **_assistant_config(),
+        "live_actions": ["check_availability", "book_appointment"],
+        "booking": {
+            "calendar_id": "primary",
+            "appointment_types": [
+                {
+                    "key": "consultation",
+                    "label": "Consultation",
+                    "duration_minutes": 30,
+                    "when_to_use": "Initial appointment",
+                    "location_or_link": "Online",
+                }
+            ],
+            "min_notice_hours": 0,
+            "horizon_days": 14,
+            "buffer_minutes": 0,
+            "max_slots_offered": 3,
+            "slot_step_minutes": 30,
+        },
+    }
+
+
+def _tool_response(name: str, args: dict):
+    return SimpleNamespace(
+        text=None,
+        function_calls=[SimpleNamespace(name=name, args=args)],
+        candidates=[SimpleNamespace(content=f"function-call:{name}")],
+        usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=1),
+    )
+
+
+def _text_response(text: str):
+    return SimpleNamespace(
+        text=text,
+        function_calls=[],
+        candidates=[],
+        usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=1),
+    )
+
+
+@pytest.mark.asyncio
+async def test_signed_whatsapp_jobs_preserve_booking_offers_across_messages(
+    graph_env, api_client, monkeypatch, tmp_path
+):
+    from inbound_core.config import AssistantConfig
+
+    from inbound_api import settings as settings_module
+    from inbound_api.db import tenant_session
+    from inbound_api.integrations import google_auth
+    from inbound_api.models import CalendarBooking, Commitment, Conversation, Message
+    from inbound_api.routers import webhooks
+    from inbound_api.services import booking as booking_service
+    from inbound_api.services import job_handlers
+
+    tenant_id = graph_env["tenant_id"]
+    assistant_id = graph_env["assistant_id"]
+    config = AssistantConfig.model_validate(_whatsapp_booking_config())
+    graph_env["execute"](
+        "UPDATE assistants SET config = %s::jsonb WHERE id = %s",
+        (json.dumps(config.model_dump(mode="json")), assistant_id),
+    )
+    graph_env["execute"](
+        "INSERT INTO channel_connections "
+        "(id, tenant_id, assistant_id, kind, external_id, status, settings) "
+        "VALUES (%s, %s, %s, 'whatsapp', '123456', 'active', '{}')",
+        (uuid4(), tenant_id, assistant_id),
+    )
+    graph_env["execute"](
+        "INSERT INTO channel_connections "
+        "(id, tenant_id, assistant_id, kind, external_id, status, settings) "
+        "VALUES (%s, %s, %s, 'gmail', 'booking@example.test', 'active', %s::jsonb)",
+        (
+            uuid4(),
+            tenant_id,
+            assistant_id,
+            json.dumps({"google_features": ["calendar"]}),
+        ),
+    )
+    settings = SimpleNamespace(
+        google_api_key="test-key",
+        text_agent_model="gemini-test",
+        whatsapp_mode="fake",
+        fake_outbox_path=tmp_path / "outbox.jsonl",
+        message_extract_delay_seconds=120,
+        price_table_path=tmp_path / "missing-prices.yaml",
+        calendar_fake_path=tmp_path / "calendar.json",
+        calendar_fake_delay_ms=0,
+        calendar_mode="fake",
+        gmail_mode="fake",
+    )
+    monkeypatch.setattr(job_handlers, "get_settings", lambda: settings)
+    monkeypatch.setattr(booking_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(settings_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(google_auth, "get_settings", lambda: settings)
+
+    async def load_route(*_args, **_kwargs):
+        return SimpleNamespace(config=config, digest=None, context_card=None)
+
+    monkeypatch.setattr(job_handlers, "load_assistant_route", load_route)
+    sequences = [
+        [
+            _tool_response(
+                "check_availability",
+                {"appointment_type": "consultation", "preference_text": "Tuesday"},
+            ),
+            _text_response("I can offer one of those times."),
+        ]
+    ]
+    prompts: list[str] = []
+    calls: list[dict] = []
+
+    class Models:
+        def __init__(self, responses):
+            self.responses = list(responses)
+
+        async def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            contents = kwargs.get("contents")
+            if isinstance(contents, str):
+                prompts.append(contents)
+            else:
+                prompts.append(str(contents[0]))
+            return self.responses.pop(0)
+
+    def make_client(_api_key):
+        models = Models(sequences.pop(0))
+        return SimpleNamespace(
+            aio=SimpleNamespace(models=models, aclose=AsyncMock(return_value=None))
+        )
+
+    monkeypatch.setattr(job_handlers, "make_genai_client", make_client)
+
+    async def signed_message(message_id: str, body_text: str):
+        payload = {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "value": {
+                                "metadata": {"phone_number_id": "123456"},
+                                "contacts": [
+                                    {
+                                        "wa_id": "447700900123",
+                                        "profile": {"name": "Alex Example"},
+                                    }
+                                ],
+                                "messages": [
+                                    {
+                                        "id": message_id,
+                                        "from": "447700900123",
+                                        "timestamp": str(int(datetime.now(UTC).timestamp())),
+                                        "type": "text",
+                                        "text": {"body": body_text},
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        body = json.dumps(payload).encode()
+        signature = hmac.new(b"booking-secret", body, hashlib.sha256).hexdigest()
+        monkeypatch.setattr(
+            webhooks,
+            "get_settings",
+            lambda: SimpleNamespace(whatsapp_mode="fake", whatsapp_app_secret="booking-secret"),
+        )
+        response = await api_client.post(
+            "/webhooks/whatsapp",
+            content=body,
+            headers={"X-Hub-Signature-256": f"sha256={signature}"},
+        )
+        assert response.status_code == 200, response.text
+        return graph_env["execute"](
+            "SELECT id, conversation_id FROM messages WHERE tenant_id = %s AND external_id = %s",
+            (tenant_id, message_id),
+        )[0]
+
+    first_message_id, conversation_id = await signed_message(
+        "wamid.booking-first", "What appointment times are available?"
+    )
+    assert graph_env["execute"](
+        "SELECT count(*) FROM jobs WHERE tenant_id = %s AND kind = 'message_reply'",
+        (tenant_id,),
+    ) == [(1,)]
+    async with tenant_session(tenant_id) as session:
+        await job_handlers.message_reply(
+            session,
+            {"conversation_id": str(conversation_id), "message_id": str(first_message_id)},
+        )
+
+    async with tenant_session(tenant_id) as session:
+        first_assistant = await session.scalar(
+            select(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.role == MessageRole.ASSISTANT,
+            )
+            .order_by(Message.ts.desc(), Message.id.desc())
+        )
+        availability_call = next(
+            call
+            for call in first_assistant.meta["tool_calls"]
+            if call["name"] == "check_availability"
+        )
+        assert availability_call["result"]["matched_preference"] is False
+        offered_slot = availability_call["result"]["slots"][0]
+
+    second_message_id, second_conversation_id = await signed_message(
+        "wamid.booking-second", "Yes, book that time. My name is Alex Example."
+    )
+    assert second_conversation_id == conversation_id
+    assert graph_env["execute"](
+        "SELECT count(*) FROM jobs WHERE tenant_id = %s AND kind = 'message_reply'",
+        (tenant_id,),
+    ) == [(2,)]
+    sequences.append(
+        [
+            _tool_response(
+                "book_appointment",
+                {"slot_id": offered_slot["slot_id"], "name": "Alex Example"},
+            ),
+            _text_response("Your consultation is booked."),
+        ]
+    )
+    async with tenant_session(tenant_id) as session:
+        await job_handlers.message_reply(
+            session,
+            {"conversation_id": str(conversation_id), "message_id": str(second_message_id)},
+        )
+
+    assert offered_slot["slot_id"] in prompts[-2]
+    assert "Note: slots offered —" in prompts[-2]
+    assert all("config" in call for call in calls)
+    async with tenant_session(tenant_id) as session:
+        conversation = await session.get(Conversation, conversation_id)
+        booking = await session.scalar(
+            select(CalendarBooking).where(CalendarBooking.conversation_id == conversation_id)
+        )
+        system_message = await session.scalar(
+            select(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.role == MessageRole.SYSTEM,
+            )
+            .order_by(Message.ts.desc(), Message.id.desc())
+        )
+        commitment = await session.scalar(
+            select(Commitment).where(Commitment.source_message_id == system_message.id)
+        )
+    assert booking is not None
+    assert commitment is not None and commitment.kind == "appointment"
+    assert conversation.metrics["booking"]["booking_id"] == str(booking.id)
+    outbox = [json.loads(line) for line in settings.fake_outbox_path.read_text().splitlines()]
+    assert len(outbox) == 2
+    assert outbox[-1]["body"] == "Your consultation is booked."
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_provider_error_is_returned_as_tool_error_not_job_failure(
+    graph_env, monkeypatch, tmp_path
+):
+    from inbound_core.config import AssistantConfig
+
+    from inbound_api.db import tenant_session
+    from inbound_api.integrations.calendar import CalendarError
+    from inbound_api.services import job_handlers
+    from inbound_api.services.booking import BookingContext
+
+    tenant_id = graph_env["tenant_id"]
+    config = AssistantConfig.model_validate(_whatsapp_booking_config())
+    graph_env["execute"](
+        "UPDATE assistants SET config = %s::jsonb WHERE id = %s",
+        (json.dumps(config.model_dump(mode="json")), graph_env["assistant_id"]),
+    )
+    settings = SimpleNamespace(
+        google_api_key="test-key",
+        text_agent_model="gemini-test",
+        whatsapp_mode="fake",
+        fake_outbox_path=tmp_path / "error-outbox.jsonl",
+        message_extract_delay_seconds=120,
+        price_table_path=tmp_path / "missing-prices.yaml",
+    )
+    monkeypatch.setattr(job_handlers, "get_settings", lambda: settings)
+
+    async def load_route(*_args, **_kwargs):
+        return SimpleNamespace(config=config, digest=None, context_card=None)
+
+    class FailingProvider:
+        name = "fake"
+
+        async def free_busy(self, *_args, **_kwargs):
+            raise CalendarError("calendar offline")
+
+    async def context(*_args, **_kwargs):
+        return BookingContext(
+            config=config,
+            booking=config.booking,
+            connection=None,
+            provider=FailingProvider(),
+            timezone=config.office_hours.timezone,
+        )
+
+    monkeypatch.setattr(job_handlers, "load_assistant_route", load_route)
+    monkeypatch.setattr(job_handlers, "booking_context", context)
+    responses = [
+        _tool_response(
+            "check_availability",
+            {"appointment_type": "consultation", "preference_text": "any time"},
+        ),
+        _text_response("I could not check the diary just now."),
+    ]
+
+    class Models:
+        async def generate_content(self, **_kwargs):
+            return responses.pop(0)
+
+    monkeypatch.setattr(
+        job_handlers,
+        "make_genai_client",
+        lambda _key: SimpleNamespace(
+            aio=SimpleNamespace(
+                models=Models(),
+                aclose=AsyncMock(return_value=None),
+            )
+        ),
+    )
+    message_id, conversation_id = await _insert_test_message(
+        graph_env,
+        datetime.now(UTC) - timedelta(seconds=2),
+        "wamid.booking-provider-error",
+    )
+    async with tenant_session(tenant_id) as session:
+        await job_handlers.message_reply(
+            session,
+            {"conversation_id": str(conversation_id), "message_id": str(message_id)},
+        )
+        assistant = await session.scalar(
+            select(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.role == MessageRole.ASSISTANT,
+            )
+            .order_by(Message.ts.desc(), Message.id.desc())
+        )
+    call = assistant.meta["tool_calls"][0]
+    assert call["result"] == {
+        "ok": False,
+        "error": "The diary can't be checked right now.",
+    }
+    assert assistant.text == "I could not check the diary just now."
+    assert settings.fake_outbox_path.exists()

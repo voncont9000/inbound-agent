@@ -137,6 +137,7 @@ class CallMetricsObserver(BaseObserver):
         self._seen_broadcast_frame_ids: set[int] = set()
         self.service_metrics: list[dict[str, Any]] = []
         self.number_holds: list[dict[str, Any]] = []
+        self.tool_round_trip_ms: dict[str, list[float]] = {}
         self.transfer: dict[str, Any] | None = None
         self.usage: dict[str, float | int] = {
             "stt_audio_seconds": 0,
@@ -293,6 +294,10 @@ class CallMetricsObserver(BaseObserver):
         record["held_secs"] = max(0.0, held_secs)
         self._save()
 
+    def record_tool_round_trip(self, name: str, milliseconds: float) -> None:
+        self.tool_round_trip_ms.setdefault(name, []).append(max(0.0, milliseconds))
+        self._save()
+
     def snapshot(self) -> dict[str, Any]:
         metrics = {
             "call_id": self.sink.call_id,
@@ -305,6 +310,16 @@ class CallMetricsObserver(BaseObserver):
             "number_holds": self.number_holds,
             "service_metrics": self.service_metrics,
             "usage": self.usage,
+            "tool_round_trips": {
+                name: {
+                    "count": len(values),
+                    "p50_ms": percentile(values, 50),
+                    "p95_ms": percentile(values, 95),
+                    "max_ms": max(values),
+                }
+                for name, values in self.tool_round_trip_ms.items()
+                if values
+            },
         }
         if self.transfer is not None:
             metrics["transfer"] = self.transfer

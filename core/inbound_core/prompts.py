@@ -11,6 +11,7 @@ def render_business_context(
     channel: str = "text",
     persona: str | None = None,
     include_deadline_instructions: bool = True,
+    booking_enabled: bool = False,
 ) -> str:
     current_date = today or date.today()
     audience = "caller" if channel == "phone" else "customer"
@@ -77,6 +78,18 @@ OFFICE HOURS
 {hours}
 
 {knowledge}{context_section}"""
+    if booking_enabled and config.booking is not None:
+        appointment_types = "\n".join(
+            f"- {item.label} ({item.duration_minutes} minutes): {item.when_to_use}"
+            + (f" Location or link: {item.location_or_link}." if item.location_or_link else "")
+            for item in config.booking.appointment_types
+        )
+        business_context += (
+            "\n\nAPPOINTMENTS\n"
+            f"{appointment_types}\n"
+            "Only offer these appointment types. Offer only slots returned by check_availability; "
+            "never invent times."
+        )
     deadline_instructions = render_deadline_instructions(config, channel=channel)
     if include_deadline_instructions and deadline_instructions:
         business_context += "\n\nDEADLINE INSTRUCTIONS\n" + "\n".join(deadline_instructions)

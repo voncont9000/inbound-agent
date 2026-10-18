@@ -13,7 +13,43 @@ from eval.run_matrix import (
     _configure_llm_provider,
     _configure_tts_voice,
     _fake_api_state,
+    _rep_fake_state,
+    build_parser,
 )
+from eval.synth_callers import load_scenarios
+
+
+def test_every_eval_scenario_has_a_caller_id() -> None:
+    for scenario_name, scenario in load_scenarios().items():
+        caller_id = scenario.get("caller_id")
+        assert isinstance(caller_id, str) and caller_id.strip(), (
+            f"Scenario {scenario_name} must have a non-empty caller_id."
+        )
+
+
+def test_rep_fake_state_excludes_bookings_from_earlier_repetitions() -> None:
+    previous = {"bookings": [{"booking_id": "earlier"}], "calls": ["earlier-call"]}
+    current = {
+        "bookings": [{"booking_id": "earlier"}, {"booking_id": "this-repetition"}],
+        "calls": ["earlier-call", "this-call"],
+    }
+
+    state = _rep_fake_state(previous, current)
+
+    assert state == {
+        "bookings": [{"booking_id": "this-repetition"}],
+        "calls": ["earlier-call", "this-call"],
+    }
+
+
+def test_booking_smoke_command_has_default_provider_repetition_args() -> None:
+    args = build_parser().parse_args(
+        ["--transport", "twilio", "--fake-api", "--scenario", "booking"]
+    )
+
+    assert args.stt == ["deepgram"]
+    assert args.tts == ["deepgram"]
+    assert args.reps == [1]
 
 
 @pytest.mark.asyncio
@@ -31,7 +67,7 @@ async def test_fake_api_state_reads_response_from_live_server() -> None:
                 await asyncio.sleep(0.01)
 
         state = await _fake_api_state(f"http://127.0.0.1:{port}")
-        assert state == {"calls": [], "reports": []}
+        assert state == {"calls": [], "reports": [], "bookings": []}
     finally:
         server.should_exit = True
         await server_task

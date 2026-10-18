@@ -62,6 +62,18 @@ PROVIDER_ERROR = re.compile(
 )
 
 
+def _rep_fake_state(
+    state_before: dict[str, Any] | None, state_after: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    if state_before is None or state_after is None:
+        return state_after
+    previous_booking_count = len(state_before.get("bookings", []))
+    return {
+        **state_after,
+        "bookings": state_after.get("bookings", [])[previous_booking_count:],
+    }
+
+
 async def _read_runner_output(
     stream: asyncio.StreamReader,
     process_env: dict[str, str],
@@ -261,8 +273,8 @@ async def _set_fake_assistant(api_base_url: str, assistant_path: str) -> None:
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f"{api_base_url}/_fake/assistant",
-            json={"assistant": assistant_path},
             headers={"X-Service-Token": FAKE_API_TOKEN},
+            json={"assistant": assistant_path},
         ) as response:
             response.raise_for_status()
 
@@ -489,7 +501,8 @@ async def _run_matrix_calls(
                 active_assistant = object()
                 try:
                     for scenario_name in scenario_names:
-                        caller_id = scenarios[scenario_name].get("caller_id")
+                        scenario = scenarios[scenario_name]
+                        caller_id = scenario.get("caller_id")
                         assistant_path = scenarios[scenario_name].get("assistant")
                         if api_base_url is not None and assistant_path:
                             await _set_fake_assistant(api_base_url, assistant_path)
@@ -575,6 +588,12 @@ async def _run_matrix_calls(
                                     len(state_before["calls"]),
                                     timeout=5 if run_dir is not None else 1,
                                 )
+                            state_after = (
+                                await _fake_api_state(api_base_url)
+                                if api_base_url is not None
+                                else None
+                            )
+                            rep_fake_state = _rep_fake_state(state_before, state_after)
                             if run_dir is not None:
                                 for filename in (
                                     "bot_audio.wav",
@@ -584,10 +603,10 @@ async def _run_matrix_calls(
                                     source = scratch / filename
                                     if source.exists():
                                         shutil.copy2(source, run_dir / filename)
-                                scored = score_call(run_dir, scenarios[scenario_name])
+                                scored = score_call(run_dir, scenario, fake_state=rep_fake_state)
                                 scored["run_dir"] = str(run_dir)
                             else:
-                                scored = score_call(scratch, scenarios[scenario_name])
+                                scored = score_call(scratch, scenario, fake_state=rep_fake_state)
                                 scored["run_dir"] = None
                             scored.update(
                                 {
@@ -677,11 +696,11 @@ async def _run_matrix_calls(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run scripted voice-provider A/B calls.")
-    parser.add_argument("--stt", nargs="+", choices=STT_PROVIDERS, required=True)
-    parser.add_argument("--tts", nargs="+", choices=TTS_PROVIDERS, required=True)
+    parser.add_argument("--stt", nargs="+", choices=STT_PROVIDERS, default=["deepgram"])
+    parser.add_argument("--tts", nargs="+", choices=TTS_PROVIDERS, default=["deepgram"])
     parser.add_argument("--llm", nargs="+", choices=LLM_PROVIDERS, default=["google"])
     parser.add_argument("--scenario", nargs="+", required=True)
-    parser.add_argument("--reps", nargs="+", type=int, required=True)
+    parser.add_argument("--reps", nargs="+", type=int, default=[1])
     parser.add_argument("--speechify-voice")
     parser.add_argument("--elevenlabs-voice")
     parser.add_argument(

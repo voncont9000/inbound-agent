@@ -20,6 +20,7 @@ from inbound_voice.twilio import (
     compute_signature,
     parse_start_message,
     stream_token,
+    verify_stream_token,
 )
 from phone_server import create_app
 
@@ -27,6 +28,37 @@ AUTH_TOKEN = "test-auth-token"
 VOICE_URL = "https://example.com/myapp?foo=1"
 VOICE_PARAMS = {"CallSid": "CA1234", "Caller": "+12345"}
 SDK_SIGNATURE = "mXInA0Z/Xd472znZ/g/WrnB6R14="
+
+
+@pytest.mark.parametrize(
+    ("issued_at_offset", "expected"),
+    [
+        (30, True),
+        (31, False),
+        (-STREAM_TOKEN_MAX_AGE_SECONDS, True),
+        (-(STREAM_TOKEN_MAX_AGE_SECONDS + 1), False),
+    ],
+)
+def test_verify_stream_token_enforces_exact_age_boundaries(
+    issued_at_offset: int,
+    expected: bool,
+) -> None:
+    now = 1_700_000_000
+    issued_at = now + issued_at_offset
+    token = stream_token(AUTH_TOKEN, "CA123", "+449876543210", "+441234567890", issued_at)
+
+    assert (
+        verify_stream_token(
+            AUTH_TOKEN,
+            "CA123",
+            "+449876543210",
+            "+441234567890",
+            str(issued_at),
+            token,
+            now=now,
+        )
+        is expected
+    )
 
 
 def _send_start(websocket, call_sid: str, custom_parameters: dict[str, str]) -> None:
@@ -547,7 +579,7 @@ def test_websocket_rejects_invalid_stream_token_before_preparing_call(
     elif invalid_token == "tampered_from":
         custom_parameters["From"] = "+441111111111"
     elif invalid_token in {"expired", "future"}:
-        issued_at += -(STREAM_TOKEN_MAX_AGE_SECONDS + 1) if invalid_token == "expired" else 31
+        issued_at += -(STREAM_TOKEN_MAX_AGE_SECONDS + 60) if invalid_token == "expired" else 30 + 60
         custom_parameters["StreamIssuedAt"] = str(issued_at)
         custom_parameters["StreamToken"] = stream_token(
             token,
@@ -560,6 +592,7 @@ def test_websocket_rejects_invalid_stream_token_before_preparing_call(
         custom_parameters["StreamIssuedAt"] = "not-an-integer"
 
     prepared_calls = []
+    run_calls = []
 
     async def prepare_call(*args, **kwargs):
         prepared_calls.append(kwargs)
@@ -568,8 +601,15 @@ def test_websocket_rejects_invalid_stream_token_before_preparing_call(
         )
 
     async def run_bot(*args, **kwargs):
-        pytest.fail("run_bot must not be called for an invalid stream token")
+        run_calls.append(kwargs)
 
+    original_verify_stream_token = phone_server.verify_stream_token
+
+    def verify_stream_token_with_clock_shift(*args, **kwargs):
+        kwargs["now"] = time.time() + 0.999
+        return original_verify_stream_token(*args, **kwargs)
+
+    monkeypatch.setattr(phone_server, "verify_stream_token", verify_stream_token_with_clock_shift)
     monkeypatch.setattr(phone_server, "prepare_call", prepare_call)
     monkeypatch.setattr(phone_server, "run_bot", run_bot)
     with TestClient(create_app({"TWILIO_AUTH_TOKEN": token})) as client:
@@ -580,6 +620,7 @@ def test_websocket_rejects_invalid_stream_token_before_preparing_call(
 
     assert disconnect.value.code == 1008
     assert prepared_calls == []
+    assert run_calls == []
 
 
 def test_websocket_rejects_reused_call_sid(

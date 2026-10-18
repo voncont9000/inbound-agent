@@ -53,6 +53,7 @@ services:
       VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
       WHATSAPP_MODE: ${WHATSAPP_MODE:-off}
       GMAIL_MODE: ${GMAIL_MODE:-off}
+      CALENDAR_MODE: ${CALENDAR_MODE:-off}
     depends_on:
       db:
         condition: service_healthy
@@ -89,6 +90,7 @@ services:
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_GRAPH_BASE_URL: ${WHATSAPP_GRAPH_BASE_URL:-https://graph.facebook.com/v26.0}
       GMAIL_MODE: ${GMAIL_MODE:-off}
+      CALENDAR_MODE: ${CALENDAR_MODE:-off}
       GMAIL_FAKE_DIR: ${GMAIL_FAKE_DIR:-/app/backend/var/gmail-fake}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
@@ -151,6 +153,7 @@ services:
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_GRAPH_BASE_URL: ${WHATSAPP_GRAPH_BASE_URL:-https://graph.facebook.com/v26.0}
       GMAIL_MODE: ${GMAIL_MODE:-off}
+      CALENDAR_MODE: ${CALENDAR_MODE:-off}
       GMAIL_FAKE_DIR: ${GMAIL_FAKE_DIR:-/app/backend/var/gmail-fake}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}

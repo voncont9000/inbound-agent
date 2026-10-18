@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     fake_outbox_path: Path = BACKEND_ROOT / "var" / "whatsapp-outbox.jsonl"
     gmail_mode: Literal["off", "fake", "google"] = "fake"
     gmail_fake_dir: Path = BACKEND_ROOT / "var" / "gmail-fake"
+    calendar_mode: Literal["off", "fake", "google"] = "fake"
+    calendar_fake_path: Path = BACKEND_ROOT / "var" / "calendar-fake.json"
+    calendar_fake_delay_ms: int = 0
     email_sender: Literal["off", "fake", "gmail", "resend"] = "fake"
     resend_api_key: str | None = None
     email_from: str | None = None
@@ -87,6 +90,12 @@ class Settings(BaseSettings):
         path = Path(value)
         return path if path.is_absolute() else BACKEND_ROOT.parent / path
 
+    @field_validator("calendar_fake_path", mode="before")
+    @classmethod
+    def resolve_calendar_fake_path(cls, value: str | Path) -> Path:
+        path = Path(value)
+        return path if path.is_absolute() else BACKEND_ROOT.parent / path
+
     @field_validator("post_actions_fake_dir", mode="before")
     @classmethod
     def resolve_post_actions_fake_dir(cls, value: str | Path) -> Path:
@@ -126,6 +135,10 @@ class Settings(BaseSettings):
                 )
         if self.app_env not in {"development", "test"} and self.gmail_mode == "fake":
             raise ValueError("Gmail production requires google mode or off mode")
+        if self.app_env not in {"development", "test"} and self.calendar_mode == "fake":
+            raise ValueError("Calendar production requires google mode or off mode")
+        if self.calendar_mode == "google" and self.gmail_mode != "google":
+            raise ValueError("Google Calendar mode requires GMAIL_MODE=google")
         if (
             self.app_env not in {"development", "test"}
             and self.gmail_mode == "google"

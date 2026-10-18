@@ -22,6 +22,21 @@ const channels = ["phone", "web", "gmail", "whatsapp"] as const;
 const statuses = ["active", "completed", "failed"] as const;
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
 
+function formatBookingStart(value: unknown, timezone: unknown) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: typeof timezone === "string" ? timezone : "UTC",
+    }).format(date);
+  } catch {
+    return null;
+  }
+}
+
 function conversationQuery(filters: { channel: string; status: string; reviewOnly: boolean }, cursor?: string | null) {
   return {
     channel: channels.find((channel) => channel === filters.channel),
@@ -85,6 +100,11 @@ export function ConversationPage() {
   const assistantId = detailQuery.data?.assistant_id ?? "";
   const assistantQuery = useQuery({ queryKey: ["assistant", assistantId], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}", { params: { path: { assistant_id: assistantId } } })), enabled: Boolean(assistantId) });
   const detail = detailQuery.data;
+  const bookingValue = detail?.metrics.booking;
+  const booking = bookingValue && typeof bookingValue === "object"
+    ? bookingValue as Record<string, unknown>
+    : null;
+  const bookingStart = booking ? formatBookingStart(booking.start, booking.timezone) : null;
   const intakes = useMemo(() => {
     const result: Partial<Record<"live" | "post_call" | "merged", IntakeRecord>> = {};
     detail?.intakes.forEach((intake) => { result[intake.version] = intake.data as IntakeRecord; });
@@ -120,6 +140,18 @@ export function ConversationPage() {
   return <main className="page" id="main-content">
     <p className="eyebrow">Conversation · {detail.channel} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</p><h1>{detail.summary ?? "Conversation details"}</h1>
     <div className="panel card-grid"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
+    {booking && <section className="panel stack">
+      <h2>Appointment booking</h2>
+      <p><strong>{String(booking.label ?? booking.appointment_type ?? "Appointment")}</strong></p>
+      <p>{String(booking.text ?? booking.speech ?? "Booking details unavailable.")}</p>
+      <p>Status: {String(booking.status ?? "booked")}</p>
+      {bookingStart && <p><strong>Start</strong>: {bookingStart} ({String(booking.timezone ?? "UTC")})</p>}
+      {(typeof booking.attendee_name === "string" || typeof booking.attendee_email === "string") && <p>
+        <strong>Attendee</strong>: {typeof booking.attendee_name === "string" ? booking.attendee_name : "—"}
+        {typeof booking.attendee_email === "string" && <> · {booking.attendee_email}</>}
+      </p>}
+      {typeof booking.event_link === "string" && <p><a href={booking.event_link} target="_blank" rel="noreferrer">Open Calendar event</a></p>}
+    </section>}
     {detail.channel === "gmail" && Object.keys(emailTriage).length > 0 && <section className="panel"><h2>Email triage</h2><div className="card-grid"><div><strong>Category</strong><p>{String(emailTriage.category ?? "—")}</p></div><div><strong>Reason</strong><p>{String(emailTriage.reason ?? "—")}</p></div></div></section>}
     {detail.transfer && <section className="panel"><h2>Transfer</h2><div className="card-grid"><div><strong>Target</strong><p>{detail.transfer.target_key}</p></div><div><strong>Status</strong><p>{detail.transfer.status}</p></div><div><strong>Latency</strong><p>{detail.transfer.latency_ms == null ? "—" : `${detail.transfer.latency_ms} ms`}</p></div></div></section>}
     <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role} {message.role === "assistant" && message.meta.draft === true && <Badge tone="neutral">Draft in Gmail</Badge>}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>

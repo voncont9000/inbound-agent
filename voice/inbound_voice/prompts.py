@@ -17,6 +17,7 @@ def render_system_prompt(
     today: date | None = None,
     caller_id: str | None = None,
     context_card: str | None = None,
+    booking_enabled: bool = False,
     now: datetime | None = None,
 ) -> str:
     current_date = today or date.today()
@@ -29,6 +30,7 @@ def render_system_prompt(
             f"You are the telephone assistant for {config.business_name}.\nSpeak {config.language}."
         ),
         include_deadline_instructions=False,
+        booking_enabled=booking_enabled,
     )
     readback_instructions = {
         "off": "Do not read details back to the caller.",
@@ -75,6 +77,13 @@ def render_system_prompt(
         if action != "transfer_call"
     )
     deadline_instructions = render_deadline_instructions(config, channel="phone")
+    booking_instruction = ""
+    if booking_enabled:
+        booking_instruction = (
+            "\n- Call check_availability or book_appointment immediately without announcing it; "
+            "the system will say a short holding line. Read the chosen slot back once and get a "
+            "yes before calling book_appointment. After booking, confirm it in one sentence."
+        )
     transfer_targets = available_transfer_targets(config, now)
     transfer_instructions = ""
     if transfer_targets:
@@ -97,7 +106,7 @@ CALL BEHAVIOUR MECHANICS
 {readback_instructions}
 {caller_id_instruction}
 {chr(10).join(deadline_instructions)}
-{end_call_instruction}
+{end_call_instruction}{booking_instruction}
 {chr(10).join(other_enabled_actions)}
 
 {enabled_actions}

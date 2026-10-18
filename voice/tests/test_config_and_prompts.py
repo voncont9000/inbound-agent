@@ -98,6 +98,17 @@ def test_prompt_only_mentions_enabled_actions() -> None:
     assert "flag_urgent" not in prompt
 
 
+def test_booking_prompt_matches_silent_tool_golden() -> None:
+    assistant = load_assistant_config(ROOT / "config" / "assistants" / "booking_firm.yaml")
+    prompt = render_system_prompt(assistant, today=date(2026, 1, 15), booking_enabled=True)
+    golden = (ROOT / "tests" / "fixtures" / "booking_system_prompt.txt").read_text(encoding="utf-8")
+
+    assert prompt == golden
+    assert "immediately without announcing it" in prompt
+    assert "say one short line" not in prompt
+    assert "same response" not in prompt
+
+
 def test_caller_context_is_inserted_only_when_nonblank() -> None:
     assistant = load_assistant_config(ROOT / "config" / "assistants" / "demo_firm.yaml")
     original = render_system_prompt(assistant)

@@ -86,5 +86,42 @@ export function validateAssistantConfig(config: AssistantConfig): Record<string,
   if (!Number.isFinite(config.review_confidence_threshold) || config.review_confidence_threshold < 0 || config.review_confidence_threshold > 1) {
     set("review_confidence_threshold", "Choose a value between 0 and 1.");
   }
+  if (config.booking) {
+    if (!config.booking.calendar_id.trim()) set("booking.calendar_id", "Enter a calendar ID.");
+    if (config.booking.appointment_types.length === 0) {
+      set("booking.appointment_types", "Add at least one appointment type.");
+    }
+    const seenAppointmentKeys = new Set<string>();
+    config.booking.appointment_types.forEach((appointment, index) => {
+      const base = `booking.appointment_types.${index}`;
+      if (!/^[a-z0-9_]+$/.test(appointment.key)) {
+        set(`${base}.key`, "Use lowercase letters, numbers, and underscores.");
+      }
+      if (seenAppointmentKeys.has(appointment.key)) {
+        set(`${base}.key`, "Appointment type keys must be unique.");
+      }
+      seenAppointmentKeys.add(appointment.key);
+      if (!appointment.label.trim()) set(`${base}.label`, "Enter an appointment label.");
+      if (!Number.isInteger(appointment.duration_minutes) || appointment.duration_minutes < 1 || appointment.duration_minutes > 480) {
+        set(`${base}.duration_minutes`, "Duration must be between 1 and 480 minutes.");
+      }
+      if (!appointment.when_to_use.trim()) set(`${base}.when_to_use`, "Describe when to use this appointment type.");
+    });
+    if (!Number.isInteger(config.booking.min_notice_hours) || config.booking.min_notice_hours < 0) {
+      set("booking.min_notice_hours", "Enter a whole number greater than or equal to zero.");
+    }
+    if (!Number.isInteger(config.booking.horizon_days) || config.booking.horizon_days < 1 || config.booking.horizon_days > 60) {
+      set("booking.horizon_days", "Choose between 1 and 60 days.");
+    }
+    if (!Number.isInteger(config.booking.buffer_minutes) || config.booking.buffer_minutes < 0) {
+      set("booking.buffer_minutes", "Enter a whole number greater than or equal to zero.");
+    }
+    if (!Number.isInteger(config.booking.slot_step_minutes) || config.booking.slot_step_minutes < 5 || config.booking.slot_step_minutes > 240) {
+      set("booking.slot_step_minutes", "Choose between 5 and 240 minutes.");
+    }
+    if (!Number.isInteger(config.booking.max_slots_offered) || config.booking.max_slots_offered < 1 || config.booking.max_slots_offered > 5) {
+      set("booking.max_slots_offered", "Choose between 1 and 5 slots.");
+    }
+  }
   return errors;
 }

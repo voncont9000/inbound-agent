@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from eval import twilio_sim
+from eval.run_matrix import _rep_fake_state
 from eval.score import aggregate_calls, render_summary, score_call
 from eval.synth_callers import load_scenarios
 from inbound_voice.config import load_assistant_config
@@ -178,6 +179,63 @@ def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
     assert "email_readback" in scenarios["employment"]["assistant_checks"]
     assert scenarios["conveyancing"]["assistant_not_matches"] == "(?i)call ?back"
     assert "knowledge_check" not in {"employment", "conveyancing", "idle_check"}
+    assert scenarios["booking"]["assistant"] == "config/assistants/booking_firm.yaml"
+    assert scenarios["booking"]["booking_checks"] == {
+        "booked": True,
+        "appointment_type": "initial_consultation",
+    }
+
+
+def test_booking_checks_are_scored_from_fake_api_state(tmp_path) -> None:
+    run_dir = tmp_path / "booking-score"
+    shutil.copytree(FIXTURE, run_dir)
+    scenario = {"booking_checks": {"booked": True, "appointment_type": "initial_consultation"}}
+
+    score = score_call(
+        run_dir,
+        scenario,
+        fake_state={
+            "bookings": [
+                {
+                    "appointment_type": "initial_consultation",
+                    "booking": {"status": "booked"},
+                }
+            ]
+        },
+    )
+
+    assert all(item["passed"] for item in score["booking_checks"].values())
+
+
+def test_pre_repetition_booking_does_not_satisfy_booked_check(tmp_path) -> None:
+    run_dir = tmp_path / "booking-score"
+    shutil.copytree(FIXTURE, run_dir)
+    scenario = {"booking_checks": {"booked": True}}
+    prior_booking = {
+        "appointment_type": "initial_consultation",
+        "booking": {"status": "booked"},
+    }
+    state_before = {"bookings": [prior_booking]}
+    state_after = {"bookings": [prior_booking]}
+
+    score = score_call(
+        run_dir,
+        scenario,
+        fake_state=_rep_fake_state(state_before, state_after),
+    )
+
+    assert score["booking_checks"]["booked"]["actual"] is False
+    assert score["booking_checks"]["booked"]["passed"] is False
+
+
+def test_booking_scenario_assistant_fixture_enables_booking() -> None:
+    scenarios = load_scenarios()
+    scenario = scenarios["booking"]
+    assistant_path = Path(__file__).resolve().parents[1] / scenario["assistant"]
+    assistant = load_assistant_config(assistant_path)
+
+    assert assistant.booking is not None
+    assert {"check_availability", "book_appointment"} <= set(assistant.live_actions)
     assert (
         scenarios["transfer_request"]["assistant"] == "eval/fixtures/assistants/transfer_firm.yaml"
     )

@@ -36,6 +36,7 @@ scenarios:
     expected_server_disconnect: true
   conveyancing:
     caller_voice: catriona          # Speechify en-GB female, not used as an agent voice
+    caller_id: "07700900456"
     assistant_not_matches: "(?i)call ?back"
     utterances:
       - "Hello. I'm buying a leasehold flat and I'd like a quote for the conveyancing."
@@ -67,6 +68,7 @@ scenarios:
 
   knowledge_check:
     caller_voice: catriona
+    caller_id: "07700900456"
     utterances:
       - "Hi, I'm thinking of remortgaging. Do you do remortgages and how much is it?"
       - "Great. Is there parking at your office?"
@@ -103,12 +105,27 @@ scenarios:
 
   idle_check:
     caller_voice: catriona
+    caller_id: "07700900456"
     utterances:
       - "Hi, I'm calling about a property purchase."
     final_call_timeout_seconds: 35
     expected_end_call_source: idle
     expected_server_disconnect: true
-
+  booking:
+    assistant: config/assistants/booking_firm.yaml
+    caller_voice: catriona
+    caller_id: "07700900789"
+    utterances:
+      - "Hi, I'd like to book an initial consultation."
+      - "Tuesday afternoon would be good."
+      - "The first one please."
+      - "My name is Alex Morgan."
+      - "Yes, that's right."
+      - "That's all, thanks. Goodbye."
+    booking_checks:
+      booked: true
+      appointment_type: initial_consultation
+    expected_end_call_source: goodbye_detected
   transfer_request:
     caller_voice: catriona
     assistant: eval/fixtures/assistants/transfer_firm.yaml
