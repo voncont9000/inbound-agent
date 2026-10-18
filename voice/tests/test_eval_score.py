@@ -207,7 +207,8 @@ def test_booking_checks_are_scored_from_fake_api_state(tmp_path) -> None:
 
 
 def test_booking_scenario_assistant_fixture_enables_booking() -> None:
-    scenario = load_scenarios()["booking"]
+    scenarios = load_scenarios()
+    scenario = scenarios["booking"]
     assistant_path = Path(__file__).resolve().parents[1] / scenario["assistant"]
     assistant = load_assistant_config(assistant_path)
 

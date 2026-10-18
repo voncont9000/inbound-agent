@@ -13,7 +13,18 @@ from eval.run_matrix import (
     _configure_llm_provider,
     _configure_tts_voice,
     _fake_api_state,
+    build_parser,
 )
+
+
+def test_booking_smoke_command_has_default_provider_repetition_args() -> None:
+    args = build_parser().parse_args(
+        ["--transport", "twilio", "--fake-api", "--scenario", "booking"]
+    )
+
+    assert args.stt == ["deepgram"]
+    assert args.tts == ["deepgram"]
+    assert args.reps == [1]
 
 
 @pytest.mark.asyncio
@@ -31,7 +42,7 @@ async def test_fake_api_state_reads_response_from_live_server() -> None:
                 await asyncio.sleep(0.01)
 
         state = await _fake_api_state(f"http://127.0.0.1:{port}")
-        assert state == {"calls": [], "reports": []}
+        assert state == {"calls": [], "reports": [], "bookings": []}
     finally:
         server.should_exit = True
         await server_task

@@ -683,11 +683,11 @@ async def _run_matrix_calls(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run scripted voice-provider A/B calls.")
-    parser.add_argument("--stt", nargs="+", choices=STT_PROVIDERS, required=True)
-    parser.add_argument("--tts", nargs="+", choices=TTS_PROVIDERS, required=True)
+    parser.add_argument("--stt", nargs="+", choices=STT_PROVIDERS, default=["deepgram"])
+    parser.add_argument("--tts", nargs="+", choices=TTS_PROVIDERS, default=["deepgram"])
     parser.add_argument("--llm", nargs="+", choices=LLM_PROVIDERS, default=["google"])
     parser.add_argument("--scenario", nargs="+", required=True)
-    parser.add_argument("--reps", nargs="+", type=int, required=True)
+    parser.add_argument("--reps", nargs="+", type=int, default=[1])
     parser.add_argument("--speechify-voice")
     parser.add_argument("--elevenlabs-voice")
     parser.add_argument(
