@@ -8,6 +8,7 @@ from inbound_api.routers import (
     gmail,
     internal_voice,
     knowledge,
+    post_actions,
     tasks,
     webhooks,
 )
@@ -25,6 +26,7 @@ for router in (
     internal_voice.router,
     webhooks.router,
     gmail.router,
+    post_actions.router,
 ):
     app.include_router(router)
 

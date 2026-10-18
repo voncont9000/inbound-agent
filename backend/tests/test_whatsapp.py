@@ -848,5 +848,8 @@ def test_production_requires_graph_whatsapp_credentials():
         whatsapp_verify_token="verify-token",
         whatsapp_access_token="access-token",
         gmail_mode="off",
+        email_sender="off",
+        sheets_writer="off",
+        webhook_sender="off",
     )
     assert configured.whatsapp_mode == "graph"

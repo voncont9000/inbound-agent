@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
 from inbound_api.models import (
+    ActionRun,
     Assistant,
     Conversation,
     Intake,
@@ -19,6 +20,7 @@ from inbound_api.models import (
     Task,
 )
 from inbound_api.schemas import (
+    ActionRunSummary,
     ConversationDetailResponse,
     ConversationListResponse,
     ConversationReviewCreate,
@@ -140,6 +142,11 @@ async def get_conversation(
     tasks = await session.scalars(
         select(Task).where(Task.conversation_id == conversation_id).order_by(Task.created_at)
     )
+    action_runs = await session.scalars(
+        select(ActionRun)
+        .where(ActionRun.conversation_id == conversation_id)
+        .order_by(ActionRun.created_at, ActionRun.id)
+    )
     merged = next((intake.data for intake in intakes if intake.version.value == "merged"), {})
     assistant = await session.get(Assistant, conversation.assistant_id)
     threshold = float(assistant.config.get("review_confidence_threshold", 0.7))
@@ -159,6 +166,7 @@ async def get_conversation(
         tasks=[TaskSummary.model_validate(task) for task in tasks],
         metrics=conversation.metrics,
         estimated_cost=conversation.estimated_cost,
+        action_runs=[ActionRunSummary.model_validate(run) for run in action_runs],
     )
 
 

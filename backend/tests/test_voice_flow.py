@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from inbound_api.db import tenant_session
 from inbound_api.jobs import run_next_job
 from inbound_api.models import (
+    ActionRun,
     Conversation,
     ConversationChannel,
     ConversationStatus,
@@ -16,17 +17,41 @@ from inbound_api.models import (
     Message,
     Person,
     Task,
+    TaskSource,
+    TaskStatus,
+)
+from inbound_api.post_actions.providers import FakeEmailSender
+from inbound_api.post_actions.service import (
+    execute_conversation_action,
+    plan_conversation_actions,
 )
 from inbound_api.services import job_handlers as _job_handlers  # noqa: F401
 from inbound_api.services.review import merged_needs_review
 from inbound_api.settings import get_settings
 
 
-async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> None:
+async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair, tmp_path) -> None:
     account = tenant_pair["first"]
     client = account["client"]
     templates = (await client.get("/templates")).json()
     config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    config["post_actions"] = [
+        {
+            "kind": "notify_staff",
+            "key": "callback-alert",
+            "trigger": {"events": ["callback_requested", "urgent"]},
+            "to": ["staff@example.com"],
+            "subject_template": "New {{service}} enquiry",
+            "body_template": "{{summary}}",
+        },
+        {
+            "kind": "email_customer",
+            "key": "customer-confirmation",
+            "trigger": {"events": ["conversation_completed"]},
+            "subject_template": "Thanks",
+            "body_template": "Hello {{contact.name}}",
+        },
+    ]
     assistant = await client.post(
         "/assistants",
         json={"name": "Voice assistant", "template": "uk_law_firm", "config": config},
@@ -144,7 +169,79 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
         persisted_tasks = list(
             await session.scalars(select(Task).where(Task.conversation_id == UUID(conversation_id)))
         )
+        post_actions_job = await session.scalar(
+            select(Job.id).where(
+                Job.kind == "post_actions_run",
+                Job.payload == {"conversation_id": str(conversation_id)},
+            )
+        )
+        first_plan = await plan_conversation_actions(session, UUID(conversation_id))
+        second_plan = await plan_conversation_actions(session, UUID(conversation_id))
+        run = await session.scalar(
+            select(ActionRun).where(
+                ActionRun.conversation_id == UUID(conversation_id),
+                ActionRun.action_key == "callback-alert",
+            )
+        )
     assert conversation is not None
+    assert post_actions_job is not None
+    assert first_plan == {"queued": 2}
+    assert second_plan == {"queued": 0}
+    assert run is not None
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        customer_execution = await execute_conversation_action(
+            session,
+            conversation_id=UUID(conversation_id),
+            action_key="customer-confirmation",
+            fire_count=1,
+        )
+        execution = await execute_conversation_action(
+            session,
+            conversation_id=UUID(conversation_id),
+            action_key="callback-alert",
+            fire_count=run.fire_count,
+            email_sender=FakeEmailSender(tmp_path),
+        )
+    assert execution["status"] == "succeeded"
+    assert customer_execution["status"] == "skipped"
+    assert (tmp_path / "emails.jsonl").is_file()
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        session.add(
+            Task(
+                tenant_id=UUID(account["tenant_id"]),
+                conversation_id=UUID(conversation_id),
+                kind="urgent",
+                status=TaskStatus.OPEN,
+                source=TaskSource.LIVE,
+                payload={"reason": "Urgent follow up"},
+            )
+        )
+        await session.flush()
+        refire = await plan_conversation_actions(session, UUID(conversation_id))
+        run = await session.scalar(
+            select(ActionRun).where(
+                ActionRun.conversation_id == UUID(conversation_id),
+                ActionRun.action_key == "callback-alert",
+            )
+        )
+    assert refire == {"queued": 1}
+    assert run is not None and run.fire_count == 2
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        refired_execution = await execute_conversation_action(
+            session,
+            conversation_id=UUID(conversation_id),
+            action_key="callback-alert",
+            fire_count=2,
+            email_sender=FakeEmailSender(tmp_path),
+        )
+        assert not await session.scalar(
+            select(Task.id).where(
+                Task.conversation_id == UUID(conversation_id),
+                Task.kind == "post_action_setup",
+            )
+        )
+    assert refired_execution["status"] == "succeeded"
+    assert len((tmp_path / "emails.jsonl").read_text().splitlines()) == 2
     assistant_id = str(conversation.assistant_id)
     assert conversation.summary == "The caller requested a return call about a service enquiry."
     callback_task = next(task for task in persisted_tasks if task.kind == "callback")
@@ -160,6 +257,11 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     first_detail = first_detail_response.json()
     assert first_detail["needs_review"] is True
     assert first_detail["summary"] == "The caller requested a return call about a service enquiry."
+    action_runs = {run["action_key"]: run for run in first_detail["action_runs"]}
+    assert action_runs["callback-alert"]["status"] == "succeeded"
+    assert action_runs["callback-alert"]["fired_events"] == ["callback_requested", "urgent"]
+    assert action_runs["callback-alert"]["fire_count"] == 2
+    assert action_runs["customer-confirmation"]["status"] == "skipped"
     list_item = next(
         item
         for item in (await client.get("/conversations?has_review=true")).json()["items"]
@@ -201,7 +303,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert detail_data["needs_review"] is True
     assert len(detail_data["messages"]) == 1
     assert len(detail_data["intakes"]) == 3
-    assert len(detail_data["tasks"]) == 2
+    assert len(detail_data["tasks"]) == 3
     repeated_gaps_response = await client.get("/knowledge-gaps?status=open")
     repeated_gap_ids = {
         item["id"]
@@ -211,10 +313,10 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert repeated_gap_ids == first_gap_ids
     review_filter = await client.get("/conversations?has_review=true")
     assert conversation_id in {item["id"] for item in review_filter.json()["items"]}
-    assert len((await client.get("/tasks?status=open")).json()["items"]) == 2
+    assert len((await client.get("/tasks?status=open")).json()["items"]) == 3
     assert len((await client.get("/knowledge-gaps?status=open")).json()["items"]) == 1
     assert len((await client.get("/tasks?kind=callback")).json()["items"]) == 1
-    assert len((await client.get(f"/tasks?assistant_id={assistant_id}")).json()["items"]) == 2
+    assert len((await client.get(f"/tasks?assistant_id={assistant_id}")).json()["items"]) == 3
     assert (
         len((await client.get(f"/knowledge-gaps?assistant_id={assistant_id}")).json()["items"]) == 1
     )
@@ -276,7 +378,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
             .select_from(KnowledgeGap)
             .where(KnowledgeGap.conversation_id == UUID(conversation_id))
         )
-    assert (message_count, task_count, gap_count) == (1, 2, 1)
+    assert (message_count, task_count, gap_count) == (1, 3, 1)
     assert await run_next_job()
     job = await client.get(f"/jobs/{job_id}")
     assert job.json()["status"] == "succeeded"

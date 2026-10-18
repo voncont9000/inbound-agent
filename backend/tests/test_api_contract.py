@@ -5,6 +5,7 @@ from inbound_api.main import app
 
 OPENAPI_PATH = Path(__file__).resolve().parents[1] / "openapi.json"
 PRE_PLATFORM_API_COMPONENTS = {
+    "ActionRunSummary",
     "AssistantConfig-Input",
     "AssistantConfig-Output",
     "AssistantCreate",
@@ -56,6 +57,12 @@ PRE_PLATFORM_API_COMPONENTS = {
     "MeResponse",
     "MessageResponse",
     "OfficeHours",
+    "PostActionTestRequest",
+    "PostActionTestResponse",
+    "PostActionVariable",
+    "WebhookSecretCreateResponse",
+    "WebhookSecretListResponse",
+    "WebhookSecretSummary",
     "PriceItem",
     "RouteResponse",
     "ServiceConfig",
@@ -93,6 +100,7 @@ def test_all_feature_routers_are_mounted() -> None:
         "/me",
         "/templates",
         "/assistant-config/schema",
+        "/post-actions/variables",
         "/assistants",
         "/assistants/{assistant_id}",
         "/assistants/{assistant_id}/test-calls",
@@ -102,6 +110,9 @@ def test_all_feature_routers_are_mounted() -> None:
         "/assistants/{assistant_id}/knowledge/sources",
         "/assistants/{assistant_id}/knowledge/import",
         "/assistants/{assistant_id}/knowledge/digest",
+        "/assistants/{assistant_id}/post-actions/test",
+        "/assistants/{assistant_id}/post-actions/webhook-secrets",
+        "/assistants/{assistant_id}/post-actions/{action_key}/webhook-secret",
         "/knowledge-gaps",
         "/knowledge-gaps/{gap_id}",
         "/jobs/{job_id}",

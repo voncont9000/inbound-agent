@@ -108,6 +108,7 @@ async def persist_voice_report(
     conversation.metrics = {**(conversation.metrics or {}), **payload.metrics}
     conversation.estimated_cost = payload.estimated_cost
     await enqueue(session, "graph_ingest", {"conversation_id": str(conversation.id)})
+    await enqueue(session, "post_actions_run", {"conversation_id": str(conversation.id)})
 
 
 async def persist_extracted_results(
@@ -204,3 +205,4 @@ async def persist_extracted_results(
             )
     conversation.summary = summary
     await enqueue(session, "graph_ingest", {"conversation_id": str(conversation.id)})
+    await enqueue(session, "post_actions_run", {"conversation_id": str(conversation.id)})
