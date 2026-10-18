@@ -13,12 +13,13 @@ and Redis stay on the private Compose network. Only Caddy publishes application 
 | `/api/internal/*` | Caddy | Always 404 from the public edge |
 | `/webhooks/*`, `/oauth/*` | backend:8000 | Prefix preserved |
 | `/twilio/*` | phone:7861 | Voice webhooks and Twilio media WebSockets |
-| `/call/` and `/call/*` | webcall:7862 | Browser-call app and WebRTC signaling |
+| `/call/` and `/call/*` | webcall:7862 | Browser-call app and WebSocket audio stream at `/call/ws` |
 | TCP 80, TCP 443, UDP 443 | Caddy only | HTTP redirect/challenge and HTTPS/HTTP/3 |
 
 The Compose project name is `inbound`. Named volumes hold Postgres data, backend uploads and
-outbox, voice spool files, and Caddy certificates. `migrate` is a one-shot service; backend and
-worker start only after it succeeds. Container logs rotate at 10 MiB with five files retained.
+outbox, voice spool files, per-call files, and Caddy certificates. Per-call artifacts can contain
+caller PII and live in the `voice-runs` volume. `migrate` is a one-shot service; backend and worker
+start only after it succeeds. Container logs rotate at 10 MiB with five files retained.
 `/healthz` checks the backend database using the application role; it is intentionally omitted
 from the public OpenAPI schema.
 
@@ -53,13 +54,15 @@ Repository-to-runtime mapping:
 
 2. Point the DNS `A` record for the chosen domain to the server IPv4 address. Add an `AAAA` record
    only if IPv6 connectivity is available and working. With Cloudflare, use DNS-only (grey cloud):
-   Caddy's Let's Encrypt HTTP-01/TLS-ALPN challenge must reach the origin directly, and proxying
-   adds an unnecessary hop to long-lived Twilio media WebSockets. This repository does not create
-   cloud resources or change DNS.
+   Caddy's Let's Encrypt HTTP-01/TLS-ALPN challenge must reach the origin directly. Proxying adds
+   latency to phone audio; voice replies must start within about 2 seconds of the caller stopping.
+   This repository does not create cloud resources or change DNS.
 3. The supplied `deploy/cloud-init.yaml` creates the `deploy` user with the selected SSH public
    key, disables password/root SSH, installs Docker and operational packages, configures fail2ban,
    unattended upgrades, UFW, and Docker log rotation. Permit only SSH, HTTP, HTTPS TCP, and HTTPS
    UDP at both the Hetzner firewall and host firewall. Wait for cloud-init before connecting.
+   Docker-published ports bypass UFW; this is acceptable because only Caddy publishes 80/443, and
+   the Hetzner firewall is the outer layer.
 4. Create a read-only deploy key for this GitHub repository, clone the selected branch into
    `/opt/inbound-agent` as `deploy`, and install the private deploy key with mode `0600`.
    Never paste a private key, API token, or application secret into cloud-init or this repository.
@@ -95,14 +98,15 @@ Validate and deploy:
 
 ```sh
 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.production config -q
-SKIP_PULL=1 ./deploy/deploy.sh
+./deploy/deploy.sh
 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.production ps
 ```
 
-`SKIP_PULL=1` is appropriate only after deliberately checking out the intended revision. Normal
-deploys run `git pull --ff-only`, build the images, execute Alembic migrations, start services,
-wait for health, request `https://$DOMAIN/api/healthz`, and prune dangling images. Caddy obtains
-and renews public certificates automatically; ensure inbound 80/443 reach this server. Check
+The first deploy uses `./deploy/deploy.sh`. `SKIP_PULL=1` is optional only after deliberately
+checking out the intended revision. Normal deploys run `git pull --ff-only`, build the images,
+execute Alembic migrations, start services, wait for health, request
+`https://$DOMAIN/api/healthz`, and prune dangling images. Caddy obtains and renews public
+certificates automatically; ensure inbound 80/443 reach this server. Check
 `docker compose ... logs --tail=100 caddy backend worker phone webcall` if startup fails. Do not
 expose database or Redis ports to the Internet.
 
@@ -124,12 +128,38 @@ expose database or Redis ports to the Internet.
 
 ## Backups and recovery
 
-`deploy/backup.sh` writes a custom-format database dump, role SQL (without passwords), and
-uploads archive under `$BACKUP_DIR/daily`; it retains seven daily sets and four weekly sets.
-Weekly copies are made on Sunday or when `BACKUP_WEEKLY=1`. The optional Restic path requires both
-`RESTIC_REPOSITORY` and `RESTIC_PASSWORD`; S3-compatible storage additionally uses the AWS
-credential variables. The environment file is parsed as key/value data, not sourced as shell.
-Protect it as secret material.
+`deploy/backup.sh` writes a custom-format database dump, role SQL (without passwords), uploads
+archive, and `voice-runs` archive under `$BACKUP_DIR/daily`; it retains seven daily sets and four
+weekly sets. Weekly copies are made on Sunday or when `BACKUP_WEEKLY=1`. The optional Restic path
+requires both `RESTIC_REPOSITORY` and `RESTIC_PASSWORD`. For S3-compatible storage, configure:
+
+```dotenv
+RESTIC_REPOSITORY=s3:https://<endpoint>/<bucket>/inbound
+AWS_ACCESS_KEY_ID=<access-key>
+AWS_SECRET_ACCESS_KEY=<secret-key>
+RESTIC_PASSWORD=<restic-repository-password>
+```
+
+For a Hetzner Storage Box, configure:
+
+```dotenv
+RESTIC_REPOSITORY=sftp:uXXXX@uXXXX.your-storagebox.de:inbound
+RESTIC_PASSWORD=<restic-repository-password>
+```
+
+Add the deploy user's SSH key to the Storage Box. Configure port 23 in `~/.ssh/config` for
+`uXXXX.your-storagebox.de`:
+
+```sshconfig
+Host uXXXX.your-storagebox.de
+  User uXXXX
+  Port 23
+  IdentityFile /home/deploy/.ssh/id_ed25519_storagebox
+  IdentitiesOnly yes
+```
+
+The environment file is parsed as key/value data, not sourced as shell. Protect it as secret
+material.
 
 Install and enable the included daily systemd timer:
 
@@ -151,12 +181,13 @@ downtime, and provide the uploads archive if restoring uploads:
 
 ```sh
 ./deploy/restore.sh /var/backups/inbound/daily/inbound-YYYYMMDD-HHMMSS.dump \
-  --uploads /var/backups/inbound/daily/inbound-YYYYMMDD-HHMMSS.uploads.tar.gz --yes
+  --uploads /var/backups/inbound/daily/inbound-YYYYMMDD-HHMMSS.uploads.tar.gz \
+  --voice-runs /var/backups/inbound/daily/inbound-YYYYMMDD-HHMMSS.voice-runs.tar.gz --yes
 ```
 
-The script stops application services, restores roles/database and optional uploads, and restarts
-the application services. `--yes` is mandatory for live database replacement. To test the dump
-without replacing production data, restore it into a new database name:
+The script stops application services, restores roles/database and optional uploads and voice call
+files, then restarts the application services. `--yes` is mandatory for live database replacement.
+To test the dump without replacing production data, restore it into a new database name:
 
 ```sh
 ./deploy/restore.sh /var/backups/inbound/daily/inbound-YYYYMMDD-HHMMSS.dump --db inbound_drill
@@ -181,10 +212,9 @@ Use `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.pro
 and `ps` for operations. Caddy's ACME logs are the first place to look for DNS/firewall issues.
 Check `systemctl list-timers inbound-backup.timer`, disk space, and backup age regularly.
 
-For planning only, the original estimate is about €8.49/month net for a CX33 plus €0.50/month net
-for a primary IPv4, or approximately €8.99/month without Hetzner backups. Hetzner backups were
-estimated at 20% of the server price (about €1.70/month), for about €10.69/month with backups.
-Check current Hetzner pricing and VAT before provisioning; an optional Storage Box costs extra.
+CX33 costs €8.49/month net and a primary IPv4 costs €0.50/month net, for a total of €8.99/month.
+Optional Hetzner backups add 20% of the server price (about €1.70/month), for about €10.69/month.
+These prices exclude VAT; check current Hetzner pricing. A Storage Box is an optional extra.
 The monthly bill also includes any selected model, speech, phone, and object-storage provider
 usage. Provider API costs vary with traffic and configuration; review current pricing before
 enabling a service. No provider keys or cloud credentials are needed for the local verification
