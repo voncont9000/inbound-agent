@@ -15,6 +15,15 @@ from eval.run_matrix import (
     _fake_api_state,
     build_parser,
 )
+from eval.synth_callers import load_scenarios
+
+
+def test_every_eval_scenario_has_a_caller_id() -> None:
+    for scenario_name, scenario in load_scenarios().items():
+        caller_id = scenario.get("caller_id")
+        assert isinstance(caller_id, str) and caller_id.strip(), (
+            f"Scenario {scenario_name} must have a non-empty caller_id."
+        )
 
 
 def test_booking_smoke_command_has_default_provider_repetition_args() -> None:

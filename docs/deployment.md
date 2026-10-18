@@ -88,8 +88,11 @@ openssl rand -hex 32
 Use separate random values for `POSTGRES_PASSWORD`, `INBOUND_APP_PASSWORD`, and
 `VOICE_SERVICE_TOKEN`. Replace the placeholder email/domain, then edit
 `deploy/.env.production` through a protected editor. Do not put secrets in shell history. The
-example intentionally starts with WhatsApp, Twilio, and Gmail disabled. Keep `GMAIL_MODE=off`
-on first deploy until Google OAuth, Pub/Sub, and credential encryption are configured. WhatsApp
+example intentionally starts with WhatsApp, Twilio, Gmail, and Calendar disabled. Keep
+`GMAIL_MODE=off` on first deploy until Google OAuth, Pub/Sub, and credential encryption are
+configured. Keep `CALENDAR_MODE=off` until Calendar is configured; `google` requires
+`GMAIL_MODE=google`, and `fake` is refused in production. See [booking.md](booking.md) for Calendar
+setup. WhatsApp
 `graph` mode requires `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, and
 `WHATSAPP_ACCESS_TOKEN`; `fake` is rejected in production. Twilio `twilio` mode requires
 `TWILIO_AUTH_TOKEN`. A tokenless browser demo is rejected in production unless the request
