@@ -117,20 +117,21 @@ class MaxCallDurationObserver(BaseObserver):
         self.ended = False
 
     def start(self) -> None:
-        if self.seconds is not None:
-            self.pending = asyncio.create_task(
-                wait_for_max_call_duration(
-                    self.seconds,
-                    self.message,
-                    queue_frame=self.queue_frame,
-                    new_marker=self.speech_tracker.new_marker,
-                    marker_frame=self.marker_frame,
-                    wait_for_marker=self.speech_tracker.wait_for_marker,
-                    call_ended=lambda: self.ended or self.call_tools.end_call_requested,
-                    transfer_in_progress=lambda: self.call_tools.transfer_request is not None,
-                    append_task=self.sink.append_task,
-                )
+        if self.seconds is None or self.pending is not None:
+            return
+        self.pending = asyncio.create_task(
+            wait_for_max_call_duration(
+                self.seconds,
+                self.message,
+                queue_frame=self.queue_frame,
+                new_marker=self.speech_tracker.new_marker,
+                marker_frame=self.marker_frame,
+                wait_for_marker=self.speech_tracker.wait_for_marker,
+                call_ended=lambda: self.ended or self.call_tools.end_call_requested,
+                transfer_in_progress=lambda: self.call_tools.transfer_request is not None,
+                append_task=self.sink.append_task,
             )
+        )
 
     async def on_push_frame(self, data: Any) -> None:
         if isinstance(data.frame, EndWorkerFrame):

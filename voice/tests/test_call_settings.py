@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 from types import SimpleNamespace
 
 from pipecat.frames.frames import EndWorkerFrame, TTSSpeakFrame
@@ -74,3 +75,48 @@ def test_max_call_observer_does_not_start_without_a_limit() -> None:
     )
     observer.start()
     assert observer.pending is None
+
+
+def test_max_call_observer_start_is_idempotent() -> None:
+    async def run() -> None:
+        async def queue_frame(frame) -> None:
+            return None
+
+        async def wait_for_marker(marker_id, *, timeout) -> None:
+            return None
+
+        observer = MaxCallDurationObserver(
+            60,
+            "message",
+            queue_frame=queue_frame,
+            speech_tracker=SimpleNamespace(
+                new_marker=lambda: "marker",
+                wait_for_marker=wait_for_marker,
+            ),
+            marker_frame=lambda marker_id: marker_id,
+            call_tools=SimpleNamespace(end_call_requested=False, transfer_request=None),
+            sink=SimpleNamespace(append_task=lambda *args: None),
+        )
+        tasks_before = len(asyncio.all_tasks())
+
+        observer.start()
+        first = observer.pending
+        assert first is not None
+        observer.start()
+
+        assert observer.pending is first
+        assert len(asyncio.all_tasks()) - tasks_before == 1
+
+        observer.close()
+        assert observer.pending is None
+        with suppress(asyncio.CancelledError):
+            await first
+        assert first.cancelled() or first.done()
+        assert not [
+            task
+            for task in asyncio.all_tasks()
+            if task is not asyncio.current_task()
+            and task.get_coro().__qualname__ == "wait_for_max_call_duration"
+        ]
+
+    asyncio.run(run())
