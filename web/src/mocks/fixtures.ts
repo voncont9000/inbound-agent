@@ -27,6 +27,14 @@ const plumbingConfig: AssistantConfig = {
     { service: "Installation survey", price: "No charge", notes: "Survey required before a quote." },
   ],
   policies: ["Do not diagnose dangerous faults remotely; advise callers to leave the area if they smell gas.", "Confirm availability before promising an appointment.", "Only quote listed prices."],
+  rules: {
+    ai_disclosure: "at_start",
+    style: null,
+    off_topic: null,
+    angry_caller: null,
+    sales_calls: null,
+    pronunciations: [],
+  },
   contacts: { office: "hello@brightside.example", emergency: "0800 000 0000" },
   services: {
     boiler_repair: { label: "Boiler repair", fields: [
@@ -79,8 +87,6 @@ const lawConfig: AssistantConfig = {
 When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
 question twice in a row.
 
-At the beginning of every call, disclose that you are an AI assistant. Say: "{greeting}"
-
 Ask for each critical field at a natural point. If the caller does not answer, acknowledge it,
 move on, and return to it once before the end.
 Collect other details conversationally; they are extracted after the call. Do not call a tool
@@ -112,6 +118,14 @@ in response.`,
     "For existing-client matter updates, take a message for the fee earner; never imply access to live matter status.",
     "For employment termination dates, the system calculates the tribunal deadline. Do not calculate or reassure callers about legal time limits, and offer a callback.",
   ],
+  rules: {
+    ai_disclosure: "at_start",
+    style: "formal",
+    off_topic: "redirect",
+    angry_caller: "de_escalate",
+    sales_calls: "decline",
+    pronunciations: [{ term: "ACAS", say_as: "Ay-cass" }],
+  },
   contacts: {
     complaints_contact: "complaints@demoandco.example",
     complaints_procedure: "Ask for the written complaints procedure from the complaints handler.",

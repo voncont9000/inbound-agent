@@ -58,6 +58,10 @@ export function validateAssistantConfig(config: AssistantConfig): Record<string,
 
   config.urgency_rules.forEach((rule, index) => {
     const base = `urgency_rules.${index}`;
+    if (rule.type === "sentence") {
+      if (!rule.text.trim()) set(`${base}.text`, "Enter an urgency condition.");
+      return;
+    }
     if (rule.type === "keyword") {
       if (!rule.phrases.some((phrase) => phrase.trim())) set(`${base}.phrases`, "Add at least one phrase.");
       if (!rule.reason.trim()) set(`${base}.reason`, "Enter a reason.");
@@ -71,6 +75,11 @@ export function validateAssistantConfig(config: AssistantConfig): Record<string,
       if (!Number.isInteger(rule[name]) || rule[name] < 0) set(`${base}.${name}`, "Enter a whole number greater than or equal to zero.");
     }
     if (!rule.reason.trim()) set(`${base}.reason`, "Enter a reason.");
+  });
+  (config.rules?.pronunciations ?? []).forEach((entry, index) => {
+    const base = `rules.pronunciations.${index}`;
+    if (!entry.term.trim()) set(`${base}.term`, "Enter a term.");
+    if (!entry.say_as.trim()) set(`${base}.say_as`, "Enter how to say the term.");
   });
   const actionKeys = new Set<string>();
   (config.post_actions ?? []).forEach((action, index) => {

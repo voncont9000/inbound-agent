@@ -5,6 +5,7 @@ import { api, unwrap, uploadKnowledgeFile, type Schemas } from "../api/client";
 import { ApiError, fieldErrorsFrom422 } from "../api/errors";
 import { TestCallButton } from "../components/TestCallButton";
 import { PostActionsEditor } from "../components/PostActionsEditor";
+import { RulePresetsEditor } from "../components/RulePresetsEditor";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
 import { enumAt, rangeAt } from "../lib/configSchema";
@@ -55,6 +56,11 @@ function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
   }));
   result.urgency_rules.forEach((rule) => {
     if (rule.type === "keyword") rule.phrases = rule.phrases.map((phrase) => phrase.trim()).filter(Boolean);
+    if (rule.type === "sentence") rule.text = rule.text.trim();
+  });
+  (result.rules?.pronunciations ?? []).forEach((entry) => {
+    entry.term = entry.term.trim();
+    entry.say_as = entry.say_as.trim();
   });
   return result;
 }
@@ -234,13 +240,7 @@ export function AssistantSettingsPage() {
           ["not_relevant", "Not relevant"],
         ] as const).map(([key, label]) => <Field key={key} path={`email_triage.${key}`} label={label}>{(fieldId) => <textarea id={fieldId} value={config.email_triage?.[key] ?? ""} onChange={(event) => update((draft) => { if (draft.email_triage) draft.email_triage[key] = event.target.value; })} />}</Field>)}
       </section>
-      <section className="panel stack"><h2>Policies</h2>
-        {config.policies.map((policy, index) => <div className="inline-editor" key={`policy-${index}`}>
-          <Field path={`policies.${index}`} label={`Policy ${index + 1}`}>{(fieldId) => <textarea id={fieldId} value={policy} onChange={(event) => update((draft) => { draft.policies[index] = event.target.value; })} />}</Field>
-          <div className="button-row"><button type="button" onClick={() => update((draft) => { [draft.policies[index - 1], draft.policies[index]] = [draft.policies[index], draft.policies[index - 1]]; })} disabled={index === 0}>Move up</button><button type="button" onClick={() => update((draft) => { [draft.policies[index + 1], draft.policies[index]] = [draft.policies[index], draft.policies[index + 1]]; })} disabled={index === config.policies.length - 1}>Move down</button><button type="button" onClick={() => update((draft) => { draft.policies.splice(index, 1); })}>Remove policy</button></div>
-        </div>)}
-        <button type="button" onClick={() => update((draft) => { draft.policies.push(""); })}>Add policy</button>
-      </section>
+      <RulePresetsEditor config={config} update={update} />
       <section className="panel stack"><h2>Readback</h2>
         <p className="help">Choose which information the assistant reads back for caller confirmation.</p>
         {readbackOptions.map((option) => <label key={option} className="radio-row"><input type="radio" name="readback" value={option} checked={config.readback === option} onChange={() => update((draft) => { draft.readback = option as AssistantConfig["readback"]; })} /><span><strong>{option}</strong> — {option === "off" ? "Don't read details back to the caller." : option === "email" ? "Read email addresses back letter by letter so the caller can confirm them." : "Read back every field marked critical (for example name, phone, email or key dates) and ask the caller to confirm."}</span></label>)}
@@ -316,7 +316,9 @@ export function AssistantSettingsPage() {
         <button type="button" onClick={() => update((draft) => { let key = "service"; let suffix = 1; while (draft.services[key]) key = `service_${suffix++}`; draft.services[key] = { label: "", fields: [] }; })}>Add service</button>
       </section>
       <section className="panel stack"><h2>Urgency rules</h2>
-        {config.urgency_rules.map((rule, index) => <section className="inline-editor" key={`urgency-${index}`}>
+        {config.urgency_rules.map((rule, index) => {
+          if (rule.type === "sentence") return null;
+          return <section className="inline-editor" key={`urgency-${index}`}>
           <Field path={`urgency_rules.${index}.type`} label="Rule type">{(fieldId) => <select id={fieldId} value={rule.type} onChange={(event) => {
             setPhraseText((current) => { const next = { ...current }; delete next[`urgency_rules.${index}.phrases`]; return next; });
             update((draft) => {
@@ -345,7 +347,8 @@ export function AssistantSettingsPage() {
             <Field path={`urgency_rules.${index}.reason`} label="Reason" error={allErrors[`urgency_rules.${index}.reason`]}>{(fieldId, describedBy) => <input id={fieldId} value={rule.reason} {...inputProps(`urgency_rules.${index}.reason`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { const current = draft.urgency_rules[index]; if (current?.type === "date_deadline") current.reason = event.target.value; })} />}</Field>
           </>}
           <button type="button" onClick={() => { setPhraseText({}); update((draft) => { draft.urgency_rules.splice(index, 1); }); }}>Remove urgency rule</button>
-        </section>)}
+        </section>;
+        })}
         <button type="button" onClick={() => update((draft) => { draft.urgency_rules.push({ type: "keyword", phrases: [], reason: "" }); })}>Add urgency rule</button>
       </section>
       <section className="panel stack"><h2>Live actions</h2><p className="help">Live actions add latency and default to none.</p>

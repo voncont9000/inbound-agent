@@ -3,12 +3,6 @@
     "AppointmentType": {
       "additionalProperties": false,
       "properties": {
-        "duration_minutes": {
-          "exclusiveMinimum": 0,
-          "maximum": 480,
-          "title": "Duration Minutes",
-          "type": "integer"
-        },
         "key": {
           "pattern": "^[a-z0-9_]+$",
           "title": "Key",
@@ -16,6 +10,16 @@
         },
         "label": {
           "title": "Label",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "exclusiveMinimum": 0,
+          "maximum": 480,
+          "title": "Duration Minutes",
+          "type": "integer"
+        },
+        "when_to_use": {
+          "title": "When To Use",
           "type": "string"
         },
         "location_or_link": {
@@ -29,10 +33,6 @@
           ],
           "default": null,
           "title": "Location Or Link"
-        },
-        "when_to_use": {
-          "title": "When To Use",
-          "type": "string"
         }
       },
       "required": [
@@ -47,6 +47,11 @@
     "BookingConfig": {
       "additionalProperties": false,
       "properties": {
+        "calendar_id": {
+          "default": "primary",
+          "title": "Calendar Id",
+          "type": "string"
+        },
         "appointment_types": {
           "items": {
             "$ref": "#/$defs/AppointmentType"
@@ -55,32 +60,23 @@
           "title": "Appointment Types",
           "type": "array"
         },
-        "book_message": {
-          "default": "One moment while I book that.",
-          "title": "Book Message",
-          "type": "string"
-        },
-        "buffer_minutes": {
-          "default": 0,
+        "min_notice_hours": {
+          "default": 2,
           "minimum": 0,
-          "title": "Buffer Minutes",
+          "title": "Min Notice Hours",
           "type": "integer"
-        },
-        "calendar_id": {
-          "default": "primary",
-          "title": "Calendar Id",
-          "type": "string"
-        },
-        "check_message": {
-          "default": "Let me check the diary.",
-          "title": "Check Message",
-          "type": "string"
         },
         "horizon_days": {
           "default": 14,
           "maximum": 60,
           "minimum": 1,
           "title": "Horizon Days",
+          "type": "integer"
+        },
+        "buffer_minutes": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Buffer Minutes",
           "type": "integer"
         },
         "max_slots_offered": {
@@ -90,10 +86,11 @@
           "title": "Max Slots Offered",
           "type": "integer"
         },
-        "min_notice_hours": {
-          "default": 2,
-          "minimum": 0,
-          "title": "Min Notice Hours",
+        "slot_step_minutes": {
+          "default": 30,
+          "maximum": 240,
+          "minimum": 5,
+          "title": "Slot Step Minutes",
           "type": "integer"
         },
         "send_updates": {
@@ -106,12 +103,15 @@
           "title": "Send Updates",
           "type": "string"
         },
-        "slot_step_minutes": {
-          "default": 30,
-          "maximum": 240,
-          "minimum": 5,
-          "title": "Slot Step Minutes",
-          "type": "integer"
+        "check_message": {
+          "default": "Let me check the diary.",
+          "title": "Check Message",
+          "type": "string"
+        },
+        "book_message": {
+          "default": "One moment while I book that.",
+          "title": "Book Message",
+          "type": "string"
         }
       },
       "required": [
@@ -123,34 +123,34 @@
     "DateDeadlineUrgencyRule": {
       "additionalProperties": false,
       "properties": {
-        "add_months": {
-          "title": "Add Months",
-          "type": "integer"
-        },
-        "field": {
-          "title": "Field",
-          "type": "string"
-        },
-        "minus_days": {
-          "title": "Minus Days",
-          "type": "integer"
-        },
-        "reason": {
-          "title": "Reason",
+        "type": {
+          "const": "date_deadline",
+          "title": "Type",
           "type": "string"
         },
         "service": {
           "title": "Service",
           "type": "string"
         },
-        "type": {
-          "const": "date_deadline",
-          "title": "Type",
+        "field": {
+          "title": "Field",
           "type": "string"
+        },
+        "add_months": {
+          "title": "Add Months",
+          "type": "integer"
+        },
+        "minus_days": {
+          "title": "Minus Days",
+          "type": "integer"
         },
         "urgent_within_days": {
           "title": "Urgent Within Days",
           "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
         }
       },
       "required": [
@@ -168,9 +168,9 @@
     "EmailCustomerAction": {
       "additionalProperties": false,
       "properties": {
-        "body_template": {
-          "minLength": 1,
-          "title": "Body Template",
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
           "type": "string"
         },
         "enabled": {
@@ -178,10 +178,8 @@
           "title": "Enabled",
           "type": "boolean"
         },
-        "key": {
-          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
-          "title": "Key",
-          "type": "string"
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
         },
         "kind": {
           "const": "email_customer",
@@ -193,8 +191,10 @@
           "title": "Subject Template",
           "type": "string"
         },
-        "trigger": {
-          "$ref": "#/$defs/PostActionTrigger"
+        "body_template": {
+          "minLength": 1,
+          "title": "Body Template",
+          "type": "string"
         }
       },
       "required": [
@@ -220,14 +220,14 @@
           "title": "Needs Human",
           "type": "string"
         },
-        "not_relevant": {
-          "default": "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
-          "title": "Not Relevant",
-          "type": "string"
-        },
         "spam": {
           "default": "Unsolicited marketing, phishing, scams or automated bulk mail.",
           "title": "Spam",
+          "type": "string"
+        },
+        "not_relevant": {
+          "default": "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+          "title": "Not Relevant",
           "type": "string"
         }
       },
@@ -237,43 +237,13 @@
     "FieldSpec": {
       "additionalProperties": false,
       "properties": {
-        "choices": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Choices"
-        },
-        "critical": {
-          "default": false,
-          "title": "Critical",
-          "type": "boolean"
-        },
-        "description": {
-          "default": "",
-          "title": "Description",
+        "name": {
+          "title": "Name",
           "type": "string"
         },
         "label": {
           "title": "Label",
           "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "required": {
-          "default": false,
-          "title": "Required",
-          "type": "boolean"
         },
         "type": {
           "enum": [
@@ -289,6 +259,36 @@
           ],
           "title": "Type",
           "type": "string"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Choices"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "critical": {
+          "default": false,
+          "title": "Critical",
+          "type": "boolean"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
         }
       },
       "required": [
@@ -302,6 +302,11 @@
     "KeywordUrgencyRule": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "keyword",
+          "title": "Type",
+          "type": "string"
+        },
         "phrases": {
           "items": {
             "type": "string"
@@ -311,11 +316,6 @@
         },
         "reason": {
           "title": "Reason",
-          "type": "string"
-        },
-        "type": {
-          "const": "keyword",
-          "title": "Type",
           "type": "string"
         }
       },
@@ -330,17 +330,19 @@
     "KnowledgeConfig": {
       "additionalProperties": false,
       "properties": {
-        "digest_content": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Digest Content"
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeSource"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "faqs": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeFAQ"
+          },
+          "title": "Faqs",
+          "type": "array"
         },
         "digest_path": {
           "anyOf": [
@@ -354,25 +356,23 @@
           "default": null,
           "title": "Digest Path"
         },
-        "faqs": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeFAQ"
-          },
-          "title": "Faqs",
-          "type": "array"
-        },
         "max_digest_chars": {
           "default": 24000,
           "exclusiveMinimum": 0,
           "title": "Max Digest Chars",
           "type": "integer"
         },
-        "sources": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeSource"
-          },
-          "title": "Sources",
-          "type": "array"
+        "digest_content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest Content"
         }
       },
       "title": "KnowledgeConfig",
@@ -381,12 +381,12 @@
     "KnowledgeFAQ": {
       "additionalProperties": false,
       "properties": {
-        "answer": {
-          "title": "Answer",
-          "type": "string"
-        },
         "question": {
           "title": "Question",
+          "type": "string"
+        },
+        "answer": {
+          "title": "Answer",
           "type": "string"
         }
       },
@@ -400,18 +400,6 @@
     "KnowledgeSource": {
       "additionalProperties": false,
       "properties": {
-        "file": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "File"
-        },
         "url": {
           "anyOf": [
             {
@@ -425,6 +413,18 @@
           ],
           "default": null,
           "title": "Url"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File"
         }
       },
       "title": "KnowledgeSource",
@@ -433,9 +433,9 @@
     "NotifyStaffAction": {
       "additionalProperties": false,
       "properties": {
-        "body_template": {
-          "minLength": 1,
-          "title": "Body Template",
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
           "type": "string"
         },
         "enabled": {
@@ -443,19 +443,12 @@
           "title": "Enabled",
           "type": "boolean"
         },
-        "key": {
-          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
-          "title": "Key",
-          "type": "string"
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
         },
         "kind": {
           "const": "notify_staff",
           "title": "Kind",
-          "type": "string"
-        },
-        "subject_template": {
-          "minLength": 1,
-          "title": "Subject Template",
           "type": "string"
         },
         "to": {
@@ -467,8 +460,15 @@
           "title": "To",
           "type": "array"
         },
-        "trigger": {
-          "$ref": "#/$defs/PostActionTrigger"
+        "subject_template": {
+          "minLength": 1,
+          "title": "Subject Template",
+          "type": "string"
+        },
+        "body_template": {
+          "minLength": 1,
+          "title": "Body Template",
+          "type": "string"
         }
       },
       "required": [
@@ -485,10 +485,6 @@
     "OfficeHours": {
       "additionalProperties": false,
       "properties": {
-        "closes": {
-          "title": "Closes",
-          "type": "string"
-        },
         "days": {
           "items": {
             "type": "string"
@@ -498,6 +494,10 @@
         },
         "opens": {
           "title": "Opens",
+          "type": "string"
+        },
+        "closes": {
+          "title": "Closes",
           "type": "string"
         },
         "timezone": {
@@ -517,19 +517,6 @@
     "PostActionTrigger": {
       "additionalProperties": false,
       "properties": {
-        "channels": {
-          "items": {
-            "enum": [
-              "phone",
-              "web",
-              "gmail",
-              "whatsapp"
-            ],
-            "type": "string"
-          },
-          "title": "Channels",
-          "type": "array"
-        },
         "events": {
           "items": {
             "enum": [
@@ -543,6 +530,19 @@
           },
           "minItems": 1,
           "title": "Events",
+          "type": "array"
+        },
+        "channels": {
+          "items": {
+            "enum": [
+              "phone",
+              "web",
+              "gmail",
+              "whatsapp"
+            ],
+            "type": "string"
+          },
+          "title": "Channels",
           "type": "array"
         },
         "services": {
@@ -562,16 +562,16 @@
     "PriceItem": {
       "additionalProperties": false,
       "properties": {
-        "notes": {
-          "title": "Notes",
+        "service": {
+          "title": "Service",
           "type": "string"
         },
         "price": {
           "title": "Price",
           "type": "string"
         },
-        "service": {
-          "title": "Service",
+        "notes": {
+          "title": "Notes",
           "type": "string"
         }
       },
@@ -583,19 +583,146 @@
       "title": "PriceItem",
       "type": "object"
     },
+    "PronunciationEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "term": {
+          "minLength": 1,
+          "title": "Term",
+          "type": "string"
+        },
+        "say_as": {
+          "minLength": 1,
+          "title": "Say As",
+          "type": "string"
+        }
+      },
+      "required": [
+        "term",
+        "say_as"
+      ],
+      "title": "PronunciationEntry",
+      "type": "object"
+    },
+    "RulesConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "ai_disclosure": {
+          "default": "at_start",
+          "enum": [
+            "at_start",
+            "when_asked"
+          ],
+          "title": "Ai Disclosure",
+          "type": "string"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "enum": [
+                "formal",
+                "friendly",
+                "neutral"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Style"
+        },
+        "off_topic": {
+          "anyOf": [
+            {
+              "enum": [
+                "redirect",
+                "answer_briefly"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Off Topic"
+        },
+        "angry_caller": {
+          "anyOf": [
+            {
+              "const": "de_escalate",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Angry Caller"
+        },
+        "sales_calls": {
+          "anyOf": [
+            {
+              "enum": [
+                "decline",
+                "take_message"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sales Calls"
+        },
+        "pronunciations": {
+          "items": {
+            "$ref": "#/$defs/PronunciationEntry"
+          },
+          "title": "Pronunciations",
+          "type": "array"
+        }
+      },
+      "title": "RulesConfig",
+      "type": "object"
+    },
+    "SentenceUrgencyRule": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sentence",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "SentenceUrgencyRule",
+      "type": "object"
+    },
     "ServiceConfig": {
       "additionalProperties": false,
       "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
         "fields": {
           "items": {
             "$ref": "#/$defs/FieldSpec"
           },
           "title": "Fields",
           "type": "array"
-        },
-        "label": {
-          "title": "Label",
-          "type": "string"
         }
       },
       "required": [
@@ -628,27 +755,27 @@
     "SheetsRowAction": {
       "additionalProperties": false,
       "properties": {
-        "columns": {
-          "items": {
-            "$ref": "#/$defs/SheetColumn"
-          },
-          "minItems": 1,
-          "title": "Columns",
-          "type": "array"
+        "key": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "title": "Key",
+          "type": "string"
         },
         "enabled": {
           "default": true,
           "title": "Enabled",
           "type": "boolean"
         },
-        "key": {
-          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
-          "title": "Key",
-          "type": "string"
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
         },
         "kind": {
           "const": "sheets_row",
           "title": "Kind",
+          "type": "string"
+        },
+        "spreadsheet_id": {
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Spreadsheet Id",
           "type": "string"
         },
         "sheet_name": {
@@ -657,13 +784,13 @@
           "title": "Sheet Name",
           "type": "string"
         },
-        "spreadsheet_id": {
-          "pattern": "^[A-Za-z0-9_-]+$",
-          "title": "Spreadsheet Id",
-          "type": "string"
-        },
-        "trigger": {
-          "$ref": "#/$defs/PostActionTrigger"
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/SheetColumn"
+          },
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
         }
       },
       "required": [
@@ -688,11 +815,6 @@
           "title": "Label",
           "type": "string"
         },
-        "office_hours_only": {
-          "default": true,
-          "title": "Office Hours Only",
-          "type": "boolean"
-        },
         "phone": {
           "title": "Phone",
           "type": "string"
@@ -700,6 +822,11 @@
         "when_to_use": {
           "title": "When To Use",
           "type": "string"
+        },
+        "office_hours_only": {
+          "default": true,
+          "title": "Office Hours Only",
+          "type": "boolean"
         }
       },
       "required": [
@@ -714,23 +841,23 @@
     "WebhookAction": {
       "additionalProperties": false,
       "properties": {
-        "enabled": {
-          "default": true,
-          "title": "Enabled",
-          "type": "boolean"
-        },
         "key": {
           "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
           "title": "Key",
           "type": "string"
         },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "trigger": {
+          "$ref": "#/$defs/PostActionTrigger"
+        },
         "kind": {
           "const": "webhook",
           "title": "Kind",
           "type": "string"
-        },
-        "trigger": {
-          "$ref": "#/$defs/PostActionTrigger"
         },
         "url": {
           "format": "uri",
@@ -751,30 +878,14 @@
   },
   "additionalProperties": false,
   "properties": {
-    "booking": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/BookingConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+    "language": {
+      "default": "English",
+      "title": "Language",
+      "type": "string"
     },
     "business_name": {
       "title": "Business Name",
       "type": "string"
-    },
-    "contacts": {
-      "additionalProperties": {
-        "type": "string"
-      },
-      "title": "Contacts",
-      "type": "object"
-    },
-    "email_triage": {
-      "$ref": "#/$defs/EmailTriageConfig"
     },
     "greeting": {
       "title": "Greeting",
@@ -785,33 +896,25 @@
       "title": "Instructions",
       "type": "string"
     },
-    "knowledge": {
-      "$ref": "#/$defs/KnowledgeConfig"
-    },
-    "language": {
-      "default": "English",
-      "title": "Language",
+    "readback": {
+      "default": "off",
+      "enum": [
+        "off",
+        "email",
+        "critical"
+      ],
+      "title": "Readback",
       "type": "string"
-    },
-    "live_actions": {
-      "items": {
-        "enum": [
-          "confirm_critical_fields",
-          "flag_urgent",
-          "request_callback",
-          "log_complaint",
-          "end_call",
-          "check_availability",
-          "book_appointment",
-          "transfer_call"
-        ],
-        "type": "string"
-      },
-      "title": "Live Actions",
-      "type": "array"
     },
     "office_hours": {
       "$ref": "#/$defs/OfficeHours"
+    },
+    "price_list": {
+      "items": {
+        "$ref": "#/$defs/PriceItem"
+      },
+      "title": "Price List",
+      "type": "array"
     },
     "policies": {
       "items": {
@@ -819,6 +922,48 @@
       },
       "title": "Policies",
       "type": "array"
+    },
+    "contacts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Contacts",
+      "type": "object"
+    },
+    "services": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ServiceConfig"
+      },
+      "title": "Services",
+      "type": "object"
+    },
+    "urgency_rules": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "date_deadline": "#/$defs/DateDeadlineUrgencyRule",
+            "keyword": "#/$defs/KeywordUrgencyRule",
+            "sentence": "#/$defs/SentenceUrgencyRule"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/KeywordUrgencyRule"
+          },
+          {
+            "$ref": "#/$defs/DateDeadlineUrgencyRule"
+          },
+          {
+            "$ref": "#/$defs/SentenceUrgencyRule"
+          }
+        ]
+      },
+      "title": "Urgency Rules",
+      "type": "array"
+    },
+    "rules": {
+      "$ref": "#/$defs/RulesConfig"
     },
     "post_actions": {
       "items": {
@@ -849,46 +994,36 @@
       "title": "Post Actions",
       "type": "array"
     },
-    "price_list": {
+    "knowledge": {
+      "$ref": "#/$defs/KnowledgeConfig"
+    },
+    "live_actions": {
       "items": {
-        "$ref": "#/$defs/PriceItem"
+        "enum": [
+          "confirm_critical_fields",
+          "flag_urgent",
+          "request_callback",
+          "log_complaint",
+          "end_call",
+          "check_availability",
+          "book_appointment",
+          "transfer_call"
+        ],
+        "type": "string"
       },
-      "title": "Price List",
+      "title": "Live Actions",
       "type": "array"
     },
-    "readback": {
-      "default": "off",
-      "enum": [
-        "off",
-        "email",
-        "critical"
+    "booking": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BookingConfig"
+        },
+        {
+          "type": "null"
+        }
       ],
-      "title": "Readback",
-      "type": "string"
-    },
-    "review_confidence_threshold": {
-      "default": 0.7,
-      "maximum": 1,
-      "minimum": 0,
-      "title": "Review Confidence Threshold",
-      "type": "number"
-    },
-    "services": {
-      "additionalProperties": {
-        "$ref": "#/$defs/ServiceConfig"
-      },
-      "title": "Services",
-      "type": "object"
-    },
-    "transfer_failed_message": {
-      "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
-      "title": "Transfer Failed Message",
-      "type": "string"
-    },
-    "transfer_handoff_message": {
-      "default": "I'm putting you through now, please hold.",
-      "title": "Transfer Handoff Message",
-      "type": "string"
+      "default": null
     },
     "transfer_targets": {
       "items": {
@@ -897,26 +1032,25 @@
       "title": "Transfer Targets",
       "type": "array"
     },
-    "urgency_rules": {
-      "items": {
-        "discriminator": {
-          "mapping": {
-            "date_deadline": "#/$defs/DateDeadlineUrgencyRule",
-            "keyword": "#/$defs/KeywordUrgencyRule"
-          },
-          "propertyName": "type"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/$defs/KeywordUrgencyRule"
-          },
-          {
-            "$ref": "#/$defs/DateDeadlineUrgencyRule"
-          }
-        ]
-      },
-      "title": "Urgency Rules",
-      "type": "array"
+    "transfer_handoff_message": {
+      "default": "I'm putting you through now, please hold.",
+      "title": "Transfer Handoff Message",
+      "type": "string"
+    },
+    "transfer_failed_message": {
+      "default": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "title": "Transfer Failed Message",
+      "type": "string"
+    },
+    "email_triage": {
+      "$ref": "#/$defs/EmailTriageConfig"
+    },
+    "review_confidence_threshold": {
+      "default": 0.7,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Review Confidence Threshold",
+      "type": "number"
     }
   },
   "required": [
