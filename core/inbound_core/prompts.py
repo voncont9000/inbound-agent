@@ -1,6 +1,7 @@
 from datetime import date
 
 from inbound_core.config import AssistantConfig, DateDeadlineUrgencyRule
+from inbound_core.rules import render_conversation_rules
 
 
 def render_business_context(
@@ -12,6 +13,7 @@ def render_business_context(
     persona: str | None = None,
     include_deadline_instructions: bool = True,
     booking_enabled: bool = False,
+    handoff_available: bool = False,
 ) -> str:
     current_date = today or date.today()
     audience = "caller" if channel == "phone" else "customer"
@@ -28,6 +30,16 @@ def render_business_context(
         f"- {name.replace('_', ' ')}: {value}" for name, value in config.contacts.items()
     )
     knowledge = _render_knowledge(config, audience=audience)
+    conversation_rules = render_conversation_rules(
+        config,
+        channel=channel,
+        handoff_available=handoff_available,
+    )
+    conversation_rules_section = (
+        "\n\nCONVERSATION RULES\n" + "\n".join(conversation_rules) + "\n\n"
+        if conversation_rules
+        else "\n\n"
+    )
     context_section = ""
     if context_card and context_card.strip():
         context_header = "CALLER" if channel == "phone" else "CUSTOMER"
@@ -63,9 +75,7 @@ Today is {current_date.isoformat()}. Use today's date to resolve {audience} date
 If the year remains ambiguous, ask the {audience} to clarify it.
 
 POLICIES
-{policies}
-
-CONTACTS
+{policies}{conversation_rules_section}CONTACTS
 {contacts or "- No contacts are configured."}
 
 SERVICES AND INTAKE FIELDS

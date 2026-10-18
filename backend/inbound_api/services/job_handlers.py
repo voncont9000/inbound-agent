@@ -24,6 +24,7 @@ from inbound_core.extraction import (
 )
 from inbound_core.pricing import calculate_cost, load_price_table
 from inbound_core.prompts import render_business_context
+from inbound_core.rules import render_ai_disclosure
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -226,14 +227,10 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
         booking_enabled=booking_ctx is not None,
     )
     has_prior_assistant_reply = any(item.role == MessageRole.ASSISTANT for item in thread)
-    disclosure_rule = (
-        "- This is a later reply. Do not disclose again that you are an AI assistant."
-        if has_prior_assistant_reply
-        else (
-            f"- In this first reply only, include one short clause disclosing that you are "
-            f"the AI assistant for {config.business_name}, exactly once. Do not use the spoken "
-            "call greeting."
-        )
+    disclosure_rule = render_ai_disclosure(
+        config,
+        channel="whatsapp",
+        first_reply=not has_prior_assistant_reply,
     )
     history_labels = {
         MessageRole.CALLER: "Customer",

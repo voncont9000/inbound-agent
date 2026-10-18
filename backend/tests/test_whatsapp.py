@@ -876,9 +876,13 @@ async def test_message_extract_persists_results_and_tasks(graph_env, monkeypatch
     from inbound_api.services import job_handlers
 
     tenant_id = graph_env["tenant_id"]
+    assistant_config = _assistant_config()
+    assistant_config["urgency_rules"] = [
+        {"type": "sentence", "text": "The customer has a deadline within four weeks."}
+    ]
     graph_env["execute"](
         "UPDATE assistants SET config = %s::jsonb WHERE id = %s",
-        (json.dumps(_assistant_config()), graph_env["assistant_id"]),
+        (json.dumps(assistant_config), graph_env["assistant_id"]),
     )
     settings = SimpleNamespace(
         google_api_key="test-key",
@@ -911,6 +915,13 @@ async def test_message_extract_persists_results_and_tasks(graph_env, monkeypatch
             "unanswered_questions": [
                 {"question": "Can you confirm the fee?", "evidence": "Asked about a fee"}
             ],
+            "urgency_matches": [
+                {
+                    "rule": 0,
+                    "reason": "The customer said a deadline is in two weeks.",
+                    "evidence": "My deadline is in two weeks.",
+                }
+            ],
         }
 
     monkeypatch.setattr(job_handlers, "extract_intake", extract)
@@ -940,9 +951,12 @@ async def test_message_extract_persists_results_and_tasks(graph_env, monkeypatch
     ) == [("The customer requested a callback.",)]
     assert graph_env["execute"](
         "SELECT kind, source, payload->>'reason' FROM tasks "
-        "WHERE tenant_id = %s AND conversation_id = %s",
+        "WHERE tenant_id = %s AND conversation_id = %s ORDER BY kind",
         (tenant_id, conversation_id),
-    ) == [("callback", "post_call", "Customer asked to speak with the team")]
+    ) == [
+        ("callback", "post_call", "Customer asked to speak with the team"),
+        ("urgent", "post_call", "The customer said a deadline is in two weeks."),
+    ]
     assert graph_env["execute"](
         "SELECT question FROM knowledge_gaps WHERE tenant_id = %s AND conversation_id = %s",
         (tenant_id, conversation_id),

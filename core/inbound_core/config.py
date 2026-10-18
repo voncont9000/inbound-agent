@@ -108,6 +108,31 @@ class DateDeadlineUrgencyRule(BaseModel):
     reason: str
 
 
+class SentenceUrgencyRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["sentence"]
+    text: str = Field(min_length=1)
+
+
+class PronunciationEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    term: str = Field(min_length=1)
+    say_as: str = Field(min_length=1)
+
+
+class RulesConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ai_disclosure: Literal["at_start", "when_asked"] = "at_start"
+    style: Literal["formal", "friendly", "neutral"] | None = None
+    off_topic: Literal["redirect", "answer_briefly"] | None = None
+    angry_caller: Literal["de_escalate"] | None = None
+    sales_calls: Literal["decline", "take_message"] | None = None
+    pronunciations: list[PronunciationEntry] = Field(default_factory=list)
+
+
 class KnowledgeSource(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -259,7 +284,7 @@ PostAction = Annotated[
 
 
 UrgencyRule = Annotated[
-    KeywordUrgencyRule | DateDeadlineUrgencyRule,
+    KeywordUrgencyRule | DateDeadlineUrgencyRule | SentenceUrgencyRule,
     Field(discriminator="type"),
 ]
 
@@ -278,6 +303,7 @@ class AssistantConfig(BaseModel):
     contacts: dict[str, str]
     services: dict[str, ServiceConfig]
     urgency_rules: list[UrgencyRule]
+    rules: RulesConfig = Field(default_factory=RulesConfig)
     post_actions: list[PostAction] = Field(default_factory=list)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     live_actions: list[

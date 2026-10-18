@@ -5,11 +5,18 @@ from types import SimpleNamespace
 
 import pytest
 
-from inbound_core.config import AssistantConfig
-from inbound_core.extraction import _extraction_prompt, extract_intake
+from inbound_core.config import AssistantConfig, RulesConfig, SentenceUrgencyRule
+from inbound_core.extraction import (
+    _extraction_prompt,
+    _extraction_schema,
+    build_intake_artifacts,
+    build_post_call_tasks,
+    extract_intake,
+)
 from inbound_core.intake import build_service_model, days_until_deadline
 from inbound_core.pricing import calculate_cost, load_price_table
 from inbound_core.prompts import render_business_context
+from inbound_core.rules import render_ai_disclosure, render_conversation_rules
 
 
 def _config() -> AssistantConfig:
@@ -181,3 +188,188 @@ def test_business_context_is_channel_neutral_and_includes_deadline_rules() -> No
     assert "DEADLINE INSTRUCTIONS" in prompt
     assert "after the conversation" in prompt
     assert "Speak " not in prompt
+
+
+def test_default_rules_do_not_change_text_channel_business_context() -> None:
+    config = _config()
+    old_config_payload = config.model_dump(mode="json")
+    old_config_payload.pop("rules")
+    old_config = AssistantConfig.model_validate(old_config_payload)
+
+    prompt = render_business_context(config, channel="whatsapp")
+
+    assert old_config.rules == RulesConfig()
+    assert render_business_context(old_config, channel="whatsapp") == prompt
+    assert "CONVERSATION RULES" not in prompt
+    assert (
+        render_business_context(
+            config.model_copy(update={"rules": RulesConfig(ai_disclosure="when_asked")}),
+            channel="whatsapp",
+        )
+        == prompt
+    )
+
+
+def test_conversation_rule_presets_and_transfer_gating() -> None:
+    config = _config().model_copy(
+        update={
+            "rules": RulesConfig(
+                ai_disclosure="when_asked",
+                style="friendly",
+                off_topic="redirect",
+                angry_caller="de_escalate",
+                sales_calls="take_message",
+            )
+        }
+    )
+
+    phone_rules = render_conversation_rules(config, channel="phone")
+    assert phone_rules == [
+        "- Do not volunteer that you are an AI assistant. If asked whether you are a person, "
+        "say honestly that you are an AI assistant.",
+        "- Use a warm, friendly tone while staying professional.",
+        "- If the caller raises something unrelated to Example business, say politely that you "
+        "can only help with Example business enquiries and return to their enquiry.",
+        "- If the caller is angry or upset, stay calm, acknowledge their frustration, apologise "
+        "for the inconvenience without admitting fault, and focus on the next step.",
+        "- If the caller is selling something or calls from a competitor, take their name, "
+        "company and a one-line message for the team, then close politely.",
+    ]
+    assert not any("transfer" in line or "person" in line for line in phone_rules[3:])
+    assert (
+        "offer the transfer."
+        in render_conversation_rules(config, channel="phone", handoff_available=True)[3]
+    )
+    assert all(
+        "transfer" not in line for line in render_conversation_rules(config, channel="whatsapp")
+    )
+    assert any(
+        "answer in one short sentence" in line
+        for line in render_conversation_rules(
+            config.model_copy(update={"rules": RulesConfig(off_topic="answer_briefly")}),
+            channel="whatsapp",
+        )
+    )
+    formal_config = _config()
+    formal_config.rules.style = "formal"
+    assert "- Use a formal, professional tone." in render_conversation_rules(
+        formal_config, channel="phone"
+    )
+    neutral_config = _config()
+    neutral_config.rules.style = "neutral"
+    assert "- Use a neutral, matter-of-fact tone." in render_conversation_rules(
+        neutral_config, channel="whatsapp"
+    )
+    assert any(
+        line.endswith("decline politely and close the conversation.")
+        for line in render_conversation_rules(
+            config.model_copy(update={"rules": RulesConfig(sales_calls="decline")}),
+            channel="whatsapp",
+        )
+    )
+
+
+def test_text_channel_disclosure_preserves_whatsapp_prompts() -> None:
+    config = _config()
+
+    assert render_ai_disclosure(config, channel="whatsapp", first_reply=True) == (
+        "- In this first reply only, include one short clause disclosing that you are the "
+        "AI assistant for Example business, exactly once. Do not use the spoken call greeting."
+    )
+    assert render_ai_disclosure(config, channel="whatsapp", first_reply=False) == (
+        "- This is a later reply. Do not disclose again that you are an AI assistant."
+    )
+    when_asked = config.model_copy(update={"rules": RulesConfig(ai_disclosure="when_asked")})
+    assert render_ai_disclosure(when_asked, channel="whatsapp", first_reply=True) == (
+        "- Do not volunteer that you are an AI assistant. If asked whether you are a person, "
+        "say honestly that you are the AI assistant for Example business."
+    )
+    assert render_ai_disclosure(config, channel="gmail", first_reply=True) == ""
+
+
+def test_sentence_urgency_extraction_and_task_deduplication() -> None:
+    config = _config().model_copy(
+        update={
+            "urgency_rules": [
+                SentenceUrgencyRule(type="sentence", text="A deadline is within four weeks.")
+            ]
+        }
+    )
+
+    class Models:
+        async def generate_content(self, **arguments):
+            self.arguments = arguments
+            return SimpleNamespace(
+                text=json.dumps(
+                    {
+                        "service": "general",
+                        "fields": [],
+                        "summary": "The customer has a deadline.",
+                        "callback_requested": {
+                            "requested": False,
+                            "reason": None,
+                            "preferred_time": None,
+                            "preferred_time_iso": None,
+                        },
+                        "complaint": {"made": False, "summary": None},
+                        "unanswered_questions": [],
+                        "urgency_matches": [
+                            {
+                                "rule": 0,
+                                "reason": "The customer said a deadline is in two weeks.",
+                                "evidence": "My deadline is in two weeks.",
+                            },
+                            {"rule": 1, "reason": "Invalid index", "evidence": "No match"},
+                            {"rule": 0, "reason": "  ", "evidence": "Empty reason"},
+                            {"rule": True, "reason": "Boolean index", "evidence": "No match"},
+                        ],
+                    }
+                ),
+                usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=5),
+            )
+
+    models = Models()
+    result = asyncio.run(
+        extract_intake(
+            [{"role": "caller", "text": "My deadline is in two weeks."}],
+            {"service": "general", "fields": {}},
+            config,
+            SimpleNamespace(aio=SimpleNamespace(models=models)),
+            "test-model",
+            call_started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+
+    assert "urgency_matches" in models.arguments["config"]["response_json_schema"]["properties"]
+    assert "0. A deadline is within four weeks." in models.arguments["contents"]
+    assert result["urgency_matches"] == [
+        {
+            "rule": 0,
+            "reason": "The customer said a deadline is in two weeks.",
+            "evidence": "My deadline is in two weeks.",
+        }
+    ]
+    post_call, merged = build_intake_artifacts({"service": "general", "fields": {}}, result, config)
+    assert post_call["urgency_matches"] == result["urgency_matches"]
+    tasks = build_post_call_tasks(post_call, merged, config)
+    assert tasks == [
+        {
+            "type": "urgent",
+            "reason": "The customer said a deadline is in two weeks.",
+            "rule": 0,
+            "rule_text": "A deadline is within four weeks.",
+            "evidence": "My deadline is in two weeks.",
+            "source": "post_call",
+        }
+    ]
+    assert build_post_call_tasks(post_call, merged, config, tasks) == []
+
+
+def test_sentence_urgency_schema_and_prompt_are_omitted_without_sentence_rules() -> None:
+    config = _config()
+
+    schema = _extraction_schema(config)
+    prompt = _extraction_prompt([], {"service": "general", "fields": {}}, config)
+
+    assert "urgency_matches" not in schema["properties"]
+    assert "Urgency rules" not in prompt
