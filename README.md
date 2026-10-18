@@ -11,3 +11,6 @@ A personalised AI agent that takes customer inquiries via phone (speech-to-text 
 ## Local development
 
 See [M1 architecture](docs/m1-architecture.md#local-run) for the Python, Postgres, and web setup.
+
+Run the background job worker separately with
+`uv run --directory backend python -m inbound_api.worker`.

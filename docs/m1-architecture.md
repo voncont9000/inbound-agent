@@ -1,6 +1,6 @@
 # M1 shared foundation
 
-M1 establishes service boundaries, shared contracts, and a tenant-isolated persistence layer. The API routes are contracts and currently return `501 Not Implemented`; product behavior belongs to the follow-on agents.
+M1 establishes service boundaries, shared contracts, and a tenant-isolated persistence layer. Platform API behavior is implemented; the graph-owned `/contacts*` routes remain follow-on work.
 
 ## Services and layout
 
@@ -36,6 +36,71 @@ tenant_id = current_setting('app.tenant_id', true)::uuid
 Migrations use `MIGRATION_DATABASE_URL`. The API and workers use `DATABASE_URL`, which must point to the non-superuser application role so RLS remains enforced. In local development, the Compose `inbound_migrator` role is the database superuser and owns the `SECURITY DEFINER` functions. Production should use a dedicated non-superuser migration owner instead of a superuser.
 
 The Postgres-backed job queue is designed for worker claims using `FOR UPDATE SKIP LOCKED`.
+
+## Authentication and tenancy
+
+Signup and login create opaque sessions whose SHA-256 token hashes are stored in the
+global `user_sessions` table. Browser clients receive the token in the HttpOnly
+`inbound_session` cookie (`SameSite=Lax`, configurable `Secure`); non-browser clients may
+send the same token as `Authorization: Bearer`. Sessions expire after
+`SESSION_TTL_HOURS` (336 hours by default). Logout revokes the session.
+
+Tenant-scoped API requests select their active membership with `X-Tenant-Id`. The header
+must be a UUID and the user must be a member. Without it, the API selects the user's only
+membership; users with several memberships must provide it. Owners satisfy staff access,
+but staff do not satisfy owner access.
+
+| Access | Routes |
+|---|---|
+| Staff (owner or staff) | Reads, `/me`, `/templates`, `/assistant-config/schema`, conversations, reviews, tasks, knowledge gaps, and job status |
+| Owner | Assistant writes/deletes, channel connections, knowledge sources/import/digest edits |
+| Service token | `/internal/voice/*` |
+
+## Platform API
+
+The platform API provides assistant templates, creation, listing, detail, version history,
+updates, and deletion; channel connection listing/creation/deletion; knowledge source and
+digest management; conversation listing/detail/reviews; tasks; knowledge gaps; and job
+status. Deleting an assistant with conversations returns `409`. Tenant-scoped IDs that
+are invisible under RLS return `404`.
+
+Conversation, task, and knowledge-gap lists use descending `(created_at, id)` keyset
+pagination with URL-safe base64 cursors and limits from 1 to 200. Intake review flags
+match the merge policy: non-human fields need review when explicitly flagged or when a
+numeric confidence is below the assistant's configured threshold (default `0.7`). Human
+reviews retain previous values and record reviewer, timestamp, note, and provenance.
+
+## Jobs and worker
+
+Call reports and knowledge imports enqueue durable jobs inside their write transaction.
+The worker claims one job through the `claim_next_job` security-definer function using
+`FOR UPDATE SKIP LOCKED`; a lease expiry makes a crashed worker's job reclaimable.
+Transient failures retry with exponential backoff up to `JOB_MAX_ATTEMPTS`. Permanent
+errors, unimplemented handlers, and exhausted retries are marked failed.
+
+Run the worker with `uv run --directory backend python -m inbound_api.worker`.
+
+## Knowledge import
+
+The shared crawler, document readers, chunking, digest prompt, and manifest logic live in
+`core/inbound_core/knowledge.py`; voice retains its CLI-compatible wrapper. Tenant uploads
+are stored under `UPLOAD_DIR` (default `backend/var/uploads`) with relative paths in source
+manifests. Digest generation requires `GOOGLE_API_KEY`.
+
+## Internal voice API
+
+Phone numbers are normalized to E.164 before cross-tenant channel resolution. Call starts
+are idempotent by channel and external call ID; report retries do not duplicate stored
+records or graph jobs after completion. `conversation_tenant` is the narrow security-
+definer lookup used to route reports into the correct tenant session.
+
+Settings include `SESSION_TTL_HOURS`, `SESSION_COOKIE_SECURE`, `UPLOAD_DIR`,
+`MAX_UPLOAD_BYTES`, `GOOGLE_API_KEY`, `KNOWLEDGE_MODEL`, `KNOWLEDGE_MAX_PAGES`,
+`KNOWLEDGE_REQUEST_DELAY`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BASE_SECONDS`,
+`JOB_LEASE_SECONDS`, and `WORKER_POLL_SECONDS`.
+
+Production migration owners for `SECURITY DEFINER` functions that read RLS-protected rows
+must have `BYPASSRLS` or be superusers; local development uses the Compose migrator role.
 
 ## Voice/API lifecycle
 
