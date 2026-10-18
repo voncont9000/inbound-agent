@@ -15,12 +15,14 @@ from starlette.requests import Request
 from inbound_api.channels import credentials, gmail_messages
 from inbound_api.channels.gmail_client import FakeGmailClient
 from inbound_api.channels.gmail_oauth_state import issue_state, verify_state
+from inbound_api.models import MessageRole
 from inbound_api.routers import gmail as gmail_router
 from inbound_api.routers import webhooks
 from inbound_api.routers.gmail import exchange_google_code
 from inbound_api.services import gmail_jobs
-from inbound_api.services.gmail_jobs import _build_email_reply
+from inbound_api.services.gmail_jobs import _build_email_draft_prompt, _build_email_reply
 from inbound_api.services.gmail_queue import enqueue_gmail_sync
+from inbound_api.services.job_handlers import _message_extraction_rows
 
 
 def make_message(headers=(), labels=("INBOX",)):
@@ -97,6 +99,41 @@ def test_reply_thread_headers_and_re_subject():
     assert email["Subject"] == "Re: Fees"
     assert email["In-Reply-To"] == "<inbound@local>"
     assert email["References"] == "<prior@local> <inbound@local>"
+
+
+def test_gmail_extraction_rows_include_attachment_text_only_for_gmail():
+    message = SimpleNamespace(
+        role=MessageRole.CALLER,
+        text="I was dismissed.",
+        ts=datetime(2026, 10, 9, tzinfo=UTC),
+        meta={"attachments_text": {"dismissal-date.txt": "Termination date: 9 October 2026."}},
+    )
+
+    gmail_rows = _message_extraction_rows([message], include_attachments=True)
+    other_channel_rows = _message_extraction_rows([message])
+
+    assert (
+        gmail_rows[0]["text"]
+        == "I was dismissed.\n\n[Attachment dismissal-date.txt]\nTermination date: 9 October 2026."
+    )
+    assert other_channel_rows[0]["text"] == "I was dismissed."
+
+
+def test_email_draft_prompt_requires_greeting_for_every_reply():
+    prompt = _build_email_draft_prompt(
+        "Business context",
+        "Siobhan McAllister",
+        "Demo & Co",
+        "Customer: What is the fee?",
+    )
+
+    assert (
+        "Start every draft, including follow-ups in the same thread, with a greeting line."
+        in prompt
+    )
+    assert 'Use the customer\'s name if known (for example, "Dear Siobhan,")' in prompt
+    assert 'otherwise start with "Hello,".' in prompt
+    assert "Customer name, if known: Siobhan McAllister." in prompt
 
 
 def test_oauth_state_and_credentials(monkeypatch):
