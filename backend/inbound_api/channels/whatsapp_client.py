@@ -58,10 +58,21 @@ class FakeWhatsAppSender:
         return message_id
 
 
+class WhatsAppDisabledError(RuntimeError):
+    pass
+
+
+class DisabledWhatsAppSender:
+    async def send_text(self, phone_number_id: str, to: str, body: str) -> str:
+        raise WhatsAppDisabledError("WhatsApp is disabled")
+
+
 def sender_from_settings(settings):
     if settings.whatsapp_mode == "graph":
         return GraphWhatsAppSender(
             base_url=settings.whatsapp_graph_base_url,
             access_token=settings.whatsapp_access_token or "",
         )
+    if settings.whatsapp_mode == "off":
+        return DisabledWhatsAppSender()
     return FakeWhatsAppSender(settings.fake_outbox_path)

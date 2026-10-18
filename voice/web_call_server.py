@@ -49,6 +49,15 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
         call_token = websocket.query_params.get("call_token")
         token = env.get("WEB_CALL_TOKEN", "").strip()
         if (
+            env.get("APP_ENV", "development") not in {"development", "test"}
+            and not call_token
+            and (
+                not token or not hmac.compare_digest(websocket.query_params.get("token", ""), token)
+            )
+        ):
+            await websocket.close(code=1008)
+            return
+        if (
             call_token is None
             and token
             and not hmac.compare_digest(websocket.query_params.get("token", ""), token)

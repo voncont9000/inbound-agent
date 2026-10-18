@@ -39,7 +39,10 @@ async def verify_whatsapp_webhook(
     verify_token: str | None = Query(default=None, alias="hub.verify_token"),
     challenge: str | None = Query(default=None, alias="hub.challenge"),
 ) -> Response:
-    expected = get_settings().whatsapp_verify_token or ""
+    settings = get_settings()
+    if getattr(settings, "whatsapp_mode", "fake") == "off":
+        raise HTTPException(status_code=503, detail="WhatsApp is disabled")
+    expected = settings.whatsapp_verify_token or ""
     if mode != "subscribe" or not expected or not hmac.compare_digest(verify_token or "", expected):
         raise HTTPException(status_code=403, detail="Webhook verification failed")
     return Response(content=challenge or "", media_type="text/plain")
@@ -49,6 +52,8 @@ async def verify_whatsapp_webhook(
 async def receive_whatsapp_webhook(request: Request) -> dict[str, bool]:
     received_at = datetime.now(UTC)
     settings = get_settings()
+    if getattr(settings, "whatsapp_mode", "fake") == "off":
+        raise HTTPException(status_code=503, detail="WhatsApp is disabled")
     if not settings.whatsapp_app_secret:
         raise HTTPException(status_code=503, detail="WhatsApp webhook is not configured")
     body = await request.body()

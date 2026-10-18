@@ -144,6 +144,31 @@ def test_webhook_skips_signature_when_token_is_not_configured() -> None:
     assert 'url="ws://testserver/twilio/ws"' in response.text
 
 
+def test_production_twilio_requires_auth_token() -> None:
+    with pytest.raises(
+        ValueError,
+        match="TWILIO_AUTH_TOKEN is required in production when TWILIO_MODE=twilio",
+    ):
+        create_app({"APP_ENV": "production", "TWILIO_MODE": "twilio"})
+
+
+def test_twilio_mode_must_be_valid() -> None:
+    with pytest.raises(ValueError, match="TWILIO_MODE must be 'twilio' or 'off'"):
+        create_app({"TWILIO_MODE": "fake"})
+
+
+def test_twilio_off_disables_voice_webhook_and_closes_stream() -> None:
+    with TestClient(create_app({"APP_ENV": "production", "TWILIO_MODE": "off"})) as client:
+        response = client.post("/twilio/voice", data={"To": "+449876543210"})
+        with client.websocket_connect("/twilio/ws") as websocket:
+            with pytest.raises(WebSocketDisconnect) as closed:
+                websocket.receive_text()
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Twilio is disabled"}
+    assert closed.value.code == 1013
+
+
 def test_phone_server_host_defaults_to_loopback() -> None:
     assert phone_server.build_parser().parse_args([]).host == "127.0.0.1"
 
