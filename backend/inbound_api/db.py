@@ -15,5 +15,8 @@ session_factory = async_sessionmaker(engine, expire_on_commit=False)
 async def tenant_session(tenant_id: UUID) -> AsyncIterator[AsyncSession]:
     tenant_uuid = UUID(str(tenant_id))
     async with session_factory() as session, session.begin():
-        await session.execute(text(f"SET LOCAL app.tenant_id = '{tenant_uuid}'"))
+        await session.execute(
+            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+            {"tenant_id": str(tenant_uuid)},
+        )
         yield session

@@ -1,3 +1,4 @@
+DATABASE_URL ?= postgresql+psycopg://inbound_app_login:inbound_dev_only@localhost:5432/inbound
 MIGRATION_DATABASE_URL ?= postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound
 APP_DATABASE_URL ?= postgresql://inbound_app_login:inbound_dev_only@localhost:5432/inbound
 
@@ -7,11 +8,11 @@ up:
 	docker compose up -d db
 
 migrate:
-	DATABASE_URL="$(MIGRATION_DATABASE_URL)" uv run --directory backend alembic upgrade head
+	DATABASE_URL="$(DATABASE_URL)" MIGRATION_DATABASE_URL="$(MIGRATION_DATABASE_URL)" uv run --directory backend alembic upgrade head
 
 test:
 	uv run --directory core pytest
-	MIGRATION_DATABASE_URL="$(MIGRATION_DATABASE_URL)" APP_DATABASE_URL="$(APP_DATABASE_URL)" uv run --directory backend pytest
+	DATABASE_URL="$(DATABASE_URL)" MIGRATION_DATABASE_URL="$(MIGRATION_DATABASE_URL)" APP_DATABASE_URL="$(APP_DATABASE_URL)" uv run --directory backend pytest
 	uv run --directory voice pytest
 	cd web && npm test
 

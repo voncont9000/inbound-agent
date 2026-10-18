@@ -3,10 +3,18 @@ from uuid import uuid4
 
 import psycopg
 
+from inbound_api.db import engine
+
+
+def _psycopg_url(url: str) -> str:
+    return url.replace("postgresql+psycopg://", "postgresql://")
+
+
 OWNER_DATABASE_URL = os.environ.get(
     "MIGRATION_DATABASE_URL",
-    "postgresql://inbound_migrator:inbound_migrator@localhost:5432/inbound",
+    "postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound",
 )
+OWNER_DATABASE_URL = _psycopg_url(OWNER_DATABASE_URL)
 APP_DATABASE_URL = os.environ.get(
     "APP_DATABASE_URL",
     "postgresql://inbound_app_login:inbound_dev_only@localhost:5432/inbound",
@@ -17,6 +25,14 @@ def _execute(url: str, query: str, params: tuple = ()) -> list[tuple]:
     with psycopg.connect(url) as connection, connection.cursor() as cursor:
         cursor.execute(query, params)
         return cursor.fetchall()
+
+
+def test_application_engine_uses_non_superuser_non_bypass_role() -> None:
+    engine_url = _psycopg_url(engine.url.render_as_string(hide_password=False))
+    assert _execute(
+        engine_url,
+        "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user",
+    ) == [(False, False)]
 
 
 def test_migration_has_applied() -> None:

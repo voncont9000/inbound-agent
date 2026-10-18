@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://inbound_app_login:inbound_dev_only@localhost:5432/inbound"
     )
+    migration_database_url: str = (
+        "postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound"
+    )
     voice_service_token: str = "dev-only-voice-service-token"
 
 

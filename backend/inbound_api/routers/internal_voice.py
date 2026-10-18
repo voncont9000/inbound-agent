@@ -1,3 +1,4 @@
+import hmac
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/internal/voice", tags=["internal voice"])
 async def require_voice_service_token(
     x_service_token: str = Header(alias="X-Service-Token"),
 ) -> None:
-    if x_service_token != get_settings().voice_service_token:
+    if not hmac.compare_digest(x_service_token, get_settings().voice_service_token):
         raise HTTPException(status_code=401, detail="Invalid service token")
 
 

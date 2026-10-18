@@ -54,8 +54,8 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      DATABASE_URL: postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound
-      MIGRATION_DATABASE_URL: postgresql://inbound_migrator:inbound_migrator@localhost:5432/inbound
+      DATABASE_URL: postgresql+psycopg://inbound_app_login:inbound_dev_only@localhost:5432/inbound
+      MIGRATION_DATABASE_URL: postgresql+psycopg://inbound_migrator:inbound_migrator@localhost:5432/inbound
       APP_DATABASE_URL: postgresql://inbound_app_login:inbound_dev_only@localhost:5432/inbound
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +66,7 @@ jobs:
         working-directory: backend
       - name: Create application login role
         run: |
-          uv run python -c "import psycopg; c=psycopg.connect('$MIGRATION_DATABASE_URL'); c.execute(\"CREATE ROLE inbound_app_login LOGIN PASSWORD 'inbound_dev_only'\"); c.commit(); c.close()"
+          uv run python -c "import psycopg; c=psycopg.connect('$MIGRATION_DATABASE_URL'.replace('postgresql+psycopg://', 'postgresql://')); c.execute(\"CREATE ROLE inbound_app_login LOGIN PASSWORD 'inbound_dev_only'\"); c.commit(); c.close()"
         working-directory: backend
       - run: uv run alembic upgrade head
         working-directory: backend
