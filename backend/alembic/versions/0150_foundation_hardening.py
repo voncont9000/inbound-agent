@@ -1,7 +1,7 @@
 """Harden cross-tenant lookup and tenant references.
 
 Revision ID: 0150
-Revises: 0100
+Revises: 0101
 """
 
 import sqlalchemy as sa
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0150"
-down_revision = "0100"
+down_revision = "0101"
 branch_labels = None
 depends_on = None
 
