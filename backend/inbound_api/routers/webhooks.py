@@ -1,10 +1,12 @@
+import asyncio
+import base64
 import hashlib
 import hmac
 import json
 import logging
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -17,6 +19,7 @@ from inbound_api.models import (
     Message,
     MessageRole,
 )
+from inbound_api.services.gmail_queue import enqueue_gmail_sync
 from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
 
@@ -137,6 +140,73 @@ async def receive_whatsapp_webhook(request: Request) -> dict[str, bool]:
                     received_at=received_at,
                 )
     return {"ok": True}
+
+
+@router.post("/gmail")
+async def receive_gmail_webhook(
+    request: Request,
+    token: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, bool]:
+    received_at = datetime.now(UTC).isoformat(timespec="microseconds")
+    settings = get_settings()
+    if settings.gmail_mode == "off":
+        raise HTTPException(status_code=503, detail="Gmail is not enabled")
+    if settings.gmail_mode == "fake":
+        expected = settings.gmail_push_token or ""
+        if not expected:
+            raise HTTPException(status_code=503, detail="Gmail push webhook is not configured")
+        if not hmac.compare_digest(token or "", expected):
+            raise HTTPException(status_code=401, detail="Invalid Gmail push token")
+    else:
+        bearer = (authorization or "").removeprefix("Bearer ").strip()
+        if not bearer or not await _verify_gmail_pubsub_token(bearer):
+            raise HTTPException(status_code=401, detail="Invalid Pub/Sub identity token")
+    try:
+        envelope = await request.json()
+        data = envelope.get("message", {}).get("data") if isinstance(envelope, dict) else None
+        decoded = json.loads(base64.b64decode(data, validate=True)) if isinstance(data, str) else {}
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return {"ok": True}
+    email = decoded.get("emailAddress") if isinstance(decoded, dict) else None
+    if not isinstance(email, str) or not email.strip():
+        return {"ok": True}
+    async with session_factory() as session:
+        route = (
+            await session.execute(
+                text("SELECT * FROM gmail_route(:email)"),
+                {"email": email.strip().lower()},
+            )
+        ).first()
+    if route is None:
+        LOGGER.warning("Ignoring Gmail push for unknown mailbox %s", email)
+        return {"ok": True}
+    tenant_id, _assistant_id, connection_id = route
+    async with tenant_session(tenant_id) as session:
+        await enqueue_gmail_sync(session, connection_id, received_at=received_at)
+    return {"ok": True}
+
+
+async def _verify_gmail_pubsub_token(token: str) -> bool:
+    settings = get_settings()
+    try:
+        from google.auth.transport.requests import Request as GoogleRequest
+        from google.oauth2 import id_token
+
+        claims = await asyncio.to_thread(
+            id_token.verify_oauth2_token,
+            token,
+            GoogleRequest(),
+            settings.gmail_pubsub_audience,
+        )
+    except Exception:
+        LOGGER.warning("Gmail Pub/Sub token verification failed", exc_info=True)
+        return False
+    return (
+        claims.get("email") == settings.gmail_pubsub_service_account
+        and claims.get("email_verified") is True
+        and claims.get("aud") == settings.gmail_pubsub_audience
+    )
 
 
 async def _store_inbound_message(

@@ -21,6 +21,7 @@ async def load_assistant_route(
     include_context_card: bool,
     source: str = "phone",
     whatsapp_id: str | None = None,
+    caller_email: str | None = None,
 ) -> RouteResponse:
     async with tenant_session(tenant_id) as session:
         assistant = await session.get(Assistant, assistant_id)
@@ -40,7 +41,7 @@ async def load_assistant_route(
                     person = await graph.resolve_person(
                         session,
                         phone=caller_phone,
-                        email=None,
+                        email=caller_email,
                         whatsapp_id=whatsapp_id,
                         source=source,
                     )

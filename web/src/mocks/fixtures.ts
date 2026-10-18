@@ -262,6 +262,39 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
   };
 }
 
+function makeGmailDraftConversation(): Schemas["ConversationDetailResponse"] {
+  const base = makeConversation(0, 2);
+  const id = "50000000-0000-4000-8000-000000000007";
+  return {
+    ...base,
+    id,
+    channel: "gmail",
+    external_ref: "gmail:connection-1:thread-1",
+    summary: "Jamie asked about a boiler repair appointment.",
+    started_at: date(10),
+    ended_at: null,
+    status: "active",
+    messages: [
+      {
+        id: `${id}-m1`,
+        role: "caller",
+        text: "Could I arrange a visit to look at my boiler?",
+        ts: date(10),
+        meta: { subject: "Boiler repair appointment", from: "jamie.morgan@example.com" },
+      },
+      {
+        id: `${id}-m2`,
+        role: "assistant",
+        text: "Hello Jamie,\n\nWe can help arrange a boiler repair visit. The team will confirm availability and any applicable costs.\n\nKind regards,\nBrightside Plumbing & Heating",
+        ts: date(10),
+        meta: { draft: true, gmail_draft_id: "fake-draft-preview" },
+      },
+    ],
+    tasks: [],
+    metrics: { ...base.metrics, channel_connection_id: "connection-1", gmail_thread_id: "thread-1" },
+  };
+}
+
 function makeContacts(tenantIndex: number): Schemas["ContactDetailResponse"][] {
   return Array.from({ length: 4 }, (_, index) => {
     const personId = ids.people[tenantIndex * 4 + index];
@@ -305,6 +338,7 @@ function makeTenant(index: number): TenantFixture {
     template: index === 0 ? "home_services" : "uk_law_firm", config, version: 3, created_at: date(1), updated_at: date(10),
   };
   const conversations = Array.from({ length: 6 }, (_, item) => makeConversation(index, item));
+  if (index === 0) conversations.push(makeGmailDraftConversation());
   const contacts = makeContacts(index);
   const taskList = conversations.flatMap(({ tasks }) => tasks);
   return {

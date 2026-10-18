@@ -236,6 +236,7 @@ class ChannelConnection(UUIDPrimaryKeyMixin, TenantMixin, Base):
     settings: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=sql_text("'{}'::jsonb")
     )
+    credentials_ciphertext: Mapped[str | None] = mapped_column(Text)
 
 
 class KnowledgeSource(UUIDPrimaryKeyMixin, TenantMixin, Base):

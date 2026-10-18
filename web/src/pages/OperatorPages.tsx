@@ -119,7 +119,7 @@ export function ConversationPage() {
   return <main className="page" id="main-content">
     <p className="eyebrow">Conversation · {detail.channel} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</p><h1>{detail.summary ?? "Conversation details"}</h1>
     <div className="panel card-grid"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
-    <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>
+    <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role} {message.role === "assistant" && message.meta.draft === true && <Badge tone="neutral">Draft in Gmail</Badge>}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>
     <section className="panel stack"><h2>Intake comparison</h2>
       {!intakes.merged && <p className="muted">Merged intake is unavailable. Live and post-call values are shown where available.</p>}
       <div className="table-scroll">

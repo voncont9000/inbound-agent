@@ -41,6 +41,17 @@ Migrations use `MIGRATION_DATABASE_URL`. The API and workers use `DATABASE_URL`,
 
 The Postgres-backed job queue is designed for worker claims using `FOR UPDATE SKIP LOCKED`.
 
+Gmail uses the shared assistant context, knowledge digest, contact graph, intake extraction,
+and job queue. OAuth refresh tokens are Fernet-encrypted in a dedicated credential column.
+Gmail is draft-only: the worker creates reviewable threaded drafts and labels messages, but
+never sends email. See [text-channels.md](text-channels.md) for Pub/Sub/OIDC setup and the
+restricted-scope rationale. FR-E5 style learning and FR-E7 rule suggestions remain out of
+scope.
+
+Google authentication is shared across Gmail and future integrations: feature-specific
+scope sets are requested through Gmail OAuth, granted scopes stay internal, and
+access-token refresh/caching lives in the integrations layer.
+
 ## Authentication and tenancy
 
 Signup and login create opaque sessions whose SHA-256 token hashes are stored in the

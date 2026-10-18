@@ -8,6 +8,7 @@ from inbound_api.routers import (
     auth,
     contacts,
     conversations,
+    gmail,
     internal_voice,
     knowledge,
     tasks,
@@ -37,6 +38,7 @@ for router in (
     contacts.router,
     internal_voice.router,
     webhooks.router,
+    gmail.router,
 ):
     app.include_router(router)
 

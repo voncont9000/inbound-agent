@@ -28,6 +28,7 @@ from inbound_api.models import (
     TaskStatus,
 )
 from inbound_api.services import files_cleanup as _files_cleanup  # noqa: F401
+from inbound_api.services import gmail_jobs as _gmail_jobs  # noqa: F401
 from inbound_api.services import knowledge_import as knowledge_import_service  # noqa: F401
 from inbound_api.services.assistant_context import load_assistant_route
 from inbound_api.services.conversation_results import persist_extracted_results
@@ -239,6 +240,39 @@ async def message_reply(session: AsyncSession, payload: dict) -> None:
 
 @register("message_extract")
 async def message_extract(session: AsyncSession, payload: dict) -> None:
+    await run_message_extract(session, payload)
+
+
+def _message_extraction_rows(
+    messages: list[Message], *, include_attachments: bool = False
+) -> list[dict[str, str]]:
+    rows = []
+    for item in messages:
+        if item.role not in {MessageRole.CALLER, MessageRole.ASSISTANT}:
+            continue
+        text = item.text
+        attachments = (item.meta or {}).get("attachments_text")
+        if (
+            include_attachments
+            and item.role == MessageRole.CALLER
+            and isinstance(attachments, dict)
+        ):
+            for name, attachment_text in attachments.items():
+                if isinstance(name, str) and isinstance(attachment_text, str):
+                    text += f"\n\n[Attachment {name}]\n{attachment_text}"
+        rows.append(
+            {
+                "role": "assistant" if item.role == MessageRole.ASSISTANT else "caller",
+                "text": text,
+                "timestamp": item.ts.isoformat(),
+            }
+        )
+    return rows
+
+
+async def run_message_extract(
+    session: AsyncSession, payload: dict, *, channel: str | None = None
+) -> None:
     conversation = await session.get(Conversation, UUID(payload["conversation_id"]))
     if conversation is None:
         return
@@ -275,15 +309,11 @@ async def message_extract(session: AsyncSession, payload: dict) -> None:
             .order_by(Message.ts, Message.id)
         )
     )
-    rows = [
-        {
-            "role": "assistant" if item.role == MessageRole.ASSISTANT else "caller",
-            "text": item.text,
-            "timestamp": item.ts.isoformat(),
-        }
-        for item in messages
-        if item.role in {MessageRole.CALLER, MessageRole.ASSISTANT}
-    ]
+    extraction_channel = channel or conversation.channel.value
+    rows = _message_extraction_rows(
+        messages,
+        include_attachments=extraction_channel == "gmail",
+    )
     client = make_genai_client(settings.google_api_key)
     try:
         result = await extract_intake(
@@ -293,12 +323,12 @@ async def message_extract(session: AsyncSession, payload: dict) -> None:
             client,
             settings.extraction_model,
             call_started_at=conversation.started_at,
-            channel="whatsapp",
+            channel=extraction_channel,
         )
     finally:
         await client.aio.aclose()
     if result.get("status") == "failed":
-        raise RuntimeError(result.get("error", "WhatsApp extraction failed"))
+        raise RuntimeError(result.get("error", "Message extraction failed"))
     post_call, merged = build_intake_artifacts(
         {},
         result,
