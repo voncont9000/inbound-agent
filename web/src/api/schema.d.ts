@@ -1339,6 +1339,16 @@ export interface components {
             /** Url */
             url?: string | null;
         };
+        /** KnowledgeSourceCreate */
+        KnowledgeSourceCreate: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "url";
+            /** Uri */
+            uri: string;
+        };
         /** KnowledgeSourceResponse */
         KnowledgeSourceResponse: {
             /**
@@ -2048,15 +2058,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /**
-                     * Kind
-                     * @constant
-                     */
-                    kind: "url";
-                    /** Uri */
-                    uri: string;
-                };
+                "application/json": components["schemas"]["KnowledgeSourceCreate"];
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;

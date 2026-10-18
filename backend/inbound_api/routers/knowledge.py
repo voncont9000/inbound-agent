@@ -67,7 +67,9 @@ async def list_sources(
         "requestBody": {
             "required": True,
             "content": {
-                "application/json": {"schema": KnowledgeSourceCreate.model_json_schema()},
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/KnowledgeSourceCreate"}
+                },
                 "multipart/form-data": {
                     "schema": {
                         "type": "object",

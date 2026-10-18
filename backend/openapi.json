@@ -2005,6 +2005,25 @@
         "title": "KnowledgeSource",
         "type": "object"
       },
+      "KnowledgeSourceCreate": {
+        "properties": {
+          "kind": {
+            "const": "url",
+            "title": "Kind",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "uri"
+        ],
+        "title": "KnowledgeSourceCreate",
+        "type": "object"
+      },
       "KnowledgeSourceResponse": {
         "properties": {
           "assistant_id": {
@@ -3377,23 +3396,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "kind": {
-                    "const": "url",
-                    "title": "Kind",
-                    "type": "string"
-                  },
-                  "uri": {
-                    "title": "Uri",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "uri"
-                ],
-                "title": "KnowledgeSourceCreate",
-                "type": "object"
+                "$ref": "#/components/schemas/KnowledgeSourceCreate"
               }
             },
             "multipart/form-data": {
