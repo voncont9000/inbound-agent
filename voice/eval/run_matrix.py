@@ -250,6 +250,16 @@ async def _fake_api_state(api_url: str) -> dict[str, Any]:
             return await response.json()
 
 
+async def _set_fake_assistant(api_url: str, assistant_path: str) -> None:
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{api_url}/_fake/assistant",
+            headers={"X-Service-Token": FAKE_API_TOKEN},
+            json={"assistant": assistant_path},
+        ) as response:
+            response.raise_for_status()
+
+
 async def _wait_for_fake_report(
     api_url: str,
     calls_before: int,
@@ -471,7 +481,10 @@ async def _run_matrix_calls(
                 active_caller_id = object()
                 try:
                     for scenario_name in scenario_names:
-                        caller_id = scenarios[scenario_name].get("caller_id")
+                        scenario = scenarios[scenario_name]
+                        caller_id = scenario.get("caller_id")
+                        if api_base_url is not None and scenario.get("assistant"):
+                            await _set_fake_assistant(api_base_url, scenario["assistant"])
                         if process is None or (
                             transport == "webrtc" and caller_id != active_caller_id
                         ):
@@ -546,6 +559,11 @@ async def _run_matrix_calls(
                                     len(state_before["calls"]),
                                     timeout=5 if run_dir is not None else 1,
                                 )
+                            state_after = (
+                                await _fake_api_state(api_base_url)
+                                if api_base_url is not None
+                                else None
+                            )
                             if run_dir is not None:
                                 for filename in (
                                     "bot_audio.wav",
@@ -555,10 +573,10 @@ async def _run_matrix_calls(
                                     source = scratch / filename
                                     if source.exists():
                                         shutil.copy2(source, run_dir / filename)
-                                scored = score_call(run_dir, scenarios[scenario_name])
+                                scored = score_call(run_dir, scenario, fake_state=state_after)
                                 scored["run_dir"] = str(run_dir)
                             else:
-                                scored = score_call(scratch, scenarios[scenario_name])
+                                scored = score_call(scratch, scenario, fake_state=state_after)
                                 scored["run_dir"] = None
                             scored.update(
                                 {

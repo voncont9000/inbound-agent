@@ -108,3 +108,18 @@ scenarios:
     final_call_timeout_seconds: 35
     expected_end_call_source: idle
     expected_server_disconnect: true
+
+  booking:
+    assistant: config/assistants/booking_firm.yaml
+    caller_voice: catriona
+    utterances:
+      - "Hi, I'd like to book an initial consultation."
+      - "Tuesday afternoon would be good."
+      - "The first one please."
+      - "My name is Alex Morgan."
+      - "Yes, that's right."
+      - "That's all, thanks. Goodbye."
+    booking_checks:
+      booked: true
+      appointment_type: initial_consultation
+    expected_end_call_source: goodbye_detected

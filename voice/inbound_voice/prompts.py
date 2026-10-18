@@ -16,6 +16,7 @@ def render_system_prompt(
     today: date | None = None,
     caller_id: str | None = None,
     context_card: str | None = None,
+    booking_enabled: bool = False,
 ) -> str:
     current_date = today or date.today()
     business_context = render_business_context(
@@ -27,6 +28,7 @@ def render_system_prompt(
             f"You are the telephone assistant for {config.business_name}.\nSpeak {config.language}."
         ),
         include_deadline_instructions=False,
+        booking_enabled=booking_enabled,
     )
     readback_instructions = {
         "off": "Do not read details back to the caller.",
@@ -69,13 +71,20 @@ def render_system_prompt(
     ]
     enabled_actions = "\n".join(f"- Enabled action: {action}." for action in config.live_actions)
     deadline_instructions = render_deadline_instructions(config, channel="phone")
+    booking_instruction = ""
+    if booking_enabled:
+        booking_instruction = (
+            "\n- Before any diary tool call, say one short line first (for example 'Let me check "
+            "the diary'). Confirm the chosen slot back once before booking; after booking, confirm "
+            "it is booked in one sentence."
+        )
     return f"""{business_context}
 
 CALL BEHAVIOUR MECHANICS
 {readback_instructions}
 {caller_id_instruction}
 {chr(10).join(deadline_instructions)}
-{end_call_instruction}
+{end_call_instruction}{booking_instruction}
 {chr(10).join(other_enabled_actions)}
 
 {enabled_actions}

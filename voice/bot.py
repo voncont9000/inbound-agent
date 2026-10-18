@@ -50,6 +50,7 @@ from pipecat.turns.user_start import VADUserTurnStartStrategy
 from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
+from inbound_voice.booking import CallBooking
 from inbound_voice.call_report import build_call_report
 from inbound_voice.call_setup import PreparedCall, prepare_call
 from inbound_voice.config import load_assistant_config
@@ -427,12 +428,23 @@ class IncompletePhoneNumberTurnStopStrategy(TurnAnalyzerUserTurnStopStrategy):
         )
 
 
-def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
+def create_function_schemas(
+    call_tools: CallTools,
+    metrics_observer: CallMetricsObserver | None = None,
+) -> list[FunctionSchema]:
     schemas = []
-    for spec in tool_specs(call_tools.config):
+    for spec in tool_specs(call_tools.config, booking_available=call_tools.booking_available):
 
         async def handler(params: FunctionCallParams, tool_name: str = spec["name"]) -> None:
-            result = call_tools.dispatch(tool_name, params.arguments)
+            started = time.perf_counter()
+            result = await call_tools.dispatch_async(tool_name, params.arguments)
+            if metrics_observer is not None and tool_name in {
+                "check_availability",
+                "book_appointment",
+            }:
+                metrics_observer.record_tool_round_trip(
+                    tool_name, (time.perf_counter() - started) * 1000
+                )
             if tool_name == "end_call":
                 await params.result_callback(
                     result,
@@ -455,8 +467,11 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
     return schemas
 
 
-def create_llm_context(call_tools: CallTools) -> LLMContext:
-    schemas = create_function_schemas(call_tools)
+def create_llm_context(
+    call_tools: CallTools,
+    metrics_observer: CallMetricsObserver | None = None,
+) -> LLMContext:
+    schemas = create_function_schemas(call_tools, metrics_observer)
     return LLMContext(tools=schemas) if schemas else LLMContext()
 
 
@@ -491,7 +506,14 @@ async def run_bot(
     )
     input_sample_rate = PHONE_SAMPLE_RATE if telephony else WEB_SAMPLE_RATE
     output_sample_rate = PHONE_SAMPLE_RATE if telephony else 24000
-    call_tools = CallTools(sink, assistant)
+    booking_available = bool(
+        prepared.route is not None
+        and prepared.route.booking_available
+        and assistant.booking is not None
+        and prepared.api is not None
+        and prepared.call_start is not None
+    )
+    call_tools = CallTools(sink, assistant, booking_available=booking_available)
     metrics_observer = CallMetricsObserver(
         sink,
         telephony=telephony,
@@ -504,6 +526,22 @@ async def run_bot(
             "llm_model": providers.llm_model,
         },
     )
+    start_call_task: asyncio.Task[uuid.UUID | None] | None = None
+
+    async def conversation_id_getter() -> uuid.UUID | None:
+        return await start_call_task if start_call_task is not None else None
+
+    if booking_available:
+        assert prepared.api is not None and prepared.call_start is not None
+        call_tools.booking = CallBooking(
+            assistant,
+            prepared.api,
+            prepared.call_start,
+            prepared.availability_task,
+            conversation_id_getter,
+            prepared.call_start.from_number,
+            metrics_observer,
+        )
 
     async with aiohttp.ClientSession() as session:
         stt = create_stt(providers, os.environ, sample_rate=input_sample_rate)
@@ -514,10 +552,11 @@ async def run_bot(
                 assistant,
                 caller_id=caller_id,
                 context_card=prepared.context_card,
+                booking_enabled=booking_available,
             ),
         )
         tts = create_tts(providers, os.environ, session, sample_rate=output_sample_rate)
-        context = create_llm_context(call_tools)
+        context = create_llm_context(call_tools, metrics_observer)
         context_aggregators = LLMContextAggregatorPair(
             context,
             user_params=LLMUserAggregatorParams(
@@ -573,7 +612,6 @@ async def run_bot(
             ),
             observers=[metrics_observer, goodbye_hangup, idle_hangup],
         )
-        start_call_task: asyncio.Task[uuid.UUID | None] | None = None
         if prepared.api is not None and prepared.call_start is not None:
 
             async def start_call_safely() -> uuid.UUID | None:

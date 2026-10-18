@@ -1,6 +1,9 @@
 import json
 from datetime import date, timedelta
 
+import pytest
+from inbound_core.config import AppointmentType, BookingConfig
+
 from inbound_voice.config import load_assistant_config
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import DEFAULT_CONFIG_PATH, CallTools, tool_specs
@@ -22,6 +25,45 @@ def test_tool_specs_omit_disabled_actions() -> None:
         "confirm_critical_fields",
         "end_call",
     }
+
+
+def test_booking_tool_specs_require_config_route_availability_and_actions() -> None:
+    assistant = load_assistant_config(DEFAULT_CONFIG_PATH).model_copy(
+        update={
+            "booking": BookingConfig(
+                appointment_types=[
+                    AppointmentType(
+                        key="consultation",
+                        label="Initial consultation",
+                        duration_minutes=30,
+                        when_to_use="For new callers",
+                    )
+                ]
+            ),
+            "live_actions": ["check_availability", "book_appointment"],
+        }
+    )
+
+    assert tool_specs(assistant) == []
+    assert {item["name"] for item in tool_specs(assistant, booking_available=True)} == {
+        "check_availability",
+        "book_appointment",
+    }
+    disabled = assistant.model_copy(update={"live_actions": []})
+    assert tool_specs(disabled, booking_available=True) == []
+
+
+@pytest.mark.asyncio
+async def test_async_booking_dispatch_refuses_when_route_disables_booking(tmp_path) -> None:
+    sink = LocalFilesCallSink(tmp_path, "booking-disabled")
+    assistant = load_assistant_config(DEFAULT_CONFIG_PATH).model_copy(
+        update={"live_actions": ["check_availability", "book_appointment"]}
+    )
+    tools = CallTools(sink, assistant, booking_available=False)
+
+    result = await tools.dispatch_async("check_availability", {"appointment_type": "consult"})
+
+    assert result == {"ok": False, "error": "Appointment booking is not available."}
 
 
 def test_critical_fields_are_validated_and_saved_live(tmp_path) -> None:

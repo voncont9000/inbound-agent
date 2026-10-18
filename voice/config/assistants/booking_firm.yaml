@@ -1,0 +1,16 @@
+extends: uk_law_firm
+booking:
+  calendar_id: primary
+  appointment_types:
+    - key: initial_consultation
+      label: Initial consultation
+      duration_minutes: 30
+      when_to_use: For new callers seeking legal advice
+  min_notice_hours: 2
+  horizon_days: 14
+  buffer_minutes: 15
+  max_slots_offered: 3
+  send_updates: all
+live_actions:
+  - check_availability
+  - book_appointment

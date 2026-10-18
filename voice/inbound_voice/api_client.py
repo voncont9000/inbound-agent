@@ -16,6 +16,12 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+from inbound_core.booking import (
+    AvailabilityRequest,
+    AvailabilityResponse,
+    BookRequest,
+    BookResponse,
+)
 from inbound_core.call_report import CallReport, CallStart, RouteResponse
 from loguru import logger
 
@@ -79,6 +85,22 @@ class VoiceApiClient:
             )
             response.raise_for_status()
             return RouteResponse.model_validate(response.json())
+
+    async def availability(
+        self, req: AvailabilityRequest, timeout: float = 4.0
+    ) -> AvailabilityResponse:
+        async with self._client(timeout=timeout) as client:
+            response = await client.post(
+                "/internal/voice/availability", json=req.model_dump(mode="json")
+            )
+            response.raise_for_status()
+            return AvailabilityResponse.model_validate(response.json())
+
+    async def book(self, req: BookRequest, timeout: float = 8.0) -> BookResponse:
+        async with self._client(timeout=timeout) as client:
+            response = await client.post("/internal/voice/book", json=req.model_dump(mode="json"))
+            response.raise_for_status()
+            return BookResponse.model_validate(response.json())
 
     async def start_call(self, call_start: CallStart) -> UUID:
         last_error: Exception | None = None

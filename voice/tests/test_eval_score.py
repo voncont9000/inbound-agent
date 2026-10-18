@@ -174,6 +174,32 @@ def test_scenarios_script_final_confirmation_and_named_idle_check() -> None:
     assert "email_readback" in scenarios["employment"]["assistant_checks"]
     assert scenarios["conveyancing"]["assistant_not_matches"] == "(?i)call ?back"
     assert "knowledge_check" not in {"employment", "conveyancing", "idle_check"}
+    assert scenarios["booking"]["assistant"] == "config/assistants/booking_firm.yaml"
+    assert scenarios["booking"]["booking_checks"] == {
+        "booked": True,
+        "appointment_type": "initial_consultation",
+    }
+
+
+def test_booking_checks_are_scored_from_fake_api_state(tmp_path) -> None:
+    run_dir = tmp_path / "booking-score"
+    shutil.copytree(FIXTURE, run_dir)
+    scenario = {"booking_checks": {"booked": True, "appointment_type": "initial_consultation"}}
+
+    score = score_call(
+        run_dir,
+        scenario,
+        fake_state={
+            "bookings": [
+                {
+                    "appointment_type": "initial_consultation",
+                    "booking": {"status": "booked"},
+                }
+            ]
+        },
+    )
+
+    assert all(item["passed"] for item in score["booking_checks"].values())
 
 
 def test_score_call_checks_assistant_answers_and_knowledge_gaps(tmp_path) -> None:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from uuid import UUID
 
 import pytest
+from inbound_core.booking import AvailabilityResponse
 from inbound_core.call_report import RouteResponse
 
 from inbound_voice.api_client import VoiceApiClient
@@ -40,6 +42,90 @@ async def test_route_failure_falls_back_but_keeps_api_and_call_start(
     assert prepared.api is not None
     assert prepared.call_start is not None
     assert prepared.call_start.external_call_id == "CA123"
+
+
+@pytest.mark.asyncio
+async def test_phone_availability_prefetch_runs_before_route_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    availability_started = asyncio.Event()
+    route_waited = asyncio.Event()
+
+    async def availability(self, _request, timeout=4.0):
+        availability_started.set()
+        return AvailabilityResponse(available=True)
+
+    async def route(self, to_number, from_number):
+        await availability_started.wait()
+        route_waited.set()
+        return RouteResponse(
+            tenant_id=UUID("10000000-0000-0000-0000-000000000001"),
+            assistant_id=UUID("20000000-0000-0000-0000-000000000002"),
+            config=load_assistant_config(ASSISTANT_PATH),
+            booking_available=True,
+        )
+
+    monkeypatch.setattr(VoiceApiClient, "availability", availability)
+    monkeypatch.setattr(VoiceApiClient, "route", route)
+    prepared = await prepare_call(
+        {
+            "API_BASE_URL": "https://api.example.com",
+            "VOICE_SERVICE_TOKEN": "test-token",
+            "ASSISTANT_CONFIG": ASSISTANT_PATH,
+        },
+        channel="phone",
+        to_number="+441234567890",
+        from_number="+447700900001",
+        external_call_id="CA-prefetch",
+    )
+
+    assert route_waited.is_set()
+    assert prepared.availability_task is not None
+    assert (await prepared.availability_task).available
+
+
+@pytest.mark.asyncio
+async def test_phone_prefetch_is_cancelled_when_route_disables_booking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    availability_started = asyncio.Event()
+    availability_cancelled = asyncio.Event()
+
+    async def availability(self, _request, timeout=4.0):
+        availability_started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            availability_cancelled.set()
+            raise
+
+    async def route(self, to_number, from_number):
+        await availability_started.wait()
+        return RouteResponse(
+            tenant_id=UUID("10000000-0000-0000-0000-000000000001"),
+            assistant_id=UUID("20000000-0000-0000-0000-000000000002"),
+            config=load_assistant_config(ASSISTANT_PATH),
+            booking_available=False,
+        )
+
+    monkeypatch.setattr(VoiceApiClient, "availability", availability)
+    monkeypatch.setattr(VoiceApiClient, "route", route)
+    prepared = await prepare_call(
+        {
+            "API_BASE_URL": "https://api.example.com",
+            "VOICE_SERVICE_TOKEN": "test-token",
+            "ASSISTANT_CONFIG": ASSISTANT_PATH,
+        },
+        channel="phone",
+        to_number="+441234567890",
+        from_number="+447700900001",
+        external_call_id="CA-no-booking",
+    )
+
+    assert prepared.availability_task is None
+    await asyncio.sleep(0)
+    assert availability_started.is_set()
+    assert availability_cancelled.is_set()
 
 
 @pytest.mark.asyncio
