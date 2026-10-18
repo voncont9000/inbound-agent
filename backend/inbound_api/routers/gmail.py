@@ -16,9 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
 from inbound_api.channels.credentials import encrypt_credential
 from inbound_api.channels.gmail_client import GoogleGmailClient
-from inbound_api.channels.gmail_oauth_state import issue_state, verify_state
+from inbound_api.channels.gmail_oauth_state import (
+    issue_state,
+    verify_state_with_features,
+)
 from inbound_api.db import tenant_session
+from inbound_api.integrations.google_auth import google_scopes_for_features
 from inbound_api.models import Assistant, ChannelConnection, MembershipRole
+from inbound_api.schemas import GmailOAuthStartRequest
 from inbound_api.services.gmail_queue import enqueue_gmail_sync
 from inbound_api.settings import get_settings
 
@@ -26,7 +31,6 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter(tags=["gmail"])
 _owner = Depends(require_role(MembershipRole.OWNER))
 _tenant_session_dependency = Depends(get_tenant_session)
-GMAIL_SCOPE = "openid email https://www.googleapis.com/auth/gmail.modify"
 
 
 @router.get("/channels/gmail/mode")
@@ -37,6 +41,7 @@ async def gmail_mode() -> dict[str, Literal["off", "fake", "google"]]:
 @router.post("/assistants/{assistant_id}/channels/gmail/oauth-start")
 async def gmail_oauth_start(
     assistant_id: UUID,
+    payload: GmailOAuthStartRequest | None = None,
     ctx: TenantContext = _owner,
     session: AsyncSession = _tenant_session_dependency,
 ) -> dict[str, str]:
@@ -47,15 +52,17 @@ async def gmail_oauth_start(
         raise HTTPException(status_code=422, detail="Google OAuth is not enabled")
     if await session.get(Assistant, assistant_id) is None:
         raise HTTPException(status_code=404, detail="Assistant not found")
-    state = issue_state(ctx.tenant_id, assistant_id, ctx.user.id)
+    features = payload.features if payload else []
+    state = issue_state(ctx.tenant_id, assistant_id, ctx.user.id, features=features)
     params = urlencode(
         {
             "client_id": settings.google_oauth_client_id,
             "redirect_uri": settings.google_oauth_redirect_url,
             "response_type": "code",
-            "scope": GMAIL_SCOPE,
+            "scope": " ".join(google_scopes_for_features(features)),
             "access_type": "offline",
             "prompt": "consent",
+            "include_granted_scopes": "true",
             "state": state,
         }
     )
@@ -67,7 +74,7 @@ async def gmail_oauth_callback(code: str, state: str):
     if get_settings().gmail_mode == "off":
         raise HTTPException(status_code=409, detail="Gmail is not enabled")
     try:
-        tenant_id, assistant_id, _user_id = verify_state(state)
+        tenant_id, assistant_id, _user_id, _features = verify_state_with_features(state)
     except ValueError:
         raise HTTPException(
             status_code=400, detail="Invalid or expired Gmail OAuth state"
@@ -123,6 +130,7 @@ async def gmail_oauth_callback(code: str, state: str):
         history_id = await client.watch(settings.gmail_pubsub_topic or "")
         connection.settings = {
             **(connection.settings or {}),
+            "google_scopes": str(token_data.get("scope", "")).split(),
             "history_id": history_id,
             "watch_renewed_at": datetime.now(UTC).isoformat(),
         }

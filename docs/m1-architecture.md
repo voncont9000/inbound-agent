@@ -48,6 +48,10 @@ never sends email. See [text-channels.md](text-channels.md) for Pub/Sub/OIDC set
 restricted-scope rationale. FR-E5 style learning and FR-E7 rule suggestions remain out of
 scope.
 
+Google authentication is shared across Gmail and future integrations: feature-specific
+scope sets are requested through Gmail OAuth, granted scopes stay internal, and
+access-token refresh/caching lives in the integrations layer.
+
 ## Authentication and tenancy
 
 Signup and login create opaque sessions whose SHA-256 token hashes are stored in the
