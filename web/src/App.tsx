@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import shell from "./components/AppShell.module.css";
 import { RequireAuth } from "./auth/RequireAuth";
 import { useAuth } from "./auth/AuthProvider";
@@ -14,7 +14,7 @@ function AppShell() {
   return (
     <div className={shell.frame}>
       <aside className={shell.sidebar}>
-        <a className={shell.brand} href="/inbox">Inbound operator</a>
+        <Link className={shell.brand} to="/inbox">Inbound operator</Link>
         <nav className={shell.navigation} aria-label="Main navigation">
           <NavLink to="/inbox">Inbox</NavLink>
           <NavLink to="/contacts">Contacts</NavLink>

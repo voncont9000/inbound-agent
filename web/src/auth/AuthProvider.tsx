@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import type { Schemas } from "../api/client";
-import { request } from "../api/request";
+import { api, unwrap, type Schemas } from "../api/client";
 
 type Membership = Pick<Schemas["TenantResponse"], "id" | "name" | "role">;
 type AuthContextValue = {
@@ -37,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: () => request<Schemas["MeResponse"]>("/me"),
+    queryFn: () => unwrap(api.GET("/me")),
     retry: false,
   });
   const setSelectedTenant = (id: string) => {
@@ -54,24 +53,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await queryClient.invalidateQueries({ queryKey: ["me"] });
   }
   async function login(email: string, password: string) {
-    const response = await request<Schemas["AuthResponse"]>("/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    const response = await unwrap(api.POST("/auth/login", { body: { email, password } }));
     await saveAuth(response);
   }
   async function signup(input: Schemas["SignupRequest"]) {
-    const response = await request<Schemas["AuthResponse"]>("/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
+    const response = await unwrap(api.POST("/auth/signup", { body: input }));
     await saveAuth(response);
   }
   async function logout() {
     try {
-      await request("/auth/logout", { method: "POST" });
+      await unwrap(api.POST("/auth/logout"));
     } catch {
       localStorage.removeItem("inbound.mock.session");
     } finally {

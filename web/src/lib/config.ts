@@ -1,6 +1,6 @@
 import type { Schemas } from "../api/client";
 
-export type AssistantConfig = Schemas["AssistantConfig-Input"];
+export type AssistantConfig = Schemas["AssistantConfig-Output"];
 
 const fieldTypes = [
   "string",

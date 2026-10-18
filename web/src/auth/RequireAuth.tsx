@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import { ErrorState, LoadingState } from "../components/States";
-import { ApiError } from "../api/request";
+import { ApiError } from "../api/errors";
 
 export function RequireAuth() {
   const auth = useAuth();

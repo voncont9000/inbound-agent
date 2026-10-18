@@ -1,13 +1,19 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./schema";
-import { errorMessage } from "./errors";
-import { ApiError } from "./request";
+import { ApiError, errorMessage } from "./errors";
 
 export type Schemas = import("./schema").components["schemas"];
+
+type ApiResult<T> = {
+  data?: T;
+  error?: unknown;
+  response: Response;
+};
 
 export const api = createClient<paths>({
   baseUrl: `${window.location.origin}/api`,
   credentials: "include",
+  fetch: (...args) => globalThis.fetch(...args),
 });
 
 api.use({
@@ -28,18 +34,25 @@ api.use({
   },
 });
 
+export async function unwrap<T>(promise: Promise<ApiResult<T>>): Promise<T> {
+  const result = await promise;
+  if (result.error !== undefined || !result.response.ok) {
+    throw new ApiError(errorMessage(result.error), result.response.status, result.error);
+  }
+  if (result.data === undefined) {
+    throw new ApiError("The server returned an empty response.", result.response.status);
+  }
+  return result.data;
+}
+
 export async function uploadKnowledgeFile(assistantId: string, file: File) {
-  const result = await api.POST("/assistants/{assistant_id}/knowledge/sources", {
+  return unwrap(api.POST("/assistants/{assistant_id}/knowledge/sources", {
     params: { path: { assistant_id: assistantId } },
-    body: { file: file as unknown as string },
+    body: { file: file.name },
     bodySerializer: () => {
       const form = new FormData();
       form.set("file", file);
       return form;
     },
-  });
-  if (result.error) {
-    throw new ApiError(errorMessage(result.error), result.response.status, result.error);
-  }
-  return result.data;
+  }));
 }

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ApiError } from "../api/request";
+import { ApiError } from "../api/errors";
 import { useAuth } from "../auth/AuthProvider";
 
 function safeNext(value: string | null): string {

@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { uploadKnowledgeFile, type Schemas } from "../api/client";
-import { fieldErrorsFrom422 } from "../api/errors";
-import { ApiError, request } from "../api/request";
+import { api, unwrap, uploadKnowledgeFile, type Schemas } from "../api/client";
+import { ApiError, fieldErrorsFrom422 } from "../api/errors";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
+import { enumAt, rangeAt } from "../lib/configSchema";
 import { diffConfigs } from "../lib/diff";
 import { Badge, EmptyState, ErrorState, ErrorSummary, FieldError, LoadingState } from "../components/States";
 
-type Assistant = Schemas["AssistantResponse"];
 type FieldSpec = Schemas["FieldSpec"];
 
 function Field({ path, label, error, help, children }: { path: string; label: string; error?: string; help?: string; children: (id: string, describedBy?: string) => ReactNode }) {
@@ -33,10 +32,10 @@ export function AssistantsPage() {
   const [assistantName, setAssistantName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
-  const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => request<{ items: Assistant[] }>("/assistants") });
-  const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => request<Schemas["TemplateResponse"][]>("/templates"), enabled: showCreate });
+  const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
+  const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => unwrap(api.GET("/templates")), enabled: showCreate });
   const create = useMutation({
-    mutationFn: (input: Schemas["AssistantCreate"]) => request<Assistant>("/assistants", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }),
+    mutationFn: (input: Schemas["AssistantCreate"]) => unwrap(api.POST("/assistants", { body: input })),
     onSuccess: (assistant) => navigate(`/assistants/${assistant.id}/settings`),
     onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to create assistant."),
   });
@@ -81,9 +80,9 @@ export function AssistantsPage() {
 export function AssistantSettingsPage() {
   const { id = "" } = useParams();
   const queryClient = useQueryClient();
-  const assistantQuery = useQuery({ queryKey: ["assistant", id], queryFn: () => request<Assistant>(`/assistants/${id}`) });
-  const schemaQuery = useQuery({ queryKey: ["assistant-config-schema"], queryFn: () => request<Record<string, unknown>>("/assistant-config/schema") });
-  const versionsQuery = useQuery({ queryKey: ["assistant-versions", id], queryFn: () => request<{ items: Schemas["AssistantVersionResponse"][] }>(`/assistants/${id}/versions`) });
+  const assistantQuery = useQuery({ queryKey: ["assistant", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}", { params: { path: { assistant_id: id } } })) });
+  const schemaQuery = useQuery({ queryKey: ["assistant-config-schema"], queryFn: () => unwrap(api.GET("/assistant-config/schema")) });
+  const versionsQuery = useQuery({ queryKey: ["assistant-versions", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/versions", { params: { path: { assistant_id: id } } })) });
   const [config, setConfig] = useState<AssistantConfig | null>(null);
   const [assistantName, setAssistantName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -92,20 +91,20 @@ export function AssistantSettingsPage() {
   const [selectedVersion, setSelectedVersion] = useState("");
   useEffect(() => {
     if (!assistantQuery.data) return;
-    setConfig(structuredClone(assistantQuery.data.config) as AssistantConfig);
+    setConfig(structuredClone(assistantQuery.data.config));
     setAssistantName(assistantQuery.data.name);
   }, [assistantQuery.data]);
 
-  const readbackOptions = useMemo(() => enumAt(schemaQuery.data, ["AssistantConfig", "properties", "readback", "enum"], ["off", "email", "critical"]), [schemaQuery.data]);
-  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["AssistantConfig", "properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "end_call"]), [schemaQuery.data]);
-  const typeOptions = useMemo(() => enumAt(schemaQuery.data, ["FieldSpec", "properties", "type", "enum"], ["string", "email", "phone", "date", "boolean", "integer", "number", "enum", "list"]), [schemaQuery.data]);
+  const readbackOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "readback", "enum"], ["off", "email", "critical"]), [schemaQuery.data]);
+  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "end_call"]), [schemaQuery.data]);
+  const typeOptions = useMemo(() => enumAt(schemaQuery.data, ["$defs", "FieldSpec", "properties", "type", "enum"], ["string", "email", "phone", "date", "boolean", "integer", "number", "enum", "list"]), [schemaQuery.data]);
   const thresholdRange = useMemo(() => rangeAt(schemaQuery.data), [schemaQuery.data]);
   const serverErrors = errors;
 
   const save = useMutation({
-    mutationFn: (payload: Schemas["AssistantUpdate"]) => request<Assistant>(`/assistants/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
+    mutationFn: (payload: Schemas["AssistantUpdate"]) => unwrap(api.PUT("/assistants/{assistant_id}", { params: { path: { assistant_id: id } }, body: payload })),
     onSuccess: async (assistant) => {
-      setConfig(structuredClone(assistant.config) as AssistantConfig);
+      setConfig(structuredClone(assistant.config));
       setAssistantName(assistant.name);
       setErrors({});
       setSaveMessage(`Saved version ${assistant.version}`);
@@ -117,8 +116,8 @@ export function AssistantSettingsPage() {
       } else setErrors({ _form: caught instanceof Error ? caught.message : "Unable to save changes." });
     },
   });
-  if (assistantQuery.isLoading || !config) return <main className="page" id="main-content"><LoadingState /></main>;
   if (assistantQuery.error) return <main className="page" id="main-content"><ErrorState message="Assistant settings could not be loaded." /></main>;
+  if (assistantQuery.isLoading || !config) return <main className="page" id="main-content"><LoadingState /></main>;
   const baseline = assistantQuery.data!;
   const clientErrors = validateAssistantConfig(config);
   const allErrors = { ...clientErrors, ...serverErrors, ...serviceKeyErrors };
@@ -296,18 +295,6 @@ export function AssistantSettingsPage() {
   </main>;
 }
 
-function enumAt(data: unknown, path: string[], fallback: string[]): string[] {
-  let value: unknown = data;
-  for (const part of path) value = value && typeof value === "object" ? (value as Record<string, unknown>)[part] : undefined;
-  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : fallback;
-}
-
-function rangeAt(data: unknown): { min: number; max: number } {
-  const root = data as { $defs?: Record<string, { properties?: Record<string, { minimum?: number; maximum?: number }> }> } | undefined;
-  const fields = root?.$defs?.AssistantConfig?.properties?.review_confidence_threshold;
-  return { min: fields?.minimum ?? 0, max: fields?.maximum ?? 1 };
-}
-
 function VersionDiff({ oldConfig, currentConfig }: { oldConfig: unknown; currentConfig: unknown }) {
   const diff = diffConfigs(oldConfig, currentConfig);
   return <div className="table-wrap"><table><caption>Selected version compared with the current saved configuration</caption><thead><tr><th>Path</th><th>Change</th><th>Old value</th><th>Current value</th></tr></thead><tbody>
@@ -330,9 +317,9 @@ function formatDate(value: string) {
 export function AssistantKnowledgePage() {
   const { id = "" } = useParams();
   const queryClient = useQueryClient();
-  const assistantQuery = useQuery({ queryKey: ["assistant", id], queryFn: () => request<Assistant>(`/assistants/${id}`) });
-  const sourcesQuery = useQuery({ queryKey: ["knowledge-sources", id], queryFn: () => request<{ items: Schemas["KnowledgeSourceResponse"][] }>(`/assistants/${id}/knowledge/sources`) });
-  const digestQuery = useQuery({ queryKey: ["knowledge-digest", id], queryFn: () => request<Schemas["KnowledgeDigestResponse"]>(`/assistants/${id}/knowledge/digest`) });
+  const assistantQuery = useQuery({ queryKey: ["assistant", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}", { params: { path: { assistant_id: id } } })) });
+  const sourcesQuery = useQuery({ queryKey: ["knowledge-sources", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/knowledge/sources", { params: { path: { assistant_id: id } } })) });
+  const digestQuery = useQuery({ queryKey: ["knowledge-digest", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/knowledge/digest", { params: { path: { assistant_id: id } } })) });
   const [url, setUrl] = useState("");
   const [urlError, setUrlError] = useState("");
   const [fileError, setFileError] = useState("");
@@ -345,7 +332,7 @@ export function AssistantKnowledgePage() {
   useEffect(() => { if (assistantQuery.data) setFaqs(structuredClone(assistantQuery.data.config.knowledge?.faqs ?? [])); }, [assistantQuery.data]);
   const jobQuery = useQuery({
     queryKey: ["job", jobId],
-    queryFn: () => request<Schemas["JobResponse"]>(`/jobs/${jobId}`),
+    queryFn: () => unwrap(api.GET("/jobs/{job_id}", { params: { path: { job_id: jobId ?? "" } } })),
     enabled: Boolean(jobId),
     refetchInterval: (query) => {
       const state = query.state.data?.status;
@@ -365,16 +352,16 @@ export function AssistantKnowledgePage() {
       if (!assistantQuery.data) throw new Error("Assistant not loaded.");
       const config = structuredClone(assistantQuery.data.config);
       config.knowledge = { ...config.knowledge, faqs, max_digest_chars: config.knowledge?.max_digest_chars ?? 24000 };
-      return request<Assistant>(`/assistants/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: assistantQuery.data.name, template: assistantQuery.data.template, config }) });
+      return unwrap(api.PUT("/assistants/{assistant_id}", { params: { path: { assistant_id: id } }, body: { name: assistantQuery.data.name, template: assistantQuery.data.template, config } }));
     },
     onSuccess: () => { setStatus("FAQ saved"); void queryClient.invalidateQueries({ queryKey: ["assistant", id] }); },
   });
   const digestSave = useMutation({
-    mutationFn: () => request<Schemas["KnowledgeDigestResponse"]>(`/assistants/${id}/knowledge/digest`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: digest }) }),
+    mutationFn: () => unwrap(api.PUT("/assistants/{assistant_id}/knowledge/digest", { params: { path: { assistant_id: id } }, body: { content: digest } })),
     onSuccess: () => { setStatus("Digest saved"); void queryClient.invalidateQueries({ queryKey: ["knowledge-digest", id] }); },
   });
   const sourceAdd = useMutation({
-    mutationFn: (source: { uri: string }) => request(`/assistants/${id}/knowledge/sources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "url", uri: source.uri }) }),
+    mutationFn: (source: { uri: string }) => unwrap(api.POST("/assistants/{assistant_id}/knowledge/sources", { params: { path: { assistant_id: id } }, body: { kind: "url", uri: source.uri } })),
     onSuccess: () => { setUrl(""); setUrlError(""); setStatus("Website added"); void queryClient.invalidateQueries({ queryKey: ["knowledge-sources", id] }); },
   });
   const upload = useMutation({
@@ -382,7 +369,7 @@ export function AssistantKnowledgePage() {
     onSuccess: () => { setFile(null); setFileError(""); setStatus("File uploaded"); void queryClient.invalidateQueries({ queryKey: ["knowledge-sources", id] }); },
   });
   const importKnowledge = useMutation({
-    mutationFn: () => request<Schemas["JobResponse"]>(`/assistants/${id}/knowledge/import`, { method: "POST" }),
+    mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/knowledge/import", { params: { path: { assistant_id: id } } })),
     onSuccess: (job) => { setJobId(job.id); setStatus(`Import ${job.status}`); },
   });
   if (assistantQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;

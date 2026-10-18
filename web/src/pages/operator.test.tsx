@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import type { Schemas } from "../api/client";
 import { server } from "../mocks/server";
 import { mockDb } from "../mocks/db";
 import { renderApp } from "../test/renderApp";
@@ -46,9 +47,17 @@ describe("operator workflows", () => {
     const threshold = screen.getByRole("slider", { name: /confidence threshold/i });
     fireEvent.change(threshold, { target: { value: "0.8" } });
 
-    server.use(http.put("*/api/assistants/:id", async ({ request }) => {
-      const body = await request.json() as { name: string; config: Record<string, unknown> };
-      return HttpResponse.json({ ...mockDb.tenants[0].assistant, ...body, version: 4, updated_at: new Date().toISOString() });
+    server.use(http.put<{ id: string }, Schemas["AssistantUpdate"], Schemas["AssistantResponse"]>("*/api/assistants/:id", async ({ request }) => {
+      const body = await request.json() as Schemas["AssistantUpdate"];
+      const assistant = mockDb.tenants[0].assistant;
+      return HttpResponse.json<Schemas["AssistantResponse"]>({
+        ...assistant,
+        ...body,
+        name: body.name ?? assistant.name,
+        template: body.template ?? assistant.template,
+        version: 4,
+        updated_at: new Date().toISOString(),
+      });
     }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(capturedBody).toBeDefined());
@@ -66,7 +75,7 @@ describe("operator workflows", () => {
       }
     }
 
-    server.use(http.put("*/api/assistants/:id", () => HttpResponse.json({
+    server.use(http.put<{ id: string }, Schemas["AssistantUpdate"], Schemas["HTTPValidationError"]>("*/api/assistants/:id", () => HttpResponse.json<Schemas["HTTPValidationError"]>({
       detail: [{ loc: ["body", "config", "services", "boiler_repair", "fields", 0, "label"], msg: "Label rejected by server.", type: "value_error" }],
     }, { status: 422 })));
     const firstLabel = screen.getAllByLabelText("Field label")[0];
@@ -135,10 +144,10 @@ describe("operator workflows", () => {
     const user = userEvent.setup();
     let mergeBody: unknown;
     let mergeCount = 0;
-    server.use(http.post("*/api/contacts/:id/merge", async ({ request, params }) => {
+    server.use(http.post<{ id: string }, Schemas["ContactMergeRequest"], Schemas["ContactMergeResponse"]>("*/api/contacts/:id/merge", async ({ request, params }) => {
       mergeCount += 1;
-      mergeBody = await request.json();
-      return HttpResponse.json({ survivor_id: String(params.id), merged_id: "30000000-0000-4000-8000-000000000002" });
+      mergeBody = await request.json() as Schemas["ContactMergeRequest"];
+      return HttpResponse.json<Schemas["ContactMergeResponse"]>({ survivor_id: String(params.id), merged_id: "30000000-0000-4000-8000-000000000002" });
     }));
     renderApp(`/contacts/${contactId}`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Jamie Morgan" });
@@ -153,6 +162,36 @@ describe("operator workflows", () => {
     await waitFor(() => expect(mergeBody).toEqual({ other_id: "30000000-0000-4000-8000-000000000002" }));
     expect(screen.getByTestId("current-location")).toHaveTextContent(`/contacts/${contactId}`);
     expect(screen.getByRole("heading", { name: "Jamie Morgan" })).toBeInTheDocument();
+  });
+
+  it("confirms a split, sends selected identities, and navigates to the returned contact", async () => {
+    const user = userEvent.setup();
+    const splitId = "30000000-0000-4000-8000-000000000099";
+    const contact = mockDb.tenants[0].contacts[0];
+    const identityId = contact.identities[0].id;
+    let splitBody: unknown;
+    server.use(
+      http.post<{ id: string }, Schemas["ContactSplitRequest"], Schemas["ContactSplitResponse"]>("*/api/contacts/:id/split", async ({ request, params }) => {
+        splitBody = await request.json();
+        return HttpResponse.json<Schemas["ContactSplitResponse"]>({ person_id: params.id, split_person_id: splitId });
+      }),
+      http.get<{ id: string }, never, Schemas["ContactDetailResponse"]>("*/api/contacts/:id", ({ params }) =>
+        HttpResponse.json<Schemas["ContactDetailResponse"]>({
+          ...contact,
+          id: params.id,
+          display_name: params.id === splitId ? `${contact.display_name} (split)` : contact.display_name,
+        }),
+      ),
+    );
+    renderApp(`/contacts/${contactId}`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Jamie Morgan" });
+    await user.click(screen.getAllByRole("checkbox")[0]);
+    await user.click(screen.getByRole("button", { name: "Split selected identities" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("The selected identities will move to a new contact profile.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Split" }));
+    await waitFor(() => expect(splitBody).toEqual({ identity_ids: [identityId] }));
+    expect(await screen.findByTestId("current-location")).toHaveTextContent(`/contacts/${splitId}`);
   });
 
   it("redirects to login and returns to the inbox filters after sign-in", async () => {

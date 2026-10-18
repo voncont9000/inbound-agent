@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import type { Schemas } from "../api/client";
-import { request } from "../api/request";
+import { api, unwrap, type Schemas } from "../api/client";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Badge, EmptyState, ErrorState, LoadingState } from "../components/States";
 
@@ -24,13 +23,13 @@ const statuses = ["active", "completed", "failed"] as const;
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
 
 function conversationQuery(filters: { channel: string; status: string; reviewOnly: boolean }, cursor?: string | null) {
-  const params = new URLSearchParams();
-  if (filters.channel !== "all") params.set("channel", filters.channel);
-  if (filters.status !== "all") params.set("status", filters.status);
-  if (filters.reviewOnly) params.set("has_review", "true");
-  if (cursor) params.set("cursor", cursor);
-  params.set("limit", "20");
-  return `/conversations?${params.toString()}`;
+  return {
+    channel: channels.find((channel) => channel === filters.channel),
+    status: statuses.find((status) => status === filters.status),
+    has_review: filters.reviewOnly ? true : undefined,
+    cursor: cursor ?? undefined,
+    limit: 20,
+  };
 }
 
 export function InboxPage() {
@@ -41,18 +40,13 @@ export function InboxPage() {
   const filters = { channel, status, reviewOnly };
   const conversations = useInfiniteQuery({
     queryKey: ["conversations", filters],
-    queryFn: ({ pageParam }) => request<Schemas["ConversationListResponse"]>(conversationQuery(filters, pageParam)),
+    queryFn: ({ pageParam }) => unwrap(api.GET("/conversations", { params: { query: conversationQuery(filters, pageParam) } })),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
   });
   const reviewed = useQuery({
     queryKey: ["conversations-needing-review", channel, status],
-    queryFn: () => {
-      const params = new URLSearchParams({ has_review: "true" });
-      if (channel !== "all") params.set("channel", channel);
-      if (status !== "all") params.set("status", status);
-      return request<Schemas["ConversationListResponse"]>(`/conversations?${params}`);
-    },
+    queryFn: () => unwrap(api.GET("/conversations", { params: { query: { ...conversationQuery(filters), has_review: true } } })),
   });
   const needsReviewIds = useMemo(() => new Set(reviewed.data?.items.map(({ id }) => id) ?? []), [reviewed.data]);
   const rows = conversations.data?.pages.flatMap(({ items }) => items) ?? [];
@@ -92,9 +86,9 @@ export function ConversationPage() {
   const { id = "" } = useParams();
   const queryClient = useQueryClient();
   const [openReview, setOpenReview] = useState("");
-  const detailQuery = useQuery({ queryKey: ["conversation", id], queryFn: () => request<Schemas["ConversationDetailResponse"]>(`/conversations/${id}`) });
+  const detailQuery = useQuery({ queryKey: ["conversation", id], queryFn: () => unwrap(api.GET("/conversations/{conversation_id}", { params: { path: { conversation_id: id } } })) });
   const assistantId = detailQuery.data?.assistant_id ?? "";
-  const assistantQuery = useQuery({ queryKey: ["assistant", assistantId], queryFn: () => request<Schemas["AssistantResponse"]>(`/assistants/${assistantId}`), enabled: Boolean(assistantId) });
+  const assistantQuery = useQuery({ queryKey: ["assistant", assistantId], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}", { params: { path: { assistant_id: assistantId } } })), enabled: Boolean(assistantId) });
   const detail = detailQuery.data;
   const intakes = useMemo(() => {
     const result: Partial<Record<"live" | "post_call" | "merged", IntakeRecord>> = {};
@@ -112,7 +106,7 @@ export function ConversationPage() {
     return [...new Set([...ordered, ...discovered])];
   }, [assistantQuery.data, intakes.live, intakes.post_call, mergedData, liveFields, postFields, mergedFields]);
   const review = useMutation({
-    mutationFn: (input: { field: string; resolved_value: unknown; note?: string }) => request(`/conversations/${id}/reviews`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }),
+    mutationFn: (input: Schemas["ConversationReviewCreate"]) => unwrap(api.POST("/conversations/{conversation_id}/reviews", { params: { path: { conversation_id: id } }, body: input })),
     onSuccess: async () => {
       setOpenReview("");
       await queryClient.invalidateQueries({ queryKey: ["conversation", id] });
@@ -121,7 +115,7 @@ export function ConversationPage() {
     },
   });
   const patchTask = useMutation({
-    mutationFn: (input: { id: string; status: Schemas["TaskUpdate"]["status"] }) => request(`/tasks/${input.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: input.status }) }),
+    mutationFn: (input: { id: string; status: Schemas["TaskUpdate"]["status"] }) => unwrap(api.PATCH("/tasks/{task_id}", { params: { path: { task_id: input.id } }, body: { status: input.status } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["conversation", id] }); void queryClient.invalidateQueries({ queryKey: ["tasks"] }); },
   });
   if (detailQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;
@@ -267,7 +261,7 @@ function MetricsCard({ metrics, estimatedCost }: { metrics: Record<string, unkno
 export function ContactsPage() {
   const contacts = useInfiniteQuery({
     queryKey: ["contacts"],
-    queryFn: ({ pageParam }) => request<Schemas["ContactsResponse"]>(`/contacts?limit=50${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ""}`),
+    queryFn: ({ pageParam }) => unwrap(api.GET("/contacts", { params: { query: { cursor: pageParam ?? undefined, limit: 50 } } })),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor,
   });
@@ -289,15 +283,15 @@ export function ContactPage() {
   const [otherId, setOtherId] = useState("");
   const [dialog, setDialog] = useState<"merge" | "split" | "">("");
   const [selectedIdentities, setSelectedIdentities] = useState<string[]>([]);
-  const detailQuery = useQuery({ queryKey: ["contact", id], queryFn: () => request<Schemas["ContactDetailResponse"]>(`/contacts/${id}`) });
-  const contactsQuery = useQuery({ queryKey: ["contacts-for-merge"], queryFn: () => request<Schemas["ContactsResponse"]>("/contacts?limit=100") });
+  const detailQuery = useQuery({ queryKey: ["contact", id], queryFn: () => unwrap(api.GET("/contacts/{contact_id}", { params: { path: { contact_id: id } } })) });
+  const contactsQuery = useQuery({ queryKey: ["contacts-for-merge"], queryFn: () => unwrap(api.GET("/contacts", { params: { query: { limit: 100 } } })) });
   const detail = detailQuery.data;
   const merge = useMutation({
-    mutationFn: () => request<Schemas["ContactMergeResponse"]>(`/contacts/${id}/merge`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ other_id: otherId }) }),
+    mutationFn: () => unwrap(api.POST("/contacts/{contact_id}/merge", { params: { path: { contact_id: id } }, body: { other_id: otherId } })),
     onSuccess: async ({ survivor_id }) => { setDialog(""); await queryClient.invalidateQueries({ queryKey: ["contacts"] }); navigate(`/contacts/${survivor_id}`); },
   });
   const split = useMutation({
-    mutationFn: () => request<Schemas["ContactSplitResponse"]>(`/contacts/${id}/split`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identity_ids: selectedIdentities }) }),
+    mutationFn: () => unwrap(api.POST("/contacts/{contact_id}/split", { params: { path: { contact_id: id } }, body: { identity_ids: selectedIdentities } })),
     onSuccess: async ({ split_person_id }) => { setDialog(""); await queryClient.invalidateQueries({ queryKey: ["contacts"] }); navigate(`/contacts/${split_person_id}`); },
   });
   if (detailQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;
@@ -318,11 +312,11 @@ export function ContactPage() {
 
 export function TasksPage() {
   const queryClient = useQueryClient();
-  const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => request<Schemas["TaskListResponse"]>("/tasks") });
+  const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => unwrap(api.GET("/tasks")) });
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
   const update = useMutation({
-    mutationFn: (input: { id: string; status: Schemas["TaskUpdate"]["status"] }) => request(`/tasks/${input.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: input.status }) }),
+    mutationFn: (input: { id: string; status: Schemas["TaskUpdate"]["status"] }) => unwrap(api.PATCH("/tasks/{task_id}", { params: { path: { task_id: input.id } }, body: { status: input.status } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["tasks"] }); },
   });
   const kinds = [...new Set(tasks.data?.items.map(({ kind }) => kind) ?? [])];
@@ -336,10 +330,10 @@ export function TasksPage() {
 
 export function KnowledgeGapsPage() {
   const queryClient = useQueryClient();
-  const gaps = useQuery({ queryKey: ["knowledge-gaps"], queryFn: () => request<Schemas["KnowledgeGapsResponse"]>("/knowledge-gaps") });
+  const gaps = useQuery({ queryKey: ["knowledge-gaps"], queryFn: () => unwrap(api.GET("/knowledge-gaps")) });
   const [filter, setFilter] = useState("open");
   const update = useMutation({
-    mutationFn: (input: { id: string; status: Schemas["KnowledgeGapUpdate"]["status"] }) => request(`/knowledge-gaps/${input.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: input.status }) }),
+    mutationFn: (input: { id: string; status: Schemas["KnowledgeGapUpdate"]["status"] }) => unwrap(api.PATCH("/knowledge-gaps/{gap_id}", { params: { path: { gap_id: input.id } }, body: { status: input.status } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["knowledge-gaps"] }); },
   });
   const rows = (gaps.data?.items ?? []).filter(({ status }) => filter === "all" || status === filter);

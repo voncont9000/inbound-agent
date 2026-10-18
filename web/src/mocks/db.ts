@@ -1,11 +1,12 @@
 import { cloneFixtures, authUser, memberships, templates, type TenantFixture } from "./fixtures";
+import type { Schemas } from "../api/client";
 
 export interface MockDatabase {
   tenants: TenantFixture[];
   loggedIn: boolean;
   user: typeof authUser;
   memberships: typeof memberships;
-  jobs: Record<string, { tenantId: string; assistantId: string; polls: number; job: Record<string, unknown> }>;
+  jobs: Record<string, { tenantId: string; assistantId: string; polls: number; job: Schemas["JobResponse"] }>;
 }
 
 function browserSession(): boolean {

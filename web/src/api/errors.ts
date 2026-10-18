@@ -1,3 +1,10 @@
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly body?: unknown) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export function fieldErrorsFrom422(body: unknown): Record<string, string> {
   if (!body || typeof body !== "object" || !("detail" in body)) return {};
   const detail = (body as { detail?: unknown }).detail;

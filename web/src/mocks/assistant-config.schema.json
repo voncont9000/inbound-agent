@@ -1,0 +1,443 @@
+{
+  "$defs": {
+    "DateDeadlineUrgencyRule": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "date_deadline",
+          "title": "Type",
+          "type": "string"
+        },
+        "service": {
+          "title": "Service",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "add_months": {
+          "title": "Add Months",
+          "type": "integer"
+        },
+        "minus_days": {
+          "title": "Minus Days",
+          "type": "integer"
+        },
+        "urgent_within_days": {
+          "title": "Urgent Within Days",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "service",
+        "field",
+        "add_months",
+        "minus_days",
+        "urgent_within_days",
+        "reason"
+      ],
+      "title": "DateDeadlineUrgencyRule",
+      "type": "object"
+    },
+    "FieldSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "email",
+            "phone",
+            "date",
+            "boolean",
+            "integer",
+            "number",
+            "enum",
+            "list"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Choices"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "critical": {
+          "default": false,
+          "title": "Critical",
+          "type": "boolean"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "label",
+        "type"
+      ],
+      "title": "FieldSpec",
+      "type": "object"
+    },
+    "KeywordUrgencyRule": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "keyword",
+          "title": "Type",
+          "type": "string"
+        },
+        "phrases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Phrases",
+          "type": "array"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "phrases",
+        "reason"
+      ],
+      "title": "KeywordUrgencyRule",
+      "type": "object"
+    },
+    "KnowledgeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeSource"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "faqs": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeFAQ"
+          },
+          "title": "Faqs",
+          "type": "array"
+        },
+        "digest_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest Path"
+        },
+        "max_digest_chars": {
+          "default": 24000,
+          "exclusiveMinimum": 0,
+          "title": "Max Digest Chars",
+          "type": "integer"
+        },
+        "digest_content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest Content"
+        }
+      },
+      "title": "KnowledgeConfig",
+      "type": "object"
+    },
+    "KnowledgeFAQ": {
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "answer": {
+          "title": "Answer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "answer"
+      ],
+      "title": "KnowledgeFAQ",
+      "type": "object"
+    },
+    "KnowledgeSource": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File"
+        }
+      },
+      "title": "KnowledgeSource",
+      "type": "object"
+    },
+    "OfficeHours": {
+      "additionalProperties": false,
+      "properties": {
+        "days": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "opens": {
+          "title": "Opens",
+          "type": "string"
+        },
+        "closes": {
+          "title": "Closes",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "Europe/London",
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "days",
+        "opens",
+        "closes"
+      ],
+      "title": "OfficeHours",
+      "type": "object"
+    },
+    "PriceItem": {
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "title": "Service",
+          "type": "string"
+        },
+        "price": {
+          "title": "Price",
+          "type": "string"
+        },
+        "notes": {
+          "title": "Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "price",
+        "notes"
+      ],
+      "title": "PriceItem",
+      "type": "object"
+    },
+    "ServiceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "fields"
+      ],
+      "title": "ServiceConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "language": {
+      "default": "English",
+      "title": "Language",
+      "type": "string"
+    },
+    "business_name": {
+      "title": "Business Name",
+      "type": "string"
+    },
+    "greeting": {
+      "title": "Greeting",
+      "type": "string"
+    },
+    "instructions": {
+      "default": "",
+      "title": "Instructions",
+      "type": "string"
+    },
+    "readback": {
+      "default": "off",
+      "enum": [
+        "off",
+        "email",
+        "critical"
+      ],
+      "title": "Readback",
+      "type": "string"
+    },
+    "office_hours": {
+      "$ref": "#/$defs/OfficeHours"
+    },
+    "price_list": {
+      "items": {
+        "$ref": "#/$defs/PriceItem"
+      },
+      "title": "Price List",
+      "type": "array"
+    },
+    "policies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Policies",
+      "type": "array"
+    },
+    "contacts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Contacts",
+      "type": "object"
+    },
+    "services": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ServiceConfig"
+      },
+      "title": "Services",
+      "type": "object"
+    },
+    "urgency_rules": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "date_deadline": "#/$defs/DateDeadlineUrgencyRule",
+            "keyword": "#/$defs/KeywordUrgencyRule"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/KeywordUrgencyRule"
+          },
+          {
+            "$ref": "#/$defs/DateDeadlineUrgencyRule"
+          }
+        ]
+      },
+      "title": "Urgency Rules",
+      "type": "array"
+    },
+    "knowledge": {
+      "$ref": "#/$defs/KnowledgeConfig"
+    },
+    "live_actions": {
+      "items": {
+        "enum": [
+          "confirm_critical_fields",
+          "flag_urgent",
+          "request_callback",
+          "log_complaint",
+          "end_call"
+        ],
+        "type": "string"
+      },
+      "title": "Live Actions",
+      "type": "array"
+    },
+    "review_confidence_threshold": {
+      "default": 0.7,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Review Confidence Threshold",
+      "type": "number"
+    }
+  },
+  "required": [
+    "business_name",
+    "greeting",
+    "office_hours",
+    "price_list",
+    "policies",
+    "contacts",
+    "services",
+    "urgency_rules",
+    "live_actions"
+  ],
+  "title": "AssistantConfig",
+  "type": "object"
+}
