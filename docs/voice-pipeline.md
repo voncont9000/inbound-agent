@@ -513,12 +513,20 @@ channels do not expose it.
 
 On a successful tool call, the system speaks `transfer_handoff_message` (default:
 “I'm putting you through now, please hold.”); the model is instructed to call
-`transfer_call` without announcing the transfer. The handler pushes the handoff message
-followed by a speech marker. The marker reaches the tracker from the output transport only
-after earlier queued audio has been written, so model speech already in flight and the
-handoff line remain in output order. Transfer waits up to 10 seconds for the marker, then
-allows a 0.2-second grace period if it played. If the marker times out, transfer proceeds
-without the grace period and logs the outcome.
+`transfer_call` without announcing the transfer. Acceptance is recorded before the result
+callback. A call-scoped task then prepares the transfer, pushes the handoff line and marker,
+waits for playback, starts the redirect, and sends `EndWorkerFrame`. Pipecat may cancel the
+function handler on caller interruption, but cannot cancel this accepted-transfer sequence.
+The caller is muted by the user aggregator from the next input frame after acceptance and remains
+muted through pipeline end; this suppresses input audio, VAD/user-speaking frames, transcriptions,
+and interruption frames, preventing another user turn from reaching the LLM.
+
+The marker reaches the tracker from the output transport only after earlier queued audio has been
+written, so model speech already in flight and the handoff line remain in output order. Its status
+is `played`, `interrupted`, or `timeout`: an output-transport interruption resolves pending markers
+as interrupted, and a later marker cannot change that result. Transfer waits at most 10 seconds;
+it allows a 0.2-second grace period only when the line played. Interrupted and timed-out lines
+start the redirect immediately. The pipeline-end `complete_transfer` path remains a fallback.
 
 The handler starts the Twilio call redirect before sending `EndWorkerFrame`. This ordering
 is required because Pipecat's FastAPI websocket transport

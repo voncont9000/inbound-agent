@@ -45,10 +45,16 @@ WhatsApp or other text conversations. This is intentional: Gemini has been unrel
 to speak and call a tool in the same turn, sometimes producing a silent call or an announcement
 without a call.
 
-The booking handler returns the tool result as soon as the Calendar operation finishes; it does
-not wait for the holding message to finish playing. The output transport orders the result behind
-audio already queued, and a background marker wait logs whether the holding message reached the
-transport, with a 10-second timeout.
+The booking handler pushes the holding message and its marker immediately, then returns the tool
+result as soon as the Calendar operation finishes; it does not wait for playback. The output
+transport orders the result behind audio already queued, while a call-scoped task logs whether the
+holding message was played, interrupted, or timed out (10-second bound).
+
+Booking dispatches are serialized per call. If the caller interrupts while a booking request is in
+flight, the provider task is shielded from function-handler cancellation. Its outcome is added to
+the LLM context as Pipecat's final async-tool developer message, with a note that it completed after
+the interruption; this does not trigger another LLM run. A later booking call waits for the first
+dispatch to finish, so it cannot race the still-running request.
 
 ## Local testing
 
