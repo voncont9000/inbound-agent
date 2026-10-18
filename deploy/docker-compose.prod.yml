@@ -117,6 +117,7 @@ services:
       SETUP_DRAFT_MODEL: ${SETUP_DRAFT_MODEL:-gemini-3.1-flash-lite}
       SETUP_DRAFT_MAX_PAGES: ${SETUP_DRAFT_MAX_PAGES:-10}
       UPLOAD_DIR: /app/backend/var/uploads
+      RECORDING_MAX_BYTES: ${RECORDING_MAX_BYTES:-209715200}
       FAKE_OUTBOX_PATH: /app/backend/var/whatsapp-outbox.jsonl
     volumes:
       - backend-var:/app/backend/var
@@ -182,6 +183,7 @@ services:
       SETUP_DRAFT_MODEL: ${SETUP_DRAFT_MODEL:-gemini-3.1-flash-lite}
       SETUP_DRAFT_MAX_PAGES: ${SETUP_DRAFT_MAX_PAGES:-10}
       UPLOAD_DIR: /app/backend/var/uploads
+      RECORDING_MAX_BYTES: ${RECORDING_MAX_BYTES:-209715200}
       FAKE_OUTBOX_PATH: /app/backend/var/whatsapp-outbox.jsonl
     volumes:
       - backend-var:/app/backend/var

@@ -165,15 +165,17 @@ def create_stt(
     sample_rate: int | None = None,
     *,
     voice_language: VoiceLanguage | None = None,
+    extra_terms: list[str] | None = None,
 ):
     voice_language = voice_language or _default_voice_language(providers, env)
+    terms = merge_keyterms(extra_terms or [])
     if providers.stt == "assemblyai":
         return AssemblyAISTTService(
             api_key=env["ASSEMBLYAI_API_KEY"],
             sample_rate=sample_rate,
             settings=AssemblyAISTTService.Settings(
                 model="universal-3-6-pro",
-                keyterms_prompt=KEYTERMS,
+                keyterms_prompt=terms,
             ),
         )
     if providers.stt == "soniox":
@@ -184,7 +186,7 @@ def create_stt(
                 model="stt-rt-v5",
                 language_hints=list(voice_language.soniox_hints),
                 enable_language_identification=voice_language.soniox_language_identification,
-                context=SonioxContextObject(terms=KEYTERMS),
+                context=SonioxContextObject(terms=terms),
             ),
         )
     if providers.stt == "deepgram":
@@ -194,7 +196,7 @@ def create_stt(
             settings=DeepgramSTTService.Settings(
                 model="nova-3",
                 language=voice_language.deepgram_stt_language,
-                keyterm=KEYTERMS,
+                keyterm=terms,
             ),
         )
     raise ValueError(f"Unsupported STT provider: {providers.stt}")
@@ -208,10 +210,15 @@ def create_tts(
     *,
     voice_language: VoiceLanguage | None = None,
     pronunciations: list[PronunciationEntry] | None = None,
+    speed: float = 1.0,
 ):
     voice_language = voice_language or _default_voice_language(providers, env)
     text_transforms = [("*", PronunciationTransform(pronunciations))] if pronunciations else None
     if providers.tts == "speechify":
+        if speed != 1.0:
+            logger.info(
+                "Speechify does not support configurable speech speed; ignoring speed={}", speed
+            )
         settings = {
             "model": voice_language.speechify_model,
             "voice": voice_language.speechify_voice,
@@ -226,6 +233,7 @@ def create_tts(
             settings=SpeechifyHttpTTSService.Settings(**settings),
         )
     if providers.tts == "elevenlabs":
+        speed_setting = {"speed": speed} if speed != 1.0 else {}
         if providers.elevenlabs_model in ELEVENLABS_HTTP_ONLY_MODELS:
             return ElevenLabsHttpTTSService(
                 api_key=env["ELEVENLABS_API_KEY"],
@@ -235,6 +243,7 @@ def create_tts(
                 settings=ElevenLabsHttpTTSService.Settings(
                     model=providers.elevenlabs_model,
                     voice=providers.tts_voice,
+                    **speed_setting,
                 ),
             )
         return ElevenLabsTTSService(
@@ -244,18 +253,33 @@ def create_tts(
             settings=ElevenLabsTTSService.Settings(
                 model=providers.elevenlabs_model,
                 voice=providers.tts_voice,
+                **speed_setting,
             ),
         )
     if providers.tts == "deepgram":
+        speed_setting = {"speed": speed} if speed != 1.0 else {}
         return DeepgramTTSService(
             api_key=env["DEEPGRAM_API_KEY"],
             sample_rate=sample_rate,
             text_transforms=text_transforms,
             settings=DeepgramTTSService.Settings(
                 voice=providers.tts_voice or voice_language.deepgram_tts_voice,
+                **speed_setting,
             ),
         )
     raise ValueError(f"Unsupported TTS provider: {providers.tts}")
+
+
+def merge_keyterms(extra_terms: list[str]) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for term in [*KEYTERMS, *extra_terms]:
+        normalized = term.strip()
+        key = normalized.casefold()
+        if normalized and key not in seen:
+            terms.append(normalized)
+            seen.add(key)
+    return terms
 
 
 def _default_voice_language(

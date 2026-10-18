@@ -223,6 +223,46 @@ async def test_final_report_failure_spools_json_payload(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_recording_upload_retries_and_sends_raw_wav(tmp_path: Path) -> None:
+    conversation_id = UUID("30000000-0000-0000-0000-000000000003")
+    path = tmp_path / "recording.wav"
+    audio = b"RIFFfake-wav"
+    path.write_bytes(audio)
+    attempts = []
+    delays = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        attempts.append(request)
+        assert request.method == "POST"
+        assert request.url.path == f"/internal/voice/calls/{conversation_id}/recording"
+        assert request.url.params["duration_seconds"] == "12.5"
+        assert request.headers["X-Service-Token"] == "test-service-token"
+        assert request.headers["X-External-Call-ID"] == "CA-test-call"
+        assert request.headers["Content-Type"] == "audio/wav"
+        assert request.read() == audio
+        return httpx.Response(503 if len(attempts) == 1 else 202, request=request)
+
+    client = VoiceApiClient(
+        ApiSettings("http://fake", "test-service-token"),
+        spool_dir=tmp_path,
+        transport=httpx.MockTransport(handle),
+        sleep=_record_sleep(delays),
+    )
+
+    assert (
+        await client.upload_recording(
+            conversation_id,
+            "CA-test-call",
+            path,
+            duration_seconds=12.5,
+        )
+        is True
+    )
+    assert len(attempts) == 2
+    assert delays == [0.5]
+
+
+@pytest.mark.asyncio
 async def test_non_retryable_report_failure_spools_without_sleep(tmp_path: Path) -> None:
     def handle(request: httpx.Request) -> httpx.Response:
         return httpx.Response(400, request=request)

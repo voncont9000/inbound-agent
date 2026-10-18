@@ -120,6 +120,89 @@
       "title": "BookingConfig",
       "type": "object"
     },
+    "CallSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "max_call_minutes": {
+          "anyOf": [
+            {
+              "maximum": 240,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Call Minutes"
+        },
+        "max_call_message": {
+          "default": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+          "minLength": 1,
+          "title": "Max Call Message",
+          "type": "string"
+        },
+        "silence_timeout_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 60,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Silence Timeout Seconds"
+        },
+        "still_there_prompt": {
+          "default": "Are you still there?",
+          "minLength": 1,
+          "title": "Still There Prompt",
+          "type": "string"
+        },
+        "silence_goodbye_message": {
+          "default": "I'll end the call now. Thank you for calling. Goodbye.",
+          "minLength": 1,
+          "title": "Silence Goodbye Message",
+          "type": "string"
+        },
+        "speech_speed": {
+          "default": 1.0,
+          "maximum": 1.2,
+          "minimum": 0.7,
+          "title": "Speech Speed",
+          "type": "number"
+        },
+        "interruption_sensitivity": {
+          "default": "normal",
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "title": "Interruption Sensitivity",
+          "type": "string"
+        },
+        "uninterruptible_greeting": {
+          "default": false,
+          "title": "Uninterruptible Greeting",
+          "type": "boolean"
+        },
+        "technical_terms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Technical Terms",
+          "type": "array"
+        }
+      },
+      "title": "CallSettings",
+      "type": "object"
+    },
     "DateDeadlineUrgencyRule": {
       "additionalProperties": false,
       "properties": {
@@ -604,6 +687,31 @@
       "title": "PronunciationEntry",
       "type": "object"
     },
+    "RecordingSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "consent_message": {
+          "default": "This call may be recorded for quality and training purposes.",
+          "minLength": 1,
+          "title": "Consent Message",
+          "type": "string"
+        },
+        "retention_days": {
+          "default": 30,
+          "maximum": 365,
+          "minimum": 1,
+          "title": "Retention Days",
+          "type": "integer"
+        }
+      },
+      "title": "RecordingSettings",
+      "type": "object"
+    },
     "RulesConfig": {
       "additionalProperties": false,
       "properties": {
@@ -1016,6 +1124,12 @@
       },
       "title": "Post Actions",
       "type": "array"
+    },
+    "call_settings": {
+      "$ref": "#/$defs/CallSettings"
+    },
+    "recording": {
+      "$ref": "#/$defs/RecordingSettings"
     },
     "knowledge": {
       "$ref": "#/$defs/KnowledgeConfig"

@@ -179,6 +179,55 @@ class VoiceApiClient:
             )
         return False
 
+    async def upload_recording(
+        self,
+        conversation_id: UUID,
+        external_call_id: str,
+        path: str | Path,
+        *,
+        duration_seconds: float,
+    ) -> bool:
+        body = Path(path).read_bytes()
+        last_error = "Unknown API failure"
+        async with self._client(timeout=60.0) as client:
+            for attempt in range(5):
+                try:
+                    response = await client.post(
+                        f"/internal/voice/calls/{conversation_id}/recording",
+                        params={"duration_seconds": duration_seconds},
+                        headers={
+                            "X-External-Call-ID": external_call_id,
+                            "Content-Type": "audio/wav",
+                        },
+                        content=body,
+                    )
+                    if self._should_retry_status(response.status_code):
+                        last_error = f"API returned HTTP {response.status_code}"
+                        if attempt < 4:
+                            await self.sleep(RETRY_DELAYS[attempt])
+                            continue
+                        break
+                    response.raise_for_status()
+                    return True
+                except (httpx.TransportError, httpx.TimeoutException) as error:
+                    last_error = f"{type(error).__name__}: {error}"
+                    if attempt == 4:
+                        break
+                    await self.sleep(RETRY_DELAYS[attempt])
+                except httpx.HTTPStatusError as error:
+                    status = error.response.status_code
+                    last_error = f"API returned HTTP {status}"
+                    if self._should_retry_status(status) and attempt < 4:
+                        await self.sleep(RETRY_DELAYS[attempt])
+                        continue
+                    break
+        logger.warning(
+            "Could not upload voice recording for call {}: {}",
+            external_call_id,
+            last_error,
+        )
+        return False
+
     async def resend_spooled(self, spool_dir: str | Path) -> tuple[int, int]:
         directory = Path(spool_dir)
         sent = 0

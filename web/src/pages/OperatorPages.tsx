@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { CallRecordingPlayer } from "../components/CallRecordingPlayer";
 import { Badge, EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type IntakeRecord = Record<string, unknown>;
@@ -154,6 +155,7 @@ export function ConversationPage() {
     </section>}
     {detail.channel === "gmail" && Object.keys(emailTriage).length > 0 && <section className="panel"><h2>Email triage</h2><div className="card-grid"><div><strong>Category</strong><p>{String(emailTriage.category ?? "—")}</p></div><div><strong>Reason</strong><p>{String(emailTriage.reason ?? "—")}</p></div></div></section>}
     {detail.transfer && <section className="panel"><h2>Transfer</h2><div className="card-grid"><div><strong>Target</strong><p>{detail.transfer.target_key}</p></div><div><strong>Status</strong><p>{detail.transfer.status}</p></div><div><strong>Latency</strong><p>{detail.transfer.latency_ms == null ? "—" : `${detail.transfer.latency_ms} ms`}</p></div></div></section>}
+    <CallRecordingPlayer conversationId={id} recording={detail.recording} />
     <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role} {message.role === "assistant" && message.meta.draft === true && <Badge tone="neutral">Draft in Gmail</Badge>}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>
     <section className="panel stack"><h2>Intake comparison</h2>
       {!intakes.merged && <p className="muted">Merged intake is unavailable. Live and post-call values are shown where available.</p>}

@@ -170,6 +170,44 @@ The hold strategy subclasses `TurnAnalyzerUserTurnStopStrategy` and relies on it
 fields (`_text`, `_turn_complete`, `_transcript_finalized`, `_timeout_task`,
 `_wait_for_transcript`), so re-test it on Pipecat upgrades.
 
+## Call settings and recording
+
+Call settings are optional per assistant; missing fields use defaults that preserve existing
+behavior.
+
+| Setting | Runtime mapping |
+|---|---|
+| `max_call_minutes` | Starts a per-call timer on client connect; unset means no duration limit. |
+| `silence_timeout_seconds` | Replaces `IDLE_PROMPT_SECS`; unset uses the environment default (8 seconds). |
+| `still_there_prompt`, `silence_goodbye_message` | Spoken at the two idle-hangup stages. |
+| `max_call_message` | Spoken before an enabled maximum-duration hangup. |
+| `interruption_sensitivity` | Selects VAD confidence/start timing and the user-turn start strategy. |
+| `uninterruptible_greeting` | Mutes caller audio until the first bot response completes. |
+| `technical_terms` | Merged after built-in `KEYTERMS` and passed to the selected STT service. |
+| `speech_speed` | Passed to supported TTS services only when different from `1.0`. |
+
+| Sensitivity | VAD | Turn start |
+|---|---|---|
+| Low | confidence 0.8, `start_secs=0.4` | Three words while the bot is speaking; one word while silent. |
+| Normal | Pipecat defaults | VAD start with interruptions enabled (current behavior). |
+| High | confidence 0.6, `start_secs=0.1` | VAD start with interruptions enabled. |
+
+Speech speed is supported by Deepgram Aura and ElevenLabs HTTP/WebSocket. Speechify has no
+speed setting in its request format; a non-default assistant setting is ignored with one
+informational log when that service is created.
+
+When recording is enabled, the pipeline starts a mono `AudioBufferProcessor` on client
+connect and stores 16-bit WAV audio in that call's run directory. On connect, the bot queues
+the regular LLM greeting followed by the configured consent line; Pipecat completes the
+LLM response frame sequence before processing the queued consent speech. The greeting is
+muted from caller interruption when either recording or `uninterruptible_greeting` is on.
+Browser practice calls use the same recording flag.
+
+In API mode, the WAV is uploaded after the call report when a conversation ID is available.
+Successful uploads delete the local file. Failed uploads are logged and the WAV remains in
+the call's run directory for manual handling; this change does not spool or retry recordings
+later. Local/no-API calls keep the WAV in their run directory.
+
 ## Hybrid intake and provenance
 
 `confirm_critical_fields` accepts only configured critical fields, validates each service's

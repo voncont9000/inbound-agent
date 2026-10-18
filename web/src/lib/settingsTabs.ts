@@ -47,6 +47,8 @@ export function tabForPath(path: string): SettingsTabId {
     case "readback":
     case "live_actions":
     case "urgency_rules":
+    case "call_settings":
+    case "recording":
     case "review_confidence_threshold":
     case "transfer_handoff_message":
     case "transfer_failed_message":

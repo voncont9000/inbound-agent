@@ -155,6 +155,18 @@ const plumbingConfig: AssistantConfig = {
     not_relevant: "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
   },
   review_confidence_threshold: 0.7,
+  call_settings: {
+    max_call_minutes: null,
+    max_call_message: "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+    silence_timeout_seconds: null,
+    still_there_prompt: "Are you still there?",
+    silence_goodbye_message: "I'll end the call now. Thank you for calling. Goodbye.",
+    speech_speed: 1,
+    interruption_sensitivity: "normal",
+    uninterruptible_greeting: false,
+    technical_terms: [],
+  },
+  recording: { enabled: false, consent_message: "This call may be recorded for quality and training purposes.", retention_days: 30 },
 };
 
 const lawConfig: AssistantConfig = {
@@ -272,6 +284,18 @@ in response.`,
     not_relevant: "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
   },
   review_confidence_threshold: 0.7,
+  call_settings: {
+    max_call_minutes: null,
+    max_call_message: "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+    silence_timeout_seconds: null,
+    still_there_prompt: "Are you still there?",
+    silence_goodbye_message: "I'll end the call now. Thank you for calling. Goodbye.",
+    speech_speed: 1,
+    interruption_sensitivity: "normal",
+    uninterruptible_greeting: false,
+    technical_terms: [],
+  },
+  recording: { enabled: false, consent_message: "This call may be recorded for quality and training purposes.", retention_days: 30 },
 };
 
 const fakeUser: Schemas["UserResponse"] = { id: "40000000-0000-4000-8000-000000000001", email: "demo@example.com", display_name: "Sam Taylor" };
@@ -377,6 +401,9 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
     started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary,
     end_reason: transferred ? "transferred" : index === 3 ? "connection_lost" : "caller_hangup",
     transfer: transferred ? { target_key: "duty_solicitor", status: "no-answer", latency_ms: 1200 } : null,
+    recording: tenantIndex === 0 && index === 0
+      ? { duration_seconds: 185, size_bytes: 3700000, created_at: date(index + 1), expires_at: "2026-03-03T10:30:00Z", is_test: true }
+      : null,
     messages: [
       { id: `${id}-m1`, role: "caller", text: summary, ts: date(index + 1), meta: {} },
       { id: `${id}-m2`, role: "assistant", text: "Of course. Can I take your name and a callback number?", ts: date(index + 1), meta: {} },

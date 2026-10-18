@@ -150,6 +150,12 @@ archive, and `voice-runs` archive under `$BACKUP_DIR/daily`; it retains seven da
 weekly sets. Weekly copies are made on Sunday or when `BACKUP_WEEKLY=1`. The optional Restic path
 requires both `RESTIC_REPOSITORY` and `RESTIC_PASSWORD`. For S3-compatible storage, configure:
 
+Recordings are stored under `/app/backend/var/uploads/recordings` in the backend uploads volume
+and are therefore included in the existing uploads archive and restore path. Configure
+`RECORDING_MAX_BYTES` to set the maximum accepted WAV size (default 209715200 bytes / 200 MiB).
+Uncompressed mono WAV uses approximately 1 MB per minute at 8 kHz or 2 MB per minute at 16 kHz;
+recordings are personal caller data, so protect backups and the uploads volume accordingly.
+
 ```dotenv
 RESTIC_REPOSITORY=s3:https://<endpoint>/<bucket>/inbound
 AWS_ACCESS_KEY_ID=<access-key>

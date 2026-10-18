@@ -288,6 +288,11 @@ rendering with the latest knowledge digest and contact context, first-reply AI d
 shared extraction, and a fake-mode simulator. Embedded signup, approved templates, media
 download, voice notes, takeover, and per-connection tokens remain planned work.
 
+**Call settings and recording status:** FR-S11 provides per-assistant call limits, silence
+handling, interruption sensitivity, speech speed, and technical terms. FR-S12 adds opt-in
+recording with spoken consent, tenant-scoped storage, and configurable retention. Both remain
+off by default for existing assistants.
+
 ## 11. Decisions
 | Question | Decision (2026-10-16) |
 |---|---|

@@ -1,5 +1,5 @@
 # inbound-agent
-A personalised, vertical-agnostic AI agent that takes customer inquiries via phone (speech-to-text / text-to-speech), draft-only Gmail, and WhatsApp.
+A personalised, vertical-agnostic AI agent that takes customer inquiries via phone (speech-to-text / text-to-speech), draft-only Gmail, and WhatsApp. Voice assistants support per-assistant call settings and opt-in recordings with configurable retention.
 
 ## Docs
 - [Product requirements (PRD)](docs/PRD.md)

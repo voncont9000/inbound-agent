@@ -146,6 +146,9 @@
             "title": "Business Name",
             "type": "string"
           },
+          "call_settings": {
+            "$ref": "#/components/schemas/CallSettings"
+          },
           "contacts": {
             "additionalProperties": {
               "type": "string"
@@ -257,6 +260,9 @@
             "title": "Readback",
             "type": "string"
           },
+          "recording": {
+            "$ref": "#/components/schemas/RecordingSettings"
+          },
           "review_confidence_threshold": {
             "default": 0.7,
             "maximum": 1.0,
@@ -358,6 +364,9 @@
           "business_name": {
             "title": "Business Name",
             "type": "string"
+          },
+          "call_settings": {
+            "$ref": "#/components/schemas/CallSettings"
           },
           "contacts": {
             "additionalProperties": {
@@ -469,6 +478,9 @@
             ],
             "title": "Readback",
             "type": "string"
+          },
+          "recording": {
+            "$ref": "#/components/schemas/RecordingSettings"
           },
           "review_confidence_threshold": {
             "default": 0.7,
@@ -1241,6 +1253,48 @@
         "title": "BusyBlock",
         "type": "object"
       },
+      "CallRecordingSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "is_test": {
+            "title": "Is Test",
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "duration_seconds",
+          "size_bytes",
+          "created_at",
+          "expires_at",
+          "is_test"
+        ],
+        "title": "CallRecordingSummary",
+        "type": "object"
+      },
       "CallReportAccepted": {
         "properties": {
           "accepted": {
@@ -1362,6 +1416,87 @@
           "metrics"
         ],
         "title": "CallReportRequest",
+        "type": "object"
+      },
+      "CallSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "interruption_sensitivity": {
+            "default": "normal",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "title": "Interruption Sensitivity",
+            "type": "string"
+          },
+          "max_call_message": {
+            "default": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+            "minLength": 1,
+            "title": "Max Call Message",
+            "type": "string"
+          },
+          "max_call_minutes": {
+            "anyOf": [
+              {
+                "maximum": 240.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Call Minutes"
+          },
+          "silence_goodbye_message": {
+            "default": "I'll end the call now. Thank you for calling. Goodbye.",
+            "minLength": 1,
+            "title": "Silence Goodbye Message",
+            "type": "string"
+          },
+          "silence_timeout_seconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 60.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Silence Timeout Seconds"
+          },
+          "speech_speed": {
+            "default": 1.0,
+            "maximum": 1.2,
+            "minimum": 0.7,
+            "title": "Speech Speed",
+            "type": "number"
+          },
+          "still_there_prompt": {
+            "default": "Are you still there?",
+            "minLength": 1,
+            "title": "Still There Prompt",
+            "type": "string"
+          },
+          "technical_terms": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Technical Terms",
+            "type": "array"
+          },
+          "uninterruptible_greeting": {
+            "default": false,
+            "title": "Uninterruptible Greeting",
+            "type": "boolean"
+          }
+        },
+        "title": "CallSettings",
         "type": "object"
       },
       "CallStartRequest": {
@@ -1996,6 +2131,16 @@
               }
             ],
             "title": "Person Id"
+          },
+          "recording": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallRecordingSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "started_at": {
             "format": "date-time",
@@ -3750,6 +3895,31 @@
           "say_as"
         ],
         "title": "PronunciationEntry",
+        "type": "object"
+      },
+      "RecordingSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "consent_message": {
+            "default": "This call may be recorded for quality and training purposes.",
+            "minLength": 1,
+            "title": "Consent Message",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "retention_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Retention Days",
+            "type": "integer"
+          }
+        },
+        "title": "RecordingSettings",
         "type": "object"
       },
       "RouteResponse": {
@@ -6827,6 +6997,63 @@
         ]
       }
     },
+    "/conversations/{conversation_id}/recording": {
+      "get": {
+        "operationId": "get_conversation_recording_conversations__conversation_id__recording_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Conversation Recording",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
     "/conversations/{conversation_id}/reviews": {
       "post": {
         "operationId": "create_review_conversations__conversation_id__reviews_post",
@@ -7184,6 +7411,104 @@
           }
         },
         "summary": "Start Call",
+        "tags": [
+          "internal voice"
+        ]
+      }
+    },
+    "/internal/voice/calls/{conversation_id}/recording": {
+      "post": {
+        "operationId": "upload_call_recording_internal_voice_calls__conversation_id__recording_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "duration_seconds",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duration Seconds"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-External-Call-ID",
+            "required": true,
+            "schema": {
+              "title": "X-External-Call-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Content-Length",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content-Length"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Service-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Service-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Upload Call Recording Internal Voice Calls  Conversation Id  Recording Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Call Recording",
         "tags": [
           "internal voice"
         ]

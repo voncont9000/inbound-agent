@@ -1,9 +1,11 @@
+import asyncio
 import hmac
 import logging
-from datetime import UTC, datetime
+import tempfile
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from inbound_core.booking import (
     AvailabilityRequest,
     AvailabilityResponse,
@@ -13,12 +15,15 @@ from inbound_core.booking import (
 from inbound_core.call_report import RouteResponse
 from inbound_core.config import AssistantConfig
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from inbound_api import graph
 from inbound_api.db import session_factory, tenant_session
+from inbound_api.jobs import enqueue
 from inbound_api.models import (
     Assistant,
+    CallRecording,
     Conversation,
     ConversationChannel,
     ConversationStatus,
@@ -33,6 +38,7 @@ from inbound_api.services.assistant_context import load_assistant_route
 from inbound_api.services.booking import book_slot, booking_context, fetch_busy
 from inbound_api.services.conversation_results import persist_voice_report
 from inbound_api.services.phone import normalise_phone
+from inbound_api.services.recordings import LocalRecordingStore
 from inbound_api.settings import get_settings
 from inbound_api.web_call_tokens import verify as verify_web_call_token
 
@@ -221,6 +227,108 @@ async def report_call(conversation_id: UUID, payload: CallReportRequest) -> Call
             return CallReportAccepted(accepted=True)
         await persist_voice_report(session, tenant_id, conversation, payload)
     return CallReportAccepted(accepted=True)
+
+
+@router.post(
+    "/calls/{conversation_id}/recording",
+    status_code=202,
+    dependencies=[Depends(require_voice_service_token)],
+)
+async def upload_call_recording(
+    conversation_id: UUID,
+    request: Request,
+    x_external_call_id: str = Header(alias="X-External-Call-ID"),
+    content_length: str | None = Header(default=None, alias="Content-Length"),
+    duration_seconds: float | None = Query(default=None, ge=0),
+) -> dict[str, bool]:
+    if content_length is None:
+        raise HTTPException(status_code=411, detail="Content-Length is required")
+    try:
+        declared_size = int(content_length)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Content-Length") from None
+    settings = get_settings()
+    if declared_size < 0:
+        raise HTTPException(status_code=400, detail="Invalid Content-Length")
+    if declared_size > settings.recording_max_bytes:
+        raise HTTPException(status_code=413, detail="Recording is too large")
+    async with session_factory() as session:
+        tenant_id = await session.scalar(
+            text("SELECT conversation_tenant(:conversation_id)"),
+            {"conversation_id": conversation_id},
+        )
+    if tenant_id is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    async with tenant_session(tenant_id) as session:
+        conversation = await session.scalar(
+            select(Conversation).where(Conversation.id == conversation_id).with_for_update()
+        )
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        if conversation.external_ref != x_external_call_id:
+            raise HTTPException(status_code=409, detail="External call ID does not match")
+        assistant = await session.get(Assistant, conversation.assistant_id)
+        try:
+            config = AssistantConfig.model_validate(assistant.config if assistant else {})
+        except Exception:
+            raise HTTPException(
+                status_code=409, detail="Assistant recording settings are invalid"
+            ) from None
+        if assistant is None or not config.recording.enabled:
+            raise HTTPException(status_code=409, detail="Recording is not enabled")
+
+        store = LocalRecordingStore(settings.upload_dir / "recordings")
+        storage_key = f"{tenant_id}/{conversation_id}.wav"
+        received_size = 0
+        with tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024) as body:
+            async for chunk in request.stream():
+                received_size += len(chunk)
+                if received_size > settings.recording_max_bytes:
+                    raise HTTPException(status_code=413, detail="Recording is too large")
+                body.write(chunk)
+            if received_size != declared_size:
+                raise HTTPException(status_code=400, detail="Content-Length does not match body")
+            body.seek(0)
+            await asyncio.to_thread(store.save, storage_key, body)
+
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(days=config.recording.retention_days)
+        recording_id = await session.scalar(
+            pg_insert(CallRecording)
+            .values(
+                tenant_id=tenant_id,
+                assistant_id=assistant.id,
+                conversation_id=conversation_id,
+                storage_key=storage_key,
+                content_type="audio/wav",
+                size_bytes=received_size,
+                duration_seconds=duration_seconds,
+                is_test=(conversation.metrics or {}).get("test_call") is True,
+                created_at=now,
+                expires_at=expires_at,
+            )
+            .on_conflict_do_update(
+                index_elements=[CallRecording.conversation_id],
+                set_={
+                    "assistant_id": assistant.id,
+                    "storage_key": storage_key,
+                    "content_type": "audio/wav",
+                    "size_bytes": received_size,
+                    "duration_seconds": duration_seconds,
+                    "is_test": (conversation.metrics or {}).get("test_call") is True,
+                    "created_at": now,
+                    "expires_at": expires_at,
+                },
+            )
+            .returning(CallRecording.id)
+        )
+        await enqueue(
+            session,
+            "recording_delete",
+            {"recording_id": str(recording_id)},
+            run_after=expires_at,
+        )
+    return {"accepted": True}
 
 
 @router.post(

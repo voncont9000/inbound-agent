@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AssistantConfig } from "../../lib/config";
 import { enumAt, rangeAt } from "../../lib/configSchema";
+import { CallSettingsSection } from "../CallSettingsSection";
 import { ManualChannelForm } from "../ChannelConnections";
 import { Field, type SettingsTabProps } from "./fields";
 import { invalidProps } from "./errors";
@@ -96,6 +97,7 @@ export function AdvancedTab({ assistantId, config, update, errors, schema }: Set
       <Field path="transfer_handoff_message" label="Handoff message">{(fieldId) => <textarea id={fieldId} value={config.transfer_handoff_message} onChange={(event) => update((draft) => { draft.transfer_handoff_message = event.target.value; })} />}</Field>
       <Field path="transfer_failed_message" label="Message when nobody answers">{(fieldId) => <textarea id={fieldId} value={config.transfer_failed_message} onChange={(event) => update((draft) => { draft.transfer_failed_message = event.target.value; })} />}</Field>
     </section>
+    <CallSettingsSection config={config} update={update} errors={errors} />
     <ManualChannelForm assistantId={assistantId} />
   </>;
 }

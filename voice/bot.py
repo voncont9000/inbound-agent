@@ -1,6 +1,5 @@
 import asyncio
 import json
-import math
 import os
 import re
 import time
@@ -17,12 +16,12 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     ControlFrame,
     EndWorkerFrame,
-    Frame,
     FunctionCallResultProperties,
     InterruptionFrame,
     LLMRunFrame,
@@ -52,13 +51,23 @@ from pipecat.services.llm_service import FunctionCallParams
 from pipecat.transports.base_output import BaseOutputTransport
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
-from pipecat.turns.user_mute import BaseUserMuteStrategy
-from pipecat.turns.user_start import VADUserTurnStartStrategy
+from pipecat.turns.user_start import MinWordsUserTurnStartStrategy, VADUserTurnStartStrategy
 from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
 from inbound_voice.booking import CallBooking
 from inbound_voice.call_report import build_call_report
+from inbound_voice.call_settings import (
+    IDLE_PROMPT_DEFAULT_SECONDS,
+    MaxCallDurationObserver,
+    build_user_mute_strategies,
+    idle_prompt_secs,
+    number_hold_secs,
+    smart_turn_stop_secs,
+)
+from inbound_voice.call_settings import (
+    SMART_TURN_STOP_DEFAULT_SECS as _SMART_TURN_STOP_DEFAULT_SECS,
+)
 from inbound_voice.call_setup import PreparedCall, prepare_call
 from inbound_voice.config import load_assistant_config
 from inbound_voice.extraction import (
@@ -80,10 +89,18 @@ from inbound_voice.providers import (
     resolve_providers,
     resolve_voice_language,
 )
+from inbound_voice.recording import (
+    add_recording_processor,
+    create_recording_processor,
+    recording_duration_seconds,
+    upload_recording_and_cleanup,
+)
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
 from inbound_voice.transfer import CallTransfer, SimulatedCallTransfer, TransferStart
 from inbound_voice.turns import incomplete_phone_number
+
+SMART_TURN_STOP_DEFAULT_SECS = _SMART_TURN_STOP_DEFAULT_SECS
 
 ROOT = Path(__file__).resolve().parent
 ASSISTANT_CONFIG = ROOT / "config" / "assistants" / "demo_firm.yaml"
@@ -91,9 +108,6 @@ PHONE_SAMPLE_RATE = 8000
 WEB_SAMPLE_RATE = 16000
 EXTRACTION_TIMEOUT_SECONDS = 60
 GOODBYE_HANGUP_SECONDS = 1.5
-IDLE_PROMPT_DEFAULT_SECONDS = 8.0
-NUMBER_HOLD_DEFAULT_SECS = 2.0
-SMART_TURN_STOP_DEFAULT_SECS = 0.7
 IDLE_PROMPT_TEXT = "Are you still there?"
 IDLE_GOODBYE_TEXT = "I'll end the call now. Thank you for calling. Goodbye."
 CLOSING_PHRASE = re.compile(
@@ -101,6 +115,52 @@ CLOSING_PHRASE = re.compile(
     re.IGNORECASE,
 )
 ASSISTANT_GOODBYE = re.compile(r"\b(?:goodbye|bye)\b", re.IGNORECASE)
+
+
+def build_user_params(
+    assistant: Any,
+    call_tools: CallTools,
+    *,
+    input_sample_rate: int,
+    metrics_observer: CallMetricsObserver,
+    env: Mapping[str, str],
+) -> LLMUserAggregatorParams:
+    sensitivity = assistant.call_settings.interruption_sensitivity
+    vad_params = {
+        "high": VADParams(confidence=0.6, start_secs=0.1),
+        "low": VADParams(confidence=0.8, start_secs=0.4),
+    }.get(sensitivity)
+    vad = (
+        SileroVADAnalyzer(sample_rate=input_sample_rate)
+        if vad_params is None
+        else SileroVADAnalyzer(sample_rate=input_sample_rate, params=vad_params)
+    )
+    start = (
+        [MinWordsUserTurnStartStrategy(min_words=3)]
+        if sensitivity == "low"
+        else [VADUserTurnStartStrategy(enable_interruptions=True)]
+    )
+    return LLMUserAggregatorParams(
+        user_mute_strategies=build_user_mute_strategies(
+            call_tools,
+            uninterruptible_greeting=assistant.call_settings.uninterruptible_greeting,
+            recording_enabled=assistant.recording.enabled,
+        ),
+        vad_analyzer=vad,
+        user_turn_strategies=UserTurnStrategies(
+            start=start,
+            stop=[
+                IncompletePhoneNumberTurnStopStrategy(
+                    turn_analyzer=LocalSmartTurnAnalyzerV3(
+                        sample_rate=input_sample_rate,
+                        params=SmartTurnParams(stop_secs=smart_turn_stop_secs(env)),
+                    ),
+                    hold_seconds=number_hold_secs(env),
+                    metrics_observer=metrics_observer,
+                )
+            ],
+        ),
+    )
 
 
 def should_goodbye_detected_end_call(
@@ -220,15 +280,6 @@ class BotSpeechTracker(BaseObserver):
             self._markers.pop(marker_id, None)
 
 
-class TransferUserMuteStrategy(BaseUserMuteStrategy):
-    def __init__(self, call_tools: CallTools) -> None:
-        super().__init__()
-        self._call_tools = call_tools
-
-    async def process_frame(self, _frame: Frame) -> bool:
-        return self._call_tools.transfer_accepted
-
-
 class GoodbyeDetectedHangup(BaseObserver):
     def __init__(
         self,
@@ -308,12 +359,16 @@ class IdleHangupObserver(BaseObserver):
         queue_frame: Any,
         push_end_worker: Any,
         idle_seconds: float = IDLE_PROMPT_DEFAULT_SECONDS,
+        prompt_text: str = IDLE_PROMPT_TEXT,
+        goodbye_text: str = IDLE_GOODBYE_TEXT,
     ) -> None:
         super().__init__(observe_every_push=False)
         self.sink = sink
         self.queue_frame = queue_frame
         self.push_end_worker = push_end_worker
         self.idle_seconds = idle_seconds
+        self.prompt_text = prompt_text
+        self.goodbye_text = goodbye_text
         self.pending: asyncio.Task[None] | None = None
         self._generation = 0
         self._phase = "conversation"
@@ -350,14 +405,14 @@ class IdleHangupObserver(BaseObserver):
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._bot_speaking = False
             if self._phase == "prompt_speaking":
-                self._schedule("waiting_goodbye", "goodbye_queued", IDLE_GOODBYE_TEXT)
+                self._schedule("waiting_goodbye", "goodbye_queued", self.goodbye_text)
             elif self._phase == "goodbye_speaking":
                 self._phase = "done"
                 self.sink.append_task("end_call", {"source": "idle"})
                 await self.push_end_worker()
             elif self._phase not in {"prompt_queued", "goodbye_queued", "done"}:
                 if not self._caller_speaking:
-                    self._schedule("waiting_prompt", "prompt_queued", IDLE_PROMPT_TEXT)
+                    self._schedule("waiting_prompt", "prompt_queued", self.prompt_text)
 
     def close(self) -> None:
         self._cancel_timer()
@@ -398,38 +453,6 @@ class IdleHangupObserver(BaseObserver):
         self.pending = None
         self._phase = queued_phase
         await self.queue_frame(TTSSpeakFrame(text))
-
-
-def smart_turn_stop_secs(env: Mapping[str, str]) -> float:
-    try:
-        stop_secs = float(
-            env.get("SMART_TURN_STOP_SECS", str(SMART_TURN_STOP_DEFAULT_SECS)).strip()
-        )
-    except ValueError as error:
-        raise ValueError("SMART_TURN_STOP_SECS must be a positive number.") from error
-    if not math.isfinite(stop_secs) or stop_secs <= 0:
-        raise ValueError("SMART_TURN_STOP_SECS must be a positive number.")
-    return stop_secs
-
-
-def idle_prompt_secs(env: Mapping[str, str]) -> float:
-    try:
-        idle_seconds = float(env.get("IDLE_PROMPT_SECS", str(IDLE_PROMPT_DEFAULT_SECONDS)).strip())
-    except ValueError as error:
-        raise ValueError("IDLE_PROMPT_SECS must be a positive number.") from error
-    if not math.isfinite(idle_seconds) or idle_seconds <= 0:
-        raise ValueError("IDLE_PROMPT_SECS must be a positive number.")
-    return idle_seconds
-
-
-def number_hold_secs(env: Mapping[str, str]) -> float:
-    try:
-        hold_secs = float(env.get("NUMBER_HOLD_SECS", str(NUMBER_HOLD_DEFAULT_SECS)).strip())
-    except ValueError as error:
-        raise ValueError("NUMBER_HOLD_SECS must be a positive number.") from error
-    if not math.isfinite(hold_secs) or hold_secs <= 0:
-        raise ValueError("NUMBER_HOLD_SECS must be a positive number.")
-    return hold_secs
 
 
 class IncompletePhoneNumberTurnStopStrategy(TurnAnalyzerUserTurnStopStrategy):
@@ -827,6 +850,7 @@ async def run_bot(
             os.environ,
             sample_rate=input_sample_rate,
             voice_language=voice_language,
+            extra_terms=assistant.call_settings.technical_terms,
         )
         llm = create_llm(
             providers,
@@ -846,6 +870,7 @@ async def run_bot(
             sample_rate=output_sample_rate,
             voice_language=voice_language,
             pronunciations=assistant.rules.pronunciations,
+            speed=assistant.call_settings.speech_speed,
         )
         context = create_llm_context(
             call_tools,
@@ -856,23 +881,16 @@ async def run_bot(
         )
         context_aggregators = LLMContextAggregatorPair(
             context,
-            user_params=LLMUserAggregatorParams(
-                user_mute_strategies=[TransferUserMuteStrategy(call_tools)],
-                vad_analyzer=SileroVADAnalyzer(sample_rate=input_sample_rate),
-                user_turn_strategies=UserTurnStrategies(
-                    start=[VADUserTurnStartStrategy(enable_interruptions=True)],
-                    stop=[
-                        IncompletePhoneNumberTurnStopStrategy(
-                            turn_analyzer=LocalSmartTurnAnalyzerV3(
-                                sample_rate=input_sample_rate,
-                                params=SmartTurnParams(stop_secs=smart_turn_stop_secs(os.environ)),
-                            ),
-                            hold_seconds=number_hold_secs(os.environ),
-                            metrics_observer=metrics_observer,
-                        )
-                    ],
-                ),
+            user_params=build_user_params(
+                assistant,
+                call_tools,
+                input_sample_rate=input_sample_rate,
+                metrics_observer=metrics_observer,
+                env=os.environ,
             ),
+        )
+        recording_processor = (
+            create_recording_processor(sink) if assistant.recording.enabled else None
         )
         pipeline_processors = [transport.input(), stt]
         if voice_language.locale == "multi" and providers.tts == "speechify":
@@ -886,6 +904,7 @@ async def run_bot(
                 context_aggregators.assistant(),
             ]
         )
+        pipeline_processors = add_recording_processor(pipeline_processors, recording_processor)
         pipeline = Pipeline(pipeline_processors)
         task: PipelineTask
 
@@ -900,7 +919,26 @@ async def run_bot(
             sink,
             queue_frame,
             push_end_worker,
-            idle_seconds=idle_prompt_secs(os.environ),
+            idle_seconds=(
+                assistant.call_settings.silence_timeout_seconds
+                if assistant.call_settings.silence_timeout_seconds is not None
+                else idle_prompt_secs(os.environ)
+            ),
+            prompt_text=assistant.call_settings.still_there_prompt,
+            goodbye_text=assistant.call_settings.silence_goodbye_message,
+        )
+        max_call_observer = MaxCallDurationObserver(
+            (
+                assistant.call_settings.max_call_minutes * 60
+                if assistant.call_settings.max_call_minutes is not None
+                else None
+            ),
+            assistant.call_settings.max_call_message,
+            queue_frame=queue_frame,
+            speech_tracker=speech_tracker,
+            marker_frame=SpeechMarkerFrame,
+            call_tools=call_tools,
+            sink=sink,
         )
         task = PipelineTask(
             pipeline,
@@ -910,7 +948,13 @@ async def run_bot(
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[metrics_observer, goodbye_hangup, idle_hangup, speech_tracker],
+            observers=[
+                metrics_observer,
+                goodbye_hangup,
+                idle_hangup,
+                max_call_observer,
+                speech_tracker,
+            ],
         )
         if prepared.api is not None and prepared.call_start is not None:
 
@@ -925,7 +969,12 @@ async def run_bot(
 
         @transport.event_handler("on_client_connected")
         async def on_client_connected(_transport: object, _client: object) -> None:
+            if recording_processor is not None:
+                await recording_processor.start_recording()
+            max_call_observer.start()
             await task.queue_frame(LLMRunFrame())
+            if assistant.recording.enabled:
+                await task.queue_frame(TTSSpeakFrame(assistant.recording.consent_message))
 
         @transport.event_handler("on_client_disconnected")
         async def on_client_disconnected(_transport: object, _client: object) -> None:
@@ -934,7 +983,10 @@ async def run_bot(
         try:
             await PipelineRunner().run(task)
         finally:
+            max_call_observer.close()
             await tasks.cancel_all()
+            if recording_processor is not None:
+                await recording_processor.stop_recording()
             if call_tools.transfer_request is not None:
                 await complete_transfer(
                     sink,
@@ -977,6 +1029,25 @@ async def run_bot(
                     )
                 except Exception as error:
                     logger.warning("Could not post voice API call report: {}", error)
+                recording_path = sink.directory / "recording.wav"
+                if assistant.recording.enabled and recording_path.is_file():
+                    if conversation_id is not None:
+                        try:
+                            duration = recording_duration_seconds(recording_path)
+                            await upload_recording_and_cleanup(
+                                prepared.api,
+                                conversation_id,
+                                external_call_id,
+                                recording_path,
+                                duration_seconds=duration,
+                            )
+                        except Exception as error:
+                            logger.warning("Could not upload call recording: {}", error)
+                    else:
+                        logger.warning(
+                            "Could not upload call recording for {}: conversation ID unavailable",
+                            external_call_id,
+                        )
 
 
 async def complete_transfer(
