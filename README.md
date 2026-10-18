@@ -7,6 +7,7 @@ A personalised AI agent that takes customer inquiries via phone (speech-to-text 
 - [M1 architecture and agent seams](docs/m1-architecture.md)
 - [Voice pipeline (M0 architecture)](docs/voice-pipeline.md)
 - [Text channels and WhatsApp](docs/text-channels.md)
+- [Production deployment](docs/deployment.md): single-server Hetzner operations runbook
 - [Fonio teardown](docs/fonio-teardown.md): reverse-engineering notes on the reference product, made with [REA](https://github.com/morluto/rea)
 
 ## Local development

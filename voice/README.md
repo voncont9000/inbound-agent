@@ -282,6 +282,11 @@ uv run python -m inbound_voice.api_client resend
 `VOICE_SPOOL_DIR`, `API_BASE_URL`, service tokens, and `.env` values are local configuration;
 never commit `.env`, call runs, or spool files.
 
+In production, `TWILIO_MODE=off` disables phone webhook and WebSocket service behavior;
+`TWILIO_MODE=twilio` requires `TWILIO_AUTH_TOKEN`. Browser calls without the backend's signed
+`call_token` also require a matching `WEB_CALL_TOKEN` in production. Keep this separate from
+`VOICE_SERVICE_TOKEN`; the production container passes the demo token only to the web-call service.
+
 ## Local Twilio simulation
 
 Run the phone server and, in a second terminal, the μ-law simulator:
