@@ -92,6 +92,19 @@ urgency_rules:
 live_actions: []
 transfer_handoff_message: "I'm putting you through now, please hold."
 transfer_failed_message: "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye."
+email_triage:
+  enquiry: >-
+    Someone asking about the firm's services, fees or their own employment or property matter,
+    including "do I have a claim?"-type questions, which get a reply that gives no legal advice
+    and offers the next step.
+  needs_human: >-
+    Complaints about the firm or another solicitor, existing clients chasing a live matter,
+    threats, opposing parties or their representatives, press, and anything urgent or sensitive
+    the context doesn't cover.
+  spam: "Unsolicited marketing, phishing, scams or automated bulk mail."
+  not_relevant: >-
+    Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt,
+    or a message clearly meant for a different business.
 # Example human-transfer configuration:
 # live_actions:
 #   - transfer_call

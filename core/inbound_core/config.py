@@ -138,6 +138,26 @@ class KnowledgeConfig(BaseModel):
     digest_content: str | None = Field(default=None, exclude=True)
 
 
+class EmailTriageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enquiry: str = (
+        "A customer or prospective customer asking about the business's services, prices, "
+        "availability or their own case, which you can answer or move forward from the "
+        "business context."
+    )
+    needs_human: str = (
+        "A person must decide or act: complaints, disputes, threats or safety concerns, "
+        "requests the business context does not cover, or anything you cannot answer "
+        "without inventing facts."
+    )
+    spam: str = "Unsolicited marketing, phishing, scams or automated bulk mail."
+    not_relevant: str = (
+        "Genuine mail that needs no reply, such as a thank-you with no question, a "
+        "delivery receipt, or a message clearly meant for a different business."
+    )
+
+
 PostActionEvent = Literal[
     "conversation_completed",
     "urgent",
@@ -244,6 +264,7 @@ class AssistantConfig(BaseModel):
         "Sorry, nobody is available to take your call right now. Someone will call you back "
         "as soon as possible. Goodbye."
     )
+    email_triage: EmailTriageConfig = Field(default_factory=EmailTriageConfig)
     review_confidence_threshold: float = Field(default=0.7, ge=0, le=1)
 
     @model_validator(mode="after")

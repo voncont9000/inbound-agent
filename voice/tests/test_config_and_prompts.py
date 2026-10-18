@@ -24,6 +24,8 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert assistant.business_name == "Demo & Co Solicitors"
     assert assistant.language == "British English"
     assert set(assistant.services) == {"conveyancing", "employment"}
+    assert "do I have a claim?" in assistant.email_triage.enquiry
+    assert "existing clients chasing a live matter" in assistant.email_triage.needs_human
     assert assistant.contacts["complaints_contact"] == "complaints@demoandco.example"
     assert len(assistant.price_list) == 5
     assert "AI assistant" in prompt

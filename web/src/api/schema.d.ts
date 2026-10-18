@@ -759,6 +759,7 @@ export interface components {
             contacts: {
                 [key: string]: string;
             };
+            email_triage?: components["schemas"]["EmailTriageConfig"];
             /** Greeting */
             greeting: string;
             /**
@@ -819,6 +820,7 @@ export interface components {
             contacts: {
                 [key: string]: string;
             };
+            email_triage?: components["schemas"]["EmailTriageConfig"];
             /** Greeting */
             greeting: string;
             /**
@@ -1408,6 +1410,29 @@ export interface components {
             /** Subject Template */
             subject_template: string;
             trigger: components["schemas"]["PostActionTrigger"];
+        };
+        /** EmailTriageConfig */
+        EmailTriageConfig: {
+            /**
+             * Enquiry
+             * @default A customer or prospective customer asking about the business's services, prices, availability or their own case, which you can answer or move forward from the business context.
+             */
+            enquiry: string;
+            /**
+             * Needs Human
+             * @default A person must decide or act: complaints, disputes, threats or safety concerns, requests the business context does not cover, or anything you cannot answer without inventing facts.
+             */
+            needs_human: string;
+            /**
+             * Not Relevant
+             * @default Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.
+             */
+            not_relevant: string;
+            /**
+             * Spam
+             * @default Unsolicited marketing, phishing, scams or automated bulk mail.
+             */
+            spam: string;
         };
         /** FactResponse */
         FactResponse: {
