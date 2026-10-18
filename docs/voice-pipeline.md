@@ -35,8 +35,8 @@ development runner creates the requested transport and invokes the same voice pi
 The `CallSink` protocol isolates transcript, intake, follow-up tasks and metrics from
 storage; Google Sheets and email sinks are intentionally deferred. Business behavior lives
 in assistant YAML that extends a template: `AssistantConfig` contains a response language,
-policies, services, typed fields, urgency rules, live actions, and a review-confidence
-threshold. Dictionary values merge recursively while assistant lists and scalars replace
+shared rule presets, custom policies, services, typed fields, urgency rules, live actions,
+and a review-confidence threshold. Dictionary values merge recursively while assistant lists and scalars replace
 template values.
 `uk_law_firm.yaml` is the first template; the product model is not law-firm-specific.
 
@@ -117,6 +117,19 @@ callback requests, and complaints are post-call tasks; the employment unfair-dis
 deadline rule is calculated from merged intake in code. Live tasks use source `live` and
 post-call tasks use `post_call`. The live prompt offers a callback at most once per topic,
 and post-call extraction does not treat contact details or an unaccepted offer as consent.
+
+## Conversation rules and pronunciation
+
+The shared prompt renderer adds a short `CONVERSATION RULES` section only for configured
+presets. Phone prompts use “caller”; text channels use “customer”. Transfer language is
+included for upset callers only when a transfer target is available and `transfer_call` is
+enabled. WhatsApp disclosure is rendered separately for first and later replies; Gmail
+drafts are human-reviewed and receive no disclosure rule.
+
+Sentence urgency conditions are evaluated in the existing post-conversation extraction
+request, without another model call. Matching reasons and evidence become urgent tasks.
+Pronunciation entries are case-insensitive whole-term substitutions in Pipecat's provider-
+agnostic TTS text filter and are not included in prompts.
 
 The bot subclasses Pipecat's turn-analyzer stop strategy to hold finalization for
 `NUMBER_HOLD_SECS` (default 2 seconds) only when the caller's trailing digits resemble an

@@ -157,6 +157,17 @@ See [context-graph.md](./context-graph.md) for research and design.
 - FR-L9: **Supervision and audit.** The firm stays responsible for the service under SRA rules. Every conversation keeps its transcript, the knowledge sources used and the actions taken. The firm can review and correct them. The SRA's [AI warning notice](https://www.sra.org.uk/solicitors/guidance/misuse-ai/) focuses on inaccurate information and client confidentiality, which drive FR-L1, FR-L5 and the vendor DPAs.
 - Out of scope for v1: AML/ID verification for client onboarding, engagement letters, taking payments.
 
+### 7.12 Rule presets and sentence urgency
+
+**Implementation status (FR-A2 / FR-S13 / sentence-rule portion of FR-S5):** Assistant
+configuration now has defaulted, optional-to-set conversation presets and pronunciation
+entries, while existing free-text policies and stored configs remain compatible. Only enabled
+presets are rendered; phone handoff language additionally requires an enabled transfer action
+and available target. Pronunciation uses provider-agnostic TTS text substitution, not prompt
+instructions. Configured plain-sentence urgency rules are evaluated in the existing post-call
+extraction request and create urgent tasks with a reason and evidence. Keyword and date-based
+urgency behavior is unchanged.
+
 ## 8. Non-functional requirements
 - **Latency:** see metrics. Stream everything. Region-pinned processing (EU first).
 - **Reliability:** 99.9% call answer availability. If the AI pipeline fails, fall back to voicemail or transfer. Durable, idempotent processing for email and WhatsApp webhooks (retries, dedupe by message ID).
