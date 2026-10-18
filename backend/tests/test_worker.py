@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import func, select, text
 
 from inbound_api.db import session_factory, tenant_session
-from inbound_api.jobs import HANDLERS, PermanentJobError, enqueue, run_next_job
+from inbound_api.jobs import HANDLERS, PermanentJobError, enqueue, run_next_job, worker
 from inbound_api.models import Job
 from inbound_api.settings import get_settings
 
@@ -279,3 +279,23 @@ async def test_enqueue_requires_tenant_context() -> None:
     async with session_factory() as session:
         with pytest.raises(RuntimeError, match="Tenant context"):
             await enqueue(session, "test.no_tenant", {})
+
+
+async def test_worker_retries_after_unexpected_job_error(monkeypatch) -> None:
+    stop = asyncio.Event()
+    calls = 0
+
+    async def fail_once_then_stop() -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("temporary database error")
+        stop.set()
+        return False
+
+    monkeypatch.setattr("inbound_api.jobs.run_next_job", fail_once_then_stop)
+    monkeypatch.setattr(get_settings(), "worker_poll_seconds", 0.01)
+
+    await worker(stop=stop)
+
+    assert calls == 2
