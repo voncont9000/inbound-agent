@@ -124,6 +124,9 @@ uv run --directory backend python -m inbound_api.channels.simulate gmail \
 Text, Markdown, CSV, PDF, and DOCX attachments up to 2 MB use the existing
 knowledge-file reader and are included as context, capped at 4,000 characters each.
 Other types and larger files are ignored. Outgoing drafts never include attachments.
+Extraction sees each customer email as `From:`/`Subject:` header lines (plus `Reply-To:` when it
+differs from the sender) followed by the body and any attachment text, so the sender's name and
+address can be captured with quoted evidence.
 FR-E5 style learning and FR-E7 suggested mailbox rules are out of scope.
 
 Media is not downloaded or transcribed. Non-text messages are stored as placeholders such as

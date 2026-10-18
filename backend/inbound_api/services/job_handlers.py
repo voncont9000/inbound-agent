@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime, timedelta
+from email.utils import parseaddr
 from uuid import UUID
 
 import httpx
@@ -244,19 +245,40 @@ async def message_extract(session: AsyncSession, payload: dict) -> None:
 
 
 def _message_extraction_rows(
-    messages: list[Message], *, include_attachments: bool = False
+    messages: list[Message],
+    *,
+    channel: str = "phone",
+    conversation_metrics: dict | None = None,
 ) -> list[dict[str, str]]:
     rows = []
+    metrics = conversation_metrics or {}
     for item in messages:
         if item.role not in {MessageRole.CALLER, MessageRole.ASSISTANT}:
             continue
         text = item.text
         attachments = (item.meta or {}).get("attachments_text")
-        if (
-            include_attachments
-            and item.role == MessageRole.CALLER
-            and isinstance(attachments, dict)
-        ):
+        if channel == "gmail" and item.role == MessageRole.CALLER:
+            meta = item.meta or {}
+            from_email = str(meta.get("from") or metrics.get("from_email") or "").strip()
+            contact_name = str(
+                meta.get("contact_name") or metrics.get("contact_name") or ""
+            ).strip()
+            subject = str(meta.get("subject") or metrics.get("subject") or "").strip()
+            from_value = (
+                f"{contact_name} <{from_email}>"
+                if contact_name and from_email
+                else from_email or contact_name
+            )
+            header_lines = [f"From: {from_value}", f"Subject: {subject}"]
+            reply_to = str(meta.get("reply_to") or "").strip()
+            if reply_to:
+                reply_to_address = parseaddr(reply_to)[1] or reply_to
+                from_address = parseaddr(from_email)[1] or from_email
+                if reply_to_address.casefold() != from_address.casefold():
+                    header_lines.append(f"Reply-To: {reply_to}")
+            header = "\n".join(header_lines)
+            text = f"{header}\n\n{text}"
+        if channel == "gmail" and item.role == MessageRole.CALLER and isinstance(attachments, dict):
             for name, attachment_text in attachments.items():
                 if isinstance(name, str) and isinstance(attachment_text, str):
                     text += f"\n\n[Attachment {name}]\n{attachment_text}"
@@ -312,7 +334,8 @@ async def run_message_extract(
     extraction_channel = channel or conversation.channel.value
     rows = _message_extraction_rows(
         messages,
-        include_attachments=extraction_channel == "gmail",
+        channel=extraction_channel,
+        conversation_metrics=conversation.metrics,
     )
     client = make_genai_client(settings.google_api_key)
     try:
