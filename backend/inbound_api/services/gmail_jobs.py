@@ -48,6 +48,7 @@ from inbound_api.models import (
     TaskStatus,
 )
 from inbound_api.services.assistant_context import load_assistant_route
+from inbound_api.services.costs import add_conversation_cost
 from inbound_api.services.gmail_queue import enqueue_gmail_sync
 from inbound_api.services.knowledge_import import make_genai_client
 from inbound_api.settings import get_settings
@@ -466,6 +467,7 @@ async def email_draft(session: AsyncSession, payload: dict) -> None:
             "llm_output_tokens": getattr(usage_metadata, "candidates_token_count", 0) or 0,
         }
         cost = _calculate_cost(settings, usage)
+        add_conversation_cost(conversation, cost)
         session.add(
             Message(
                 tenant_id=conversation.tenant_id,
@@ -519,7 +521,7 @@ def _build_email_reply(
     return email.as_bytes(policy=SMTP)
 
 
-def _calculate_cost(settings, usage: dict) -> float | None:
+def _calculate_cost(settings, usage: dict) -> dict | None:
     try:
         price_table = load_price_table(settings.price_table_path)
         return calculate_cost(

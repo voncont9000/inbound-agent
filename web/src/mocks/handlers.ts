@@ -3,6 +3,7 @@ import type { Schemas } from "../api/client";
 import type { paths } from "../api/schema";
 import { validateAssistantConfig } from "../lib/config";
 import { authUser, templates, testCallResponse } from "./fixtures";
+import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
 import type { TenantFixture } from "./fixtures";
 import assistantConfigSchema from "./assistant-config.schema.json";
@@ -48,6 +49,20 @@ function toContactSummary(detail: Schemas["ContactDetailResponse"]): Schemas["Co
 }
 
 export const handlers = [
+  http.get<never, never, Schemas["DashboardSummary"]>("*/api/dashboard/summary", ({ request }) => {
+    const query = new URL(request.url).searchParams;
+    const tenant = selectedTenant(request);
+    const assistantId = query.get("assistant_id");
+    const summary = mockDashboardSummary({
+      range: (query.get("range") ?? "7d") as DashboardMockQuery["range"],
+      start: query.get("start"),
+      end: query.get("end"),
+      timezone: query.get("timezone") ?? "UTC",
+      assistant_id: assistantId,
+      include_test: query.get("include_test") === "true",
+    }, mockDb.tenants.indexOf(tenant) + 1, assistantId && !findAssistant(tenant, assistantId) ? 0 : 1);
+    return HttpResponse.json<Schemas["DashboardSummary"]>(summary);
+  }),
   http.get<never, never, Schemas["PostActionVariable"][]>("*/api/post-actions/variables", () =>
     HttpResponse.json<Schemas["PostActionVariable"][]>([
       { name: "contact.name", description: "The customer's name." },
