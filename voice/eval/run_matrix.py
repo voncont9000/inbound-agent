@@ -254,7 +254,7 @@ async def _fake_api_state(api_url: str) -> dict[str, Any]:
             headers={"X-Service-Token": FAKE_API_TOKEN},
         ) as response:
             response.raise_for_status()
-        return await response.json()
+            return await response.json()
 
 
 async def _set_fake_assistant(api_base_url: str, assistant_path: str) -> None:
