@@ -17,7 +17,7 @@ M1 establishes service boundaries, shared contracts, and a tenant-isolated persi
 | Agent | Owns | Migration range |
 |---|---|---|
 | A — platform API | `backend/inbound_api/routers/` except `contacts.py`, `auth.py`, `jobs.py`, API implementation and API tests | `0100+` |
-| B — context graph | `backend/inbound_api/graph/`, `backend/inbound_api/routers/contacts.py`, graph/contact implementation and tests | None |
+| B — context graph | `backend/inbound_api/graph/`, `backend/inbound_api/routers/contacts.py`, graph/contact implementation and tests | `0200+` (none needed yet) |
 | C — web app | `web/` | None |
 | D — voice integration | `voice/` and voice/API integration tests | None |
 
