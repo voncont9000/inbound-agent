@@ -214,8 +214,9 @@ API keys.
 
 Configure `TWILIO_AUTH_TOKEN` to validate incoming webhook signatures. Add
 `TWILIO_ACCOUNT_SID` when REST hang-up is desired; otherwise the server closes the
-WebSocket after the shared pipeline ends. Expose port 7861 through a secure tunnel such as
-ngrok, and set `PUBLIC_BASE_URL` to the tunnel's HTTPS URL:
+WebSocket after the shared pipeline ends. The phone server binds to `127.0.0.1` by
+default, which works with a local tunnel such as ngrok. Set `PUBLIC_BASE_URL` to the
+tunnel's HTTPS URL:
 
 ```sh
 ngrok http 7861
@@ -229,7 +230,12 @@ Pipecat development runner's `-t twilio` path also remains available for develop
 
 The phone pipeline uses 8 kHz PCM internally and Twilio's 8 kHz μ-law stream externally.
 Set `PUBLIC_BASE_URL` behind a proxy so signature validation uses Twilio's public request
-URL. Never disable signature validation in a public deployment.
+URL. With `TWILIO_AUTH_TOKEN` configured, the webhook adds a `StreamToken` HMAC-SHA256
+parameter bound to CallSid, To, and From; the WebSocket verifies it before call setup and
+closes unauthorized streams with code 1008. If directly binding to a network interface is
+required, pass `--host` explicitly (for example, `--host 0.0.0.0`) and protect access with
+the surrounding network controls. Never disable signature validation in a public
+deployment.
 
 ## API routing and reporting
 
@@ -263,6 +269,9 @@ fake API:
 uv run python -m eval.run_matrix --stt soniox --tts speechify \
   --scenario employment --reps 1 --transport twilio --fake-api
 ```
+
+The standalone fake API also binds to `127.0.0.1` by default; its `/_fake/state` endpoint
+requires the configured `X-Service-Token`.
 
 ## Call outputs and report
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -22,9 +23,12 @@ from starlette.websockets import WebSocketState
 from bot import resolve_caller_id, run_bot
 from inbound_voice.call_setup import prepare_call
 from inbound_voice.twilio import (
+    STREAM_TOKEN_MAX_AGE_SECONDS,
     build_stream_twiml,
     parse_start_message,
+    stream_token,
     validate_signature,
+    verify_stream_token,
 )
 
 VOICE_ROOT = Path(__file__).resolve().parent
@@ -32,6 +36,7 @@ VOICE_ROOT = Path(__file__).resolve().parent
 
 def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
     app = FastAPI()
+    app.state.accepted_call_sids = {}
 
     @app.get("/healthz")
     async def healthz() -> dict[str, bool]:
@@ -60,9 +65,20 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
             if public_base_url
             else _websocket_url(_external_base_url(request))
         )
+        stream_parameters = {"To": params.get("To", ""), "From": params.get("From", "")}
+        if auth_token:
+            issued_at = int(time.time())
+            stream_parameters["StreamIssuedAt"] = str(issued_at)
+            stream_parameters["StreamToken"] = stream_token(
+                auth_token,
+                params.get("CallSid", ""),
+                stream_parameters["To"],
+                stream_parameters["From"],
+                issued_at,
+            )
         twiml = build_stream_twiml(
             f"{ws_url}/twilio/ws",
-            {"To": params.get("To", ""), "From": params.get("From", "")},
+            stream_parameters,
         )
         return Response(content=twiml, media_type="application/xml")
 
@@ -74,6 +90,28 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
             if start_payload is None:
                 return
             start = parse_start_message({"event": "start", "start": start_payload})
+            auth_token = env.get("TWILIO_AUTH_TOKEN", "").strip()
+            if auth_token and not verify_stream_token(
+                auth_token,
+                start.call_sid,
+                start.custom_parameters.get("To", ""),
+                start.custom_parameters.get("From", ""),
+                start.custom_parameters.get("StreamIssuedAt", ""),
+                start.custom_parameters.get("StreamToken", ""),
+            ):
+                logger.warning("Rejected Twilio media stream with invalid StreamToken.")
+                await websocket.close(code=1008)
+                return
+            accepted_at = time.time()
+            replay_window = STREAM_TOKEN_MAX_AGE_SECONDS + 30
+            for accepted_call_sid, accepted_time in list(app.state.accepted_call_sids.items()):
+                if accepted_at - accepted_time > replay_window:
+                    del app.state.accepted_call_sids[accepted_call_sid]
+            if start.call_sid in app.state.accepted_call_sids:
+                logger.warning("Rejected duplicate Twilio media stream for an accepted call.")
+                await websocket.close(code=1008)
+                return
+            app.state.accepted_call_sids[start.call_sid] = accepted_at
             caller_id = resolve_caller_id({"start": start_payload}, env, telephony=True)
             prepared = await prepare_call(
                 env,
@@ -83,7 +121,6 @@ def create_app(env: Mapping[str, str] = os.environ) -> FastAPI:
                 external_call_id=start.call_sid,
             )
             account_sid = env.get("TWILIO_ACCOUNT_SID", "").strip()
-            auth_token = env.get("TWILIO_AUTH_TOKEN", "").strip()
             serializer = TwilioFrameSerializer(
                 stream_sid=start.stream_sid,
                 call_sid=start.call_sid,
@@ -176,7 +213,7 @@ def _websocket_url(base_url: str) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the inbound Twilio voice server.")
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=7861)
     return parser
 

@@ -84,7 +84,10 @@ def create_fake_api(
         return {"accepted": True}
 
     @app.get("/_fake/state")
-    async def state() -> dict:
+    async def state(
+        x_service_token: str | None = Header(default=None, alias="X-Service-Token"),
+    ) -> dict:
+        await require_token(x_service_token)
         return {
             "calls": app.state.fake["calls"],
             "reports": app.state.fake["reports"],
@@ -95,6 +98,7 @@ def create_fake_api(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run an in-memory fake inbound voice API.")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8010)
     parser.add_argument("--token", default="dev-token")
     parser.add_argument("--to", default="+441234567890")
@@ -118,7 +122,7 @@ def main() -> None:
         context_card=args.context_card,
     )
     app = create_fake_api(route_response, args.token, to_number=args.to)
-    uvicorn.run(app, host="0.0.0.0", port=args.port)
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
