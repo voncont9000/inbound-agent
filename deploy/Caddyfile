@@ -1,0 +1,47 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	handle /api/internal/* {
+		respond 404
+	}
+
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /webhooks/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /oauth/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /twilio/* {
+		reverse_proxy phone:7861
+	}
+
+	redir /call /call/ 308
+
+	handle_path /call/* {
+		reverse_proxy webcall:7862
+	}
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@index path /index.html
+	header @index Cache-Control "no-cache"
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

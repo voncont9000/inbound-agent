@@ -1,7 +1,9 @@
 import base64
+import json
 from datetime import UTC, datetime, timedelta
 from email.parser import BytesParser
 from email.policy import default
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -10,6 +12,8 @@ import httpx
 import pytest
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
+from inbound_core.config import load_assistant_config
+from inbound_core.extraction import build_intake_artifacts, extract_intake
 from starlette.requests import Request
 
 from inbound_api.channels import credentials, gmail_messages
@@ -101,22 +105,131 @@ def test_reply_thread_headers_and_re_subject():
     assert email["References"] == "<prior@local> <inbound@local>"
 
 
-def test_gmail_extraction_rows_include_attachment_text_only_for_gmail():
+def test_gmail_extraction_rows_include_headers_and_attachment_text_only_for_gmail():
     message = SimpleNamespace(
         role=MessageRole.CALLER,
         text="I was dismissed.",
         ts=datetime(2026, 10, 9, tzinfo=UTC),
-        meta={"attachments_text": {"dismissal-date.txt": "Termination date: 9 October 2026."}},
+        meta={
+            "from": "siobhan.mcallister@example.com",
+            "reply_to": "reply@example.test",
+            "subject": "Urgent: dismissal claim",
+            "attachments_text": {"dismissal-date.txt": "Termination date: 9 October 2026."},
+        },
     )
+    metrics = {
+        "contact_name": "Siobhan McAllister",
+        "from_email": "siobhan.mcallister@example.com",
+        "subject": "Urgent: dismissal claim",
+    }
 
-    gmail_rows = _message_extraction_rows([message], include_attachments=True)
-    other_channel_rows = _message_extraction_rows([message])
+    gmail_rows = _message_extraction_rows(
+        [message],
+        channel="gmail",
+        conversation_metrics=metrics,
+    )
+    other_channel_rows = _message_extraction_rows(
+        [message],
+        channel="whatsapp",
+        conversation_metrics=metrics,
+    )
 
     assert (
-        gmail_rows[0]["text"]
-        == "I was dismissed.\n\n[Attachment dismissal-date.txt]\nTermination date: 9 October 2026."
+        gmail_rows[0]["text"] == "From: Siobhan McAllister <siobhan.mcallister@example.com>\n"
+        "Subject: Urgent: dismissal claim\n"
+        "Reply-To: reply@example.test\n\n"
+        "I was dismissed.\n\n[Attachment dismissal-date.txt]\n"
+        "Termination date: 9 October 2026."
     )
     assert other_channel_rows[0]["text"] == "I was dismissed."
+    same_reply_message = SimpleNamespace(
+        role=MessageRole.CALLER,
+        text="I was dismissed.",
+        ts=message.ts,
+        meta={
+            **message.meta,
+            "reply_to": "SIOBHAN.MCALLISTER@example.com",
+        },
+    )
+    same_reply_row = _message_extraction_rows(
+        [same_reply_message],
+        channel="gmail",
+        conversation_metrics=metrics,
+    )
+    assert "Reply-To:" not in same_reply_row[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_gmail_from_header_evidence_survives_extraction_and_merge():
+    from_line = "From: Siobhan McAllister <siobhan.mcallister@example.com>"
+    message = SimpleNamespace(
+        role=MessageRole.CALLER,
+        text="I was dismissed.",
+        ts=datetime(2026, 10, 9, tzinfo=UTC),
+        meta={
+            "from": "siobhan.mcallister@example.com",
+            "subject": "Urgent: dismissal claim",
+            "attachments_text": {"dismissal-date.txt": "Termination date: 9 October 2026."},
+        },
+    )
+    rows = _message_extraction_rows(
+        [message],
+        channel="gmail",
+        conversation_metrics={"contact_name": "Siobhan McAllister"},
+    )
+    response = {
+        "service": "employment",
+        "fields": [
+            {
+                "name": "caller_name",
+                "value": "Siobhan McAllister",
+                "confidence": 0.99,
+                "evidence": from_line,
+                "confirmed_by_caller": False,
+            },
+            {
+                "name": "email",
+                "value": "siobhan.mcallister@example.com",
+                "confidence": 0.99,
+                "evidence": from_line,
+                "confirmed_by_caller": False,
+            },
+        ],
+        "summary": "The customer asks about a dismissal.",
+    }
+    generate_content = AsyncMock(
+        return_value=SimpleNamespace(text=json.dumps(response), usage_metadata=None)
+    )
+    client = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+    )
+    config_path = (
+        Path(__file__).resolve().parents[2] / "voice" / "config" / "assistants" / "demo_firm.yaml"
+    )
+    config = load_assistant_config(config_path)
+
+    result = await extract_intake(
+        rows,
+        {},
+        config,
+        client,
+        "gemini-3.8-flash",
+        call_started_at=datetime(2026, 10, 9, tzinfo=UTC),
+        channel="gmail",
+    )
+    post_call, merged = build_intake_artifacts({}, result, config)
+    prompt = generate_content.await_args.kwargs["contents"]
+
+    assert from_line in prompt
+    assert "[Attachment dismissal-date.txt]\nTermination date: 9 October 2026." in prompt
+    for field, value in (
+        ("caller_name", "Siobhan McAllister"),
+        ("email", "siobhan.mcallister@example.com"),
+    ):
+        assert post_call["fields"][field]["value"] == value
+        assert post_call["fields"][field]["evidence"] == from_line
+        assert merged["fields"][field]["value"] == value
+        assert merged["fields"][field]["sources"]["post_call"]["evidence"] == from_line
 
 
 def test_email_draft_prompt_requires_greeting_for_every_reply():

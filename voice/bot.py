@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
 from loguru import logger
@@ -65,6 +65,7 @@ from inbound_voice.prompts import render_system_prompt
 from inbound_voice.providers import create_llm, create_stt, create_tts, resolve_providers
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
+from inbound_voice.transfer import CallTransfer, SimulatedCallTransfer, TransferStart
 from inbound_voice.turns import incomplete_phone_number
 
 ROOT = Path(__file__).resolve().parent
@@ -108,6 +109,72 @@ def should_goodbye_detected_end_call(
     )
 
 
+class BotSpeechTracker(BaseObserver):
+    def __init__(self) -> None:
+        super().__init__(observe_every_push=False)
+        self.speaking = False
+        self.started_count = 0
+        self.last_stopped_at: float | None = None
+        self._seen_speaking_frame_siblings: set[frozenset[Any]] = set()
+
+    async def on_push_frame(self, data: Any) -> None:
+        frame = data.frame
+        if isinstance(frame, (BotStartedSpeakingFrame, BotStoppedSpeakingFrame)):
+            sibling_ids = frozenset((frame.id, getattr(frame, "broadcast_sibling_id", None)))
+            if sibling_ids in self._seen_speaking_frame_siblings:
+                return
+            self._seen_speaking_frame_siblings.add(sibling_ids)
+        if isinstance(frame, BotStartedSpeakingFrame):
+            self.speaking = True
+            self.started_count += 1
+            self.last_stopped_at = None
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self.speaking = False
+            self.last_stopped_at = time.monotonic()
+
+    async def wait_until_quiet(self, quiet_secs: float = 0.3, max_secs: float = 6.0) -> None:
+        quiet_secs = max(0.0, quiet_secs)
+        started_at = time.monotonic()
+        deadline = started_at + max(0.0, max_secs)
+        while True:
+            now = time.monotonic()
+            if not self.speaking:
+                quiet_since = self.last_stopped_at
+                if quiet_since is None:
+                    quiet_since = started_at
+                if now - quiet_since >= quiet_secs:
+                    return
+            if now >= deadline:
+                return
+            await asyncio.sleep(min(0.05, deadline - now))
+
+    async def wait_for_utterance(
+        self,
+        after_count: int,
+        start_timeout: float = 2.0,
+        max_secs: float = 4.0,
+        grace_secs: float = 0.2,
+    ) -> Literal["spoken", "no_start", "timeout"]:
+        start_deadline = time.monotonic() + max(0.0, start_timeout)
+        while self.started_count <= after_count:
+            now = time.monotonic()
+            if now >= start_deadline:
+                return "no_start"
+            await asyncio.sleep(min(0.05, start_deadline - now))
+
+        utterance_started_at = time.monotonic()
+        deadline = utterance_started_at + max(0.0, max_secs)
+        grace_secs = max(0.0, grace_secs)
+        while True:
+            now = time.monotonic()
+            if not self.speaking and self.last_stopped_at is not None:
+                if now - self.last_stopped_at >= grace_secs:
+                    return "spoken"
+            if now >= deadline:
+                return "timeout"
+            await asyncio.sleep(min(0.05, deadline - now))
+
+
 class GoodbyeDetectedHangup(BaseObserver):
     def __init__(
         self,
@@ -144,7 +211,10 @@ class GoodbyeDetectedHangup(BaseObserver):
             if should_goodbye_detected_end_call(
                 self.caller_closing_seen,
                 assistant_text,
-                end_call_received=self.call_tools.end_call_requested,
+                end_call_received=(
+                    self.call_tools.end_call_requested
+                    or self.call_tools.transfer_request is not None
+                ),
             ):
                 self._schedule()
 
@@ -167,7 +237,11 @@ class GoodbyeDetectedHangup(BaseObserver):
             await asyncio.sleep(self.delay_seconds)
         except asyncio.CancelledError:
             return
-        if generation != self._generation or self.call_tools.end_call_requested:
+        if (
+            generation != self._generation
+            or self.call_tools.end_call_requested
+            or self.call_tools.transfer_request is not None
+        ):
             return
         self.sink.append_task("end_call", {"source": "goodbye_detected"})
         await self.push_end_worker()
@@ -427,20 +501,51 @@ class IncompletePhoneNumberTurnStopStrategy(TurnAnalyzerUserTurnStopStrategy):
         )
 
 
-def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
+def create_function_schemas(
+    call_tools: CallTools,
+    call_transfer: CallTransfer | None = None,
+    speech_tracker: BotSpeechTracker | None = None,
+) -> list[FunctionSchema]:
     schemas = []
-    for spec in tool_specs(call_tools.config):
+    transfer = call_transfer or SimulatedCallTransfer()
+    for spec in tool_specs(call_tools.config, now=call_tools.now):
 
         async def handler(params: FunctionCallParams, tool_name: str = spec["name"]) -> None:
             result = call_tools.dispatch(tool_name, params.arguments)
-            if tool_name == "end_call":
+            should_end = tool_name == "end_call" or (
+                tool_name == "transfer_call" and result.get("ok") is True
+            )
+            if should_end:
                 await params.result_callback(
                     result,
                     properties=FunctionCallResultProperties(run_llm=False),
                 )
             else:
                 await params.result_callback(result)
-            if tool_name == "end_call":
+            if tool_name == "transfer_call" and result.get("ok") is True:
+                transfer.prepare()
+                request = call_tools.transfer_request
+                if request is not None:
+                    if speech_tracker is not None:
+                        if speech_tracker.speaking:
+                            await speech_tracker.wait_until_quiet()
+                        count = speech_tracker.started_count
+                    else:
+                        count = 0
+                    await params.llm.push_frame(
+                        TTSSpeakFrame(call_tools.config.transfer_handoff_message)
+                    )
+                    if speech_tracker is not None:
+                        speech_result = await speech_tracker.wait_for_utterance(count)
+                        logger.info("Transfer handoff speech result: {}", speech_result)
+                    try:
+                        start = await transfer.start(request.target, request.reason)
+                    except Exception as error:
+                        logger.warning("Could not start call transfer: {}", type(error).__name__)
+                        start = TransferStart("error", str(error))
+                    call_tools.transfer_start = start
+                    call_tools.transfer_started_at = time.monotonic()
+            if should_end:
                 await params.llm.push_frame(EndWorkerFrame(), FrameDirection.UPSTREAM)
 
         schemas.append(
@@ -455,8 +560,12 @@ def create_function_schemas(call_tools: CallTools) -> list[FunctionSchema]:
     return schemas
 
 
-def create_llm_context(call_tools: CallTools) -> LLMContext:
-    schemas = create_function_schemas(call_tools)
+def create_llm_context(
+    call_tools: CallTools,
+    call_transfer: CallTransfer | None = None,
+    speech_tracker: BotSpeechTracker | None = None,
+) -> LLMContext:
+    schemas = create_function_schemas(call_tools, call_transfer, speech_tracker)
     return LLMContext(tools=schemas) if schemas else LLMContext()
 
 
@@ -466,6 +575,7 @@ async def run_bot(
     caller_id: str | None = None,
     prepared: PreparedCall | None = None,
     call_id: str | None = None,
+    call_transfer: CallTransfer | None = None,
 ) -> None:
     if prepared is None:
         prepared = PreparedCall(
@@ -484,6 +594,11 @@ async def run_bot(
     )
     sink = LocalFilesCallSink(ROOT / "runs", run_id, started_at=call_started_at)
     assistant = prepared.assistant
+    call_now = datetime.now(UTC)
+    if call_transfer is None:
+        call_transfer = SimulatedCallTransfer()
+        if "transfer_call" in assistant.live_actions:
+            logger.warning("Live call transfer is simulated for this call.")
     external_call_id = (
         prepared.call_start.external_call_id
         if prepared.call_start is not None
@@ -491,7 +606,8 @@ async def run_bot(
     )
     input_sample_rate = PHONE_SAMPLE_RATE if telephony else WEB_SAMPLE_RATE
     output_sample_rate = PHONE_SAMPLE_RATE if telephony else 24000
-    call_tools = CallTools(sink, assistant)
+    call_tools = CallTools(sink, assistant, now=call_now)
+    speech_tracker = BotSpeechTracker()
     metrics_observer = CallMetricsObserver(
         sink,
         telephony=telephony,
@@ -514,10 +630,11 @@ async def run_bot(
                 assistant,
                 caller_id=caller_id,
                 context_card=prepared.context_card,
+                now=call_now,
             ),
         )
         tts = create_tts(providers, os.environ, session, sample_rate=output_sample_rate)
-        context = create_llm_context(call_tools)
+        context = create_llm_context(call_tools, call_transfer, speech_tracker)
         context_aggregators = LLMContextAggregatorPair(
             context,
             user_params=LLMUserAggregatorParams(
@@ -571,7 +688,7 @@ async def run_bot(
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[metrics_observer, goodbye_hangup, idle_hangup],
+            observers=[metrics_observer, goodbye_hangup, idle_hangup, speech_tracker],
         )
         start_call_task: asyncio.Task[uuid.UUID | None] | None = None
         if prepared.api is not None and prepared.call_start is not None:
@@ -596,6 +713,14 @@ async def run_bot(
         try:
             await PipelineRunner().run(task)
         finally:
+            if call_tools.transfer_request is not None:
+                await complete_transfer(
+                    sink,
+                    metrics_observer,
+                    call_tools,
+                    call_transfer,
+                    os.environ,
+                )
             goodbye_hangup.close()
             idle_hangup.close()
             call_ended_at = datetime.now(UTC)
@@ -630,6 +755,78 @@ async def run_bot(
                     )
                 except Exception as error:
                     logger.warning("Could not post voice API call report: {}", error)
+
+
+async def complete_transfer(
+    sink: LocalFilesCallSink,
+    metrics_observer: CallMetricsObserver,
+    call_tools: CallTools,
+    call_transfer: CallTransfer,
+    env: Mapping[str, str],
+) -> dict[str, Any] | None:
+    request = call_tools.transfer_request
+    if request is None:
+        return None
+
+    start = call_tools.transfer_start
+    if start is None:
+        try:
+            start = await call_transfer.start(request.target, request.reason)
+        except Exception as error:
+            logger.warning("Could not start call transfer: {}", type(error).__name__)
+            start = TransferStart("error", str(error))
+        call_tools.transfer_start = start
+        call_tools.transfer_started_at = time.monotonic()
+
+    if call_tools.transfer_started_at is None:
+        call_tools.transfer_started_at = time.monotonic()
+    latency_ms = round(max(0.0, call_tools.transfer_started_at - request.requested_at) * 1000)
+    if start.status in {"dialling", "simulated"}:
+        sink.append_task("end_call", {"source": "transferred"})
+    else:
+        sink.append_task("end_call", {"source": "transfer_failed"})
+
+    try:
+        outcome_timeout = max(0.0, float(env.get("TRANSFER_OUTCOME_WAIT_SECS", "35")))
+    except ValueError:
+        outcome_timeout = 35.0
+    status = "error"
+    if start.status != "error":
+        try:
+            status = await call_transfer.outcome(outcome_timeout)
+        except Exception as error:
+            logger.warning("Could not get call transfer outcome: {}", type(error).__name__)
+    valid_statuses = {
+        "answered",
+        "completed",
+        "no-answer",
+        "busy",
+        "failed",
+        "canceled",
+        "unknown",
+        "error",
+        "simulated",
+    }
+    if status not in valid_statuses:
+        status = "unknown"
+    if status in {"no-answer", "busy", "failed", "canceled", "error"}:
+        sink.append_task(
+            "transfer_failed",
+            {
+                "source": "live",
+                "target_key": request.target.key,
+                "target_label": request.target.label,
+                "dial_status": status,
+                "reason": request.reason,
+            },
+        )
+    metrics = {
+        "target_key": request.target.key,
+        "status": status,
+        "latency_ms": latency_ms,
+    }
+    metrics_observer.record_transfer(metrics)
+    return metrics
 
 
 async def finalize_call_intake(

@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str | None = None
     whatsapp_access_token: str | None = None
     whatsapp_graph_base_url: str = "https://graph.facebook.com/v26.0"
-    whatsapp_mode: Literal["fake", "graph"] = "fake"
+    whatsapp_mode: Literal["fake", "graph", "off"] = "fake"
     text_agent_model: str = "gemini-3.5-flash-lite"
     extraction_model: str = "gemini-3.8-flash"
     message_extract_delay_seconds: int = 120
@@ -108,16 +108,22 @@ class Settings(BaseSettings):
             raise ValueError(
                 "VOICE_SERVICE_TOKEN must be non-empty and non-default outside development and test"
             )
-        if self.app_env not in {"development", "test"} and (
-            self.whatsapp_mode != "graph"
-            or not (self.whatsapp_app_secret or "").strip()
-            or not (self.whatsapp_verify_token or "").strip()
-            or not (self.whatsapp_access_token or "").strip()
-        ):
-            raise ValueError(
-                "WhatsApp production requires graph mode, WHATSAPP_APP_SECRET, "
-                "WHATSAPP_VERIFY_TOKEN, and WHATSAPP_ACCESS_TOKEN"
-            )
+        if self.app_env not in {"development", "test"}:
+            if self.whatsapp_mode == "fake":
+                raise ValueError(
+                    "WhatsApp production requires WHATSAPP_MODE=off or graph mode with "
+                    "WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN, and WHATSAPP_ACCESS_TOKEN"
+                )
+            if self.whatsapp_mode == "graph" and (
+                not (self.whatsapp_app_secret or "").strip()
+                or not (self.whatsapp_verify_token or "").strip()
+                or not (self.whatsapp_access_token or "").strip()
+            ):
+                raise ValueError(
+                    "WhatsApp graph mode requires WHATSAPP_APP_SECRET, "
+                    "WHATSAPP_VERIFY_TOKEN, and WHATSAPP_ACCESS_TOKEN; "
+                    "use WHATSAPP_MODE=off to disable WhatsApp"
+                )
         if self.app_env not in {"development", "test"} and self.gmail_mode == "fake":
             raise ValueError("Gmail production requires google mode or off mode")
         if (

@@ -215,6 +215,7 @@ async def run_twilio_call(
     from_number: str | None = None,
     audio_dir: str | Path = AUDIO_DIR,
     scenarios_path: str | Path = SCENARIOS_PATH,
+    fake_call_log_path: str | Path | None = None,
 ) -> dict[str, Any]:
     scenarios = load_scenarios(scenarios_path)
     if scenario_name not in scenarios:
@@ -371,6 +372,18 @@ async def run_twilio_call(
                 asyncio.create_task(receive_messages()),
                 asyncio.create_task(play_audio()),
             ]
+            transfer_observer = None
+            if fake_call_log_path and scenario.get("transfer_dial_status"):
+                transfer_observer = asyncio.create_task(
+                    _observe_fake_transfer(
+                        fake_call_log_path,
+                        call_sid,
+                        scenario,
+                        auth_token,
+                        call_started,
+                        timeline,
+                    )
+                )
             try:
                 call_lines_completed = await _drive_conversation(
                     scenario_name,
@@ -401,6 +414,15 @@ async def run_twilio_call(
         timeline["error"] = f"{type(error).__name__}: {error}"
     finally:
         client_stopping = True
+        if "transfer_observer" in locals() and transfer_observer is not None:
+            if not transfer_observer.done():
+                try:
+                    await asyncio.wait_for(transfer_observer, timeout=1)
+                except TimeoutError:
+                    transfer_observer.cancel()
+                    await asyncio.gather(transfer_observer, return_exceptions=True)
+            elif not transfer_observer.cancelled():
+                transfer_observer.result()
         for task in tasks:
             if not task.done():
                 task.cancel()
@@ -421,6 +443,76 @@ async def run_twilio_call(
             encoding="utf-8",
         )
     return timeline
+
+
+async def _observe_fake_transfer(
+    log_path: str | Path,
+    call_sid: str,
+    scenario: dict[str, Any],
+    auth_token: str,
+    call_started: float,
+    timeline: dict[str, Any],
+) -> None:
+    deadline = time.monotonic() + 40
+    path = Path(log_path)
+    update = None
+    while time.monotonic() < deadline:
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    entry = json.loads(line)
+                    if entry.get("call_sid") == call_sid:
+                        update = entry
+                        break
+        if update:
+            break
+        await asyncio.sleep(0.05)
+    if not update:
+        return
+    twiml = update["twiml"]
+    root = ET.fromstring(twiml)
+    dial = root.find("./Dial")
+    number = root.find("./Dial/Number")
+    observed_at = max(0.0, time.monotonic() - call_started)
+    transfer = {
+        "observed_at_seconds": observed_at,
+        "twiml": twiml,
+        "dial_number": number.text if number is not None else None,
+        "callback_status": None,
+        "callback_response": None,
+    }
+    first_speech = next(
+        (
+            item.get("start_seconds")
+            for item in timeline.get("agent_speech", [])
+            if item.get("start_seconds") is not None
+        ),
+        None,
+    )
+    if first_speech is not None:
+        transfer["greeting_to_transfer_seconds"] = observed_at - float(first_speech)
+    callback_url = dial.get("action") if dial is not None else None
+    dial_status = scenario.get("transfer_dial_status")
+    if dial_status and callback_url:
+        callback_form = {"CallSid": call_sid, "DialCallStatus": dial_status}
+        if dial_status == "answered" and number is not None:
+            callback_url = number.get("statusCallback", callback_url)
+            callback_form = {
+                "ParentCallSid": call_sid,
+                "CallSid": "CA" + uuid.uuid4().hex,
+                "CallStatus": "in-progress",
+            }
+        async with ClientSession() as session:
+            async with session.post(
+                callback_url,
+                data=callback_form,
+                headers={
+                    "X-Twilio-Signature": compute_signature(auth_token, callback_url, callback_form)
+                },
+            ) as response:
+                transfer["callback_status"] = response.status
+                transfer["callback_response"] = await response.text()
+    timeline["transfer"] = transfer
 
 
 def _parse_stream_twiml(twiml: str) -> tuple[str, dict[str, str]]:

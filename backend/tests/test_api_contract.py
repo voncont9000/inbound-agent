@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from inbound_api.main import app
+from inbound_api.routers.conversations import _parse_transfer_metrics
 
 OPENAPI_PATH = Path(__file__).resolve().parents[1] / "openapi.json"
 PRE_PLATFORM_API_COMPONENTS = {
@@ -130,3 +131,17 @@ def test_all_feature_routers_are_mounted() -> None:
         "/internal/voice/calls",
         "/internal/voice/calls/{conversation_id}/report",
     } <= paths
+
+
+def test_conversation_transfer_metrics_are_parsed_tolerantly() -> None:
+    transfer = _parse_transfer_metrics(
+        {"target_key": "duty_solicitor", "status": "no-answer", "latency_ms": 1200}
+    )
+    assert transfer is not None
+    assert transfer.model_dump() == {
+        "target_key": "duty_solicitor",
+        "status": "no-answer",
+        "latency_ms": 1200,
+    }
+    assert _parse_transfer_metrics({"target_key": "duty_solicitor", "status": "invalid"}) is None
+    assert _parse_transfer_metrics("not-an-object") is None

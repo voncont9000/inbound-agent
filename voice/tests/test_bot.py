@@ -1,15 +1,18 @@
 import asyncio
 import importlib.util
 import json
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from inbound_core.config import TransferTarget
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     EndWorkerFrame,
+    LLMTextFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
     TTSTextFrame,
@@ -27,6 +30,95 @@ BOT_SPEC = importlib.util.spec_from_file_location("voice_bot", BOT_PATH)
 assert BOT_SPEC is not None and BOT_SPEC.loader is not None
 BOT_MODULE = importlib.util.module_from_spec(BOT_SPEC)
 BOT_SPEC.loader.exec_module(BOT_MODULE)
+
+
+class FastBotSpeechTracker(BOT_MODULE.BotSpeechTracker):
+    def __init__(
+        self,
+        *,
+        start_timeout: float = 0.06,
+        max_secs: float = 0.15,
+        grace_secs: float = 0.01,
+        quiet_secs: float = 0.01,
+        quiet_max_secs: float = 0.2,
+    ) -> None:
+        super().__init__()
+        self.start_timeout = start_timeout
+        self.max_secs = max_secs
+        self.grace_secs = grace_secs
+        self.quiet_secs = quiet_secs
+        self.quiet_max_secs = quiet_max_secs
+
+    async def wait_until_quiet(self, quiet_secs=None, max_secs=None):
+        return await super().wait_until_quiet(
+            self.quiet_secs if quiet_secs is None else quiet_secs,
+            self.quiet_max_secs if max_secs is None else max_secs,
+        )
+
+    async def wait_for_utterance(
+        self,
+        after_count,
+        start_timeout=None,
+        max_secs=None,
+        grace_secs=None,
+    ):
+        return await super().wait_for_utterance(
+            after_count,
+            self.start_timeout if start_timeout is None else start_timeout,
+            self.max_secs if max_secs is None else max_secs,
+            self.grace_secs if grace_secs is None else grace_secs,
+        )
+
+
+def _transfer_handler(tmp_path, events, tracker):
+    class FakeLLM:
+        async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM) -> None:
+            events.append(("push", frame, direction))
+
+    class FakeParams:
+        arguments = {"target_key": "duty_solicitor", "reason": "Caller requests a person."}
+
+        def __init__(self) -> None:
+            self.llm = FakeLLM()
+
+        async def result_callback(self, result, *, properties=None) -> None:
+            events.append(("result", result, properties))
+
+    class FakeTransfer:
+        def prepare(self) -> None:
+            events.append(("prepare",))
+
+        async def start(self, target, reason):
+            events.append(("start", time.monotonic(), target.key, reason))
+            return BOT_MODULE.TransferStart("dialling")
+
+    sink = LocalFilesCallSink(tmp_path, "transfer-tool-handler")
+    config = CallTools(sink).config.model_copy(
+        update={
+            "live_actions": ["transfer_call"],
+            "transfer_targets": [
+                TransferTarget(
+                    key="duty_solicitor",
+                    label="Duty solicitor",
+                    phone="+447700900123",
+                    when_to_use="The caller explicitly asks to speak to a person now.",
+                    office_hours_only=False,
+                )
+            ],
+            "transfer_handoff_message": "A colleague will speak with you shortly.",
+        }
+    )
+    call_tools = CallTools(sink, config)
+    handler = next(
+        schema.handler
+        for schema in BOT_MODULE.create_function_schemas(
+            call_tools,
+            FakeTransfer(),
+            tracker,
+        )
+        if schema.name == "transfer_call"
+    )
+    return handler, FakeParams(), call_tools
 
 
 def test_smart_turn_stop_secs_parses_default_and_override() -> None:
@@ -335,6 +427,283 @@ def test_end_call_sends_end_worker_after_tool_result(tmp_path) -> None:
     assert events[0][2].run_llm is False
     assert isinstance(events[1][1], EndWorkerFrame)
     assert events[1][2] is FrameDirection.UPSTREAM
+
+
+def test_transfer_handoff_speaks_then_starts_transfer_and_ends_worker(tmp_path) -> None:
+    events = []
+    tracker = FastBotSpeechTracker(max_secs=0.3, grace_secs=0.01)
+    handler, params, call_tools = _transfer_handler(tmp_path, events, tracker)
+
+    async def feed_handoff_speech() -> None:
+        while not any(
+            event[0] == "push" and isinstance(event[1], TTSSpeakFrame) for event in events
+        ):
+            await asyncio.sleep(0.005)
+        events.append(("speech_started",))
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+        await asyncio.sleep(0.01)
+        events.append(("speech_stopped",))
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
+
+    async def run() -> float:
+        feeder = asyncio.create_task(feed_handoff_speech())
+        started_at = time.monotonic()
+        await handler(params)
+        await feeder
+        return time.monotonic() - started_at
+
+    elapsed = asyncio.run(run())
+    handoff_index = next(
+        index
+        for index, event in enumerate(events)
+        if event[0] == "push" and isinstance(event[1], TTSSpeakFrame)
+    )
+    start_index = next(index for index, event in enumerate(events) if event[0] == "start")
+    end_index = next(
+        index
+        for index, event in enumerate(events)
+        if event[0] == "push" and isinstance(event[1], EndWorkerFrame)
+    )
+
+    assert events[0][0:2] == ("result", {"ok": True, "status": "Transferring the caller."})
+    assert events[0][2].run_llm is False
+    assert events[1] == ("prepare",)
+    assert events[handoff_index][1].text == "A colleague will speak with you shortly."
+    assert events[handoff_index][2] is FrameDirection.DOWNSTREAM
+    assert handoff_index < events.index(("speech_started",)) < events.index(("speech_stopped",))
+    assert events.index(("speech_stopped",)) < start_index < end_index
+    assert events[start_index][2:] == ("duty_solicitor", "Caller requests a person.")
+    assert events[end_index][2] is FrameDirection.UPSTREAM
+    assert call_tools.transfer_start == BOT_MODULE.TransferStart("dialling")
+    assert call_tools.transfer_started_at is not None
+    assert elapsed < 0.3
+
+
+def test_transfer_without_tracker_still_speaks_handoff(tmp_path) -> None:
+    events = []
+    handler, params, _ = _transfer_handler(tmp_path, events, None)
+
+    asyncio.run(handler(params))
+    handoff_index = next(
+        index
+        for index, event in enumerate(events)
+        if event[0] == "push" and isinstance(event[1], TTSSpeakFrame)
+    )
+    start_index = next(index for index, event in enumerate(events) if event[0] == "start")
+    end_index = next(
+        index
+        for index, event in enumerate(events)
+        if event[0] == "push" and isinstance(event[1], EndWorkerFrame)
+    )
+
+    assert events[handoff_index][1].text == "A colleague will speak with you shortly."
+    assert handoff_index < start_index < end_index
+
+
+def test_transfer_starts_when_handoff_never_starts_speaking(tmp_path) -> None:
+    events = []
+    tracker = FastBotSpeechTracker(start_timeout=0.06, max_secs=0.15)
+    handler, params, _ = _transfer_handler(tmp_path, events, tracker)
+
+    async def run() -> float:
+        started_at = time.monotonic()
+        await handler(params)
+        return time.monotonic() - started_at
+
+    elapsed = asyncio.run(run())
+
+    assert any(event[0] == "start" for event in events)
+    assert elapsed < 0.2
+
+
+def test_transfer_waits_for_prior_speech_then_speaks_handoff(tmp_path) -> None:
+    events = []
+    tracker = FastBotSpeechTracker(max_secs=0.3, grace_secs=0.01)
+    asyncio.run(
+        tracker.on_push_frame(SimpleNamespace(frame=LLMTextFrame(text="I am transferring you.")))
+    )
+    asyncio.run(tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame())))
+    events.append(("prior_speech_started",))
+    handler, params, _ = _transfer_handler(tmp_path, events, tracker)
+
+    async def feed_speech() -> None:
+        while ("prepare",) not in events:
+            await asyncio.sleep(0.005)
+        await asyncio.sleep(0.02)
+        events.append(("prior_speech_stopped",))
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
+        while not any(
+            event[0] == "push" and isinstance(event[1], TTSSpeakFrame) for event in events
+        ):
+            await asyncio.sleep(0.005)
+        events.append(("handoff_speech_started",))
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+        await asyncio.sleep(0.01)
+        events.append(("handoff_speech_stopped",))
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
+
+    async def run() -> None:
+        feeder = asyncio.create_task(feed_speech())
+        await handler(params)
+        await feeder
+
+    asyncio.run(run())
+    handoff_index = next(
+        index
+        for index, event in enumerate(events)
+        if event[0] == "push" and isinstance(event[1], TTSSpeakFrame)
+    )
+    start_index = next(index for index, event in enumerate(events) if event[0] == "start")
+
+    assert events.index(("prior_speech_stopped",)) < handoff_index
+    assert handoff_index < events.index(("handoff_speech_started",))
+    assert events.index(("handoff_speech_stopped",)) < start_index
+
+
+def test_transfer_starts_at_handoff_utterance_timeout_without_stop(tmp_path) -> None:
+    events = []
+    tracker = FastBotSpeechTracker(start_timeout=0.06, max_secs=0.12)
+    handler, params, _ = _transfer_handler(tmp_path, events, tracker)
+
+    async def feed_started_only() -> None:
+        while not any(
+            event[0] == "push" and isinstance(event[1], TTSSpeakFrame) for event in events
+        ):
+            await asyncio.sleep(0.005)
+        events.append(("handoff_speech_started", time.monotonic()))
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+
+    async def run() -> None:
+        feeder = asyncio.create_task(feed_started_only())
+        await handler(params)
+        await feeder
+
+    asyncio.run(run())
+    started_at = next(event[1] for event in events if event[0] == "handoff_speech_started")
+    start_at = next(event[1] for event in events if event[0] == "start")
+
+    assert 0.1 <= start_at - started_at < 0.3
+
+
+def test_bot_speech_tracker_ignores_text_deduplicates_siblings_and_caps_quiet_wait() -> None:
+    async def run() -> None:
+        tracker = BOT_MODULE.BotSpeechTracker()
+        await tracker.on_push_frame(SimpleNamespace(frame=LLMTextFrame(text="Not speaking yet.")))
+        await tracker.on_push_frame(
+            SimpleNamespace(frame=TTSTextFrame(text="Not speaking yet.", aggregated_by="test"))
+        )
+        assert tracker.speaking is False
+        assert tracker.started_count == 0
+
+        started = BotStartedSpeakingFrame()
+        start_sibling = BotStartedSpeakingFrame()
+        started.broadcast_sibling_id = start_sibling.id
+        start_sibling.broadcast_sibling_id = started.id
+        await tracker.on_push_frame(SimpleNamespace(frame=started))
+        await tracker.on_push_frame(SimpleNamespace(frame=start_sibling))
+        assert tracker.started_count == 1
+
+        stopped = BotStoppedSpeakingFrame()
+        stop_sibling = BotStoppedSpeakingFrame()
+        stopped.broadcast_sibling_id = stop_sibling.id
+        stop_sibling.broadcast_sibling_id = stopped.id
+        await tracker.on_push_frame(SimpleNamespace(frame=stopped))
+        stopped_at = tracker.last_stopped_at
+        await tracker.on_push_frame(SimpleNamespace(frame=stop_sibling))
+        assert tracker.last_stopped_at == stopped_at
+
+        started_at = time.monotonic()
+        await tracker.on_push_frame(SimpleNamespace(frame=BotStartedSpeakingFrame()))
+        await tracker.wait_until_quiet(quiet_secs=0.5, max_secs=0.08)
+        assert 0.06 <= time.monotonic() - started_at < 0.3
+
+    asyncio.run(run())
+
+
+def test_failed_transfer_tool_result_continues_llm(tmp_path) -> None:
+    events = []
+
+    class FakeLLM:
+        async def push_frame(self, frame, direction) -> None:
+            events.append(("frame", frame, direction))
+
+    class FakeParams:
+        arguments = {"target_key": "unknown", "reason": "Caller requests a person."}
+        llm = FakeLLM()
+
+        async def result_callback(self, result, *, properties=None) -> None:
+            events.append(("result", result, properties))
+
+    sink = LocalFilesCallSink(tmp_path, "invalid-transfer-tool")
+    config = CallTools(sink).config.model_copy(
+        update={
+            "live_actions": ["transfer_call"],
+            "transfer_targets": [
+                TransferTarget(
+                    key="duty_solicitor",
+                    label="Duty solicitor",
+                    phone="+447700900123",
+                    when_to_use="The caller explicitly asks to speak to a person now.",
+                    office_hours_only=False,
+                )
+            ],
+        }
+    )
+    call_tools = CallTools(sink, config)
+    handler = next(
+        schema.handler
+        for schema in BOT_MODULE.create_function_schemas(call_tools)
+        if schema.name == "transfer_call"
+    )
+
+    asyncio.run(handler(FakeParams()))
+
+    assert events == [
+        ("result", {"ok": False, "error": "Unknown transfer target."}, None),
+    ]
+
+
+def test_goodbye_hangup_does_not_schedule_during_transfer(tmp_path) -> None:
+    async def run() -> None:
+        sink = LocalFilesCallSink(tmp_path, "goodbye-during-transfer")
+        config = CallTools(sink).config.model_copy(
+            update={
+                "live_actions": ["transfer_call"],
+                "transfer_targets": [
+                    TransferTarget(
+                        key="duty_solicitor",
+                        label="Duty solicitor",
+                        phone="+447700900123",
+                        when_to_use="The caller explicitly asks to speak to a person now.",
+                        office_hours_only=False,
+                    )
+                ],
+            }
+        )
+        call_tools = CallTools(sink, config)
+        call_tools.transfer_call("duty_solicitor", "Caller requests a person.")
+        end_worker_calls = []
+
+        async def push_end_worker() -> None:
+            end_worker_calls.append(True)
+
+        observer = BOT_MODULE.GoodbyeDetectedHangup(
+            sink,
+            call_tools,
+            push_end_worker,
+            delay_seconds=0.01,
+        )
+        await observer.on_push_frame(
+            SimpleNamespace(frame=TTSTextFrame(text="Goodbye.", aggregated_by="test"))
+        )
+        await observer.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
+        await asyncio.sleep(0.03)
+
+        assert end_worker_calls == []
+        assert json.loads((sink.directory / "tasks.json").read_text()) == []
+        observer.close()
+
+    asyncio.run(run())
 
 
 def test_empty_live_actions_create_context_without_tools(tmp_path) -> None:

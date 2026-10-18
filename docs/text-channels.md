@@ -27,7 +27,7 @@ Backend environment variables:
 
 | Variable | Default / use |
 |---|---|
-| `WHATSAPP_MODE` | `fake` by default; use `graph` for Meta Cloud API |
+| `WHATSAPP_MODE` | `fake` by default; use `graph` for Meta Cloud API or `off` to disable |
 | `WHATSAPP_APP_SECRET` | Signs webhook payloads and simulator requests |
 | `WHATSAPP_VERIFY_TOKEN` | Shared token used for Meta webhook verification |
 | `WHATSAPP_ACCESS_TOKEN` | Bearer token for Graph sends |
@@ -41,9 +41,10 @@ Backend environment variables:
 
 The Graph base URL pins the sender to Graph API **v26.0** (the latest release we selected
 for this implementation; Meta's versioned changelog is
-<https://developers.facebook.com/docs/graph-api/changelog/>). Production startup requires
-`WHATSAPP_MODE=graph`, an app secret, and an access token. The current sender uses one
-global access token; per-connection tokens and embedded signup are later work.
+<https://developers.facebook.com/docs/graph-api/changelog/>). In production, `WHATSAPP_MODE=off`
+is the default and needs no Meta credentials. `fake` is rejected; `graph` requires an app secret,
+verify token, and access token. The current sender uses one global access token; per-connection
+tokens and embedded signup are later work.
 
 Run the API and worker, set `WHATSAPP_MODE=fake`, then add a WhatsApp channel connection
 using the `phone_number_id` from Meta Business settings. The simulator sends signed Meta
@@ -126,6 +127,9 @@ uv run --directory backend python -m inbound_api.channels.simulate gmail \
 Text, Markdown, CSV, PDF, and DOCX attachments up to 2 MB use the existing
 knowledge-file reader and are included as context, capped at 4,000 characters each.
 Other types and larger files are ignored. Outgoing drafts never include attachments.
+Extraction sees each customer email as `From:`/`Subject:` header lines (plus `Reply-To:` when it
+differs from the sender) followed by the body and any attachment text, so the sender's name and
+address can be captured with quoted evidence.
 FR-E5 style learning and FR-E7 suggested mailbox rules are out of scope.
 
 Media is not downloaded or transcribed. Non-text messages are stored as placeholders such as

@@ -773,7 +773,7 @@ export interface components {
              */
             language: string;
             /** Live Actions */
-            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call")[];
+            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "transfer_call")[];
             office_hours: components["schemas"]["OfficeHours"];
             /** Policies */
             policies: string[];
@@ -796,6 +796,18 @@ export interface components {
             services: {
                 [key: string]: components["schemas"]["ServiceConfig"];
             };
+            /**
+             * Transfer Failed Message
+             * @default Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.
+             */
+            transfer_failed_message: string;
+            /**
+             * Transfer Handoff Message
+             * @default I'm putting you through now, please hold.
+             */
+            transfer_handoff_message: string;
+            /** Transfer Targets */
+            transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */
             urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
         };
@@ -821,7 +833,7 @@ export interface components {
              */
             language: string;
             /** Live Actions */
-            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call")[];
+            live_actions: ("confirm_critical_fields" | "flag_urgent" | "request_callback" | "log_complaint" | "end_call" | "transfer_call")[];
             office_hours: components["schemas"]["OfficeHours"];
             /** Policies */
             policies: string[];
@@ -844,6 +856,18 @@ export interface components {
             services: {
                 [key: string]: components["schemas"]["ServiceConfig"];
             };
+            /**
+             * Transfer Failed Message
+             * @default Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.
+             */
+            transfer_failed_message: string;
+            /**
+             * Transfer Handoff Message
+             * @default I'm putting you through now, please hold.
+             */
+            transfer_handoff_message: string;
+            /** Transfer Targets */
+            transfer_targets?: components["schemas"]["TransferTarget"][];
             /** Urgency Rules */
             urgency_rules: (components["schemas"]["KeywordUrgencyRule"] | components["schemas"]["DateDeadlineUrgencyRule"])[];
         };
@@ -996,6 +1020,18 @@ export interface components {
             to_number: string;
             /** Web Call Token */
             web_call_token?: string | null;
+        };
+        /** CallTransferMetrics */
+        CallTransferMetrics: {
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "answered" | "completed" | "no-answer" | "busy" | "failed" | "canceled" | "unknown" | "error" | "simulated";
+            /** Target Key */
+            target_key: string;
         };
         /** ChannelConnectionCreate */
         ChannelConnectionCreate: {
@@ -1241,6 +1277,7 @@ export interface components {
              * @default false
              */
             test_call: boolean;
+            transfer?: components["schemas"]["CallTransferMetrics"] | null;
         };
         /** ConversationListResponse */
         ConversationListResponse: {
@@ -1977,6 +2014,22 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+        };
+        /** TransferTarget */
+        TransferTarget: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Office Hours Only
+             * @default true
+             */
+            office_hours_only: boolean;
+            /** Phone */
+            phone: string;
+            /** When To Use */
+            when_to_use: string;
         };
         /** UserResponse */
         UserResponse: {

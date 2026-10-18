@@ -89,7 +89,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     report = {
         "external_call_id": "voice-flow-call",
         "ended_at": "2026-03-01T12:05:00Z",
-        "end_reason": "caller_finished",
+        "end_reason": "transferred",
         "summary": "The caller requested a return call about a service enquiry.",
         "transcript": [
             {
@@ -121,7 +121,15 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
                 "due_at": "2026-03-02T10:00:00Z",
             },
             {"type": "task", "source": "post_call", "description": "Check the details"},
-            {"type": "end_call", "source": "goodbye_detected"},
+            {"type": "end_call", "source": "transferred"},
+            {
+                "type": "transfer_failed",
+                "source": "live",
+                "target_key": "duty_solicitor",
+                "target_label": "Duty solicitor",
+                "dial_status": "no-answer",
+                "reason": "Caller asks to speak to someone.",
+            },
             {
                 "type": "knowledge_gap",
                 "question": "What is the completion estimate?",
@@ -134,7 +142,14 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
                 "evidence": "The caller asked for a completion estimate.",
             }
         ],
-        "metrics": {"duration_seconds": 300},
+        "metrics": {
+            "duration_seconds": 300,
+            "transfer": {
+                "target_key": "duty_solicitor",
+                "status": "no-answer",
+                "latency_ms": 1200,
+            },
+        },
         "estimated_cost": {"currency": "USD", "amount": 0.02},
     }
     report_response = await client.post(
@@ -155,19 +170,37 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert conversation is not None
     assistant_id = str(conversation.assistant_id)
     assert conversation.summary == "The caller requested a return call about a service enquiry."
+    assert conversation.end_reason == "transferred"
     callback_task = next(task for task in persisted_tasks if task.kind == "callback")
     assert callback_task.due_at.isoformat() == "2026-03-02T10:00:00+00:00"
     task_kinds = [task.kind for task in persisted_tasks]
     assert conversation.metrics == {
         "from_number": "+447700900456",
         "duration_seconds": 300,
+        "transfer": {
+            "target_key": "duty_solicitor",
+            "status": "no-answer",
+            "latency_ms": 1200,
+        },
     }
     assert "end_call" not in task_kinds
+    assert "transfer_failed" in task_kinds
     first_detail_response = await client.get(f"/conversations/{conversation_id}")
     assert first_detail_response.status_code == 200, first_detail_response.text
     first_detail = first_detail_response.json()
     assert first_detail["needs_review"] is True
     assert first_detail["summary"] == "The caller requested a return call about a service enquiry."
+    assert first_detail["end_reason"] == "transferred"
+    assert first_detail["transfer"] == {
+        "target_key": "duty_solicitor",
+        "status": "no-answer",
+        "latency_ms": 1200,
+    }
+    failed_transfer_task = next(
+        task for task in first_detail["tasks"] if task["kind"] == "transfer_failed"
+    )
+    assert failed_transfer_task["payload"]["target_key"] == "duty_solicitor"
+    assert failed_transfer_task["payload"]["dial_status"] == "no-answer"
     list_item = next(
         item
         for item in (await client.get("/conversations?has_review=true")).json()["items"]
@@ -209,7 +242,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert detail_data["needs_review"] is True
     assert len(detail_data["messages"]) == 1
     assert len(detail_data["intakes"]) == 3
-    assert len(detail_data["tasks"]) == 2
+    assert len(detail_data["tasks"]) == 3
     repeated_gaps_response = await client.get("/knowledge-gaps?status=open")
     repeated_gap_ids = {
         item["id"]
@@ -219,10 +252,10 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert repeated_gap_ids == first_gap_ids
     review_filter = await client.get("/conversations?has_review=true")
     assert conversation_id in {item["id"] for item in review_filter.json()["items"]}
-    assert len((await client.get("/tasks?status=open")).json()["items"]) == 2
+    assert len((await client.get("/tasks?status=open")).json()["items"]) == 3
     assert len((await client.get("/knowledge-gaps?status=open")).json()["items"]) == 1
     assert len((await client.get("/tasks?kind=callback")).json()["items"]) == 1
-    assert len((await client.get(f"/tasks?assistant_id={assistant_id}")).json()["items"]) == 2
+    assert len((await client.get(f"/tasks?assistant_id={assistant_id}")).json()["items"]) == 3
     assert (
         len((await client.get(f"/knowledge-gaps?assistant_id={assistant_id}")).json()["items"]) == 1
     )
@@ -284,7 +317,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
             .select_from(KnowledgeGap)
             .where(KnowledgeGap.conversation_id == UUID(conversation_id))
         )
-    assert (message_count, task_count, gap_count) == (1, 2, 1)
+    assert (message_count, task_count, gap_count) == (1, 3, 1)
     assert await run_next_job()
     job = await client.get(f"/jobs/{job_id}")
     assert job.json()["status"] == "succeeded"

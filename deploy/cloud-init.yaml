@@ -1,0 +1,70 @@
+#cloud-config
+users:
+  - name: deploy
+    groups: [docker]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - __SSH_PUBLIC_KEY__
+
+ssh_pwauth: false
+disable_root: true
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-inbound-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      KbdInteractiveAuthentication no
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "5"
+        }
+      }
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - fail2ban
+  - git
+  - gnupg
+  - restic
+  - ufw
+  - unattended-upgrades
+
+runcmd:
+  - [bash, -lc, "install -m 0755 -d /etc/apt/keyrings"]
+  - [bash, -lc, "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"]
+  - [bash, -lc, "chmod a+r /etc/apt/keyrings/docker.gpg"]
+  - [bash, -lc, "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME:-$VERSION_CODENAME}) stable\" > /etc/apt/sources.list.d/docker.list"]
+  - [bash, -lc, "apt-get update"]
+  - [bash, -lc, "DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"]
+  - [bash, -lc, "systemctl enable --now docker"]
+  - [bash, -lc, "systemctl restart docker"]
+  - [bash, -lc, "systemctl enable --now fail2ban"]
+  - [bash, -lc, "systemctl enable --now unattended-upgrades"]
+  - [bash, -lc, "ufw default deny incoming"]
+  - [bash, -lc, "ufw default allow outgoing"]
+  - [bash, -lc, "ufw allow 22/tcp"]
+  - [bash, -lc, "ufw allow 80/tcp"]
+  - [bash, -lc, "ufw allow 443/tcp"]
+  - [bash, -lc, "ufw allow 443/udp"]
+  - [bash, -lc, "ufw --force enable"]
+  - [bash, -lc, "install -d -o deploy -g deploy /opt/inbound-agent /var/backups/inbound"]

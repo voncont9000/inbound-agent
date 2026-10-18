@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -163,6 +164,106 @@ async def test_whatsapp_verification_signature_and_unknown_number(api_client, mo
     )
     unconfigured = await api_client.post("/webhooks/whatsapp", content=body)
     assert unconfigured.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_off_disables_signed_post_and_verification(api_client, monkeypatch):
+    from inbound_api.routers import webhooks
+
+    monkeypatch.setattr(
+        webhooks,
+        "get_settings",
+        lambda: SimpleNamespace(
+            whatsapp_mode="off",
+            whatsapp_app_secret="app-secret",
+            whatsapp_verify_token="verify-me",
+        ),
+    )
+    body = b'{"entry":[]}'
+    signature = hmac.new(b"app-secret", body, hashlib.sha256).hexdigest()
+
+    posted = await api_client.post(
+        "/webhooks/whatsapp",
+        content=body,
+        headers={"X-Hub-Signature-256": f"sha256={signature}"},
+    )
+    verified = await api_client.get(
+        "/webhooks/whatsapp",
+        params={
+            "hub.mode": "subscribe",
+            "hub.verify_token": "verify-me",
+            "hub.challenge": "challenge",
+        },
+    )
+
+    assert posted.status_code == 503
+    assert posted.json() == {"detail": "WhatsApp is disabled"}
+    assert verified.status_code == 503
+    assert verified.json() == {"detail": "WhatsApp is disabled"}
+
+
+def test_disabled_whatsapp_sender_raises_without_writing_outbox(tmp_path):
+    from inbound_api.channels.whatsapp_client import (
+        DisabledWhatsAppSender,
+        WhatsAppDisabledError,
+        sender_from_settings,
+    )
+
+    settings = SimpleNamespace(whatsapp_mode="off", fake_outbox_path=tmp_path / "outbox.jsonl")
+    sender = sender_from_settings(settings)
+
+    assert isinstance(sender, DisabledWhatsAppSender)
+    with pytest.raises(WhatsAppDisabledError, match="WhatsApp is disabled"):
+        asyncio.run(sender.send_text("phone-id", "447700900123", "Hello"))
+    assert not settings.fake_outbox_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_off_reply_is_permanent_and_does_not_write_outbox(
+    graph_env, monkeypatch, tmp_path
+):
+    from inbound_api.services import job_handlers
+
+    tenant_id = graph_env["tenant_id"]
+    graph_env["execute"](
+        "UPDATE assistants SET config = %s::jsonb WHERE id = %s",
+        (json.dumps(_assistant_config()), graph_env["assistant_id"]),
+    )
+    settings = SimpleNamespace(
+        google_api_key="test-key",
+        text_agent_model="gemini-3.5-flash-lite",
+        whatsapp_mode="off",
+        fake_outbox_path=tmp_path / "outbox.jsonl",
+        message_extract_delay_seconds=120,
+        price_table_path=tmp_path / "missing-prices.yaml",
+    )
+    monkeypatch.setattr(job_handlers, "get_settings", lambda: settings)
+    _fake_genai(monkeypatch, job_handlers, [])
+    route_config = AssistantConfig.model_validate(_assistant_config())
+
+    async def load_route(*args, **kwargs):
+        return SimpleNamespace(config=route_config, digest=None, context_card=None)
+
+    monkeypatch.setattr(job_handlers, "load_assistant_route", load_route)
+    message_id, conversation_id = await _insert_test_message(
+        graph_env,
+        datetime.now(UTC) - timedelta(seconds=2),
+        "wamid.disabled-reply",
+    )
+
+    async with tenant_session(tenant_id) as session:
+        with pytest.raises(PermanentJobError, match="WhatsApp is disabled"):
+            await job_handlers.message_reply(
+                session,
+                {"conversation_id": str(conversation_id), "message_id": str(message_id)},
+            )
+
+    assert not settings.fake_outbox_path.exists()
+    assert graph_env["execute"](
+        "SELECT count(*) FROM messages WHERE tenant_id = %s AND conversation_id = %s "
+        "AND role = 'assistant'",
+        (tenant_id, conversation_id),
+    ) == [(0,)]
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,8 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from inbound_core.call_report import CallTransferMetrics
+from pydantic import ValidationError
 from sqlalchemy import literal_column, not_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -155,6 +157,7 @@ async def get_conversation(
         if conversation.person_id is not None
         else None
     )
+    transfer = _parse_transfer_metrics(conversation.metrics.get("transfer"))
     return ConversationDetailResponse(
         **_conversation_summary(
             conversation,
@@ -164,10 +167,20 @@ async def get_conversation(
         messages=[MessageResponse.model_validate(message) for message in messages],
         intakes=[IntakeResponse(version=intake.version, data=intake.data) for intake in intakes],
         tasks=[TaskSummary.model_validate(task) for task in tasks],
+        transfer=transfer,
         metrics=conversation.metrics,
         estimated_cost=conversation.estimated_cost,
         action_runs=[ActionRunSummary.model_validate(run) for run in action_runs],
     )
+
+
+def _parse_transfer_metrics(value: object) -> CallTransferMetrics | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        return CallTransferMetrics.model_validate(value)
+    except ValidationError:
+        return None
 
 
 def _conversation_summary(
