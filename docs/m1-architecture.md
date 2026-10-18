@@ -58,4 +58,31 @@ make test
 make lint
 ```
 
-The compose database is Postgres 16 with pgvector and remains available for local agents. Start the API separately with `docker compose up backend` or `uv run --directory backend uvicorn inbound_api.main:app --reload`. Run the web app outside compose using `cd web && npm ci && npm run dev`; Vite proxies `/api` to the backend. Regenerate the frontend contract with `cd web && npm run api:types`.
+The compose database is Postgres 16 with pgvector and remains available for local agents. Start the API separately with `docker compose up backend` or `uv run --directory backend uvicorn inbound_api.main:app --reload`. Run the web app outside compose using `cd web && npm ci && npm run dev`; Vite proxies `/api` to the backend. For an all-mock operator demo, use `cd web && npm run dev:mock` (`VITE_USE_MOCKS=1`). Regenerate the frontend contract with `cd web && npm run api:types`.
+
+## Web app
+
+The operator UI is in `web/`, built with React, TypeScript, React Query, and plain CSS. Its page map is:
+
+| Route | Purpose |
+|---|---|
+| `/login`, `/signup` | Cookie-session authentication and account creation |
+| `/assistants` | Assistant list and template-based setup |
+| `/assistants/:id/settings` | Configuration editor and version comparison |
+| `/assistants/:id/knowledge` | Sources, import jobs, digest, and FAQ editing |
+| `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
+| `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
+| `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |
+
+The backend routes may return `501` while product behavior is being implemented. For local UI work and screenshots run `npm run dev:mock` (equivalent to `VITE_USE_MOCKS=1 npm run dev`); the browser-only MSW worker serves the API, and the normal `npm run dev` continues to proxy to the backend. Mock login accepts `demo@example.com` with any password except `wrong`. The first workspace is the general home-services demo; the second demonstrates a law-firm template.
+
+`src/mocks/fixtures.ts` is the typed seed dataset and `src/mocks/handlers.ts` contains the API behavior. The mock database is mutable in memory, partitioned by `X-Tenant-Id` (or the first membership when the header is absent), and resets between tests. Authentication persists only the membership ids/names/roles and selected tenant in localStorage; access tokens are never stored. `GET /me` supplies the current user and tenant. The selected workspace header is sent only when the saved membership list has multiple entries.
+
+Run frontend checks from `web/` after sourcing the repository's Node installation: `. ~/.nvm/nvm.sh && npm run lint && npm run typecheck && npm test && npm run build`. The schema drift check is `. ~/.nvm/nvm.sh && npm run api:types && git diff --exit-code -- src/api/schema.d.ts`.
+
+Current contract gaps handled in the UI:
+
+- `ConversationSummary` has neither `needs_review` nor a contact display name. Review badges are derived from a parallel `has_review=true` conversation query; contact links show `external_ref`.
+- `ConversationDetailResponse` has no review collection. The UI expects review results to be folded into merged intake fields as `status: "human"` with `sources.human`.
+- `GET /me` returns only the current tenant, not memberships. Memberships are kept from login/signup responses for workspace switching.
+- `TaskSummary` lacks `conversation_id` and `person_id`, and `GET /tasks` and `GET /knowledge-gaps` have no filters or assistant scoping. Task rows therefore cannot reliably link back to a conversation, and these queues follow the selected tenant's API response.
