@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
+from inbound_api.jobs import enqueue
 from inbound_api.models import (
     Assistant,
     AssistantConfigVersion,
@@ -127,11 +128,12 @@ async def update_assistant(
     old_config = assistant.config
     new_config = payload.config.model_dump(mode="json")
     changes = config_diff(old_config, new_config)
-    if assistant.name != payload.name:
-        changes["name"] = {"from": assistant.name, "to": payload.name}
+    new_name = payload.name if payload.name is not None else assistant.name
+    if assistant.name != new_name:
+        changes["name"] = {"from": assistant.name, "to": new_name}
     if assistant.template != payload.template:
         changes["template"] = {"from": assistant.template, "to": payload.template}
-    assistant.name = payload.name
+    assistant.name = new_name
     assistant.template = payload.template
     assistant.config = new_config
     assistant.version += 1
@@ -176,6 +178,11 @@ async def delete_assistant(
     if conversation_id is not None:
         raise HTTPException(status_code=409, detail="Assistant has conversations")
     await write_audit(session, ctx, "assistant.deleted", "assistant", assistant_id)
+    await enqueue(
+        session,
+        "knowledge_files_cleanup",
+        {"assistant_id": str(assistant_id)},
+    )
     await session.delete(assistant)
 
 

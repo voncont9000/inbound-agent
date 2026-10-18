@@ -1,4 +1,5 @@
 import base64
+import binascii
 import json
 from datetime import datetime
 from typing import Any
@@ -16,13 +17,17 @@ def encode_cursor(created_at: datetime, row_id: UUID) -> str:
 
 def decode_cursor(cursor: str) -> tuple[datetime, UUID]:
     try:
-        raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
+        raw = base64.b64decode(
+            cursor + "=" * (-len(cursor) % 4),
+            altchars=b"-_",
+            validate=True,
+        )
         value = json.loads(raw)
         if not isinstance(value, list) or len(value) != 2:
             raise ValueError
         created_at = datetime.fromisoformat(value[0])
         row_id = UUID(value[1])
-    except (ValueError, TypeError, json.JSONDecodeError):
+    except (ValueError, TypeError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError):
         raise HTTPException(status_code=400, detail="Invalid cursor") from None
     return created_at, row_id
 

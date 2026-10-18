@@ -20,13 +20,19 @@ async def test_assistant_versions_channels_and_audit(tenant_pair, owner_database
         json={"name": "Assistant", "template": "uk_law_firm", "config": updated_config},
     )
     assert first_update.status_code == 200, first_update.text
+    config_only_update = await client.put(
+        f"/assistants/{assistant_id}",
+        json={"template": "uk_law_firm", "config": updated_config},
+    )
+    assert config_only_update.status_code == 200
+    assert config_only_update.json()["name"] == "Assistant"
     second_update = await client.put(
         f"/assistants/{assistant_id}",
         json={"name": "Updated assistant", "template": "uk_law_firm", "config": updated_config},
     )
     assert second_update.status_code == 200
     versions = await client.get(f"/assistants/{assistant_id}/versions")
-    assert [item["version"] for item in versions.json()["items"]] == [3, 2, 1]
+    assert [item["version"] for item in versions.json()["items"]] == [4, 3, 2, 1]
     assert (await client.get("/assistant-config/schema")).status_code == 200
 
     phone = await client.post(
@@ -74,8 +80,10 @@ async def test_assistant_versions_channels_and_audit(tenant_pair, owner_database
         "assistant.created",
         "assistant.updated",
         "assistant.updated",
+        "assistant.updated",
     ]
     assert audit[1][1]["changes"]["greeting"]["to"] == "Welcome to the firm."
+    assert "name" not in audit[2][1]["changes"]
 
     assert (
         await client.delete(f"/assistants/{assistant_id}/channels/{channel_id}")

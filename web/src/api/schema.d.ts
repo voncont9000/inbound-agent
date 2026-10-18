@@ -1339,6 +1339,16 @@ export interface components {
             /** Url */
             url?: string | null;
         };
+        /** KnowledgeSourceCreate */
+        KnowledgeSourceCreate: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "url";
+            /** Uri */
+            uri: string;
+        };
         /** KnowledgeSourceResponse */
         KnowledgeSourceResponse: {
             /**
@@ -2048,15 +2058,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /**
-                     * Kind
-                     * @constant
-                     */
-                    kind: "url";
-                    /** Uri */
-                    uri: string;
-                };
+                "application/json": components["schemas"]["KnowledgeSourceCreate"];
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
@@ -2072,6 +2074,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["KnowledgeSourceResponse"];
                 };
+            };
+            /** @description Content-Length is required for multipart uploads */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Knowledge upload is too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
