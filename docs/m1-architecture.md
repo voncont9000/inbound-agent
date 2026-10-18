@@ -147,8 +147,8 @@ The contacts API provides tenant-scoped list/search with cursor pagination, cont
 ## Voice/API lifecycle
 
 1. **Route before greeting:** voice calls `GET /internal/voice/route?to=...&from=...`; the API resolves the tenant and assistant by dialled channel number and returns config, digest, and context card. Routing is a single bounded attempt; if it fails, voice uses local YAML while keeping API reporting enabled.
-2. **Start:** after pipeline setup, voice starts `POST /internal/voice/calls` asynchronously so call setup does not block the greeting.
-3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`. Transient failures are retried; an undelivered report is atomically spooled for later resend.
+2. **Start:** after pipeline setup, voice starts `POST /internal/voice/calls` asynchronously so call setup does not block the greeting. The API stores a normalized caller number as `from_number` in conversation metrics when present.
+3. **Report:** after the call, voice posts the transcript, live/post-call/merged intake, tasks, knowledge gaps, metrics, and cost in `CallReport`. `end_call` control events are not stored as tasks, and report metrics are merged with the start metrics. Transient failures are retried; an undelivered report is atomically spooled for later resend.
 4. **Graph ingest:** the report handler stores the conversation and enqueues `graph_ingest`; the worker calls the graph seam to ingest the conversation.
 
 All internal voice routes require `X-Service-Token`, checked against `VOICE_SERVICE_TOKEN`.
@@ -180,6 +180,13 @@ make migrate
 make test
 make lint
 ```
+
+For local HTTP development, `.env.example` sets `SESSION_COOKIE_SECURE=false` and
+allows the Vite origin `http://localhost:5173` in `ALLOWED_ORIGINS`. Use secure cookies
+and configure the trusted origins for HTTPS deployments.
+
+For an M1 end-to-end run, start the API on port 8000, the worker, and the Vite dev server
+on port 5173, then run `cd voice && uv run python ../scripts/m1_e2e.py`.
 
 The compose database is Postgres 16 with pgvector and remains available for local agents. Start the API separately with `docker compose up backend` or `uv run --directory backend uvicorn inbound_api.main:app --reload`. Run the web app outside compose using `cd web && npm ci && npm run dev`; Vite proxies `/api` to the backend. For an all-mock operator demo, use `cd web && npm run dev:mock` (`VITE_USE_MOCKS=1`). Regenerate the frontend contract with `cd web && npm run api:types`.
 
