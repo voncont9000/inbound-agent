@@ -5,6 +5,7 @@ export const routes = [
   { path: "/assistants", label: "Assistants" },
   { path: "/assistants/new", label: "Set up assistant" },
   { path: "/assistants/:id/settings", label: "Assistant settings" },
+  { path: "/assistants/:id/settings/:tab", label: "Assistant settings tab" },
   { path: "/assistants/:id/knowledge", label: "Assistant knowledge" },
   { path: "/inbox", label: "Inbox" },
   { path: "/conversations/:id", label: "Conversation" },

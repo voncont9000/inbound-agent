@@ -10,6 +10,7 @@ describe("web route contracts", () => {
       "/assistants",
       "/assistants/new",
       "/assistants/:id/settings",
+      "/assistants/:id/settings/:tab",
       "/assistants/:id/knowledge",
       "/inbox",
       "/conversations/:id",
