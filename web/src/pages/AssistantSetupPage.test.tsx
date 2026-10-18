@@ -41,7 +41,7 @@ describe("website-based assistant setup", () => {
 
     await user.click(screen.getByRole("button", { name: "Create assistant" }));
 
-    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings$/));
+    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings\/general$/));
     expect(mockDb.setupDraftRequests).toHaveLength(1);
     expect(mockDb.setupCompletions).toHaveLength(1);
     const completion = mockDb.setupCompletions[0];
@@ -61,7 +61,7 @@ describe("website-based assistant setup", () => {
     await user.type(screen.getByLabelText("Business name"), "Harbor Dental Studio");
     await user.click(screen.getByRole("button", { name: "Create assistant" }));
 
-    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings$/));
+    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings\/general$/));
     expect(mockDb.setupDraftRequests).toHaveLength(0);
     expect(mockDb.setupCompletions).toHaveLength(1);
     expect(mockDb.setupCompletions[0].accepted).toEqual({});
@@ -84,7 +84,7 @@ describe("website-based assistant setup", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Website drafting is not configured.");
     await user.click(screen.getByRole("button", { name: "Continue with template defaults" }));
 
-    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings$/));
+    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings\/general$/));
     expect(mockDb.setupCompletions).toHaveLength(1);
     expect(mockDb.setupCompletions[0].accepted).toEqual({});
     expect(mockDb.setupCompletions[0].website_url).toBe("https://harbordental.example");

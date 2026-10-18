@@ -5,6 +5,7 @@ import { api, unwrap, type Schemas } from "../api/client";
 import { ErrorState, LoadingState } from "../components/States";
 import { DraftSectionCard, type DraftSectionStatus } from "../components/setup/DraftSectionCard";
 import { DraftSectionEditor, DraftSectionPreview, type DraftSectionName } from "../components/setup/DraftSectionEditor";
+import { settingsTabPath } from "../lib/settingsTabs";
 
 type SetupStep = "form" | "waiting" | "review";
 type DraftJobResult = { draft: Schemas["SetupDraft"]; warnings?: string[] };
@@ -42,7 +43,7 @@ export function AssistantSetupPage() {
 
   const complete = useMutation({
     mutationFn: (body: Schemas["AssistantSetupComplete"]) => unwrap(api.POST("/assistant-setup/complete", { body })),
-    onSuccess: (assistant) => navigate(`/assistants/${assistant.id}/settings`),
+    onSuccess: (assistant) => navigate(settingsTabPath(assistant.id)),
   });
   const startDraft = useMutation({
     mutationFn: (body: Schemas["AssistantSetupDraftCreate"]) => unwrap(api.POST("/assistant-setup/drafts", { body })),
