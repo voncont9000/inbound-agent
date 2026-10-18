@@ -20,6 +20,8 @@ describe("settings tabs", () => {
     expect(tabForPath("services.boiler_repair.fields.0.label")).toBe("abilities");
     expect(tabForPath("booking.appointment_types.0.label")).toBe("abilities");
     expect(tabForPath("booking.horizon_days")).toBe("advanced");
+    expect(tabForPath("call_settings.max_call_minutes")).toBe("advanced");
+    expect(tabForPath("recording.enabled")).toBe("advanced");
     expect(tabForPath("transfer_targets.0.phone")).toBe("abilities");
     expect(tabForPath("urgency_rules.1.field")).toBe("advanced");
     expect(tabForPath("email_triage.enquiry")).toBe("channels");

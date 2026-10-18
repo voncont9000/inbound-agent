@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -503,6 +504,35 @@ class Conversation(UUIDPrimaryKeyMixin, TenantMixin, Base):
         JSONB, nullable=False, server_default=sql_text("'{}'::jsonb")
     )
     estimated_cost: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+
+class CallRecording(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "call_recordings"
+    __table_args__ = (
+        UniqueConstraint("conversation_id"),
+        Index("ix_call_recordings_tenant_expires", "tenant_id", "expires_at"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    assistant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assistants.id", ondelete="CASCADE"), nullable=False
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+    is_test: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sql_text("false"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class Message(UUIDPrimaryKeyMixin, TenantMixin, Base):

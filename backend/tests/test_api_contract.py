@@ -18,6 +18,7 @@ PRE_PLATFORM_API_COMPONENTS = {
     "AuthResponse",
     "CallReportAccepted",
     "CallReportRequest",
+    "CallRecordingSummary",
     "CallStartRequest",
     "CommitmentResponse",
     "ContactDetailResponse",
@@ -119,6 +120,7 @@ def test_all_feature_routers_are_mounted() -> None:
         "/jobs/{job_id}",
         "/conversations",
         "/conversations/{conversation_id}",
+        "/conversations/{conversation_id}/recording",
         "/conversations/{conversation_id}/reviews",
         "/tasks",
         "/tasks/{task_id}",
@@ -129,6 +131,7 @@ def test_all_feature_routers_are_mounted() -> None:
         "/internal/voice/route",
         "/internal/voice/web-route",
         "/internal/voice/calls",
+        "/internal/voice/calls/{conversation_id}/recording",
         "/internal/voice/calls/{conversation_id}/report",
     } <= paths
 

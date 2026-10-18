@@ -5,7 +5,9 @@ from pydantic import ValidationError
 
 from inbound_core.config import (
     AssistantConfig,
+    CallSettings,
     EmailTriageConfig,
+    RecordingSettings,
     assistant_config_json_schema,
     load_assistant_config,
 )
@@ -183,3 +185,31 @@ def test_email_triage_defaults_and_rejects_extra_fields() -> None:
 
     with pytest.raises(ValidationError):
         EmailTriageConfig(unknown="not allowed")
+
+
+def test_new_call_and_recording_settings_default_and_normalize() -> None:
+    legacy = AssistantConfig.model_validate(
+        {
+            "business_name": "Example",
+            "greeting": "Hello",
+            "office_hours": {"days": ["Monday"], "opens": "09:00", "closes": "17:00"},
+            "price_list": [],
+            "policies": [],
+            "contacts": {},
+            "services": {},
+            "urgency_rules": [],
+            "live_actions": [],
+        }
+    )
+    assert legacy.call_settings == CallSettings()
+    assert legacy.recording == RecordingSettings()
+    assert legacy.recording.enabled is False
+    assert CallSettings(technical_terms=[" term ", "", "TERM", "Call"]).technical_terms == [
+        "term",
+        "Call",
+    ]
+
+
+def test_technical_terms_reject_too_long_values() -> None:
+    with pytest.raises(ValidationError, match="at most 60 characters"):
+        CallSettings(technical_terms=["x" * 61])

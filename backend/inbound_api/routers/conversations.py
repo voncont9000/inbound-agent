@@ -4,6 +4,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from inbound_core.call_report import CallTransferMetrics
 from pydantic import ValidationError
 from sqlalchemy import literal_column, not_, select
@@ -13,6 +14,7 @@ from inbound_api.auth import TenantContext, get_tenant_session, require_role
 from inbound_api.models import (
     ActionRun,
     Assistant,
+    CallRecording,
     Conversation,
     Intake,
     IntakeReview,
@@ -23,6 +25,7 @@ from inbound_api.models import (
 )
 from inbound_api.schemas import (
     ActionRunSummary,
+    CallRecordingSummary,
     ConversationDetailResponse,
     ConversationListResponse,
     ConversationReviewCreate,
@@ -34,7 +37,9 @@ from inbound_api.schemas import (
 )
 from inbound_api.services.audit import write_audit
 from inbound_api.services.pagination import page_query
+from inbound_api.services.recordings import LocalRecordingStore
 from inbound_api.services.review import merged_needs_review
+from inbound_api.settings import get_settings
 
 router = APIRouter(tags=["conversations"])
 _staff = Depends(require_role(MembershipRole.STAFF))
@@ -158,6 +163,24 @@ async def get_conversation(
         else None
     )
     transfer = _parse_transfer_metrics(conversation.metrics.get("transfer"))
+    recording = await session.scalar(
+        select(CallRecording).where(CallRecording.conversation_id == conversation_id)
+    )
+    recording_summary = None
+    if recording is not None:
+        store = LocalRecordingStore(get_settings().upload_dir / "recordings")
+        try:
+            store.open(recording.storage_key)
+        except (FileNotFoundError, ValueError):
+            recording = None
+        else:
+            recording_summary = CallRecordingSummary(
+                duration_seconds=recording.duration_seconds,
+                size_bytes=recording.size_bytes,
+                created_at=recording.created_at,
+                expires_at=recording.expires_at,
+                is_test=recording.is_test,
+            )
     return ConversationDetailResponse(
         **_conversation_summary(
             conversation,
@@ -171,6 +194,30 @@ async def get_conversation(
         metrics=conversation.metrics,
         estimated_cost=conversation.estimated_cost,
         action_runs=[ActionRunSummary.model_validate(run) for run in action_runs],
+        recording=recording_summary,
+    )
+
+
+@router.get("/conversations/{conversation_id}/recording")
+async def get_conversation_recording(
+    conversation_id: UUID,
+    _: TenantContext = _staff,
+    session: AsyncSession = _tenant_session_dependency,
+) -> FileResponse:
+    recording = await session.scalar(
+        select(CallRecording).where(CallRecording.conversation_id == conversation_id)
+    )
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    store = LocalRecordingStore(get_settings().upload_dir / "recordings")
+    try:
+        path = store.open(recording.storage_key)
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(status_code=404, detail="Recording not found") from None
+    return FileResponse(
+        path,
+        media_type=recording.content_type,
+        headers={"Cache-Control": "private, no-store"},
     )
 
 

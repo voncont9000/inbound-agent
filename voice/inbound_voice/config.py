@@ -5,6 +5,7 @@ from pathlib import Path
 
 from inbound_core.config import (
     AssistantConfig,
+    CallSettings,
     DateDeadlineUrgencyRule,
     FieldSpec,
     KeywordUrgencyRule,
@@ -13,6 +14,7 @@ from inbound_core.config import (
     KnowledgeSource,
     OfficeHours,
     PriceItem,
+    RecordingSettings,
     ServiceConfig,
     UrgencyRule,
     _deep_merge,
@@ -40,6 +42,7 @@ def load_assistant_config(path: str | Path) -> AssistantConfig:
 
 __all__ = [
     "AssistantConfig",
+    "CallSettings",
     "DateDeadlineUrgencyRule",
     "FieldSpec",
     "KeywordUrgencyRule",
@@ -48,6 +51,7 @@ __all__ = [
     "KnowledgeSource",
     "OfficeHours",
     "PriceItem",
+    "RecordingSettings",
     "ServiceConfig",
     "UrgencyRule",
     "VOICE_ROOT",
