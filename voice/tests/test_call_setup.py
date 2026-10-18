@@ -78,7 +78,7 @@ async def test_tokenized_web_call_uses_backend_route_and_call_token(
     assert prepared.assistant.knowledge.digest_content == "Practice-only knowledge."
     assert prepared.call_start is not None
     assert prepared.call_start.web_call_token == token
-    assert prepared.call_start.external_call_id == token
+    assert prepared.call_start.external_call_id == "random-call-id"
 
 
 @pytest.mark.asyncio

@@ -1038,6 +1038,11 @@ export interface components {
             summary: string | null;
             /** Tasks */
             tasks: components["schemas"]["TaskSummary"][];
+            /**
+             * Test Call
+             * @default false
+             */
+            test_call: boolean;
         };
         /** ConversationListResponse */
         ConversationListResponse: {
@@ -1123,6 +1128,11 @@ export interface components {
             status: "active" | "completed" | "failed";
             /** Summary */
             summary: string | null;
+            /**
+             * Test Call
+             * @default false
+             */
+            test_call: boolean;
         };
         /** DateDeadlineUrgencyRule */
         DateDeadlineUrgencyRule: {

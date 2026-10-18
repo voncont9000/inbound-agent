@@ -32,6 +32,7 @@ function toConversationSummary(detail: Schemas["ConversationDetailResponse"]): S
     ended_at: detail.ended_at,
     end_reason: detail.end_reason,
     needs_review: detail.needs_review,
+    test_call: detail.test_call,
     contact_name: detail.contact_name,
   };
 }

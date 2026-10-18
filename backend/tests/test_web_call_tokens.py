@@ -172,7 +172,7 @@ async def test_web_route_and_start_call_use_token_tenant_and_assistant(
         json={
             "to_number": "",
             "from_number": None,
-            "external_call_id": token,
+            "external_call_id": "web-call-one",
             "channel": "web",
             "started_at": datetime.now(UTC).isoformat(),
             "web_call_token": token,
@@ -180,9 +180,38 @@ async def test_web_route_and_start_call_use_token_tenant_and_assistant(
     )
     assert started.status_code == 201, started.text
     conversation_id = started.json()["conversation_id"]
-    detail = await client.get(f"/conversations/{conversation_id}")
-    assert detail.status_code == 200, detail.text
-    assert detail.json()["channel"] == "web"
-    assert detail.json()["assistant_id"] == str(assistant_id)
-    assert detail.json()["external_ref"] == token
-    assert detail.json()["metrics"]["test_call"] is True
+    second_started = await client.post(
+        "/internal/voice/calls",
+        headers=service_headers,
+        json={
+            "to_number": "",
+            "from_number": None,
+            "external_call_id": "web-call-two",
+            "channel": "web",
+            "started_at": datetime.now(UTC).isoformat(),
+            "web_call_token": token,
+        },
+    )
+    assert second_started.status_code == 201, second_started.text
+    second_conversation_id = second_started.json()["conversation_id"]
+    assert second_conversation_id != conversation_id
+
+    for current_id, external_ref in (
+        (conversation_id, "web-call-one"),
+        (second_conversation_id, "web-call-two"),
+    ):
+        detail = await client.get(f"/conversations/{current_id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["channel"] == "web"
+        assert detail.json()["assistant_id"] == str(assistant_id)
+        assert detail.json()["external_ref"] == external_ref
+        assert detail.json()["external_ref"] != token
+        assert detail.json()["metrics"]["test_call"] is True
+        assert detail.json()["test_call"] is True
+
+    summaries = await client.get("/conversations", params={"channel": "web"})
+    assert summaries.status_code == 200, summaries.text
+    assert {item["external_ref"]: item["test_call"] for item in summaries.json()["items"]} == {
+        "web-call-one": True,
+        "web-call-two": True,
+    }

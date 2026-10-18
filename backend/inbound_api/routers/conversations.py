@@ -179,6 +179,7 @@ def _conversation_summary(
         summary=conversation.summary,
         end_reason=conversation.end_reason,
         needs_review=needs_review,
+        test_call=conversation.metrics.get("test_call") is True,
         contact_name=contact_name,
     )
 

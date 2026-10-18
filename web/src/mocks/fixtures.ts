@@ -247,6 +247,7 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
     external_ref: channel === "phone" || channel === "whatsapp" ? caller.phone : caller.email,
     contact_name: caller.name,
     needs_review: review,
+    test_call: tenantIndex === 0 && index === 0,
     status: (["completed", "completed", "active", "failed", "completed", "completed"] as const)[index],
     started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary,
     end_reason: index === 3 ? "connection_lost" : "caller_hangup",

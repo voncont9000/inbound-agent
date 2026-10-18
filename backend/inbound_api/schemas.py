@@ -215,6 +215,7 @@ class ConversationSummary(BaseModel):
     summary: str | None
     end_reason: str | None
     needs_review: bool = False
+    test_call: bool = False
     contact_name: str | None = None
 
 

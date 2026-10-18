@@ -54,7 +54,7 @@ async def prepare_call(
         call_start = CallStart(
             to_number=destination or "",
             from_number=from_number,
-            external_call_id=web_call_token,
+            external_call_id=external_call_id,
             channel=channel,
             started_at=datetime.now(UTC),
             web_call_token=web_call_token,

@@ -175,16 +175,11 @@ async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
     if resolution is None:
         raise HTTPException(status_code=404, detail="Unknown channel")
     tenant_id, assistant_id = resolution
-    external_call_id = (
-        payload.web_call_token
-        if payload.channel == "web" and payload.web_call_token is not None
-        else payload.external_call_id
-    )
     async with tenant_session(tenant_id) as session:
         existing = await session.scalar(
             select(Conversation).where(
                 Conversation.channel == payload.channel,
-                Conversation.external_ref == external_call_id,
+                Conversation.external_ref == payload.external_call_id,
             )
         )
         if existing is not None:
@@ -214,7 +209,7 @@ async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
             assistant_id=assistant_id,
             person_id=person_id,
             channel=ConversationChannel(payload.channel),
-            external_ref=external_call_id,
+            external_ref=payload.external_call_id,
             status=ConversationStatus.ACTIVE,
             started_at=payload.started_at,
         )
@@ -233,7 +228,7 @@ async def start_call(payload: CallStartRequest) -> ConversationCreatedResponse:
             existing = await session.scalar(
                 select(Conversation).where(
                     Conversation.channel == payload.channel,
-                    Conversation.external_ref == external_call_id,
+                    Conversation.external_ref == payload.external_call_id,
                 )
             )
             if existing is not None:

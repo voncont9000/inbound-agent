@@ -1156,6 +1156,11 @@
             },
             "title": "Tasks",
             "type": "array"
+          },
+          "test_call": {
+            "default": false,
+            "title": "Test Call",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1382,6 +1387,11 @@
               }
             ],
             "title": "Summary"
+          },
+          "test_call": {
+            "default": false,
+            "title": "Test Call",
+            "type": "boolean"
           }
         },
         "required": [
