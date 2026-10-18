@@ -70,6 +70,7 @@ def test_security_definer_functions_have_non_bypass_owners() -> None:
     assert functions == [
         ("claim_next_job", "inbound_job_claimer", False, False),
         ("conversation_tenant", "inbound_lookup", False, False),
+        ("gmail_route", "inbound_lookup", False, False),
         ("lookup_user_memberships", "inbound_lookup", False, False),
         ("resolve_channel", "inbound_lookup", False, False),
         ("whatsapp_route", "inbound_lookup", False, False),
