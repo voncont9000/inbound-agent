@@ -127,6 +127,12 @@ async def complete_setup(
                 manifest={},
             )
         )
+        await session.flush()
+        await enqueue(
+            session,
+            "knowledge_import",
+            {"assistant_id": str(assistant.id)},
+        )
     accepted_sections = [
         section
         for section, value in payload.accepted.model_dump(mode="python").items()

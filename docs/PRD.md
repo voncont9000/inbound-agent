@@ -186,7 +186,9 @@ from any tab, and tabs that have validation errors show a count. Knowledge sourc
 Ability cards switch the matching live actions on or off (booking: `check_availability` and
 `book_appointment`; forwarding: `transfer_call`). Keys are generated in the browser
 (`web/src/lib/keys.ts`) and match the backend key patterns. Saved keys never change. Post-action
-keys are generated the same way. Voice selection on General (FR-S8) is not built here. Rule presets (FR-S13) go into the slot marked in `web/src/components/settings/RulesTab.tsx`.
+keys are generated the same way. Turning off booking confirms before removing configured
+appointment types. Voice selection on General (FR-S8) is not built here. Rule presets (FR-S13) go
+into the slot marked in `web/src/components/settings/RulesTab.tsx`.
 
 **Website-based setup**
 - FR-S7: Creating an assistant asks for business name, website URL and template. The website is crawled
@@ -194,6 +196,7 @@ keys are generated the same way. Voice selection on General (FR-S8) is not built
   reviews and accepts each draft section; nothing generated is used until accepted. Setup without a
   website remains possible.
   - Status: Implemented with per-section review; only accepted sections are applied at completion.
+    A provided website URL also queues knowledge import automatically after completion.
 
 **Languages and voices**
 - FR-S8 **implemented**: `language` is a shared locale code (`en-GB`, `en-US`, `de-DE`, `es-ES`,
@@ -209,10 +212,11 @@ keys are generated the same way. Voice selection on General (FR-S8) is not built
   identification across English, German, Spanish, French, Italian, and Portuguese. Speechify
   switches to a supported detected language when transcript annotations are available; absent
   annotations trigger a warning and retain the selected voice. Other TTS providers do not use
-  the runtime Speechify language switch, and provider-specific hiding of the `multi` option for
-  those TTS providers is not yet implemented. Deepgram Aura-2 keeps its English fallback for
-  Portuguese and `multi`; it warns and uses mapped voices for German, Spanish, French, and
-  Italian. Provider pricing is unchanged.
+  the runtime Speechify language switch. The voice catalogue hides `multi` for those providers;
+  an existing saved `multi` selection remains visible with a note that the assistant will speak
+  its default voice language. Deepgram Aura-2 keeps its English fallback for Portuguese and
+  `multi`; it warns and uses mapped voices for German, Spanish, French, and Italian. Provider
+  pricing is unchanged.
 
 **Call settings and recording**
 - FR-S11: Per-assistant call settings: maximum call length, silence hang-up (with a configurable

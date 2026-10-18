@@ -77,6 +77,11 @@ annotations change. English resets without a language override. If annotations a
 the processor warns and keeps the selected voice while the prompt retains multilingual
 behavior; it does not guess a caller language.
 
+The backend reads `TTS_PROVIDER` when building voice catalogue responses and omits the
+multilingual locale for ElevenLabs and Deepgram because those providers do not switch languages
+during a call. An assistant that already has `language: multi` keeps that selected value in the
+settings picker, which explains that the default voice language will be used.
+
 For Deepgram Aura-2, German, Spanish (Spain and Mexico), French, and Italian use their mapped
 Aura-2 voices. Portuguese and `multi` warn and retain the existing English Pandora fallback.
 An explicit `TTS_VOICE` still overrides the mapped Deepgram voice. Provider selection and

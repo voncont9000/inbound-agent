@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Schemas } from "../api/client";
 import { server } from "../mocks/server";
 import { mockDb } from "../mocks/db";
@@ -255,6 +255,74 @@ describe("operator workflows", () => {
       appointment_types: [{ key: "consultation", duration_minutes: 45 }, { key: "consultation_2", label: "Consultation" }],
     });
     expect(savedConfig?.live_actions).toEqual(expect.arrayContaining(["check_availability", "book_appointment"]));
+    server.events.removeListener("request:start", listener);
+  }, 15000);
+
+  it("keeps booking appointment types when turning booking off is cancelled", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    let savedConfig: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => {
+          savedConfig = (body as { config: Record<string, unknown> }).config;
+        });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
+    await user.click(screen.getByRole("button", { name: "Add appointment type" }));
+    await user.type(
+      screen.getAllByLabelText("When to use this appointment type")[1],
+      "Initial consultation.",
+    );
+
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
+    expect(confirm).toHaveBeenCalledWith(
+      "Turning off calendar booking removes its 2 appointment type(s). Continue?",
+    );
+    expect(screen.getByRole("switch", { name: "Calendar booking" })).toBeChecked();
+    expect(screen.getAllByLabelText("Appointment label")).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(savedConfig).toBeDefined());
+    expect(
+      (savedConfig?.booking as { appointment_types: unknown[] }).appointment_types,
+    ).toHaveLength(2);
+    confirm.mockRestore();
+    server.events.removeListener("request:start", listener);
+  }, 15000);
+
+  it("clears booking after confirming the removal of appointment types", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    let savedConfig: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => {
+          savedConfig = (body as { config: Record<string, unknown> }).config;
+        });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
+    await user.click(screen.getByRole("button", { name: "Add appointment type" }));
+
+    await user.click(screen.getByRole("switch", { name: "Calendar booking" }));
+    expect(confirm).toHaveBeenCalledWith(
+      "Turning off calendar booking removes its 2 appointment type(s). Continue?",
+    );
+    expect(screen.getByRole("switch", { name: "Calendar booking" })).not.toBeChecked();
+    expect(screen.queryByLabelText("Appointment label")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(savedConfig).toBeDefined());
+    expect(savedConfig?.booking).toBeNull();
+    confirm.mockRestore();
     server.events.removeListener("request:start", listener);
   }, 15000);
 
