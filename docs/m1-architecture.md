@@ -176,9 +176,11 @@ The shared `voice/bot.py` pipeline serves browser WebRTC and phone calls. The st
 `voice/phone_server.py` exposes Twilio's form webhook and WebSocket media stream, validates
 Twilio signatures when configured, and can run behind a proxy with `PUBLIC_BASE_URL`.
 Twilio audio is 8 kHz G.711 μ-law at the edge and 8 kHz PCM through the phone pipeline;
-the browser pipeline retains its existing sample rates. `voice/eval/twilio_sim.py` and
-`voice/eval/fake_api.py` support local integration and evaluation through
-`eval.run_matrix --transport twilio --fake-api`.
+the browser pipeline retains its existing sample rates. CallSid replay claims last 150
+seconds; configure `REDIS_URL` to share them across phone-server processes. Without Redis,
+replay protection is per-process. If Redis fails, the server falls back to a local check.
+`voice/eval/twilio_sim.py` and `voice/eval/fake_api.py` support local integration and
+evaluation through `eval.run_matrix --transport twilio --fake-api`.
 
 ## Local run
 

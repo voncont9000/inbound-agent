@@ -254,6 +254,11 @@ closes unauthorized streams with code 1008. If directly binding to a network int
 required, pass `--host` explicitly (for example, `--host 0.0.0.0`) and protect access with
 the surrounding network controls. Never disable signature validation in a public
 deployment.
+Set `REDIS_URL` to a shared Redis instance (the Compose service is available at
+`redis://localhost:6379/0`) to share the 150-second CallSid replay window across
+phone-server processes. Without it, claims are in-memory per process. If Redis is
+unavailable, replay protection logs the error and falls back to a local check so a Redis
+outage does not drop real calls.
 
 ## API routing and reporting
 

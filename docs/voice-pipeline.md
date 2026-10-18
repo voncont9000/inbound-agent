@@ -417,10 +417,13 @@ warning when no auth token is configured; production deployments must configure 
 With the token configured, the webhook adds `StreamToken` and `StreamIssuedAt` custom
 parameters. The HMAC-SHA256 token binds the Twilio Call SID, `To`/`From` numbers, and
 issue time. Streams expire after 120 seconds, allow at most 30 seconds of clock skew into
-the future, and the server retains accepted Call SIDs for a 150-second in-process replay
-window. The media-stream WebSocket checks these before preparing a call and closes
-unauthorized or replayed streams with code 1008. Without the token, webhook signature and
-stream-token validation are skipped for local development.
+the future. Accepted Call SIDs are claimed for a 150-second replay window. Set `REDIS_URL`
+to share these claims across phone-server processes; without it, replay protection is
+in-memory per process. If Redis is unavailable, the server logs an error and falls back to
+its local check so a Redis outage does not drop calls. The media-stream WebSocket checks
+these before preparing a call and closes unauthorized or replayed streams with code 1008.
+Without the token, webhook signature and stream-token validation are skipped for local
+development.
 `TWILIO_ACCOUNT_SID` plus `TWILIO_AUTH_TOKEN` enable REST hang-up. Without both, the
 WebSocket is closed when the pipeline ends.
 
