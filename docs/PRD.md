@@ -71,7 +71,7 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-P3: Turn-taking: voice-activity and semantic endpointing (don't cut the caller off at "um"), barge-in/interruption with adjustable sensitivity, optional backchannels, no-interrupt on the greeting.
 - FR-P4: Personalised greeting. An optional **pre-call context hook** (HTTP request templated with `{{from}}`, `{{to}}`) runs before the greeting, then contact matching runs on caller ID.
 - FR-P5: STT vocabulary boosting (key terms, names, products). TTS pronunciation dictionary. Voice speed.
-- FR-P6: Call controls: max duration, silence timeout with re-prompt then hang-up, take-a-message fallback that creates a callback task. Later: warm or cold transfer/forwarding to a phone number with a whisper summary, DTMF sending.
+- FR-P6: Call controls: max duration, silence timeout with re-prompt then hang-up, take-a-message fallback that creates a callback task. **M0:** cold transfer to a configured person with office-hours availability, outcome reporting, and a follow-up task when the dial fails. Later: warm transfer with a whisper summary, DTMF sending.
 - FR-P7: Recording off by default. When on, it is announced in the greeting. If the caller opts out, the recording is not stored and the transcript is kept or deleted per setting. Retention is configurable (default 30 days).
 - FR-P8: Languages: English (UK accents and voices) at launch. More languages later via automatic language detection.
 

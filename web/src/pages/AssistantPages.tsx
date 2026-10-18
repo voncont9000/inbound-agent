@@ -118,7 +118,7 @@ export function AssistantSettingsPage() {
   }, [assistantQuery.data]);
 
   const readbackOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "readback", "enum"], ["off", "email", "critical"]), [schemaQuery.data]);
-  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "end_call"]), [schemaQuery.data]);
+  const actionOptions = useMemo(() => enumAt(schemaQuery.data, ["properties", "live_actions", "items", "enum"], ["confirm_critical_fields", "flag_urgent", "request_callback", "log_complaint", "end_call", "transfer_call"]), [schemaQuery.data]);
   const typeOptions = useMemo(() => enumAt(schemaQuery.data, ["$defs", "FieldSpec", "properties", "type", "enum"], ["string", "email", "phone", "date", "boolean", "integer", "number", "enum", "list"]), [schemaQuery.data]);
   const thresholdRange = useMemo(() => rangeAt(schemaQuery.data), [schemaQuery.data]);
   const serverErrors = errors;
@@ -336,6 +336,17 @@ export function AssistantSettingsPage() {
         </div>)}
         <button type="button" onClick={() => update((draft) => { draft.price_list.push({ service: "", price: "", notes: "" }); })}>Add price</button>
       </section>
+      <section className="panel stack"><h2>Transfer targets</h2>
+        {(config.transfer_targets ?? []).map((target, index) => <div className="inline-editor" key={`transfer-${index}`}>
+          <div className="form-grid">
+            {(["key", "label", "phone", "when_to_use"] as const).map((key) => <Field key={key} path={`transfer_targets.${index}.${key}`} label={key === "when_to_use" ? "When to use" : key.replaceAll("_", " ")} error={allErrors[`transfer_targets.${index}.${key}`]}>{(fieldId, describedBy) => key === "when_to_use" ? <textarea id={fieldId} value={target[key]} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.transfer_targets![index][key] = event.target.value; })} /> : <input id={fieldId} type={key === "phone" ? "tel" : "text"} value={target[key]} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.transfer_targets![index][key] = event.target.value; })} />}</Field>)}
+            <Field path={`transfer_targets.${index}.office_hours_only`} label="Only during office hours">{(fieldId) => <input id={fieldId} type="checkbox" checked={target.office_hours_only} onChange={(event) => update((draft) => { draft.transfer_targets![index].office_hours_only = event.target.checked; })} />}</Field>
+          </div>
+          <button type="button" onClick={() => update((draft) => { draft.transfer_targets!.splice(index, 1); })}>Remove transfer target</button>
+        </div>)}
+        <button type="button" onClick={() => update((draft) => { draft.transfer_targets ??= []; draft.transfer_targets.push({ key: "", label: "", phone: "", when_to_use: "", office_hours_only: true }); })}>Add transfer target</button>
+        <Field path="transfer_failed_message" label="Message when nobody answers">{(fieldId) => <textarea id={fieldId} value={config.transfer_failed_message} onChange={(event) => update((draft) => { draft.transfer_failed_message = event.target.value; })} />}</Field>
+      </section>
       <section className="panel stack"><h2>Contacts</h2>
         {Object.entries(config.contacts).map(([key, value], index) => <div className="form-grid" key={`${key}-${index}`}>
           <Field path={`contacts.${key}.key`} label="Contact key" error={allErrors[`contacts.${key}.key`]}>{(fieldId, describedBy) => <input id={fieldId} value={key} {...inputProps(`contacts.${key}.key`)} aria-describedby={describedBy} onChange={(event) => {
@@ -383,6 +394,7 @@ const liveActionHelp: Record<string, string> = {
   request_callback: "Create a callback request.",
   log_complaint: "Record a complaint for the team.",
   end_call: "End the interaction after a clear closing.",
+  transfer_call: "Transfer the caller to a configured person; needs at least one transfer target.",
 };
 
 function formatDate(value: string) {

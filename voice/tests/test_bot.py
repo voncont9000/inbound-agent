@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from inbound_core.config import TransferTarget
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
@@ -335,6 +336,147 @@ def test_end_call_sends_end_worker_after_tool_result(tmp_path) -> None:
     assert events[0][2].run_llm is False
     assert isinstance(events[1][1], EndWorkerFrame)
     assert events[1][2] is FrameDirection.UPSTREAM
+
+
+def test_transfer_call_prepares_provider_before_ending_worker(tmp_path) -> None:
+    events = []
+
+    class FakeLLM:
+        async def push_frame(self, frame, direction) -> None:
+            events.append(("frame", frame, direction))
+
+    class FakeParams:
+        arguments = {"target_key": "duty_solicitor", "reason": "Caller requests a person."}
+        llm = FakeLLM()
+
+        async def result_callback(self, result, *, properties=None) -> None:
+            events.append(("result", result, properties))
+
+    class FakeTransfer:
+        def prepare(self) -> None:
+            events.append(("prepare",))
+
+        async def start(self, target, reason):
+            raise AssertionError("Transfer starts after the pipeline ends.")
+
+        async def outcome(self, timeout):
+            raise AssertionError("Transfer outcome is not checked before the pipeline ends.")
+
+    sink = LocalFilesCallSink(tmp_path, "transfer-tool-handler")
+    config = CallTools(sink).config.model_copy(
+        update={
+            "live_actions": ["transfer_call"],
+            "transfer_targets": [
+                TransferTarget(
+                    key="duty_solicitor",
+                    label="Duty solicitor",
+                    phone="+447700900123",
+                    when_to_use="The caller explicitly asks to speak to a person now.",
+                    office_hours_only=False,
+                )
+            ],
+        }
+    )
+    call_tools = CallTools(sink, config)
+    handler = next(
+        schema.handler
+        for schema in BOT_MODULE.create_function_schemas(call_tools, FakeTransfer())
+        if schema.name == "transfer_call"
+    )
+
+    asyncio.run(handler(FakeParams()))
+
+    assert events[0][0:2] == ("result", {"ok": True, "status": "Transferring the caller."})
+    assert events[0][2].run_llm is False
+    assert events[1] == ("prepare",)
+    assert isinstance(events[2][1], EndWorkerFrame)
+    assert events[2][2] is FrameDirection.UPSTREAM
+
+
+def test_failed_transfer_tool_result_continues_llm(tmp_path) -> None:
+    events = []
+
+    class FakeLLM:
+        async def push_frame(self, frame, direction) -> None:
+            events.append(("frame", frame, direction))
+
+    class FakeParams:
+        arguments = {"target_key": "unknown", "reason": "Caller requests a person."}
+        llm = FakeLLM()
+
+        async def result_callback(self, result, *, properties=None) -> None:
+            events.append(("result", result, properties))
+
+    sink = LocalFilesCallSink(tmp_path, "invalid-transfer-tool")
+    config = CallTools(sink).config.model_copy(
+        update={
+            "live_actions": ["transfer_call"],
+            "transfer_targets": [
+                TransferTarget(
+                    key="duty_solicitor",
+                    label="Duty solicitor",
+                    phone="+447700900123",
+                    when_to_use="The caller explicitly asks to speak to a person now.",
+                    office_hours_only=False,
+                )
+            ],
+        }
+    )
+    call_tools = CallTools(sink, config)
+    handler = next(
+        schema.handler
+        for schema in BOT_MODULE.create_function_schemas(call_tools)
+        if schema.name == "transfer_call"
+    )
+
+    asyncio.run(handler(FakeParams()))
+
+    assert events == [
+        ("result", {"ok": False, "error": "Unknown transfer target."}, None),
+    ]
+
+
+def test_goodbye_hangup_does_not_schedule_during_transfer(tmp_path) -> None:
+    async def run() -> None:
+        sink = LocalFilesCallSink(tmp_path, "goodbye-during-transfer")
+        config = CallTools(sink).config.model_copy(
+            update={
+                "live_actions": ["transfer_call"],
+                "transfer_targets": [
+                    TransferTarget(
+                        key="duty_solicitor",
+                        label="Duty solicitor",
+                        phone="+447700900123",
+                        when_to_use="The caller explicitly asks to speak to a person now.",
+                        office_hours_only=False,
+                    )
+                ],
+            }
+        )
+        call_tools = CallTools(sink, config)
+        call_tools.transfer_call("duty_solicitor", "Caller requests a person.")
+        end_worker_calls = []
+
+        async def push_end_worker() -> None:
+            end_worker_calls.append(True)
+
+        observer = BOT_MODULE.GoodbyeDetectedHangup(
+            sink,
+            call_tools,
+            push_end_worker,
+            delay_seconds=0.01,
+        )
+        await observer.on_push_frame(
+            SimpleNamespace(frame=TTSTextFrame(text="Goodbye.", aggregated_by="test"))
+        )
+        await observer.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
+        await asyncio.sleep(0.03)
+
+        assert end_worker_calls == []
+        assert json.loads((sink.directory / "tasks.json").read_text()) == []
+        observer.close()
+
+    asyncio.run(run())
 
 
 def test_empty_live_actions_create_context_without_tools(tmp_path) -> None:

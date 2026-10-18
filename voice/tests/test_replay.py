@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -115,7 +116,9 @@ def test_two_phone_apps_share_replay_guard_and_reject_duplicate(
 
     async def prepare_call(*args, **kwargs):
         prepared_calls.append(kwargs)
-        return object()
+        return SimpleNamespace(
+            assistant=SimpleNamespace(transfer_failed_message="Nobody is available.")
+        )
 
     async def run_bot(*args, **kwargs):
         run_calls.append(kwargs)

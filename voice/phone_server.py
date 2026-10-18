@@ -12,6 +12,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
+from inbound_core.config import AssistantConfig
 from loguru import logger
 from pipecat.serializers.twilio import TwilioFrameSerializer
 from pipecat.transports.websocket.fastapi import (
@@ -24,6 +25,14 @@ from starlette.websockets import WebSocketState
 from bot import resolve_caller_id, run_bot
 from inbound_voice.call_setup import prepare_call
 from inbound_voice.replay import RedisReplayGuard, ReplayGuard, replay_guard_from_env
+from inbound_voice.transfer import (
+    TransferRegistry,
+    TwilioCallControl,
+    TwilioCallTransfer,
+    build_transfer_failed_twiml,
+    build_transfer_hangup_twiml,
+    call_control_from_env,
+)
 from inbound_voice.twilio import (
     STREAM_TOKEN_MAX_AGE_SECONDS,
     build_stream_twiml,
@@ -39,9 +48,12 @@ VOICE_ROOT = Path(__file__).resolve().parent
 def create_app(
     env: Mapping[str, str] = os.environ,
     replay_guard: ReplayGuard | None = None,
+    call_control: TwilioCallControl | None = None,
 ) -> FastAPI:
     guard = replay_guard if replay_guard is not None else replay_guard_from_env(env)
     owns_guard = replay_guard is None
+    selected_call_control = call_control if call_control is not None else call_control_from_env(env)
+    transfer_registry = TransferRegistry()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -53,6 +65,8 @@ def create_app(
 
     app = FastAPI(lifespan=lifespan)
     app.state.replay_guard = guard
+    app.state.call_control = selected_call_control
+    app.state.transfer_registry = transfer_registry
 
     @app.get("/healthz")
     async def healthz() -> dict[str, bool]:
@@ -62,20 +76,9 @@ def create_app(
     async def voice_webhook(request: Request) -> Response:
         form = await request.form()
         params = _form_params(form)
-        auth_token = env.get("TWILIO_AUTH_TOKEN", "").strip()
+        _verify_twilio_signature(request, params, env)
         public_base_url = env.get("PUBLIC_BASE_URL", "").strip()
-        webhook_url = (
-            f"{public_base_url.rstrip('/')}/twilio/voice"
-            + (f"?{request.url.query}" if request.url.query else "")
-            if public_base_url
-            else _external_request_url(request)
-        )
-        if auth_token:
-            signature = request.headers.get("X-Twilio-Signature", "")
-            if not signature or not validate_signature(auth_token, webhook_url, params, signature):
-                raise HTTPException(status_code=403, detail="Invalid Twilio signature")
-        else:
-            logger.warning("TWILIO_AUTH_TOKEN is unset; skipping webhook signature validation.")
+        auth_token = env.get("TWILIO_AUTH_TOKEN", "").strip()
         ws_url = (
             _websocket_url(public_base_url)
             if public_base_url
@@ -96,6 +99,30 @@ def create_app(
             f"{ws_url}/twilio/ws",
             stream_parameters,
         )
+        return Response(content=twiml, media_type="application/xml")
+
+    @app.post("/twilio/transfer-status")
+    async def transfer_status_webhook(request: Request) -> Response:
+        form = await request.form()
+        params = _form_params(form)
+        _verify_twilio_signature(request, params, env)
+        if request.query_params.get("event") == "answered":
+            transfer_registry.resolve(params.get("ParentCallSid", ""), "answered")
+            return Response(content="<Response/>", media_type="application/xml")
+
+        call_sid = params.get("CallSid", "")
+        status = params.get("DialCallStatus", "") or "unknown"
+        transfer_registry.resolve(call_sid, status)
+        if status in {"completed", "answered"}:
+            twiml = build_transfer_hangup_twiml()
+        else:
+            entry = transfer_registry.entry(call_sid)
+            message = (
+                entry.failed_message
+                if entry is not None
+                else AssistantConfig.model_fields["transfer_failed_message"].default
+            )
+            twiml = build_transfer_failed_twiml(message)
         return Response(content=twiml, media_type="application/xml")
 
     @app.websocket("/twilio/ws")
@@ -132,7 +159,7 @@ def create_app(
                 external_call_id=start.call_sid,
             )
             account_sid = env.get("TWILIO_ACCOUNT_SID", "").strip()
-            serializer = TwilioFrameSerializer(
+            serializer = TransferAwareTwilioFrameSerializer(
                 stream_sid=start.stream_sid,
                 call_sid=start.call_sid,
                 account_sid=account_sid or None,
@@ -141,6 +168,14 @@ def create_app(
                     auto_hang_up=bool(account_sid and auth_token),
                     sample_rate=8000,
                 ),
+            )
+            call_transfer = TwilioCallTransfer(
+                selected_call_control,
+                transfer_registry,
+                start.call_sid,
+                _websocket_callback_base_url(websocket, env),
+                prepared.assistant.transfer_failed_message,
+                serializer.disable_auto_hang_up,
             )
             transport = FastAPIWebsocketTransport(
                 websocket,
@@ -159,6 +194,7 @@ def create_app(
                 caller_id=caller_id,
                 prepared=prepared,
                 call_id=start.call_sid,
+                call_transfer=call_transfer,
             )
         except WebSocketDisconnect:
             return
@@ -176,6 +212,32 @@ def create_app(
                     pass
 
     return app
+
+
+class TransferAwareTwilioFrameSerializer(TwilioFrameSerializer):
+    def disable_auto_hang_up(self) -> None:
+        self._hangup_attempted = True
+
+
+def _verify_twilio_signature(
+    request: Request,
+    params: Mapping[str, str],
+    env: Mapping[str, str],
+) -> None:
+    auth_token = env.get("TWILIO_AUTH_TOKEN", "").strip()
+    if not auth_token:
+        logger.warning("TWILIO_AUTH_TOKEN is unset; skipping webhook signature validation.")
+        return
+    public_base_url = env.get("PUBLIC_BASE_URL", "").strip()
+    webhook_url = (
+        f"{public_base_url.rstrip('/')}{request.url.path}"
+        + (f"?{request.url.query}" if request.url.query else "")
+        if public_base_url
+        else _external_request_url(request)
+    )
+    signature = request.headers.get("X-Twilio-Signature", "")
+    if not signature or not validate_signature(auth_token, webhook_url, params, signature):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
 
 
 async def _read_start_message(websocket: WebSocket) -> dict | None:
@@ -212,6 +274,19 @@ def _external_base_url(request: Request) -> str:
 def _external_request_url(request: Request) -> str:
     base = _external_base_url(request)
     return f"{base}{request.url.path}" + (f"?{request.url.query}" if request.url.query else "")
+
+
+def _websocket_callback_base_url(websocket: WebSocket, env: Mapping[str, str]) -> str:
+    public_base_url = env.get("PUBLIC_BASE_URL", "").strip()
+    if public_base_url:
+        return public_base_url.rstrip("/")
+    headers = websocket.headers
+    forwarded_proto = headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip()
+    forwarded_host = headers.get("X-Forwarded-Host", "").split(",", 1)[0].strip()
+    scheme = forwarded_proto or websocket.url.scheme
+    scheme = {"ws": "http", "wss": "https"}.get(scheme, scheme)
+    host = forwarded_host or headers.get("host") or websocket.url.netloc
+    return f"{scheme}://{host}"
 
 
 def _websocket_url(base_url: str) -> str:

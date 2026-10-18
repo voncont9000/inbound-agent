@@ -90,4 +90,13 @@ urgency_rules:
     urgent_within_days: 28
     reason: "Employment tribunal time limit may be within 28 days."
 live_actions: []
+# Example human-transfer configuration:
+# live_actions:
+#   - transfer_call
+# transfer_targets:
+#   - key: team_member
+#     label: Team member
+#     phone: "+447700900123"
+#     when_to_use: The caller explicitly asks to speak to a person now.
+#     office_hours_only: true
 review_confidence_threshold: 0.7

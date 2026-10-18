@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import re
+import time
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+from inbound_core.config import TransferTarget
+from inbound_core.transfer import available_transfer_targets
 from pydantic import ValidationError
 
 from inbound_voice.config import (
@@ -21,10 +25,25 @@ DEFAULT_CONFIG_PATH = (
 )
 
 
+@dataclass(frozen=True)
+class TransferRequest:
+    target: TransferTarget
+    reason: str
+    requested_at: float
+
+
 class CallTools:
-    def __init__(self, sink: CallSink, config: AssistantConfig | None = None) -> None:
+    def __init__(
+        self,
+        sink: CallSink,
+        config: AssistantConfig | None = None,
+        now: datetime | None = None,
+    ) -> None:
         self.sink = sink
         self.config = config or load_assistant_config(DEFAULT_CONFIG_PATH)
+        self.now = now
+        self.transfer_targets = available_transfer_targets(self.config, now)
+        self.transfer_request: TransferRequest | None = None
         self.models = {
             name: build_service_model(service) for name, service in self.config.services.items()
         }
@@ -177,6 +196,18 @@ class CallTools:
         self._append_live_task("end_call", {})
         return {"ok": True, "status": "The call may now end."}
 
+    def transfer_call(self, target_key: str, reason: str) -> dict[str, Any]:
+        if self.transfer_request is not None:
+            return {"ok": False, "error": "A transfer is already pending."}
+        target = next(
+            (target for target in self.transfer_targets if target.key == target_key),
+            None,
+        )
+        if target is None:
+            return {"ok": False, "error": "Unknown transfer target."}
+        self.transfer_request = TransferRequest(target, reason, time.monotonic())
+        return {"ok": True, "status": "Transferring the caller."}
+
     def _append_live_task(self, task_type: str, details: dict[str, Any]) -> None:
         self.sink.append_task(task_type, {**details, "source": "live"})
 
@@ -196,8 +227,12 @@ class CallTools:
         return result
 
 
-def tool_specs(config: AssistantConfig | None = None) -> list[dict[str, Any]]:
+def tool_specs(
+    config: AssistantConfig | None = None,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
     assistant = config or load_assistant_config(DEFAULT_CONFIG_PATH)
+    transfer_targets = available_transfer_targets(assistant, now)
     actions = {
         "confirm_critical_fields": {
             "description": (
@@ -236,6 +271,24 @@ def tool_specs(config: AssistantConfig | None = None) -> list[dict[str, Any]]:
             "required": [],
         },
     }
+    if transfer_targets:
+        actions["transfer_call"] = {
+            "description": (
+                "Transfer the caller to a person. Say one short sentence telling the caller you "
+                "are transferring them in the same response, then call this tool."
+            ),
+            "properties": {
+                "target_key": {
+                    "type": "string",
+                    "enum": [target.key for target in transfer_targets],
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Short reason the caller wants a person.",
+                },
+            },
+            "required": ["target_key", "reason"],
+        }
     return [{"name": name, **actions[name]} for name in assistant.live_actions if name in actions]
 
 

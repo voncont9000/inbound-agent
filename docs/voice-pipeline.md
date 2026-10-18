@@ -490,3 +490,30 @@ clear callback preference to `preferred_time_iso` using the configured office-ho
 timezone (Europe/London by default). Callback task `due_at` values must be aware and within
 14 days of call end; an out-of-hours time moves to the next opening, and missing or invalid
 preferences use the next opening when office hours are configured.
+
+## Live call transfer
+
+Assistants can configure `transfer_targets` (key, label, phone, `when_to_use`, and
+`office_hours_only`) and enable the `transfer_call` live action. Phone numbers are
+normalized to E.164. Office-hours-only targets use the assistant timezone and the
+half-open interval from `opens` through (but not including) `closes`. The tool and prompt
+section appear only when the action is enabled and at least one target is available; text
+channels do not expose it.
+
+Phone calls use Twilio Dial TwiML, an answered callback for prompt outcome reporting, and
+the Dial action callback for the final result. Callback URLs use the configured public
+base URL or forwarded request host and are signature-validated when `TWILIO_AUTH_TOKEN`
+is configured. The configurable `transfer_failed_message` is spoken when a dial fails.
+Reports include `metrics.transfer` and end reason `transferred`; no-answer, busy, failed,
+canceled, and start errors create a `transfer_failed` task. Browser/practice calls
+simulate transfer outcomes.
+
+`TWILIO_CALL_CONTROL=rest` selects Twilio REST control; it is selected by default when
+both Twilio credentials are set. Otherwise call control defaults to the fake. Set
+`TWILIO_CALL_CONTROL=fake` and optionally `TWILIO_FAKE_CALL_LOG` for local evaluation.
+`TRANSFER_OUTCOME_WAIT_SECS` controls the callback wait (default 35 seconds). The
+callback registry is process-local: a callback reaching another process gets valid
+failure TwiML, but the original process reports the outcome as `unknown`.
+
+The `transfer_request` evaluation scenario uses fake call control and a signed Dial
+callback; the real provider scenario is not required for unit-test plumbing.

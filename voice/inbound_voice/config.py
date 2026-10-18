@@ -27,9 +27,12 @@ VOICE_ROOT = Path(__file__).resolve().parents[1]
 def load_assistant_config(path: str | Path) -> AssistantConfig:
     digest_override = os.environ.get("KNOWLEDGE_DIGEST_PATH", "").strip()
     config_path = Path(path)
+    template_dir = config_path.parent.parent / "templates"
+    if not template_dir.is_dir():
+        template_dir = VOICE_ROOT / "config" / "templates"
     return _load_assistant_config(
         config_path,
-        template_dir=config_path.parent.parent / "templates",
+        template_dir=template_dir,
         digest_root=VOICE_ROOT,
         digest_path_override=digest_override or None,
     )

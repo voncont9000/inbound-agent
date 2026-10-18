@@ -9,9 +9,69 @@ import { renderApp } from "../test/renderApp";
 
 const assistantId = "20000000-0000-4000-8000-000000000001";
 const conversationId = "50000000-0000-4000-8000-000000000001";
+const transferConversationId = "50000000-0000-4000-8000-000000000011";
 const contactId = "30000000-0000-4000-8000-000000000001";
 
 describe("operator workflows", () => {
+  it("adds and saves a transfer target with the assistant configuration", async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Add transfer target" }));
+    await user.type(screen.getByLabelText("key"), "duty_solicitor");
+    await user.type(screen.getByLabelText("label"), "Duty solicitor");
+    const phone = screen.getByLabelText("phone");
+    expect(phone).toHaveAttribute("type", "tel");
+    await user.type(phone, "+447700900123");
+    await user.type(screen.getByLabelText("When to use"), "The caller asks for a person.");
+    await user.click(screen.getByRole("checkbox", { name: /transfer call/i }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    const savedConfig = capturedBody?.config as Record<string, unknown>;
+    expect(savedConfig.transfer_targets).toEqual([
+      {
+        key: "duty_solicitor",
+        label: "Duty solicitor",
+        phone: "+447700900123",
+        when_to_use: "The caller asks for a person.",
+        office_hours_only: true,
+      },
+    ]);
+    expect(savedConfig.live_actions).toContain("transfer_call");
+    expect(savedConfig.transfer_failed_message).toBe(
+      "Sorry, nobody is available to take your call right now.",
+    );
+    server.events.removeListener("request:start", listener);
+  }, 15000);
+
+  it("shows transfer metrics and failed transfer task on conversation details", async () => {
+    const transferConversation = mockDb.tenants[1].conversations[0];
+    server.use(
+      http.get<{ id: string }, never, Schemas["ConversationDetailResponse"]>(
+        "*/api/conversations/:id",
+        ({ params }) => HttpResponse.json({ ...transferConversation, id: params.id }),
+      ),
+    );
+    renderApp(`/conversations/${transferConversationId}`, { loggedIn: true });
+    await screen.findByRole("heading", { name: /Enquiry about unfair dismissal/ });
+
+    const transfer = screen.getByRole("heading", { name: "Transfer" }).parentElement;
+    expect(transfer).toHaveTextContent("duty_solicitor");
+    expect(transfer).toHaveTextContent("no-answer");
+    expect(transfer).toHaveTextContent("1200 ms");
+    expect(screen.getByRole("heading", { name: "Tasks" }).parentElement).toHaveTextContent(
+      "transfer_failed",
+    );
+  });
+
   it("validates settings, saves the complete config, and shows server validation paths", async () => {
     const user = userEvent.setup();
     const initialConfig = structuredClone(mockDb.tenants[0].assistants[0].config);

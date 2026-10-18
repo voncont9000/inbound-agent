@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from inbound_core.call_report import CallReport, CallStart, RouteResponse
+from inbound_core.call_report import CallReport, CallStart, CallTransferMetrics, RouteResponse
 from inbound_core.config import AssistantConfig
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -258,6 +258,7 @@ class ConversationDetailResponse(ConversationSummary):
     messages: list[MessageResponse]
     intakes: list[IntakeResponse]
     tasks: list[TaskSummary]
+    transfer: CallTransferMetrics | None = None
     metrics: dict[str, Any]
     estimated_cost: dict[str, Any] | None
 

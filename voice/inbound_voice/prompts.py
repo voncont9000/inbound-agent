@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, datetime
 
 from inbound_core.config import AssistantConfig
 from inbound_core.prompts import render_business_context, render_deadline_instructions
+from inbound_core.transfer import available_transfer_targets
 
 EMAIL_SPELLING_RULE = (
     "- When spelling an email address back, write it as separate letters and spoken words, "
@@ -16,6 +17,7 @@ def render_system_prompt(
     today: date | None = None,
     caller_id: str | None = None,
     context_card: str | None = None,
+    now: datetime | None = None,
 ) -> str:
     current_date = today or date.today()
     business_context = render_business_context(
@@ -65,10 +67,29 @@ def render_system_prompt(
     other_enabled_actions = [
         f"- Use {action} when appropriate."
         for action in config.live_actions
-        if action != "end_call"
+        if action not in {"end_call", "transfer_call"}
     ]
-    enabled_actions = "\n".join(f"- Enabled action: {action}." for action in config.live_actions)
+    enabled_actions = "\n".join(
+        f"- Enabled action: {action}."
+        for action in config.live_actions
+        if action != "transfer_call"
+    )
     deadline_instructions = render_deadline_instructions(config, channel="phone")
+    transfer_targets = available_transfer_targets(config, now)
+    transfer_instructions = ""
+    if transfer_targets:
+        transfer_instructions = (
+            "\n\nTRANSFER TO A PERSON\n"
+            "Only offer or start a transfer when the business instructions above allow it and "
+            "the caller's situation matches one of these targets:\n"
+            + "\n".join(
+                f"- {target.label} (target_key: {target.key}): {target.when_to_use}"
+                for target in transfer_targets
+            )
+            + "\n- To transfer, say one short sentence telling the caller you are transferring "
+            "them, and call transfer_call in the same response. Do not say anything else after it."
+            "\n- If no target matches, do not mention transfers."
+        )
     return f"""{business_context}
 
 CALL BEHAVIOUR MECHANICS
@@ -79,4 +100,4 @@ CALL BEHAVIOUR MECHANICS
 {chr(10).join(other_enabled_actions)}
 
 {enabled_actions}
-"""
+{transfer_instructions}"""
