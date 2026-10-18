@@ -52,6 +52,7 @@ class CallTools:
         self.transfer_request: TransferRequest | None = None
         self.transfer_start: TransferStart | None = None
         self.transfer_started_at: float | None = None
+        self.transfer_accepted = False
         self.models = {
             name: build_service_model(service) for name, service in self.config.services.items()
         }

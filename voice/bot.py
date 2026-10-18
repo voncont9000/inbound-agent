@@ -217,7 +217,7 @@ class TransferUserMuteStrategy(BaseUserMuteStrategy):
         self._call_tools = call_tools
 
     async def process_frame(self, _frame: Frame) -> bool:
-        return bool(getattr(self._call_tools, "transfer_accepted", False))
+        return self._call_tools.transfer_accepted
 
 
 class GoodbyeDetectedHangup(BaseObserver):
@@ -555,8 +555,6 @@ def create_function_schemas(
     tasks: CallTaskSet | None = None,
 ) -> list[FunctionSchema]:
     tasks = tasks or CallTaskSet()
-    if not hasattr(call_tools, "transfer_accepted"):
-        call_tools.transfer_accepted = False
     schemas = []
     transfer = call_transfer or SimulatedCallTransfer()
     booking_dispatch_lock = asyncio.Lock()
