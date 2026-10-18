@@ -308,6 +308,14 @@ class ActionRunSummary(BaseModel):
     updated_at: datetime
 
 
+class CallRecordingSummary(BaseModel):
+    duration_seconds: float | None
+    size_bytes: int
+    created_at: datetime
+    expires_at: datetime
+    is_test: bool
+
+
 class ConversationDetailResponse(ConversationSummary):
     messages: list[MessageResponse]
     intakes: list[IntakeResponse]
@@ -316,6 +324,7 @@ class ConversationDetailResponse(ConversationSummary):
     metrics: dict[str, Any]
     estimated_cost: dict[str, Any] | None
     action_runs: list[ActionRunSummary] = Field(default_factory=list)
+    recording: CallRecordingSummary | None = None
 
 
 class PostActionTestRequest(BaseModel):

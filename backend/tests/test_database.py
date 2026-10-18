@@ -80,7 +80,12 @@ def test_security_definer_functions_have_non_bypass_owners() -> None:
 def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
     tenant_a, tenant_b = uuid4(), uuid4()
     task_id = uuid4()
-    assistant_id, conversation_id, booking_id = uuid4(), uuid4(), uuid4()
+    assistant_id, conversation_id, booking_id, recording_id = (
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+    )
     with psycopg.connect(OWNER_DATABASE_URL) as connection:
         connection.execute(
             "INSERT INTO tenants (id, name) VALUES (%s, %s), (%s, %s)",
@@ -113,6 +118,13 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                     "'consultation@20261019T0800Z', now(), now() + interval '30 minutes', 'Alex')",
                     (booking_id, tenant_a, assistant_id, conversation_id),
                 )
+                connection.execute(
+                    "INSERT INTO call_recordings "
+                    "(id, tenant_id, assistant_id, conversation_id, storage_key, content_type, "
+                    "size_bytes, expires_at) "
+                    "VALUES (%s, %s, %s, %s, 'tenant-a/conversation.wav', 'audio/wav', 4, now())",
+                    (recording_id, tenant_a, assistant_id, conversation_id),
+                )
             with connection.transaction():
                 connection.execute(f"SET LOCAL app.tenant_id = '{tenant_b}'")
                 assert (
@@ -127,6 +139,12 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                 )
                 assert (
                     connection.execute(
+                        "SELECT id FROM call_recordings WHERE id = %s", (recording_id,)
+                    ).fetchall()
+                    == []
+                )
+                assert (
+                    connection.execute(
                         "UPDATE tasks SET kind = 'changed' WHERE id = %s", (task_id,)
                     ).rowcount
                     == 0
@@ -135,6 +153,13 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                     connection.execute(
                         "UPDATE calendar_bookings SET attendee_name = 'Changed' WHERE id = %s",
                         (booking_id,),
+                    ).rowcount
+                    == 0
+                )
+                assert (
+                    connection.execute(
+                        "UPDATE call_recordings SET size_bytes = 10 WHERE id = %s",
+                        (recording_id,),
                     ).rowcount
                     == 0
                 )
@@ -152,6 +177,12 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                 )
                 assert (
                     connection.execute(
+                        "SELECT id FROM call_recordings WHERE id = %s", (recording_id,)
+                    ).fetchall()
+                    == []
+                )
+                assert (
+                    connection.execute(
                         "UPDATE tasks SET kind = 'changed' WHERE id = %s", (task_id,)
                     ).rowcount
                     == 0
@@ -160,6 +191,13 @@ def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:
                     connection.execute(
                         "UPDATE calendar_bookings SET attendee_name = 'Changed' WHERE id = %s",
                         (booking_id,),
+                    ).rowcount
+                    == 0
+                )
+                assert (
+                    connection.execute(
+                        "UPDATE call_recordings SET size_bytes = 10 WHERE id = %s",
+                        (recording_id,),
                     ).rowcount
                     == 0
                 )

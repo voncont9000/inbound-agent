@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = ["http://localhost:5173"]
     upload_dir: Path = BACKEND_ROOT / "var" / "uploads"
     max_upload_bytes: int = 20 * 1024 * 1024
+    recording_max_bytes: int = 200 * 1024 * 1024
     templates_dir: Path = Path(__file__).resolve().parents[2] / "voice" / "config" / "templates"
     google_api_key: str | None = None
     knowledge_model: str = "gemini-3.8-flash"

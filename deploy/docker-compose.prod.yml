@@ -114,6 +114,7 @@ services:
       EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gemini-3.8-flash}
       KNOWLEDGE_MODEL: ${KNOWLEDGE_MODEL:-gemini-3.8-flash}
       UPLOAD_DIR: /app/backend/var/uploads
+      RECORDING_MAX_BYTES: ${RECORDING_MAX_BYTES:-209715200}
       FAKE_OUTBOX_PATH: /app/backend/var/whatsapp-outbox.jsonl
     volumes:
       - backend-var:/app/backend/var
@@ -177,6 +178,7 @@ services:
       EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gemini-3.8-flash}
       KNOWLEDGE_MODEL: ${KNOWLEDGE_MODEL:-gemini-3.8-flash}
       UPLOAD_DIR: /app/backend/var/uploads
+      RECORDING_MAX_BYTES: ${RECORDING_MAX_BYTES:-209715200}
       FAKE_OUTBOX_PATH: /app/backend/var/whatsapp-outbox.jsonl
     volumes:
       - backend-var:/app/backend/var
