@@ -17,7 +17,9 @@ describe("CallSettingsSection", () => {
     );
 
     expect(
-      screen.getByText("1.00× is the voice's natural pace. Lower is slower, higher is faster."),
+      screen.getByText(
+        "1.00× is a natural conversational pace for every voice. Lower is slower, higher is faster.",
+      ),
     ).toBeTruthy();
   });
 

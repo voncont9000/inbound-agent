@@ -12,7 +12,7 @@ Advanced settings cover call behaviour and technical options with template defau
 
 1. Open the assistant's settings and select **Advanced**.
 2. Review the call limits and silence settings in **Call settings**.
-3. Adjust **Speech speed** if needed. 1.00× is the voice's natural pace; lower is slower and higher is faster. This setting also works with Speechify voices.
+3. Adjust **Speech speed** if needed. 1.00× is a natural conversational pace for every voice; slower Speechify voices are raised toward 175 WPM at this setting. Lower is slower and higher is faster.
 4. Review the **Review threshold**. Fields extracted below that confidence are sent to the review queue.
 
 ## Review extra live actions

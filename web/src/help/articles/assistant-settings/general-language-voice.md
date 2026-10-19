@@ -24,4 +24,4 @@ The General tab contains the assistant's basic identity and spoken style. Choose
 
 ### Good to know
 
-Language availability depends on the options shown in the app. Do not assume that a voice or language is available if it is not listed. For speech speed, see **Advanced** call settings; 1.00× is the voice's natural pace.
+Language availability depends on the options shown in the app. Do not assume that a voice or language is available if it is not listed. For speech speed, see **Advanced** call settings; 1.00× is a natural conversational pace for every voice.
