@@ -1,6 +1,7 @@
 import math
 import time
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -135,6 +136,8 @@ class CallMetricsObserver(BaseObserver):
         self.caller_text_callback = caller_text_callback
         self.latency = TurnLatencyTracker()
         self._seen_broadcast_frame_ids: set[int] = set()
+        self._assistant_parts: list[str] = []
+        self._assistant_started_at: str | None = None
         self.service_metrics: list[dict[str, Any]] = []
         self.number_holds: list[dict[str, Any]] = []
         self.tool_round_trip_ms: dict[str, list[float]] = {}
@@ -155,6 +158,7 @@ class CallMetricsObserver(BaseObserver):
     async def on_push_frame(self, data: Any) -> None:
         from pipecat.frames.frames import (
             BotStartedSpeakingFrame,
+            BotStoppedSpeakingFrame,
             InterruptionFrame,
             MetricsFrame,
             TranscriptionFrame,
@@ -169,12 +173,20 @@ class CallMetricsObserver(BaseObserver):
         timestamp = time.monotonic()
         if isinstance(frame, TranscriptionFrame):
             if getattr(frame, "finalized", True):
+                self.flush_assistant_transcript()
                 self.sink.append_transcript("caller", frame.text, frame.timestamp)
                 if self.caller_text_callback is not None:
                     self.caller_text_callback(frame.text)
         elif isinstance(frame, TTSTextFrame):
-            self.sink.append_transcript("assistant", frame.text)
+            if not self._assistant_parts:
+                self._assistant_started_at = datetime.now(UTC).isoformat()
+            elif not getattr(frame, "includes_inter_frame_spaces", False):
+                self._assistant_parts.append(" ")
+            self._assistant_parts.append(frame.text)
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self.flush_assistant_transcript()
         elif isinstance(frame, InterruptionFrame):
+            self.flush_assistant_transcript()
             self.latency.interrupted()
         elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
             self.latency.user_started_speaking()
@@ -193,6 +205,16 @@ class CallMetricsObserver(BaseObserver):
                     self._save()
         elif isinstance(frame, MetricsFrame):
             self._record_service_metrics(frame)
+
+    def flush_assistant_transcript(self) -> None:
+        if not self._assistant_parts:
+            return
+        text = " ".join("".join(self._assistant_parts).split())
+        started_at = self._assistant_started_at
+        self._assistant_parts.clear()
+        self._assistant_started_at = None
+        if text:
+            self.sink.append_transcript("assistant", text, started_at)
 
     def _is_duplicate_broadcast_frame(self, frame: Any) -> bool:
         frame_id = frame.id

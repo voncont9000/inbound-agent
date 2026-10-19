@@ -103,8 +103,9 @@ tools.
 ## Gmail (draft only)
 
 Gmail uses Gmail History API plus Pub/Sub push notifications and periodic reconciliation.
-The worker parses full Gmail messages, skips automated/newsletter/internal mail using
-mailbox exclusions, resolves contacts by email, and classifies each thread. Enquiries
+The worker parses full Gmail messages, skips automated/newsletter mail, and treats same-domain
+senders as internal only when the mailbox domain is not a public mail domain, resolves contacts
+by email, and classifies each thread. Enquiries
 create a threaded Gmail draft and an in-app assistant message with a “Draft in Gmail”
 badge. Needs-human messages get an `AI/Needs human` label and task; spam and unrelated
 messages are labelled and completed. **The service never sends email and never attaches
