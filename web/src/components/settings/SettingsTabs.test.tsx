@@ -37,6 +37,22 @@ describe("assistant settings tabs", () => {
     expect(screen.getByLabelText("AI disclosure")).toBeInTheDocument();
   });
 
+  it("normalizes a bare domain before adding a knowledge source", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/knowledge`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+
+    const websiteInput = screen.getByLabelText("Website URL");
+    expect(websiteInput).toHaveAttribute("type", "text");
+    expect(websiteInput).toHaveAttribute("inputmode", "url");
+    expect(websiteInput).toHaveAttribute("autocomplete", "url");
+    expect(websiteInput).toHaveAttribute("placeholder", "example.co.uk");
+    await user.type(websiteInput, "example.co.uk/about");
+    await user.click(screen.getByRole("button", { name: "Add website" }));
+
+    expect(await screen.findByText(/https:\/\/example\.co\.uk\/about/)).toBeInTheDocument();
+  });
+
   it("keeps abilities off until switched on and keeps unsaved edits across tabs", async () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });

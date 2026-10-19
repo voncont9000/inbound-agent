@@ -30,7 +30,7 @@ from inbound_api.schemas import (
 )
 from inbound_api.services.audit import write_audit
 from inbound_api.services.pagination import page_query
-from inbound_api.services.url_safety import is_public_http_url
+from inbound_api.services.url_safety import is_public_http_url, normalize_website_url
 from inbound_api.settings import get_settings
 
 router = APIRouter(tags=["knowledge"])
@@ -96,19 +96,20 @@ async def create_source(
             source = KnowledgeSourceCreate.model_validate(await request.json())
         except Exception as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
-        parsed = urlsplit(source.uri)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        uri = normalize_website_url(source.uri)
+        parsed = urlsplit(uri)
+        if parsed.scheme.casefold() not in {"http", "https"} or not parsed.hostname:
             raise HTTPException(status_code=422, detail="Knowledge URL must be HTTP(S) with a host")
         settings = get_settings()
         if not settings.knowledge_allow_private_urls and not await asyncio.to_thread(
-            is_public_http_url, source.uri
+            is_public_http_url, uri
         ):
             raise HTTPException(status_code=422, detail="Knowledge URL must resolve to public IPs")
         row = KnowledgeSource(
             tenant_id=ctx.tenant_id,
             assistant_id=assistant_id,
             kind="url",
-            uri=source.uri,
+            uri=uri,
             status="pending",
             manifest={},
         )

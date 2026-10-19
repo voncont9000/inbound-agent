@@ -8,7 +8,7 @@ from sqlalchemy import func, select, text
 
 from inbound_api.db import tenant_session
 from inbound_api.jobs import run_next_job
-from inbound_api.models import Assistant, KnowledgeDigest, KnowledgeSource
+from inbound_api.models import Assistant, Job, KnowledgeDigest, KnowledgeSource
 from inbound_api.routers import assistant_setup as assistant_setup_router
 from inbound_api.services import assistant_setup
 from inbound_api.services import job_handlers as _job_handlers  # noqa: F401
@@ -122,6 +122,20 @@ async def test_setup_draft_job_succeeds_without_creating_assistant(
     async with tenant_session(UUID(account["tenant_id"])) as session:
         after = await session.scalar(select(func.count()).select_from(Assistant))
     assert before == after
+
+
+async def test_setup_draft_normalizes_bare_domain_in_job_payload(tenant_pair, monkeypatch) -> None:
+    account = tenant_pair["first"]
+    client = account["client"]
+    _configure_draft(monkeypatch)
+
+    response, _ = await _create_draft_job(client, url="example.com")
+
+    assert response.status_code == 202, response.text
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        job = await session.get(Job, UUID(response.json()["id"]))
+    assert job is not None
+    assert job.payload["website_url"] == "https://example.com"
 
 
 @pytest.mark.parametrize(
@@ -254,7 +268,7 @@ async def test_complete_setup_persists_only_accepted_data_and_optional_knowledge
             "name": "Northside",
             "business_name": "Northside Bakery",
             "template": template_name,
-            "website_url": "https://bakery.example",
+            "website_url": "bakery.example",
             "accepted": accepted,
         },
     )
@@ -354,6 +368,51 @@ async def test_complete_setup_with_template_defaults_creates_no_knowledge_rows(
             .all()
         )
     assert digest_count == 0
+    assert source_count == 0
+    assert import_jobs == []
+
+
+async def test_complete_setup_treats_blank_website_url_as_absent(tenant_pair) -> None:
+    account = tenant_pair["first"]
+    client = account["client"]
+    template = (await client.get("/templates")).json()[0]
+    response = await client.post(
+        "/assistant-setup/complete",
+        json={
+            "name": "Default assistant",
+            "business_name": "Business name",
+            "template": template["name"],
+            "website_url": "   ",
+            "accepted": {},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assistant_id = UUID(response.json()["id"])
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        source_count = await session.scalar(
+            select(func.count())
+            .select_from(KnowledgeSource)
+            .where(KnowledgeSource.assistant_id == assistant_id)
+        )
+        import_jobs = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT payload FROM jobs "
+                        "WHERE tenant_id = :tenant_id "
+                        "AND kind = 'knowledge_import' "
+                        "AND payload ->> 'assistant_id' = :assistant_id"
+                    ),
+                    {
+                        "tenant_id": UUID(account["tenant_id"]),
+                        "assistant_id": str(assistant_id),
+                    },
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert source_count == 0
     assert import_jobs == []
 

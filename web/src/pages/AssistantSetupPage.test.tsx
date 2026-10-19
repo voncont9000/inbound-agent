@@ -68,6 +68,27 @@ describe("website-based assistant setup", () => {
     expect(mockDb.setupCompletions[0].website_url).toBeUndefined();
   });
 
+  it("normalizes a bare domain for setup drafting and completion", async () => {
+    const user = userEvent.setup();
+    renderApp("/assistants/new", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Set up from your website" });
+    await user.type(screen.getByLabelText("Business name"), "Harbor Dental Studio");
+    const websiteInput = screen.getByLabelText("Website URL (optional)");
+    expect(websiteInput).toHaveAttribute("type", "text");
+    expect(websiteInput).toHaveAttribute("inputmode", "url");
+    expect(websiteInput).toHaveAttribute("autocomplete", "url");
+    expect(websiteInput).toHaveAttribute("placeholder", "example.co.uk");
+    await user.type(websiteInput, "example.co.uk");
+    await user.click(screen.getByRole("button", { name: "Read website" }));
+
+    await screen.findByRole("heading", { name: "Choose what to include" });
+    expect(mockDb.setupDraftRequests[0].website_url).toBe("https://example.co.uk");
+    await user.click(screen.getByRole("button", { name: "Create assistant" }));
+
+    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings\/general$/));
+    expect(mockDb.setupCompletions[0].website_url).toBe("https://example.co.uk");
+  });
+
   it("offers template defaults after website drafting fails", async () => {
     server.use(
       http.post("*/api/assistant-setup/drafts", () =>

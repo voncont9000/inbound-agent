@@ -3,6 +3,17 @@ import socket
 from urllib.parse import urlsplit
 
 
+def normalize_website_url(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        return normalized
+    if normalized.startswith("//"):
+        return f"https:{normalized}"
+    if "://" not in normalized:
+        return f"https://{normalized}"
+    return normalized
+
+
 def is_public_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
         address = address.ipv4_mapped

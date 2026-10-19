@@ -61,7 +61,9 @@ automatically. The crawl runs in a worker after setup is complete.
 
 ## Safety and acceptance
 
-The API accepts only HTTP(S) URLs with a hostname. Unless
+The API accepts only HTTP(S) URLs with a hostname. Bare domains are accepted
+with `https://` assumed; existing HTTP(S) schemes are preserved and other
+schemes are rejected. Unless
 `knowledge_allow_private_urls` is enabled, URL and resolved-address checks use
 the knowledge-import public-address allowlist; the crawl runs in a worker
 thread and pins address checks for crawl requests. Redirect and address
