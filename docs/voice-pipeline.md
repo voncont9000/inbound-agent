@@ -189,7 +189,7 @@ behavior.
 | `interruption_sensitivity` | Selects VAD confidence/start timing and the user-turn start strategy. |
 | `uninterruptible_greeting` | Mutes caller audio until the first bot response completes. |
 | `technical_terms` | Merged after built-in `KEYTERMS` and passed to the selected STT service. |
-| `speech_speed` | Passed to supported TTS services only when different from `1.0`. |
+| `speech_speed` | Passed to supported TTS services only when different from `1.0`; Speechify uses relative SSML prosody rates. |
 
 | Sensitivity | VAD | Turn start |
 |---|---|---|
@@ -197,9 +197,8 @@ behavior.
 | Normal | Pipecat defaults | VAD start with interruptions enabled (current behavior). |
 | High | confidence 0.6, `start_secs=0.1` | VAD start with interruptions enabled. |
 
-Speech speed is supported by Deepgram Aura and ElevenLabs HTTP/WebSocket. Speechify has no
-speed setting in its request format; a non-default assistant setting is ignored with one
-informational log when that service is created.
+Speech speed is supported by Deepgram Aura and ElevenLabs HTTP/WebSocket. Speechify applies
+non-default speeds with relative SSML prosody rates; the default speed uses plain text.
 
 When recording is enabled, the pipeline starts a mono `AudioBufferProcessor` on client
 connect and stores 16-bit WAV audio in that call's run directory. On connect, the bot queues

@@ -7,6 +7,20 @@ import { tenantFixtures } from "../mocks/fixtures";
 import type { AssistantConfig } from "../lib/config";
 
 describe("CallSettingsSection", () => {
+  it("explains Speechify speed support", () => {
+    render(
+      <CallSettingsSection
+        config={tenantFixtures[0].assistants[0].config as AssistantConfig}
+        update={() => {}}
+        errors={{}}
+      />,
+    );
+
+    expect(
+      screen.getByText("Speechify uses relative prosody rates to adjust speed."),
+    ).toBeTruthy();
+  });
+
   it("updates call and recording settings", () => {
     function Harness() {
       const [config, setConfig] = useState(

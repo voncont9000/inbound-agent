@@ -1,5 +1,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
+from xml.sax.saxutils import escape
 
 import aiohttp
 from inbound_core.config import AssistantConfig, PronunciationEntry
@@ -76,6 +78,19 @@ class VoiceLanguage:
     speechify_language: str | None
     speechify_voice: str
     deepgram_tts_voice: str
+
+
+class SpeechifyRateTTSService(SpeechifyHttpTTSService):
+    def __init__(self, *, speed: float, **kwargs: Any) -> None:
+        self._rate_percent = round((speed - 1) * 100)
+        super().__init__(**kwargs)
+
+    def _build_payload(self, text: str) -> dict[str, Any]:
+        payload = super()._build_payload(text)
+        payload["input"] = (
+            f'<speak><prosody rate="{self._rate_percent:+d}%">{escape(text)}</prosody></speak>'
+        )
+        return payload
 
 
 def resolve_providers(env: Mapping[str, str]) -> VoiceProviders:
@@ -215,23 +230,22 @@ def create_tts(
     voice_language = voice_language or _default_voice_language(providers, env)
     text_transforms = [("*", PronunciationTransform(pronunciations))] if pronunciations else None
     if providers.tts == "speechify":
-        if speed != 1.0:
-            logger.info(
-                "Speechify does not support configurable speech speed; ignoring speed={}", speed
-            )
         settings = {
             "model": voice_language.speechify_model,
             "voice": voice_language.speechify_voice,
         }
         if voice_language.speechify_language is not None:
             settings["language"] = voice_language.speechify_language
-        return SpeechifyHttpTTSService(
-            api_key=env["SPEECHIFY_API_KEY"],
-            aiohttp_session=aiohttp_session,
-            sample_rate=sample_rate,
-            text_transforms=text_transforms,
-            settings=SpeechifyHttpTTSService.Settings(**settings),
-        )
+        service_kwargs = {
+            "api_key": env["SPEECHIFY_API_KEY"],
+            "aiohttp_session": aiohttp_session,
+            "sample_rate": sample_rate,
+            "text_transforms": text_transforms,
+            "settings": SpeechifyHttpTTSService.Settings(**settings),
+        }
+        if round((speed - 1) * 100) == 0:
+            return SpeechifyHttpTTSService(**service_kwargs)
+        return SpeechifyRateTTSService(speed=speed, **service_kwargs)
     if providers.tts == "elevenlabs":
         speed_setting = {"speed": speed} if speed != 1.0 else {}
         if providers.elevenlabs_model in ELEVENLABS_HTTP_ONLY_MODELS:
