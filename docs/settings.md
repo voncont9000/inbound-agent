@@ -18,6 +18,12 @@ documented in [templates.md](templates.md).
 | Channels | Channel connections, add a channel manually, email triage |
 | Advanced | Live actions that no ability card owns (`flag_urgent`, `request_callback`, `log_complaint`, `end_call`), review threshold, call settings and recording |
 
+## Speech speed
+
+At 1.00×, Speechify uses a natural conversational pace for every voice. Slower measured voices
+are sped up toward 175 words per minute; faster voices keep their natural pace. The slider
+adjusts relative to that baseline, so lower is slower and higher is faster.
+
 ## Voice picker
 
 The General tab shows up to six recommended voices for the selected language: the current voice,

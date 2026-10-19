@@ -41,3 +41,6 @@ indent-style = "space"
 
 [tool.setuptools.packages.find]
 include = ["inbound_core*"]
+
+[tool.setuptools.package-data]
+inbound_core = ["data/*.json"]

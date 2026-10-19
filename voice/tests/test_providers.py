@@ -1,10 +1,18 @@
 import asyncio
+from io import StringIO
 from pathlib import Path
 
 import aiohttp
 import pytest
 from inbound_core.config import AssistantConfig, PronunciationEntry
-from pipecat.frames.frames import AggregatedTextFrame, AggregationType, TTSTextFrame
+from loguru import logger
+from pipecat.frames.frames import (
+    AggregatedTextFrame,
+    AggregationType,
+    Frame,
+    TTSAudioRawFrame,
+    TTSTextFrame,
+)
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
@@ -16,7 +24,7 @@ from pipecat.services.speechify.tts import SpeechifyHttpTTSService, _SpeechMarkA
 
 from inbound_voice.pronunciation import PronunciationTransform
 from inbound_voice.providers import (
-    SpeechifyRateTTSService,
+    SpeechifyVoiceAgentTTSService,
     VoiceProviders,
     create_llm,
     create_stt,
@@ -285,7 +293,7 @@ def test_prompt_stt_and_tts_share_the_assistant_locale() -> None:
     voice_language = resolve_voice_language(assistant, providers, environment)
     stt = create_stt(providers, environment, voice_language=voice_language)
 
-    async def create_speechify() -> SpeechifyHttpTTSService:
+    async def create_speechify() -> SpeechifyVoiceAgentTTSService:
         async with aiohttp.ClientSession() as session:
             return create_tts(providers, environment, session, voice_language=voice_language)
 
@@ -321,9 +329,10 @@ def test_create_tts() -> None:
         create_services()
     )
 
-    assert isinstance(speechify, SpeechifyHttpTTSService)
+    assert isinstance(speechify, SpeechifyVoiceAgentTTSService)
     assert speechify._settings.model == "simba-3.2"
     assert speechify._settings.voice == "beatrice_32"
+    assert speechify._rate_percent == 6
     assert not hasattr(speechify._settings, "speed")
     assert speechify._settings.language is None
     assert isinstance(elevenlabs, ElevenLabsHttpTTSService)
@@ -340,34 +349,226 @@ def test_create_tts() -> None:
     assert deepgram_default._settings.speed is None
 
 
-def test_speechify_speed_uses_relative_prosody_and_escapes_text() -> None:
-    async def create_services() -> tuple[object, object, object]:
-        environment = _environment()
-        providers = resolve_providers(environment)
+def test_speechify_payload_only_wraps_nonzero_rate_and_escapes_text() -> None:
+    async def create_services() -> tuple[SpeechifyVoiceAgentTTSService, ...]:
         async with aiohttp.ClientSession() as session:
             return tuple(
-                create_tts(providers, environment, session, speed=speed)
-                for speed in (1.2, 0.9, 1.0)
+                SpeechifyVoiceAgentTTSService(
+                    rate_percent=rate_percent,
+                    api_key="test-speechify-key",
+                    aiohttp_session=session,
+                    settings=SpeechifyHttpTTSService.Settings(
+                        model="simba-3.2",
+                        voice="alec",
+                    ),
+                )
+                for rate_percent in (0, 29)
             )
 
-    faster, slower, unchanged = asyncio.run(create_services())
+    unchanged, adjusted = asyncio.run(create_services())
     text = "Hello & <team>"
 
-    assert isinstance(faster, SpeechifyRateTTSService)
-    assert (
-        faster._build_payload(text)["input"]
-        == '<speak><prosody rate="+20%">Hello &amp; &lt;team&gt;</prosody></speak>'
-    )
-    assert isinstance(slower, SpeechifyRateTTSService)
-    assert (
-        slower._build_payload(text)["input"]
-        == '<speak><prosody rate="-10%">Hello &amp; &lt;team&gt;</prosody></speak>'
-    )
-    assert type(unchanged) is SpeechifyHttpTTSService
     assert unchanged._build_payload(text)["input"] == text
+    assert (
+        adjusted._build_payload(text)["input"]
+        == '<speak><prosody rate="+29%">Hello &amp; &lt;team&gt;</prosody></speak>'
+    )
 
 
-def test_speechify_rate_speech_marks_map_to_plain_spoken_text() -> None:
+def test_speechify_create_tts_uses_measured_voice_pace_and_logs_it() -> None:
+    async def create_service() -> SpeechifyVoiceAgentTTSService:
+        environment = _environment()
+        providers = resolve_providers(environment)
+        voice_language = resolve_voice_language(
+            AssistantConfig.model_construct(language="en-GB", voice_id="alec"),
+            providers,
+            environment,
+        )
+        async with aiohttp.ClientSession() as session:
+            return create_tts(
+                providers,
+                environment,
+                session,
+                voice_language=voice_language,
+                speed=1.2,
+            )
+
+    output = StringIO()
+    sink_id = logger.add(output, level="INFO", format="{message}")
+    try:
+        service = asyncio.run(create_service())
+    finally:
+        logger.remove(sink_id)
+
+    assert service._rate_percent == 54
+    assert output.getvalue().count("Speechify voice alec measured 136 WPM; applied rate +54%") == 1
+
+
+def _speechify_audio(
+    duration_ms: int,
+    *,
+    amplitude: int = 1000,
+    context_id: str = "context-1",
+) -> TTSAudioRawFrame:
+    sample_count = 24_000 * duration_ms // 1000
+    sample = amplitude.to_bytes(2, byteorder="little", signed=True)
+    return TTSAudioRawFrame(
+        audio=sample * sample_count,
+        sample_rate=24_000,
+        num_channels=1,
+        context_id=context_id,
+    )
+
+
+async def _speechify_service() -> SpeechifyVoiceAgentTTSService:
+    async with aiohttp.ClientSession() as session:
+        return SpeechifyVoiceAgentTTSService(
+            rate_percent=29,
+            api_key="test-speechify-key",
+            aiohttp_session=session,
+            sample_rate=24_000,
+        )
+
+
+def test_speechify_trims_trailing_silence_and_streams_before_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    non_audio_frames = [Frame(), Frame()]
+    state = {"finished": False}
+
+    async def fake_run_tts(self, text: str, context_id: str):
+        yield _speechify_audio(300, context_id=context_id)
+        yield non_audio_frames[0]
+        yield _speechify_audio(100, context_id=context_id)
+        yield non_audio_frames[1]
+        yield _speechify_audio(400, amplitude=0, context_id=context_id)
+        self._cumulative_time += 0.8
+        state["finished"] = True
+
+    monkeypatch.setattr(SpeechifyHttpTTSService, "run_tts", fake_run_tts)
+
+    async def collect():
+        service = await _speechify_service()
+        frames = []
+        first_audio_before_completion = False
+        async for frame in service.run_tts("Hello", "context-1"):
+            frames.append(frame)
+            if isinstance(frame, TTSAudioRawFrame) and not state["finished"]:
+                first_audio_before_completion = True
+        return service, frames, first_audio_before_completion
+
+    service, frames, first_audio_before_completion = asyncio.run(collect())
+    audio_frames = [frame for frame in frames if isinstance(frame, TTSAudioRawFrame)]
+    non_audio = [frame for frame in frames if not isinstance(frame, TTSAudioRawFrame)]
+    expected_audio = (
+        _speechify_audio(300).audio
+        + _speechify_audio(100).audio
+        + _speechify_audio(120, amplitude=0).audio
+    )
+
+    assert first_audio_before_completion
+    assert isinstance(frames[0], TTSAudioRawFrame)
+    assert frames[1] is non_audio_frames[0]
+    assert isinstance(frames[2], TTSAudioRawFrame)
+    assert frames[3] is non_audio_frames[1]
+    assert isinstance(frames[4], TTSAudioRawFrame)
+    assert [id(frame) for frame in non_audio] == [id(frame) for frame in non_audio_frames]
+    assert b"".join(frame.audio for frame in audio_frames) == expected_audio
+    assert sum(len(frame.audio) for frame in audio_frames) * 1000 / 48_000 == 520
+    assert all(frame.sample_rate == 24_000 for frame in audio_frames)
+    assert all(frame.num_channels == 1 for frame in audio_frames)
+    assert all(frame.context_id == "context-1" for frame in audio_frames)
+    assert service._cumulative_time == pytest.approx(0.52)
+
+
+def test_speechify_trims_trailing_silence_from_single_large_chunk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tone = _speechify_audio(600).audio
+    silence = _speechify_audio(300, amplitude=0).audio
+    source_frame = TTSAudioRawFrame(
+        audio=tone + silence,
+        sample_rate=24_000,
+        num_channels=1,
+        context_id="context-1",
+    )
+    state = {"finished": False}
+
+    async def fake_run_tts(self, text: str, context_id: str):
+        yield source_frame
+        state["finished"] = True
+
+    monkeypatch.setattr(SpeechifyHttpTTSService, "run_tts", fake_run_tts)
+
+    async def collect():
+        service = await _speechify_service()
+        frames = []
+        first_audio_before_completion = False
+        async for frame in service.run_tts("Hello", "context-1"):
+            frames.append(frame)
+            if isinstance(frame, TTSAudioRawFrame) and not state["finished"]:
+                first_audio_before_completion = True
+        return frames, first_audio_before_completion
+
+    frames, first_audio_before_completion = asyncio.run(collect())
+    audio_frames = [frame for frame in frames if isinstance(frame, TTSAudioRawFrame)]
+
+    assert first_audio_before_completion
+    assert b"".join(frame.audio for frame in audio_frames) == (
+        tone + _speechify_audio(120, amplitude=0).audio
+    )
+    assert sum(len(frame.audio) for frame in audio_frames) * 1000 / 48_000 == 720
+
+
+def test_speechify_all_speech_audio_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    source_frames = [_speechify_audio(300), _speechify_audio(400)]
+
+    async def fake_run_tts(self, text: str, context_id: str):
+        for frame in source_frames:
+            yield TTSAudioRawFrame(
+                audio=frame.audio,
+                sample_rate=frame.sample_rate,
+                num_channels=frame.num_channels,
+                context_id=context_id,
+            )
+
+    async def collect():
+        service = await _speechify_service()
+        frames = [frame async for frame in service.run_tts("Hello", "context-1")]
+        return frames
+
+    monkeypatch.setattr(SpeechifyHttpTTSService, "run_tts", fake_run_tts)
+    frames = asyncio.run(collect())
+    audio_frames = [frame for frame in frames if isinstance(frame, TTSAudioRawFrame)]
+
+    assert b"".join(frame.audio for frame in audio_frames) == b"".join(
+        frame.audio for frame in source_frames
+    )
+
+
+def test_speechify_first_large_chunk_is_emitted_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = {"finished": False}
+
+    async def fake_run_tts(self, text: str, context_id: str):
+        yield _speechify_audio(600, context_id=context_id)
+        yield _speechify_audio(100, amplitude=0, context_id=context_id)
+        state["finished"] = True
+
+    async def collect():
+        service = await _speechify_service()
+        first_audio_before_completion = False
+        async for frame in service.run_tts("Hello", "context-1"):
+            if isinstance(frame, TTSAudioRawFrame) and not state["finished"]:
+                first_audio_before_completion = True
+        return first_audio_before_completion
+
+    monkeypatch.setattr(SpeechifyHttpTTSService, "run_tts", fake_run_tts)
+    assert asyncio.run(collect())
+
+
+def test_speechify_speech_marks_map_to_plain_spoken_text() -> None:
     text = "Hello & welcome."
     marks = [
         {"type": "word", "value": "Hello", "start": 0, "end": 5, "start_time": 0, "end_time": 300},

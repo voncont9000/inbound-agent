@@ -115,6 +115,11 @@ Speechify shared voices for the selected locale through `GET /voices?locale=en-G
 the Speechify `/v1/voices` endpoint. Without `SPEECHIFY_API_KEY` or when Speechify is
 unavailable, the API returns a static Beatrice fallback.
 
+At 1.00×, slower measured Speechify voices are sped up toward 175 WPM while faster voices keep
+their natural pace; the slider applies a relative prosody rate. Measurements are recorded in
+`core/inbound_core/data/speechify_voice_pace.json`. A 500 ms streaming hold-back window lets the
+service trim detected trailing silence to at most 120 ms per sentence.
+
 The supported locales are `en-GB`, `en-US`, `de-DE`, `es-ES`, `es-MX`, `fr-FR`, `it-IT`,
 `pt-BR`, and `multi`. Legacy language strings normalize when configurations load; unknown
 stored values default to `en-GB`. Soniox `multi` enables language identification across

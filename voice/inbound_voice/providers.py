@@ -1,5 +1,8 @@
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import AsyncGenerator, Mapping
 from dataclasses import dataclass
+from math import ceil, sqrt
+from struct import iter_unpack
 from typing import Any
 from xml.sax.saxutils import escape
 
@@ -12,7 +15,9 @@ from inbound_core.languages import (
     MULTI_LANGUAGES,
     Locale,
 )
+from inbound_core.voice_pace import speechify_rate_percent, speechify_voice_wpm
 from loguru import logger
+from pipecat.frames.frames import Frame, TTSAudioRawFrame
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
@@ -66,17 +71,173 @@ class VoiceLanguage:
     deepgram_tts_voice: str
 
 
-class SpeechifyRateTTSService(SpeechifyHttpTTSService):
-    def __init__(self, *, speed: float, **kwargs: Any) -> None:
-        self._rate_percent = round((speed - 1) * 100)
+@dataclass
+class _BufferedSpeechifyAudio:
+    audio: bytes
+    sample_rate: int
+    num_channels: int
+    context_id: str | None
+
+
+def _trailing_silence_cut_range(
+    audio: bytes,
+    sample_rate: int,
+    num_channels: int,
+    trailing_silence_ms: int,
+) -> tuple[int, int]:
+    if sample_rate <= 0 or num_channels <= 0:
+        return 0, 0
+
+    samples_per_window = max(1, sample_rate // 100)
+    window_bytes = samples_per_window * num_channels * 2
+    silent_windows = 0
+    for end in range(len(audio), window_bytes - 1, -window_bytes):
+        window = audio[end - window_bytes : end]
+        sample_count = len(window) // 2
+        rms = sqrt(sum(sample[0] ** 2 for sample in iter_unpack("<h", window)) / sample_count)
+        if rms >= 184:
+            break
+        silent_windows += 1
+
+    windows_to_keep = ceil(max(0, trailing_silence_ms) / 10)
+    bytes_to_trim = max(0, silent_windows - windows_to_keep) * window_bytes
+    return len(audio) - silent_windows * window_bytes, bytes_to_trim
+
+
+class SpeechifyVoiceAgentTTSService(SpeechifyHttpTTSService):
+    def __init__(
+        self,
+        *,
+        rate_percent: int,
+        trailing_silence_ms: int = 120,
+        **kwargs: Any,
+    ) -> None:
+        self._rate_percent = rate_percent
+        self._trailing_silence_ms = trailing_silence_ms
         super().__init__(**kwargs)
 
     def _build_payload(self, text: str) -> dict[str, Any]:
         payload = super()._build_payload(text)
-        payload["input"] = (
-            f'<speak><prosody rate="{self._rate_percent:+d}%">{escape(text)}</prosody></speak>'
-        )
+        if self._rate_percent != 0:
+            payload["input"] = (
+                f'<speak><prosody rate="{self._rate_percent:+d}%">{escape(text)}</prosody></speak>'
+            )
         return payload
+
+    async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame | None, None]:
+        pending_frames: deque[_BufferedSpeechifyAudio | Frame | None] = deque()
+        held_bytes = 0
+        holdback_bytes: int | None = None
+        first_audio = True
+        cumulative_time_before = self._cumulative_time
+
+        async for frame in super().run_tts(text, context_id):
+            if not isinstance(frame, TTSAudioRawFrame):
+                pending_frames.append(frame)
+                while pending_frames and not isinstance(pending_frames[0], _BufferedSpeechifyAudio):
+                    yield pending_frames.popleft()
+                continue
+
+            if frame.sample_rate <= 0 or frame.num_channels <= 0:
+                pending_frames.append(frame)
+                while pending_frames and not isinstance(pending_frames[0], _BufferedSpeechifyAudio):
+                    yield pending_frames.popleft()
+                continue
+
+            if first_audio:
+                first_audio = False
+                holdback_bytes = frame.sample_rate * frame.num_channels * 2 * 500 // 1000
+
+            if holdback_bytes is None:
+                holdback_bytes = frame.sample_rate * frame.num_channels * 2 * 500 // 1000
+
+            pending_frames.append(
+                _BufferedSpeechifyAudio(
+                    audio=frame.audio,
+                    sample_rate=frame.sample_rate,
+                    num_channels=frame.num_channels,
+                    context_id=frame.context_id,
+                )
+            )
+            held_bytes += len(frame.audio)
+
+            while held_bytes > holdback_bytes and pending_frames:
+                oldest = pending_frames[0]
+                if not isinstance(oldest, _BufferedSpeechifyAudio):
+                    yield pending_frames.popleft()
+                    continue
+
+                bytes_to_emit = min(held_bytes - holdback_bytes, len(oldest.audio))
+                alignment = oldest.num_channels * 2
+                bytes_to_emit -= bytes_to_emit % alignment
+                if bytes_to_emit == 0:
+                    break
+
+                audio = oldest.audio[:bytes_to_emit]
+                oldest.audio = oldest.audio[bytes_to_emit:]
+                held_bytes -= bytes_to_emit
+                yield TTSAudioRawFrame(
+                    audio=audio,
+                    sample_rate=oldest.sample_rate,
+                    num_channels=oldest.num_channels,
+                    context_id=oldest.context_id,
+                )
+                if not oldest.audio:
+                    pending_frames.popleft()
+
+        trimmed_seconds = 0.0
+        audio_chunks = [
+            item for item in pending_frames if isinstance(item, _BufferedSpeechifyAudio)
+        ]
+        if audio_chunks:
+            tail = b"".join(chunk.audio for chunk in audio_chunks)
+            last_chunk = audio_chunks[-1]
+            trim_start, bytes_to_trim = _trailing_silence_cut_range(
+                tail,
+                last_chunk.sample_rate,
+                last_chunk.num_channels,
+                self._trailing_silence_ms,
+            )
+            trim_end = trim_start + bytes_to_trim
+            offset = 0
+            for chunk in pending_frames:
+                if not isinstance(chunk, _BufferedSpeechifyAudio):
+                    continue
+
+                chunk_length = len(chunk.audio)
+                chunk_end = offset + chunk_length
+                local_start = max(0, trim_start - offset)
+                local_end = min(chunk_length, trim_end - offset)
+                if local_start < local_end:
+                    bytes_removed = local_end - local_start
+                    chunk.audio = chunk.audio[:local_start] + chunk.audio[local_end:]
+                    held_bytes -= bytes_removed
+                    trimmed_seconds += bytes_removed / (chunk.sample_rate * chunk.num_channels * 2)
+                offset = chunk_end
+            pending_frames = deque(
+                item
+                for item in pending_frames
+                if not isinstance(item, _BufferedSpeechifyAudio) or item.audio
+            )
+
+        if trimmed_seconds:
+            self._cumulative_time = max(
+                cumulative_time_before,
+                self._cumulative_time - trimmed_seconds,
+            )
+
+        for chunk in pending_frames:
+            if isinstance(chunk, _BufferedSpeechifyAudio):
+                if not chunk.audio:
+                    continue
+                yield TTSAudioRawFrame(
+                    audio=chunk.audio,
+                    sample_rate=chunk.sample_rate,
+                    num_channels=chunk.num_channels,
+                    context_id=chunk.context_id,
+                )
+            else:
+                yield chunk
 
 
 def resolve_providers(env: Mapping[str, str]) -> VoiceProviders:
@@ -217,9 +378,18 @@ def create_tts(
     voice_language = voice_language or _default_voice_language(providers, env)
     text_transforms = [("*", PronunciationTransform(pronunciations))] if pronunciations else None
     if providers.tts == "speechify":
+        voice_id = voice_language.speechify_voice
+        rate_percent = speechify_rate_percent(voice_id, speed)
+        measured_wpm = speechify_voice_wpm(voice_id)
+        logger.info(
+            "Speechify voice {} measured {} WPM; applied rate {:+d}%",
+            voice_id,
+            measured_wpm if measured_wpm is not None else "unknown",
+            rate_percent,
+        )
         settings = {
             "model": voice_language.speechify_model,
-            "voice": voice_language.speechify_voice,
+            "voice": voice_id,
         }
         if voice_language.speechify_language is not None:
             settings["language"] = voice_language.speechify_language
@@ -230,9 +400,7 @@ def create_tts(
             "text_transforms": text_transforms,
             "settings": SpeechifyHttpTTSService.Settings(**settings),
         }
-        if round((speed - 1) * 100) == 0:
-            return SpeechifyHttpTTSService(**service_kwargs)
-        return SpeechifyRateTTSService(speed=speed, **service_kwargs)
+        return SpeechifyVoiceAgentTTSService(rate_percent=rate_percent, **service_kwargs)
     if providers.tts == "elevenlabs":
         speed_setting = {"speed": speed} if speed != 1.0 else {}
         if providers.elevenlabs_model in ELEVENLABS_HTTP_ONLY_MODELS:
