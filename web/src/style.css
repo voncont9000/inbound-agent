@@ -289,7 +289,8 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .inline-editor { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-sm); margin: 0.7rem 0; background: var(--surface-muted); }
 .settings-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap; }
 .settings-tab-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin-top: var(--space-2); border-bottom: 1px solid var(--line); }
-.settings-tabs { display: flex; flex: 1 1 auto; min-width: 0; gap: var(--space-1); overflow-x: auto; overflow-y: hidden; }
+.settings-tabs { display: flex; flex: 1 1 auto; min-width: 0; gap: var(--space-1); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.settings-tabs::-webkit-scrollbar { display: none; }
 .settings-tabs a { position: relative; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.65rem 0.9rem; text-decoration: none; color: var(--muted); font-weight: 600; font-size: var(--text-sm); white-space: nowrap; }
 .settings-tabs a::after { content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 2px; background: transparent; }
 .settings-tabs a:hover { color: var(--ink); }
