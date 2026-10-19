@@ -449,6 +449,9 @@ renderer contributes identity, business data, knowledge, and feature mechanics; 
 hard-code callback or other call-behavior policy. The channel-neutral business context,
 intake extraction, and pricing helpers live in `core/inbound_core` and are shared with text
 channels; voice-specific readback, caller ID, and tool mechanics remain in the voice service.
+The shared context includes the local weekday; phone prompts also include local time and
+current office-open status when office days are configured. Text prompts omit open/closed
+status because drafts may be read later.
 `readback` selects `off`, `email`, or `critical` behavior. The law-firm template selects
 `email`.
 Email read-backs spell addresses as separate letters and spoken words such as “dot” and

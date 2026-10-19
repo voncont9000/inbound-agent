@@ -1,8 +1,26 @@
-from datetime import date
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from inbound_core.config import AssistantConfig, DateDeadlineUrgencyRule
+from inbound_core.extraction import is_office_open
 from inbound_core.languages import written_language_instruction
 from inbound_core.rules import render_conversation_rules
+
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
 
 
 def render_business_context(
@@ -15,8 +33,15 @@ def render_business_context(
     include_deadline_instructions: bool = True,
     booking_enabled: bool = False,
     handoff_available: bool = False,
+    now: datetime | None = None,
 ) -> str:
-    current_date = today or date.today()
+    timezone_name = config.office_hours.timezone or "Europe/London"
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        timezone = ZoneInfo("Europe/London")
+    local_now = (now or datetime.now(UTC)).astimezone(timezone)
+    current_date = today or local_now.date()
     audience = "caller" if channel == "phone" else "customer"
     fee_table = (
         "\n".join(f"- {fee.service}: {fee.price}. {fee.notes}" for fee in config.price_list)
@@ -71,11 +96,22 @@ def render_business_context(
     language_line = (
         f"\n{written_language_instruction(config.language)}" if channel != "phone" else ""
     )
+    date_and_time = (
+        f"Today is {_WEEKDAYS[current_date.weekday()]} {current_date.day} "
+        f"{_MONTHS[current_date.month - 1]} {current_date.year} ({current_date.isoformat()})."
+    )
+    if channel == "phone":
+        date_and_time += f" The local time is {local_now:%H:%M} ({timezone.key})"
+        office_open = is_office_open(config, local_now)
+        if office_open is not None:
+            status = "open" if office_open else "closed"
+            date_and_time += f", so the office is currently {status}"
+        date_and_time += "."
     business_context = f"""{heading}{language_line}
 {instructions}
 
-TODAY'S DATE
-Today is {current_date.isoformat()}. Use today's date to resolve {audience} dates without a year.
+TODAY'S DATE AND TIME
+{date_and_time} Use today's date to resolve {audience} dates without a year.
 If the year remains ambiguous, ask the {audience} to clarify it.
 
 POLICIES

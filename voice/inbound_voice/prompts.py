@@ -21,11 +21,10 @@ def render_system_prompt(
     booking_enabled: bool = False,
     now: datetime | None = None,
 ) -> str:
-    current_date = today or date.today()
     transfer_targets = available_transfer_targets(config, now)
     business_context = render_business_context(
         config,
-        current_date,
+        today,
         context_card,
         channel="phone",
         persona=(
@@ -35,6 +34,7 @@ def render_system_prompt(
         include_deadline_instructions=False,
         booking_enabled=booking_enabled,
         handoff_available=bool(transfer_targets) and "transfer_call" in config.live_actions,
+        now=now,
     )
     readback_instructions = {
         "off": "Do not read details back to the caller.",

@@ -20,8 +20,8 @@ When the caller is ready to finish, say goodbye. When the caller says goodbye, s
 in response.
 
 
-TODAY'S DATE
-Today is 2026-01-15. Use today's date to resolve caller dates without a year.
+TODAY'S DATE AND TIME
+Today is Thursday 15 January 2026 (2026-01-15). The local time is 10:00 (Europe/London), so the office is currently open. Use today's date to resolve caller dates without a year.
 If the year remains ambiguous, ask the caller to clarify it.
 
 POLICIES

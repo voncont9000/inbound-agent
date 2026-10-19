@@ -386,7 +386,9 @@ prompt code. The `uk_law_firm` template supplies the Demo & Co behavior; the ren
 identity, configured business data, knowledge, and only the mechanics enabled by settings.
 The channel-neutral business context, intake extraction, deadline calculation, and pricing
 helpers are shared through `inbound_core`; voice-only readback, caller identity, and call
-control remain in `inbound_voice`.
+control remain in `inbound_voice`. The business context gives every channel the local weekday;
+phone calls also receive the local time and current open/closed status when office days are
+configured, while text drafts omit that status because they may be read later.
 Set `readback` to `off`, `email`, or `critical`. The law-firm template uses `email`.
 Email read-backs spell addresses as separate letters and spoken words such as “dot” and
 “at,” rather than punctuation symbols; common domains are spoken as words.
