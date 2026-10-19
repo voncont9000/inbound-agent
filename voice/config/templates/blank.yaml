@@ -1,0 +1,53 @@
+# Blank (generic) assistant: the default for new assistants. Contains only generic,
+# industry-neutral behaviour. Industry rules, policies and fields come from the
+# other templates.
+template:
+  label: Blank
+  description: A neutral assistant with no industry rules. Start here and add your own policies, intake fields and urgency rules.
+  order: 0
+  sets_up:
+    - AI disclosure at the start of the call
+    - One general enquiry with name, phone, email and reason
+    - Generic email triage categories
+language: en-GB
+business_name: Your business
+greeting: "Hello, you are speaking with our AI assistant. How can I help?"
+instructions: |
+  Use short, natural spoken sentences. Ask one question at a time.
+  When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
+  question twice in a row.
+
+  At the beginning of every call, say: "{greeting}"
+
+  Ask for each critical field at a natural point. If the caller does not answer, acknowledge it,
+  move on, and return to it once before the end.
+  Collect other details conversationally; they are extracted after the call.
+  Only answer from the business information you have. If you do not know, say so and offer to
+  pass the question to the team.
+  Be honest when the business is closed. Opening hours: {office_hours}.
+
+  When the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye
+  in response.
+readback: "off"
+office_hours:
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday]
+  opens: "09:00"
+  closes: "17:00"
+  timezone: Europe/London
+price_list: []
+policies: []
+rules:
+  ai_disclosure: at_start
+contacts: {}
+services:
+  general_enquiry:
+    label: General enquiry
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: email, label: Email address, type: email}
+      - {name: reason, label: Reason for contact, type: string, description: "A short summary of what the customer wants."}
+urgency_rules: []
+live_actions: []
+post_actions: []
+review_confidence_threshold: 0.7

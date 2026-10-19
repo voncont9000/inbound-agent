@@ -1,0 +1,127 @@
+template:
+  label: Restaurant
+  description: Takes table reservation requests, answers opening hours and menu questions, records allergies and routes large-group and event enquiries.
+  order: 20
+  sets_up:
+    - Reservation, large-group/event and general enquiry intake
+    - Allergy and dietary policy (never guarantee allergen-free food)
+    - Urgency for same-day bookings, allergic reactions and complaints about food safety
+    - Email triage tuned for bookings and events
+  # SAMPLE CONTENT: demo business details only applied by "Create demo assistant". Replace before going live.
+  sample:
+    business_name: The Copper Pot (sample restaurant)
+    company_info: |
+      SAMPLE CONTENT - replace with your restaurant's details.
+      The Copper Pot is a 60-cover neighbourhood bistro at 12 Market Street, Bath BA1 1AA, serving
+      seasonal British cooking. Lunch is served Wednesday to Sunday 12:00-14:30 and dinner
+      Wednesday to Saturday 17:30-22:00. The restaurant is closed on Mondays and Tuesdays.
+      There is step-free access and an accessible toilet. Well-behaved dogs are welcome on the terrace.
+      The private dining room seats up to 18 guests. Groups of 8 or more order from a set menu and
+      pay a deposit of 10 pounds per person.
+    faqs:
+      - question: Do you cater for allergies?
+        answer: Yes. Tell us about any allergy when booking and tell your server on arrival. Our kitchen handles all 14 major allergens, so we cannot guarantee any dish is allergen-free.
+      - question: Do you have vegetarian and vegan options?
+        answer: There are always vegetarian and vegan dishes on the menu, and the kitchen can adapt several others.
+      - question: Is there parking?
+        answer: There is no private parking. The nearest car park is Charlotte Street, a five-minute walk away.
+      - question: Can I bring my own cake?
+        answer: Yes, for a 2 pound per person cakeage charge.
+    price_list:
+      - {service: Set lunch, price: "Two courses 24 pounds, three courses 29 pounds", notes: "Sample price. Wednesday to Friday only."}
+      - {service: Group set menu, price: "From 45 pounds per person", notes: "Sample price. Groups of 8 or more."}
+language: en-GB
+business_name: Your restaurant
+greeting: "Hello, you are speaking with the restaurant's AI assistant. How can I help?"
+instructions: |
+  Use short, warm, natural spoken sentences. Ask one question at a time.
+  When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
+  question twice in a row.
+
+  At the beginning of every call, say: "{greeting}"
+
+  For a reservation, collect the date, time, number of guests and the name and phone number for
+  the booking, then ask whether anyone has allergies or dietary requirements. Take reservations
+  as requests: say the team will confirm the table. Never confirm a table yourself.
+  For groups of 8 or more, private dining or events, collect the details and say the events
+  team will get back to them with options.
+  Answer questions about the menu, opening hours, location and facilities only from the
+  business information. If you do not know, offer to pass the question to the team.
+  Be honest when the restaurant is closed. Opening hours: {office_hours}.
+
+  When the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye
+  in response.
+readback: critical
+office_hours:
+  days: [Wednesday, Thursday, Friday, Saturday, Sunday]
+  opens: "12:00"
+  closes: "22:00"
+  timezone: Europe/London
+price_list: []
+policies:
+  - "Never confirm a reservation yourself. Take it as a request and say the team will confirm by phone or text."
+  - "Never promise that a dish is allergen-free or safe for an allergy. Record every allergy and say the kitchen will be told; for severe allergies, advise the guest to speak to the team before ordering."
+  - "If someone is having an allergic reaction or a medical emergency, tell them to call 999 now."
+  - "Answer menu, price and opening-hour questions only from the business information. Never invent dishes, prices or availability."
+  - "For groups of 8 or more, private dining and events, take the details for the events team; do not quote deposits or set menus unless they are in the business information."
+  - "If a guest complains about a visit, apologise, take the details and say a manager will get back to them. Do not offer refunds or vouchers."
+rules:
+  ai_disclosure: at_start
+  style: friendly
+  off_topic: redirect
+  angry_caller: de_escalate
+  sales_calls: take_message
+contacts: {}
+services:
+  reservation:
+    label: Table reservation
+    fields:
+      - {name: caller_name, label: Name for the booking, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: booking_date, label: Date, type: date, critical: true}
+      - {name: booking_time, label: Time, type: string, critical: true}
+      - {name: party_size, label: Number of guests, type: integer, critical: true}
+      - {name: allergies, label: Allergies and dietary requirements, type: list}
+      - {name: occasion, label: Occasion, type: string}
+      - {name: seating_preference, label: Seating preference, type: enum, choices: [inside, terrace, no_preference]}
+      - {name: accessibility_needs, label: Accessibility needs, type: string}
+  large_group_event:
+    label: Large group or event enquiry
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: email, label: Email address, type: email, critical: true}
+      - {name: event_date, label: Event date, type: date, critical: true}
+      - {name: party_size, label: Number of guests, type: integer, critical: true}
+      - {name: event_type, label: Event type, type: enum, choices: [birthday, corporate, wedding, christening, wake, other]}
+      - {name: private_room, label: Private room wanted, type: boolean}
+      - {name: budget_per_head, label: Budget per head, type: string}
+      - {name: allergies, label: Allergies and dietary requirements, type: list}
+  general_enquiry:
+    label: General enquiry
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: reason, label: Reason for contact, type: string}
+urgency_rules:
+  - type: keyword
+    phrases: ["allergic reaction", "anaphylaxis", "food poisoning", "can't breathe", "epipen"]
+    reason: "Caller described a possible allergic reaction or food-safety incident: {phrase}"
+  - type: sentence
+    text: "The caller wants a table for today or tonight."
+  - type: sentence
+    text: "The caller is complaining about food safety, illness after a visit or a serious incident at the restaurant."
+live_actions: []
+post_actions: []
+email_triage:
+  enquiry: >-
+    A guest asking to book, change or cancel a table, asking about the menu, allergies, opening
+    hours, private dining or events, which you can answer or move forward from the business context.
+  needs_human: >-
+    Complaints about a visit, food-safety or illness reports, refund or deposit disputes, press,
+    supplier or job enquiries, and anything the business context does not cover.
+  spam: "Unsolicited marketing, phishing, scams or automated bulk mail."
+  not_relevant: >-
+    Genuine mail that needs no reply, such as a thank-you with no question, a booking-platform
+    receipt, or a message clearly meant for a different business.
+review_confidence_threshold: 0.7

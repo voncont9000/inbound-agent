@@ -13,4 +13,6 @@ export const routes = [
   { path: "/contacts/:id", label: "Contact" },
   { path: "/tasks", label: "Tasks" },
   { path: "/knowledge-gaps", label: "Knowledge gaps" },
+  { path: "/help", label: "Help center" },
+  { path: "/help/:category/:article", label: "Help article" },
 ] as const;

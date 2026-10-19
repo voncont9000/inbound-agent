@@ -1100,6 +1100,11 @@ export interface components {
             name: string;
             /** Template */
             template: string;
+            /**
+             * Use Sample Content
+             * @default false
+             */
+            use_sample_content: boolean;
             /** Website Url */
             website_url?: string | null;
         };
@@ -1973,7 +1978,7 @@ export interface components {
         EmailTriageConfig: {
             /**
              * Enquiry
-             * @default A customer or prospective customer asking about the business's services, prices, availability or their own case, which you can answer or move forward from the business context.
+             * @default A customer or prospective customer asking about the business's services, prices, availability or their own request, which you can answer or move forward from the business context.
              */
             enquiry: string;
             /**
@@ -2654,8 +2659,16 @@ export interface components {
         /** TemplateResponse */
         TemplateResponse: {
             config: components["schemas"]["AssistantConfig-Output"];
+            /** Description */
+            description: string;
+            /** Label */
+            label: string;
             /** Name */
             name: string;
+            /** Sample Business Name */
+            sample_business_name?: string | null;
+            /** Sets Up */
+            sets_up: string[];
         };
         /** TenantResponse */
         TenantResponse: {

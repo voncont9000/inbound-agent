@@ -57,6 +57,17 @@ contacts:
     assert config.knowledge.sources == []
 
 
+def test_assistant_config_strips_template_metadata() -> None:
+    templates = Path(__file__).resolve().parents[2] / "voice" / "config" / "templates"
+
+    config = load_assistant_config(
+        Path(__file__).resolve().parents[2] / "voice" / "config" / "assistants" / "demo_firm.yaml",
+        template_dir=templates,
+    )
+
+    assert config.business_name == "Demo & Co Solicitors"
+
+
 def test_digest_path_is_loaded_relative_to_supplied_root(tmp_path: Path) -> None:
     config_path = tmp_path / "assistant.yaml"
     digest = tmp_path / "knowledge" / "digest.md"
@@ -168,7 +179,7 @@ def test_email_triage_defaults_and_rejects_extra_fields() -> None:
 
     assert config.enquiry == (
         "A customer or prospective customer asking about the business's services, prices, "
-        "availability or their own case, which you can answer or move forward from the "
+        "availability or their own request, which you can answer or move forward from the "
         "business context."
     )
     assert config.needs_human == (

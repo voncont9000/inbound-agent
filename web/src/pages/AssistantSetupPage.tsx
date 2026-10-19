@@ -5,6 +5,7 @@ import { api, unwrap, type Schemas } from "../api/client";
 import { ErrorState, LoadingState } from "../components/States";
 import { DraftSectionCard, type DraftSectionStatus } from "../components/setup/DraftSectionCard";
 import { DraftSectionEditor, DraftSectionPreview, type DraftSectionName } from "../components/setup/DraftSectionEditor";
+import { TemplatePicker } from "../components/setup/TemplatePicker";
 import { settingsTabPath } from "../lib/settingsTabs";
 import { normalizeWebsiteUrl } from "../lib/url";
 
@@ -76,7 +77,12 @@ export function AssistantSetupPage() {
   }, [result, step]);
 
   useEffect(() => {
-    if (!selectedTemplate && templatesQuery.data?.length) setSelectedTemplate(templatesQuery.data[0].name);
+    if (!selectedTemplate && templatesQuery.data?.length) {
+      setSelectedTemplate(
+        templatesQuery.data.find(({ name }) => name === "blank")?.name ??
+          templatesQuery.data[0].name,
+      );
+    }
   }, [selectedTemplate, templatesQuery.data]);
 
   function makeCompletion(accepted: Schemas["SetupDraft"]) {
@@ -88,6 +94,7 @@ export function AssistantSetupPage() {
       template: selectedTemplate,
       ...(normalizedWebsiteUrl ? { website_url: normalizedWebsiteUrl } : {}),
       accepted,
+      use_sample_content: false,
     });
   }
 
@@ -142,9 +149,20 @@ export function AssistantSetupPage() {
     makeCompletion({});
   }
 
-  return <main className="page page-narrow" id="main-content">
+  function createDemo(template: Schemas["TemplateResponse"]) {
+    if (!template.sample_business_name) return;
+    complete.mutate({
+      name: `${template.label} demo`,
+      business_name: template.sample_business_name,
+      template: template.name,
+      accepted: {},
+      use_sample_content: true,
+    });
+  }
+
+  return <main className="page page-narrow page-template-setup" id="main-content">
     <p className="eyebrow">Assistant setup</p>
-    <h1>Set up from your website</h1>
+    <h1>Create an assistant</h1>
     {step === "form" && <section className="panel">
       <h2>Business details</h2>
       {templatesQuery.isLoading && <LoadingState label="Loading templates…" />}
@@ -163,13 +181,13 @@ export function AssistantSetupPage() {
           <label htmlFor="setup-website-url">Website URL (optional)</label>
           <input id="setup-website-url" type="text" inputMode="url" autoComplete="url" placeholder="example.co.uk" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} />
         </div>
-        <fieldset className="stack">
-          <legend>Start from template</legend>
-          {(templatesQuery.data ?? []).map((template) => <label key={template.name} className="radio-row">
-            <input type="radio" name="setup-template" value={template.name} checked={selectedTemplate === template.name} onChange={() => setSelectedTemplate(template.name)} />
-            <span><strong>{template.name.replaceAll("_", " ")}</strong><br /><span className="muted">{Object.values(template.config.services).map((service) => service.label).join(", ") || "Blank configuration"}</span></span>
-          </label>)}
-        </fieldset>
+        <TemplatePicker
+          templates={templatesQuery.data ?? []}
+          selectedTemplate={selectedTemplate}
+          onSelect={setSelectedTemplate}
+          onCreateDemo={createDemo}
+          demoPending={complete.isPending}
+        />
         {complete.error && <ErrorState message={complete.error instanceof Error ? complete.error.message : "Assistant creation failed."} />}
         <button className="button-primary" type="submit" disabled={templatesQuery.isLoading || !selectedTemplate || startDraft.isPending || complete.isPending}>
           {complete.isPending ? "Creating assistant…" : websiteUrl.trim() ? "Read website" : "Create assistant"}
