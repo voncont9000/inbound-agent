@@ -41,20 +41,6 @@ LLM_DEFAULT_MODELS = {
 }
 ELEVENLABS_HTTP_ONLY_MODELS = frozenset({"eleven_v4_turbo"})
 
-KEYTERMS = [
-    "conveyancing",
-    "freehold",
-    "leasehold",
-    "ACAS",
-    "tribunal",
-    "remortgage",
-    "completion",
-    "exchange",
-    "solicitor",
-    "redundancy",
-    "settlement agreement",
-]
-
 
 @dataclass(frozen=True)
 class VoiceProviders:
@@ -169,13 +155,14 @@ def create_stt(
 ):
     voice_language = voice_language or _default_voice_language(providers, env)
     terms = merge_keyterms(extra_terms or [])
+    provider_terms = terms or None
     if providers.stt == "assemblyai":
         return AssemblyAISTTService(
             api_key=env["ASSEMBLYAI_API_KEY"],
             sample_rate=sample_rate,
             settings=AssemblyAISTTService.Settings(
                 model="universal-3-6-pro",
-                keyterms_prompt=terms,
+                keyterms_prompt=provider_terms,
             ),
         )
     if providers.stt == "soniox":
@@ -186,7 +173,7 @@ def create_stt(
                 model="stt-rt-v5",
                 language_hints=list(voice_language.soniox_hints),
                 enable_language_identification=voice_language.soniox_language_identification,
-                context=SonioxContextObject(terms=terms),
+                context=SonioxContextObject(terms=provider_terms),
             ),
         )
     if providers.stt == "deepgram":
@@ -196,7 +183,7 @@ def create_stt(
             settings=DeepgramSTTService.Settings(
                 model="nova-3",
                 language=voice_language.deepgram_stt_language,
-                keyterm=terms,
+                keyterm=provider_terms,
             ),
         )
     raise ValueError(f"Unsupported STT provider: {providers.stt}")
@@ -273,7 +260,7 @@ def create_tts(
 def merge_keyterms(extra_terms: list[str]) -> list[str]:
     terms: list[str] = []
     seen: set[str] = set()
-    for term in [*KEYTERMS, *extra_terms]:
+    for term in extra_terms:
         normalized = term.strip()
         key = normalized.casefold()
         if normalized and key not in seen:
