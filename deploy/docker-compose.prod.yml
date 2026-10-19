@@ -51,9 +51,13 @@ services:
       DATABASE_URL: postgresql+psycopg://inbound_app_login:${INBOUND_APP_PASSWORD:?Set INBOUND_APP_PASSWORD}@db:5432/inbound
       MIGRATION_DATABASE_URL: postgresql+psycopg://inbound_migrator:${POSTGRES_PASSWORD}@db:5432/inbound
       VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
-      WHATSAPP_MODE: ${WHATSAPP_MODE:-off}
-      GMAIL_MODE: ${GMAIL_MODE:-off}
-      CALENDAR_MODE: ${CALENDAR_MODE:-off}
+      # Migrations use no providers; forcing modes off keeps provider secrets out of this container.
+      WHATSAPP_MODE: "off"
+      GMAIL_MODE: "off"
+      CALENDAR_MODE: "off"
+      EMAIL_SENDER: "off"
+      SHEETS_WRITER: "off"
+      WEBHOOK_SENDER: "off"
     depends_on:
       db:
         condition: service_healthy
