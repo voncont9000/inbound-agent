@@ -481,6 +481,45 @@ def test_speechify_trims_trailing_silence_and_streams_before_completion(
     assert service._cumulative_time == pytest.approx(0.52)
 
 
+def test_speechify_trims_trailing_silence_from_single_large_chunk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tone = _speechify_audio(600).audio
+    silence = _speechify_audio(300, amplitude=0).audio
+    source_frame = TTSAudioRawFrame(
+        audio=tone + silence,
+        sample_rate=24_000,
+        num_channels=1,
+        context_id="context-1",
+    )
+    state = {"finished": False}
+
+    async def fake_run_tts(self, text: str, context_id: str):
+        yield source_frame
+        state["finished"] = True
+
+    monkeypatch.setattr(SpeechifyHttpTTSService, "run_tts", fake_run_tts)
+
+    async def collect():
+        service = await _speechify_service()
+        frames = []
+        first_audio_before_completion = False
+        async for frame in service.run_tts("Hello", "context-1"):
+            frames.append(frame)
+            if isinstance(frame, TTSAudioRawFrame) and not state["finished"]:
+                first_audio_before_completion = True
+        return frames, first_audio_before_completion
+
+    frames, first_audio_before_completion = asyncio.run(collect())
+    audio_frames = [frame for frame in frames if isinstance(frame, TTSAudioRawFrame)]
+
+    assert first_audio_before_completion
+    assert b"".join(frame.audio for frame in audio_frames) == (
+        tone + _speechify_audio(120, amplitude=0).audio
+    )
+    assert sum(len(frame.audio) for frame in audio_frames) * 1000 / 48_000 == 720
+
+
 def test_speechify_all_speech_audio_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     source_frames = [_speechify_audio(300), _speechify_audio(400)]
 

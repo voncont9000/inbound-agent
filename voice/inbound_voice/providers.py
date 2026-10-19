@@ -147,9 +147,6 @@ class SpeechifyVoiceAgentTTSService(SpeechifyHttpTTSService):
             if first_audio:
                 first_audio = False
                 holdback_bytes = frame.sample_rate * frame.num_channels * 2 * 500 // 1000
-                if len(frame.audio) >= holdback_bytes:
-                    yield frame
-                    continue
 
             if holdback_bytes is None:
                 holdback_bytes = frame.sample_rate * frame.num_channels * 2 * 500 // 1000
