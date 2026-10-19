@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import type { Schemas } from "../api/client";
 import type { paths } from "../api/schema";
 import { validateAssistantConfig, type Locale } from "../lib/config";
-import { authUser, setupDraftFixture, templates, testCallResponse, voiceCatalogueFor } from "./fixtures";
+import { authUser, setupDraftFixture, templates, templateSamples, testCallResponse, voiceCatalogueFor } from "./fixtures";
 import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
 import type { TenantFixture } from "./fixtures";
@@ -171,24 +171,31 @@ export const handlers = [
     mockDb.setupCompletions.push(structuredClone(body));
     const tenant = selectedTenant(request);
     const selectedTemplate = templates.find(({ name }) => name === body.template);
-    if (!selectedTemplate) return HttpResponse.json<ApiErrorResponse>({ detail: "Template not found" }, { status: 422 });
+    if (!selectedTemplate) return HttpResponse.json<ApiErrorResponse>({ detail: "Unknown template" }, { status: 422 });
+    const sample = body.use_sample_content ? templateSamples[body.template] : undefined;
+    if (body.use_sample_content && !sample) {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Template has no sample content" }, { status: 422 });
+    }
     const config = structuredClone(selectedTemplate.config) as AssistantConfig;
     config.business_name = body.business_name;
     const accepted = body.accepted;
     if (accepted?.office_hours) config.office_hours = structuredClone(accepted.office_hours);
-    if (accepted?.price_list) config.price_list = structuredClone(accepted.price_list);
+    const priceList = accepted?.price_list ?? sample?.price_list;
+    if (priceList) config.price_list = structuredClone(priceList);
     if (accepted?.services) config.services = structuredClone(accepted.services);
-    if (accepted?.faqs) {
-      const acceptedQuestions = new Set(accepted.faqs.map(({ question }) => question.trim().toLocaleLowerCase()));
+    const faqs = accepted?.faqs ?? sample?.faqs;
+    if (faqs) {
+      const acceptedQuestions = new Set(faqs.map(({ question }) => question.trim().toLocaleLowerCase()));
       const knowledge = config.knowledge ?? { faqs: [], max_digest_chars: 24000 };
       config.knowledge = {
         ...knowledge,
         faqs: [
           ...(knowledge.faqs ?? []).filter(({ question }) => !acceptedQuestions.has(question.trim().toLocaleLowerCase())),
-          ...structuredClone(accepted.faqs),
+          ...structuredClone(faqs),
         ],
       };
     }
+    const companyInfo = accepted?.company_info ?? sample?.company_info;
     const baseAssistant = tenant.assistants[0];
     const baseState = tenant.assistantData[baseAssistant.id];
     const id = crypto.randomUUID();
@@ -212,7 +219,7 @@ export const handlers = [
         ...baseState.digest,
         id: `${id}-digest`,
         assistant_id: id,
-        content: accepted?.company_info ?? "",
+        content: companyInfo ?? "",
         created_at: createdAt,
       },
     };

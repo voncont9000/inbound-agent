@@ -201,7 +201,7 @@ class EmailTriageConfig(BaseModel):
 
     enquiry: str = (
         "A customer or prospective customer asking about the business's services, prices, "
-        "availability or their own case, which you can answer or move forward from the "
+        "availability or their own request, which you can answer or move forward from the "
         "business context."
     )
     needs_human: str = (
@@ -434,6 +434,7 @@ def load_assistant_config(
         with template_path.open(encoding="utf-8") as template_file:
             template_data = yaml.safe_load(template_file) or {}
         assistant_data = _deep_merge(template_data, assistant_data)
+    assistant_data.pop("template", None)
     config = AssistantConfig.model_validate(assistant_data)
     digest_path = (
         Path(digest_path_override)

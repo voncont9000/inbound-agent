@@ -2,7 +2,6 @@ import asyncio
 from typing import Any
 from urllib.parse import urlsplit
 
-from inbound_core.config import load_assistant_config
 from inbound_core.knowledge import (
     crawl_websites,
     documents_for_prompt,
@@ -10,6 +9,7 @@ from inbound_core.knowledge import (
 )
 from inbound_core.pricing import load_price_table
 from inbound_core.setup_draft import build_setup_draft_prompt, parse_setup_draft
+from inbound_core.templates import find_template
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.jobs import PermanentJobError, register
@@ -20,23 +20,13 @@ from inbound_api.settings import get_settings
 
 def _load_template(template_name: str):
     settings = get_settings()
-    template_path = next(
-        (
-            path
-            for path in settings.templates_dir.glob("*.yaml")
-            if path.is_file() and path.stem == template_name
-        ),
-        None,
-    )
-    if template_path is None:
-        raise PermanentJobError("Unknown template")
     try:
-        return load_assistant_config(
-            settings.templates_dir / f"{template_name}.yaml",
-            template_dir=settings.templates_dir,
-        )
+        template = find_template(settings.templates_dir, template_name)
     except (OSError, ValueError) as error:
         raise PermanentJobError("Could not load assistant template") from error
+    if template is None:
+        raise PermanentJobError("Unknown template")
+    return template.config
 
 
 def _setup_cost(settings, model: str, usage: dict[str, int]) -> float | None:

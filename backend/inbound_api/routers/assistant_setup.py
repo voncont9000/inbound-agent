@@ -2,8 +2,8 @@ import asyncio
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException
-from inbound_core.config import load_assistant_config
 from inbound_core.setup_draft import SetupDraft, apply_setup_draft
+from inbound_core.templates import find_template, sample_setup_draft
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,7 @@ class AssistantSetupComplete(BaseModel):
     template: str
     website_url: str | None = None
     accepted: SetupDraft = Field(default_factory=SetupDraft)
+    use_sample_content: bool = False
 
     @field_validator("website_url", mode="before")
     @classmethod
@@ -53,20 +54,10 @@ class AssistantSetupComplete(BaseModel):
 
 def _template_config(template_name: str):
     settings = get_settings()
-    template_path = next(
-        (
-            path
-            for path in settings.templates_dir.glob("*.yaml")
-            if path.is_file() and path.stem == template_name
-        ),
-        None,
-    )
-    if template_path is None:
+    template = find_template(settings.templates_dir, template_name)
+    if template is None:
         raise HTTPException(status_code=422, detail="Unknown template")
-    return load_assistant_config(
-        template_path,
-        template_dir=settings.templates_dir,
-    )
+    return template
 
 
 async def _validate_website_url(url: str) -> None:
@@ -110,21 +101,37 @@ async def complete_setup(
     ctx: TenantContext = _owner,
     session: AsyncSession = _tenant_session_dependency,
 ) -> AssistantResponse:
-    template = _template_config(payload.template)
+    selected_template = _template_config(payload.template)
+    template = selected_template.config
     if payload.website_url is not None:
         await _validate_website_url(payload.website_url)
-    config = apply_setup_draft(template, payload.business_name, payload.accepted)
+    if payload.use_sample_content:
+        if selected_template.meta.sample is None:
+            raise HTTPException(status_code=422, detail="Template has no sample content")
+        sample_draft = sample_setup_draft(selected_template.meta.sample)
+        accepted_data = sample_draft.model_dump(mode="python")
+        accepted_data.update(
+            {
+                section: value
+                for section, value in payload.accepted.model_dump(mode="python").items()
+                if value is not None
+            }
+        )
+        accepted = SetupDraft.model_validate(accepted_data)
+    else:
+        accepted = payload.accepted
+    config = apply_setup_draft(template, payload.business_name, accepted)
     assistant = await create_assistant(
         AssistantCreate(name=payload.name, template=payload.template, config=config),
         ctx,
         session,
     )
-    if payload.accepted.company_info:
+    if accepted.company_info:
         session.add(
             KnowledgeDigest(
                 tenant_id=ctx.tenant_id,
                 assistant_id=assistant.id,
-                content=payload.accepted.company_info,
+                content=accepted.company_info,
                 edited_by=ctx.user.id,
             )
         )
@@ -147,7 +154,7 @@ async def complete_setup(
         )
     accepted_sections = [
         section
-        for section, value in payload.accepted.model_dump(mode="python").items()
+        for section, value in accepted.model_dump(mode="python").items()
         if value is not None
     ]
     await write_audit(
@@ -156,6 +163,9 @@ async def complete_setup(
         "assistant.setup_completed",
         "assistant",
         assistant.id,
-        {"accepted_sections": accepted_sections},
+        {
+            "accepted_sections": accepted_sections,
+            "use_sample_content": payload.use_sample_content,
+        },
     )
     return assistant
