@@ -1,0 +1,126 @@
+template:
+  label: Dental or medical clinic
+  description: Takes appointment requests for new and existing patients, triages emergencies to 999/NHS 111 and never gives medical advice.
+  order: 30
+  sets_up:
+    - New patient, appointment change and emergency intake
+    - No medical advice, no diagnosis, patient confidentiality
+    - Urgency for severe pain, swelling, bleeding and trauma
+    - Email triage tuned for appointments and patient queries
+  # SAMPLE CONTENT: demo business details only applied by "Create demo assistant". Replace before going live.
+  sample:
+    business_name: Riverside Dental Practice (sample clinic)
+    company_info: |
+      SAMPLE CONTENT - replace with your clinic's details.
+      Riverside Dental Practice is a mixed NHS and private dental practice at 4 Quay Road,
+      Bristol BS1 4AB. The practice is open Monday to Friday 08:30-17:30 and Saturday mornings
+      09:00-13:00 for private patients. It has ground-floor surgeries with step-free access.
+      Emergency appointments are held back every morning for registered patients in pain.
+      Outside opening hours, patients with a dental emergency should call NHS 111.
+      Services include check-ups, hygiene, fillings, root canal treatment, crowns, whitening and
+      Invisalign.
+    faqs:
+      - question: Are you taking new NHS patients?
+        answer: The NHS list is currently full. New patients can join the waiting list or register as private patients.
+      - question: What should I do in a dental emergency out of hours?
+        answer: Call NHS 111 for urgent dental care. If you have severe swelling affecting your breathing or swallowing, or heavy bleeding that will not stop, call 999.
+      - question: How much notice do I need to give to cancel?
+        answer: Please give at least 24 hours' notice. Missed private appointments may be charged.
+      - question: Do you offer payment plans?
+        answer: Yes, interest-free finance is available for private treatment over 500 pounds.
+    price_list:
+      - {service: Private new patient examination, price: "65 pounds", notes: "Sample price. Includes two small X-rays."}
+      - {service: Hygienist appointment, price: "70 pounds", notes: "Sample price. 30 minutes."}
+      - {service: NHS Band 1 course of treatment, price: "27.40 pounds", notes: "Sample price. Check current NHS charges."}
+language: en-GB
+business_name: Your clinic
+greeting: "Hello, you are speaking with the practice's AI assistant. How can I help?"
+instructions: |
+  Use short, calm, natural spoken sentences. Ask one question at a time.
+  When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
+  question twice in a row.
+
+  At the beginning of every call, say: "{greeting}"
+
+  Find out whether the caller is a new or existing patient and what they need: a routine
+  appointment, a change to an existing appointment, or help with pain or an emergency.
+  Take appointments as requests: say the reception team will confirm the time. Never confirm a
+  slot yourself.
+  If the caller describes an emergency, follow the emergency policy first, then take their
+  details so the team can call back as a priority.
+  Answer questions about services, prices and opening hours only from the business information.
+  Be honest when the practice is closed. Opening hours: {office_hours}.
+
+  When the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye
+  in response.
+readback: critical
+office_hours:
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday]
+  opens: "08:30"
+  closes: "17:30"
+  timezone: Europe/London
+price_list: []
+policies:
+  - "You are not a clinician. Never give medical or dental advice, diagnose, recommend medication or doses, or say whether symptoms are serious. Offer a callback from the clinical team instead."
+  - "If the caller has difficulty breathing or swallowing, swelling spreading to the eye or neck, heavy bleeding that will not stop, chest pain or a serious injury, tell them to call 999 now."
+  - "If the practice is closed and the caller needs urgent care that is not life-threatening, tell them to call NHS 111."
+  - "Never confirm or deny whether someone is a patient, and never discuss appointments, treatment or records with anyone other than the patient or a parent or guardian of a child patient."
+  - "Answer prices only from the published price list. Never estimate treatment costs; offer a consultation instead."
+  - "Take appointment requests and cancellations as messages for reception; never confirm a time yourself."
+rules:
+  ai_disclosure: at_start
+  style: friendly
+  off_topic: redirect
+  angry_caller: de_escalate
+  sales_calls: decline
+contacts: {}
+services:
+  appointment_request:
+    label: Appointment request
+    fields:
+      - {name: caller_name, label: Patient name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: date_of_birth, label: Date of birth, type: date, critical: true}
+      - {name: patient_status, label: Patient status, type: enum, choices: [new, existing]}
+      - {name: appointment_type, label: Appointment type, type: enum, choices: [check_up, hygiene, treatment, consultation, other]}
+      - {name: nhs_or_private, label: NHS or private, type: enum, choices: [nhs, private, not_sure]}
+      - {name: preferred_times, label: Preferred days and times, type: string}
+      - {name: email, label: Email address, type: email}
+  change_appointment:
+    label: Change or cancel an appointment
+    fields:
+      - {name: caller_name, label: Patient name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: date_of_birth, label: Date of birth, type: date, critical: true}
+      - {name: change_type, label: Change, type: enum, choices: [reschedule, cancel]}
+      - {name: current_appointment, label: Current appointment, type: string}
+      - {name: preferred_times, label: Preferred days and times, type: string}
+  emergency:
+    label: Pain or emergency
+    fields:
+      - {name: caller_name, label: Patient name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: date_of_birth, label: Date of birth, type: date}
+      - {name: patient_status, label: Patient status, type: enum, choices: [new, existing]}
+      - {name: symptoms, label: Symptoms described, type: string, critical: true, description: "The caller's own words; never interpret or diagnose."}
+      - {name: symptoms_started, label: When symptoms started, type: string}
+urgency_rules:
+  - type: keyword
+    phrases: ["can't breathe", "difficulty breathing", "can't swallow", "swelling", "bleeding won't stop", "knocked out", "broken tooth", "chest pain", "unbearable pain"]
+    reason: "Caller described a possible dental or medical emergency: {phrase}"
+  - type: sentence
+    text: "The caller is in severe pain or describes an injury, swelling or bleeding."
+live_actions: []
+post_actions: []
+email_triage:
+  enquiry: >-
+    A patient or prospective patient asking to book, change or cancel an appointment, or about
+    services, prices, registration or opening hours, which you can answer without clinical advice.
+  needs_human: >-
+    Anything describing symptoms, pain or treatment outcomes, complaints, requests for records or
+    prescriptions, safeguarding concerns, and anything the business context does not cover.
+  spam: "Unsolicited marketing, phishing, scams or automated bulk mail."
+  not_relevant: >-
+    Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt,
+    or a message clearly meant for a different business.
+review_confidence_threshold: 0.7
