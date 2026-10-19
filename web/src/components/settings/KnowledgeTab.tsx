@@ -1,13 +1,10 @@
-import { useState } from "react";
-import { followLabel, humanizeKey, keyFromLabel } from "../../lib/keys";
 import { KnowledgeSources } from "../KnowledgeSources";
 import { Field, type SettingsTabProps } from "./fields";
 import { invalidProps } from "./errors";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export function KnowledgeTab({ assistantId, config, saved, update, errors }: SettingsTabProps) {
-  const [contactLabels, setContactLabels] = useState<Record<number, string>>({});
+export function KnowledgeTab({ assistantId, config, update, errors }: SettingsTabProps) {
   const faqs = config.knowledge?.faqs ?? [];
   const setFaqs = (change: (items: typeof faqs) => typeof faqs) => update((draft) => {
     draft.knowledge = { ...draft.knowledge, faqs: change(draft.knowledge?.faqs ?? []), max_digest_chars: draft.knowledge?.max_digest_chars ?? 24000 };
@@ -27,37 +24,6 @@ export function KnowledgeTab({ assistantId, config, saved, update, errors }: Set
         <button type="button" onClick={() => setFaqs((items) => items.filter((_, itemIndex) => itemIndex !== index))}>Remove FAQ</button>
       </div>)}
       <button type="button" onClick={() => setFaqs((items) => [...items, { question: "", answer: "" }])}>Add FAQ</button>
-    </section>
-    <section className="panel stack" aria-labelledby="price-list-heading"><h2 id="price-list-heading">Price list</h2>
-      {config.price_list.map((item, index) => <div className="inline-editor" key={`price-${index}`}>
-        <div className="form-grid">{(["service", "price", "notes"] as const).map((key) => <Field key={key} path={`price_list.${index}.${key}`} label={key.replaceAll("_", " ")}>{(fieldId) => key === "notes" ? <textarea id={fieldId} value={item[key]} onChange={(event) => update((draft) => { draft.price_list[index][key] = event.target.value; })} /> : <input id={fieldId} value={item[key]} onChange={(event) => update((draft) => { draft.price_list[index][key] = event.target.value; })} />}</Field>)}</div>
-        <button type="button" onClick={() => update((draft) => { draft.price_list.splice(index, 1); })}>Remove price</button>
-      </div>)}
-      <button type="button" onClick={() => update((draft) => { draft.price_list.push({ service: "", price: "", notes: "" }); })}>Add price</button>
-    </section>
-    <section className="panel stack" aria-labelledby="contacts-heading"><h2 id="contacts-heading">Contact details</h2>
-      <p className="help">Details the assistant may share, such as the office email or an emergency line.</p>
-      {Object.entries(config.contacts).map(([key, value], index) => {
-        const isSaved = key in saved.contacts;
-        const label = contactLabels[index] ?? humanizeKey(key);
-        return <div className="form-grid" key={`contact-${index}`}>
-          {isSaved
-            ? <Field path={`contacts.${key}.value`} label={humanizeKey(key)}>{(fieldId) => <input id={fieldId} value={value} onChange={(event) => update((draft) => { draft.contacts[key] = event.target.value; })} />}</Field>
-            : <>
-              <Field path={`contacts.${key}.label`} label="Contact name">{(fieldId) => <input id={fieldId} value={label} onChange={(event) => {
-                const nextLabel = event.target.value;
-                setContactLabels((current) => ({ ...current, [index]: nextLabel }));
-                update((draft) => {
-                  const nextKey = followLabel({ key, label: nextLabel, taken: Object.keys(draft.contacts), saved: Object.keys(saved.contacts), fallback: "contact" });
-                  draft.contacts = Object.fromEntries(Object.entries(draft.contacts).map(([itemKey, itemValue]) => [itemKey === key ? nextKey : itemKey, itemValue]));
-                });
-              }} />}</Field>
-              <Field path={`contacts.${key}.value`} label="Contact value">{(fieldId) => <input id={fieldId} value={value} onChange={(event) => update((draft) => { draft.contacts[key] = event.target.value; })} />}</Field>
-            </>}
-          <button type="button" onClick={() => { setContactLabels({}); update((draft) => { delete draft.contacts[key]; }); }}>Remove contact</button>
-        </div>;
-      })}
-      <button type="button" onClick={() => update((draft) => { draft.contacts[keyFromLabel("", Object.keys(draft.contacts), "contact")] = ""; })}>Add contact</button>
     </section>
     <KnowledgeSources assistantId={assistantId} maxChars={config.knowledge?.max_digest_chars ?? 24000} />
   </>;
