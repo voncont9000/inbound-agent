@@ -299,6 +299,9 @@ The operator UI is in `web/`, built with React, TypeScript, React Query, and pla
 | `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
 | `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
 | `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |
+| `/help`, `/help/:category/:article` | In-app help centre and searchable articles |
+
+Help articles live in `web/src/help/articles/<category>/<slug>.md`. Add the required front matter fields `title`, `category` (matching the folder), numeric `order`, and one-sentence `summary`; use `related: [category/slug, ...]` for optional related articles.
 
 The backend routes may return `501` while product behavior is being implemented. For local UI work and screenshots run `npm run dev:mock` (equivalent to `VITE_USE_MOCKS=1 npm run dev`); the browser-only MSW worker serves the API, and the normal `npm run dev` continues to proxy to the backend. Mock login accepts `demo@example.com` with any password except `wrong`. The first workspace is the general home-services demo; the second demonstrates a law-firm template.
 

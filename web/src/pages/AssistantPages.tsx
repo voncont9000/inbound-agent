@@ -9,6 +9,8 @@ import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
 import { isSettingsTab, settingsTabPath, settingsTabs, tabForPath, type SettingsTabId } from "../lib/settingsTabs";
 import { Badge, EmptyState, ErrorState, ErrorSummary, LoadingState } from "../components/States";
+import { HelpLink } from "../help/HelpLink";
+import { settingsTabHelp } from "../help/settingsTabHelp";
 
 function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
   const result = structuredClone(config);
@@ -193,6 +195,7 @@ export function AssistantSettingsPage() {
         {label}{errorCount(tabId) > 0 && <Badge tone="warning">{`${errorCount(tabId)} to fix`}</Badge>}
       </NavLink>)}
     </nav>
+    <HelpLink to={settingsTabHelp[activeTab]} />
     <div className="stack">
       <ErrorSummary errors={tabErrors} />
       {otherTabsWithErrors.length > 0 && <p role="alert">Also fix: {otherTabsWithErrors.map(({ id: tabId, label }, index) => <span key={tabId}>{index > 0 && ", "}<Link to={settingsTabPath(id, tabId)}>{label}</Link></span>)}</p>}
