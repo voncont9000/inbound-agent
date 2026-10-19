@@ -171,18 +171,17 @@
 
 .helpLink {
   display: inline-flex;
-  width: 1.7rem;
-  height: 1.7rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--accent);
-  border-radius: 50%;
-  color: var(--accent-strong);
-  font-size: 0.9rem;
-  font-weight: 700;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.45rem;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
   line-height: 1;
   text-decoration: none;
-  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .helpLink:hover,

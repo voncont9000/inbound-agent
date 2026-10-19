@@ -761,7 +761,7 @@ Evidence must be an exact quote from the {transcript_source}.
 Office hours: {", ".join(office_hours.days)} {office_hours.opens}-{office_hours.closes}
 ({office_hours.timezone}).
 Return summary as one or two neutral sentences describing the enquiry, with no advice.
-For list fields such as key_dates, return a list of strings such as "2026-08-10: dismissed".
+For list fields such as key_dates, return a list of strings such as "2026-08-10: delivery date".
 When the caller spells a value, preserve that spelling. For caller_name, when an email
 local part clearly matches the caller's name, use its spelling (for example,
 "siobhan.mcallister@" means "Siobhan McAllister").

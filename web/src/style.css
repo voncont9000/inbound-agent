@@ -288,10 +288,13 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .voice-picker-preview { min-width: 5rem; }
 .inline-editor { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-sm); margin: 0.7rem 0; background: var(--surface-muted); }
 .settings-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap; }
-.settings-tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--line); overflow-x: auto; margin-top: var(--space-2); }
-.settings-tabs a { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.65rem 0.9rem; text-decoration: none; color: var(--muted); font-weight: 600; font-size: var(--text-sm); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.settings-tab-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin-top: var(--space-2); border-bottom: 1px solid var(--line); }
+.settings-tabs { display: flex; flex: 1 1 auto; min-width: 0; gap: var(--space-1); overflow-x: auto; overflow-y: hidden; }
+.settings-tabs a { position: relative; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.65rem 0.9rem; text-decoration: none; color: var(--muted); font-weight: 600; font-size: var(--text-sm); white-space: nowrap; }
+.settings-tabs a::after { content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 2px; background: transparent; }
 .settings-tabs a:hover { color: var(--ink); }
-.settings-tabs a.active, .settings-tabs a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--accent-strong); }
+.settings-tabs a.active, .settings-tabs a[aria-current="page"] { color: var(--accent-strong); }
+.settings-tabs a.active::after, .settings-tabs a[aria-current="page"]::after { background: var(--accent); }
 .save-bar { position: sticky; top: var(--topbar-h); z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; background: rgb(246 248 247 / 92%); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: var(--space-3) 0; }
 .page-template-setup { max-width: 1060px; }
 .template-picker-fieldset { display: grid; gap: var(--space-3); border: 0; margin: 0; padding: 0; min-width: 0; }

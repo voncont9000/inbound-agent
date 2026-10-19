@@ -17,10 +17,11 @@ Tasks record follow-up work such as callbacks, urgent concerns, complaints or re
 
 ## Adjust urgency handling
 
-1. Open the assistant's settings and select **Rules** to review written urgency guidance.
-2. In **Rules**, review the **Keyword and date urgency rules** section.
-3. Add a **Keyword** rule or a **Date deadline** rule and specify its reason.
-4. Choose **Save changes** and test an example.
+1. Open the assistant's settings and select **Rules**.
+2. In **Urgency**, add a plain-language condition under **Urgent if…**. This is the primary way to mark a conversation urgent.
+3. For structured rules, expand **More rule types: keywords and date deadlines** and choose **Keywords** or **Date deadline**. Specify the phrases or date settings, then enter the reason.
+4. For a date deadline, check the read-only preview to confirm the selected field label, date adjustments and urgency threshold.
+5. Choose **Save changes** and test an example.
 
 ### Good to know
 

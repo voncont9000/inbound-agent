@@ -28,6 +28,17 @@ describe("assistant settings tabs", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
   });
 
+  it("renders the contextual Help link inside the settings tab row", async () => {
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const navigation = screen.getByRole("navigation", { name: "Settings sections" });
+    const helpLink = screen.getByRole("link", { name: "Help: Set the assistant name, language and voice" });
+
+    expect(navigation.parentElement).toContainElement(helpLink);
+    expect(helpLink).toHaveTextContent("? Help");
+    expect(helpLink).toHaveAttribute("title", "Help: Set the assistant name, language and voice");
+  });
+
   it("puts the knowledge page content on Knowledge and the rule editor on Rules", async () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings/knowledge`, { loggedIn: true });

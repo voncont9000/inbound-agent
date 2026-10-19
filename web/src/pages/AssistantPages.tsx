@@ -187,12 +187,14 @@ export function AssistantSettingsPage() {
         <span aria-live="polite" role="status">{saveMessage}</span>
       </div>
     </div>
-    <nav className="settings-tabs" aria-label="Settings sections">
-      {settingsTabs.map(({ id: tabId, label }) => <NavLink key={tabId} to={settingsTabPath(id, tabId)} aria-current={tabId === activeTab ? "page" : undefined}>
-        {label}{errorCount(tabId) > 0 && <Badge tone="warning">{`${errorCount(tabId)} to fix`}</Badge>}
-      </NavLink>)}
-    </nav>
-    <HelpLink to={settingsTabHelp[activeTab]} />
+    <div className="settings-tab-row">
+      <nav className="settings-tabs" aria-label="Settings sections">
+        {settingsTabs.map(({ id: tabId, label }) => <NavLink key={tabId} to={settingsTabPath(id, tabId)} aria-current={tabId === activeTab ? "page" : undefined}>
+          {label}{errorCount(tabId) > 0 && <Badge tone="warning">{`${errorCount(tabId)} to fix`}</Badge>}
+        </NavLink>)}
+      </nav>
+      <HelpLink to={settingsTabHelp[activeTab]} />
+    </div>
     <div className="stack">
       <ErrorSummary errors={tabErrors} />
       {otherTabsWithErrors.length > 0 && <p role="alert">Also fix: {otherTabsWithErrors.map(({ id: tabId, label }, index) => <span key={tabId}>{index > 0 && ", "}<Link to={settingsTabPath(id, tabId)}>{label}</Link></span>)}</p>}
