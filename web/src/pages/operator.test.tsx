@@ -773,6 +773,109 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", queryListener);
   });
 
+  it("bulk deletes selected inbox conversations", async () => {
+    const user = userEvent.setup();
+    const [first, second] = mockDb.tenants[0].conversations;
+    let bulkUrl = "";
+    let requestedIds: string[] = [];
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "POST" && request.url.includes("/conversations/bulk-delete")) {
+        bulkUrl = request.url;
+        void request.clone().json().then((body) => {
+          requestedIds = (body as { ids: string[] }).ids;
+        });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp("/inbox", { loggedIn: true });
+    const firstLink = await screen.findByRole("link", { name: first.summary ?? "No summary" });
+    const secondLink = screen.getByRole("link", { name: second.summary ?? "No summary" });
+    await user.click(within(firstLink.closest("tr") as HTMLElement).getByRole("checkbox"));
+    await user.click(within(secondLink.closest("tr") as HTMLElement).getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Delete selected (2)" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(
+      "Delete 2 conversations? Transcripts and recordings are permanently deleted. Contacts are kept.",
+    )).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(requestedIds).toEqual([first.id, second.id]));
+    expect(new URL(bulkUrl).pathname).toBe("/api/conversations/bulk-delete");
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: first.summary ?? "No summary" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: second.summary ?? "No summary" })).not.toBeInTheDocument();
+    });
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("deletes a conversation from its inbox row", async () => {
+    const user = userEvent.setup();
+    const conversation = mockDb.tenants[0].conversations[0];
+    let deleteUrl = "";
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "DELETE" && request.url.includes("/conversations/")) {
+        deleteUrl = request.url;
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp("/inbox", { loggedIn: true });
+    const link = await screen.findByRole("link", { name: conversation.summary ?? "No summary" });
+    await user.click(within(link.closest("tr") as HTMLElement).getByRole("button", {
+      name: "Delete conversation",
+    }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleteUrl).toContain(`/api/conversations/${conversation.id}`));
+    await waitFor(() => expect(
+      screen.queryByRole("link", { name: conversation.summary ?? "No summary" }),
+    ).not.toBeInTheDocument());
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("shows deletion controls only to owners", async () => {
+    const previousRole = mockDb.memberships[0].role;
+    mockDb.memberships[0].role = "staff";
+    const inbox = renderApp("/inbox", { loggedIn: true });
+    await screen.findByRole("link", { name: /Boiler not firing, no hot water/ });
+    expect(screen.queryByRole("button", { name: /Delete selected/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete conversation" })).not.toBeInTheDocument();
+    inbox.unmount();
+
+    renderApp("/assistants", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    mockDb.memberships[0].role = previousRole;
+  });
+
+  it("shows assistant conversation count and requests conversation deletion", async () => {
+    const user = userEvent.setup();
+    const assistant = mockDb.tenants[0].assistants[0];
+    let deleteUrl = "";
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "DELETE" && request.url.includes(`/assistants/${assistant.id}`)) {
+        deleteUrl = request.url;
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp("/assistants", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(
+      "This also permanently deletes its 7 conversations, including transcripts and recordings. Contacts are kept. This can't be undone.",
+    )).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleteUrl).not.toBe(""));
+    expect(new URL(deleteUrl).searchParams.get("delete_conversations")).toBe("true");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Conversation is still in progress",
+    );
+    server.events.removeListener("request:start", listener);
+  });
+
   it("redirects to login and returns to the inbox filters after sign-in", async () => {
     const user = userEvent.setup();
     renderApp("/inbox?channel=phone");

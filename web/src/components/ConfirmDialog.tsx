@@ -1,11 +1,12 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-export function ConfirmDialog({ title, children, onConfirm, onCancel, confirmLabel = "Confirm" }: {
+export function ConfirmDialog({ title, children, onConfirm, onCancel, confirmLabel = "Confirm", tone }: {
   title: string;
   children: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
   confirmLabel?: string;
+  tone?: "danger";
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -31,6 +32,6 @@ export function ConfirmDialog({ title, children, onConfirm, onCancel, confirmLab
   return <div className="dialog-backdrop"><div className="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" ref={dialogRef}>
     <h2 id="confirm-title">{title}</h2>
     <div>{children}</div>
-    <div className="button-row"><button type="button" ref={cancelRef} onClick={onCancel}>Cancel</button><button type="button" className="button-primary" onClick={onConfirm}>{confirmLabel}</button></div>
+    <div className="button-row"><button type="button" ref={cancelRef} onClick={onCancel}>Cancel</button><button type="button" className={tone === "danger" ? "button-danger" : "button-primary"} onClick={onConfirm}>{confirmLabel}</button></div>
   </div></div>;
 }

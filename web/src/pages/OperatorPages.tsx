@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, unwrap, type Schemas } from "../api/client";
+import { api, unwrap, unwrapNoContent, type Schemas } from "../api/client";
+import { ApiError, errorMessage } from "../api/errors";
+import { useAuth } from "../auth/AuthProvider";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CallRecordingPlayer } from "../components/CallRecordingPlayer";
 import { Badge, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
@@ -49,12 +51,33 @@ function conversationQuery(filters: { channel: string; status: string; reviewOnl
   };
 }
 
+function requestErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) return errorMessage(error.body, error.message);
+  return error instanceof Error ? error.message : fallback;
+}
+
+function conversationDeleteText(count: number) {
+  return `Delete ${count} conversation${count === 1 ? "" : "s"}? Transcripts and recordings are permanently deleted. Contacts are kept.`;
+}
+
 export function InboxPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { tenant, user, memberships, selectedTenant } = useAuth();
+  const role = memberships.find(({ id }) => id === selectedTenant)?.role ?? tenant?.role;
+  const canDelete = Boolean(user) && role === "owner";
+  const queryClient = useQueryClient();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; bulk: boolean } | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState("");
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
   const channel = searchParams.get("channel") ?? "all";
   const status = searchParams.get("status") ?? "all";
   const reviewOnly = searchParams.get("has_review") === "true";
   const filters = { channel, status, reviewOnly };
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [channel, status, reviewOnly]);
   const conversations = useInfiniteQuery({
     queryKey: ["conversations", filters],
     queryFn: ({ pageParam }) => unwrap(api.GET("/conversations", { params: { query: conversationQuery(filters, pageParam) } })),
@@ -62,7 +85,49 @@ export function InboxPage() {
     getNextPageParam: (lastPage) => lastPage.next_cursor,
   });
   const rows = conversations.data?.pages.flatMap(({ items }) => items) ?? [];
+  const selectedVisibleCount = rows.filter(({ id }) => selectedIds.includes(id)).length;
+  const allVisibleSelected = rows.length > 0 && selectedVisibleCount === rows.length;
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        selectedVisibleCount > 0 && selectedVisibleCount < rows.length;
+    }
+  }, [rows.length, selectedVisibleCount]);
+  const deleteConversations = useMutation({
+    mutationFn: async (request: { ids: string[]; bulk: boolean }) => {
+      if (request.bulk) {
+        return unwrap(api.POST("/conversations/bulk-delete", {
+          body: { ids: request.ids },
+        }));
+      }
+      await unwrapNoContent(api.DELETE("/conversations/{conversation_id}", {
+        params: { path: { conversation_id: request.ids[0] } },
+      }));
+      return { deleted: 1, skipped_in_progress: 0 };
+    },
+    onSuccess: async (result) => {
+      setPendingDelete(null);
+      setSelectedIds([]);
+      const skipped = result.skipped_in_progress ?? 0;
+      setDeleteStatus(skipped
+        ? `${skipped} conversation${skipped === 1 ? "" : "s"} skipped because they are still in progress.`
+        : "");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["conversations"] }),
+        queryClient.invalidateQueries({ queryKey: ["conversation"] }),
+        queryClient.invalidateQueries({ queryKey: ["assistants"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+      ]);
+    },
+    onError: (error) => setDeleteError(
+      requestErrorMessage(error, "Unable to delete conversation."),
+    ),
+  });
   function updateParam(key: string, value: string) {
+    setSelectedIds([]);
+    setDeleteStatus("");
     const next = new URLSearchParams(searchParams);
     if (!value || value === "all" || (key === "has_review" && value !== "true")) next.delete(key);
     else next.set(key, value);
@@ -74,21 +139,73 @@ export function InboxPage() {
       <div className="field"><label htmlFor="filter-channel">Channel</label><select id="filter-channel" value={channel} onChange={(event) => updateParam("channel", event.target.value)}><option value="all">All channels</option>{channels.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
       <div className="field"><label htmlFor="filter-status">Status</label><select id="filter-status" value={status} onChange={(event) => updateParam("status", event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
       <label className="check-row"><input type="checkbox" checked={reviewOnly} onChange={(event) => updateParam("has_review", event.target.checked ? "true" : "false")} />Needs review only</label>
+      {canDelete && selectedIds.length > 0 && <button
+        type="button"
+        className="button-danger"
+        onClick={() => {
+          setDeleteError("");
+          setPendingDelete({ ids: selectedIds, bulk: true });
+        }}
+      >Delete selected ({selectedIds.length})</button>}
     </div>
+    {deleteStatus && <p className="muted" role="status">{deleteStatus}</p>}
     {conversations.isLoading && <LoadingState />}
     {conversations.error && <ErrorState message="Conversations could not be loaded." />}
     {!conversations.isLoading && !rows.length && <EmptyState>No conversations match these filters.</EmptyState>}
-    {rows.length > 0 && <div className="table-wrap"><table><thead><tr><th>Channel</th><th>Status</th><th>Contact</th><th>Summary</th><th>Started</th><th>Review</th></tr></thead><tbody>
+    {rows.length > 0 && <div className="table-wrap"><table><thead><tr>
+      {canDelete && <th><input
+        ref={selectAllRef}
+        type="checkbox"
+        aria-label="Select all conversations"
+        checked={allVisibleSelected}
+        onChange={(event) => setSelectedIds((current) => event.target.checked
+          ? [...new Set([...current, ...rows.map(({ id }) => id)])]
+          : current.filter((id) => !rows.some((row) => row.id === id)))}
+      /></th>}
+      <th>Channel</th><th>Status</th><th>Contact</th><th>Summary</th><th>Started</th><th>Review</th>
+      {canDelete && <th>Actions</th>}
+    </tr></thead><tbody>
       {rows.map((conversation) => <tr key={conversation.id}>
+        {canDelete && <td><input
+          type="checkbox"
+          aria-label={`Select conversation ${conversation.summary ?? conversation.external_ref}`}
+          checked={selectedIds.includes(conversation.id)}
+          onChange={(event) => setSelectedIds((current) => event.target.checked
+            ? [...current, conversation.id]
+            : current.filter((id) => id !== conversation.id))}
+        /></td>}
         <td><Badge>{channelIcon[conversation.channel]} {conversation.channel}</Badge></td>
         <td><Badge tone={statusTone(conversation.status)}>{conversation.status}</Badge></td>
         <td>{conversation.person_id ? <Link to={`/contacts/${conversation.person_id}`}>{conversation.contact_name ?? conversation.external_ref}</Link> : conversation.contact_name ?? conversation.external_ref}</td>
         <td><Link to={`/conversations/${conversation.id}`}>{conversation.summary ?? "No summary"}</Link></td>
         <td className="cell-muted">{formatDate(conversation.started_at)}</td>
         <td><div className="button-row">{conversation.test_call && <Badge tone="neutral">Test call</Badge>}{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</div></td>
+        {canDelete && <td><button
+          type="button"
+          className="button-ghost button-sm"
+          aria-label="Delete conversation"
+          title="Delete conversation"
+          onClick={() => {
+            setDeleteError("");
+            setPendingDelete({ ids: [conversation.id], bulk: false });
+          }}
+        ><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2m3 0-.8 14H5.8L5 6m4 4v6m6-6v6" /></svg></button></td>}
       </tr>)}
     </tbody></table></div>}
     {conversations.hasNextPage && <button type="button" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button>}
+    {pendingDelete && <ConfirmDialog
+      title={`Delete ${pendingDelete.ids.length} conversation${pendingDelete.ids.length === 1 ? "" : "s"}?`}
+      confirmLabel="Delete"
+      tone="danger"
+      onCancel={() => {
+        setPendingDelete(null);
+        setDeleteError("");
+      }}
+      onConfirm={() => deleteConversations.mutate(pendingDelete)}
+    >
+      <p>{conversationDeleteText(pendingDelete.ids.length)}</p>
+      {deleteError && <p role="alert">{deleteError}</p>}
+    </ConfirmDialog>}
   </main>;
 }
 
@@ -103,8 +220,14 @@ function statusTone(status: string): "neutral" | "success" | "warning" | "danger
 
 export function ConversationPage() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { tenant, user, memberships, selectedTenant } = useAuth();
+  const role = memberships.find(({ id: tenantId }) => tenantId === selectedTenant)?.role ?? tenant?.role;
+  const canDelete = Boolean(user) && role === "owner";
   const [openReview, setOpenReview] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const detailQuery = useQuery({ queryKey: ["conversation", id], queryFn: () => unwrap(api.GET("/conversations/{conversation_id}", { params: { path: { conversation_id: id } } })) });
   const assistantId = detailQuery.data?.assistant_id ?? "";
   const assistantQuery = useQuery({ queryKey: ["assistant", assistantId], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}", { params: { path: { assistant_id: assistantId } } })), enabled: Boolean(assistantId) });
@@ -142,13 +265,39 @@ export function ConversationPage() {
     mutationFn: (input: { id: string; status: Schemas["TaskUpdate"]["status"] }) => unwrap(api.PATCH("/tasks/{task_id}", { params: { path: { task_id: input.id } }, body: { status: input.status } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["conversation", id] }); void queryClient.invalidateQueries({ queryKey: ["tasks"] }); },
   });
+  const deleteConversation = useMutation({
+    mutationFn: () => unwrapNoContent(api.DELETE("/conversations/{conversation_id}", {
+      params: { path: { conversation_id: id } },
+    })),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["conversations"] }),
+        queryClient.invalidateQueries({ queryKey: ["conversation"] }),
+        queryClient.invalidateQueries({ queryKey: ["assistants"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+      ]);
+      navigate("/inbox");
+    },
+    onError: (error) => setDeleteError(
+      requestErrorMessage(error, "Unable to delete conversation."),
+    ),
+  });
   if (detailQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;
   if (detailQuery.error || !detail) return <main className="page" id="main-content"><ErrorState message="Conversation could not be loaded." /></main>;
   const contact = detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{detail.external_ref}</Link> : detail.external_ref;
   const emailTriage = asRecord(detail.metrics.email_triage);
   const transcript = transcriptRows(detail.messages, detail.channel, detail.started_at);
   return <main className="page" id="main-content">
-    <PageHeader eyebrow={`Conversation · ${detail.channel}`} title={<>{detail.summary ?? "Conversation details"} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<Link className="button" to="/inbox">Back to inbox</Link>} />
+    <PageHeader eyebrow={`Conversation · ${detail.channel}`} title={<>{detail.summary ?? "Conversation details"} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<div className="button-row">
+      {canDelete && <button type="button" className="button-ghost" onClick={() => {
+        setDeleteError("");
+        setDeleteDialogOpen(true);
+      }}>Delete conversation</button>}
+      <Link className="button" to="/inbox">Back to inbox</Link>
+    </div>} />
+    {deleteError && <p role="alert">{deleteError}</p>}
     <div className="panel card-grid"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
     {booking && <section className="panel stack">
       <h2>Appointment booking</h2>
@@ -214,6 +363,18 @@ export function ConversationPage() {
     <section className="panel"><h2>After-conversation actions</h2>{(detail.action_runs ?? []).length ? detail.action_runs?.map((run) => <article className="list-row stack" key={run.id}><strong>{run.action_key} · {run.action_kind}</strong><span>Status: {run.status} · attempts: {run.attempts} · fires: {run.fire_count}</span><span>Events: {run.fired_events.join(", ") || "—"}</span>{run.pending_events.length > 0 && <span>Pending: {run.pending_events.join(", ")}</span>}{run.last_error && <p role="alert">{run.last_error}</p>}<pre>{JSON.stringify(run.output, null, 2)}</pre></article>) : <p className="muted">No after-conversation actions have run.</p>}</section>
     <section className="panel"><h2>Tasks</h2>{detail.tasks.length ? detail.tasks.map((task) => <div className="list-row" key={task.id}><span>{task.kind} · {task.source} · {compactPayload(task.payload)}</span><label className="sr-only" htmlFor={`conversation-task-${task.id}`}>Status for {task.kind}</label><select id={`conversation-task-${task.id}`} value={task.status} onChange={(event) => patchTask.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></div>) : <p className="muted">No tasks.</p>}</section>
     <MetricsCard metrics={detail.metrics} estimatedCost={detail.estimated_cost} />
+    {deleteDialogOpen && <ConfirmDialog
+      title="Delete 1 conversation?"
+      confirmLabel="Delete"
+      tone="danger"
+      onCancel={() => {
+        setDeleteDialogOpen(false);
+        setDeleteError("");
+      }}
+      onConfirm={() => deleteConversation.mutate()}
+    >
+      <p>{conversationDeleteText(1).replace(/^Delete 1 conversation\? /, "")}</p>
+    </ConfirmDialog>}
   </main>;
 }
 

@@ -97,10 +97,20 @@ class AssistantResponse(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    conversation_count: int = 0
 
 
 class AssistantListResponse(BaseModel):
     items: list[AssistantResponse]
+
+
+class ConversationBulkDeleteRequest(BaseModel):
+    ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class ConversationBulkDeleteResponse(BaseModel):
+    deleted: int
+    skipped_in_progress: int
 
 
 class TestCallResponse(BaseModel):

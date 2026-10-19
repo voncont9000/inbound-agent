@@ -15,6 +15,7 @@ Calls show one row per turn, with a clear speaker label and the time elapsed sin
 1. Open [Inbox](/inbox).
 2. Use the available filters to narrow the list, including **Needs review** where applicable.
 3. Select a conversation to open its details.
+4. Owners can select loaded conversations or use the row action to delete conversations. Active conversations are skipped in bulk deletion.
 
 ## Review conversation details
 
@@ -25,4 +26,4 @@ Calls show one row per turn, with a clear speaker label and the time elapsed sin
 
 ### Good to know
 
-Test calls are marked **Test call** and do not count towards Home dashboard conversation totals. Gmail replies appear as drafts for human review.
+Deleting a conversation permanently removes its transcript and recording, but keeps its contact. Only owners can delete conversations. Test calls are marked **Test call** and do not count towards Home dashboard conversation totals. Gmail replies appear as drafts for human review.

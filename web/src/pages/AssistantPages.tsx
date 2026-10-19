@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, useNavigate, useParams } from "react-router-dom";
-import { api, unwrap, type Schemas } from "../api/client";
-import { ApiError, fieldErrorsFrom422 } from "../api/errors";
+import { api, unwrap, unwrapNoContent, type Schemas } from "../api/client";
+import { ApiError, errorMessage, fieldErrorsFrom422 } from "../api/errors";
+import { useAuth } from "../auth/AuthProvider";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsTabContent } from "../components/settings/SettingsTabContent";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
@@ -29,10 +31,16 @@ function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
 
 export function AssistantsPage() {
   const navigate = useNavigate();
+  const { tenant, user, memberships, selectedTenant } = useAuth();
+  const role = memberships.find(({ id }) => id === selectedTenant)?.role ?? tenant?.role;
+  const canDelete = Boolean(user) && role === "owner";
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [assistantName, setAssistantName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Schemas["AssistantResponse"] | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const queryClient = useQueryClient();
   const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
   const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => unwrap(api.GET("/templates")), enabled: showCreate });
   useEffect(() => {
@@ -47,6 +55,37 @@ export function AssistantsPage() {
     mutationFn: (input: Schemas["AssistantCreate"]) => unwrap(api.POST("/assistants", { body: input })),
     onSuccess: (assistant) => navigate(settingsTabPath(assistant.id)),
     onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to create assistant."),
+  });
+  const remove = useMutation({
+    mutationFn: (assistant: Schemas["AssistantResponse"]) => unwrapNoContent(api.DELETE(
+      "/assistants/{assistant_id}",
+      {
+        params: {
+          path: { assistant_id: assistant.id },
+          ...(assistant.conversation_count > 0
+            ? { query: { delete_conversations: true } }
+            : {}),
+        },
+      },
+    )),
+    onSuccess: async () => {
+      setDeleteTarget(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["assistants"] }),
+        queryClient.invalidateQueries({ queryKey: ["conversations"] }),
+        queryClient.invalidateQueries({ queryKey: ["conversation"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+      ]);
+    },
+    onError: (caught) => setDeleteError(
+      caught instanceof ApiError
+        ? errorMessage(caught.body, caught.message)
+        : caught instanceof Error
+          ? caught.message
+          : "Unable to delete assistant.",
+    ),
   });
   const selected = templatesQuery.data?.find(({ name }) => name === selectedTemplate);
   return <main className="page" id="main-content">
@@ -85,8 +124,27 @@ export function AssistantsPage() {
       <p className="muted">{Object.values(assistant.config.services).map((service) => service.label).join(" · ")}</p>
       <div className="button-row">
         <Link to={settingsTabPath(assistant.id)}>Manage assistant</Link>
+        {canDelete && <button type="button" className="button-ghost" onClick={() => {
+          setDeleteError("");
+          setDeleteTarget(assistant);
+        }}>Delete</button>}
       </div>
     </article>)}</div>
+    {deleteTarget && <ConfirmDialog
+      title={`Delete ${deleteTarget.name}?`}
+      confirmLabel="Delete"
+      tone="danger"
+      onCancel={() => {
+        setDeleteTarget(null);
+        setDeleteError("");
+      }}
+      onConfirm={() => remove.mutate(deleteTarget)}
+    >
+      <p>{deleteTarget.conversation_count > 0
+        ? `This also permanently deletes its ${deleteTarget.conversation_count} conversation${deleteTarget.conversation_count === 1 ? "" : "s"}, including transcripts and recordings. Contacts are kept. This can't be undone.`
+        : "This can't be undone."}</p>
+      {deleteError && <p role="alert">{deleteError}</p>}
+    </ConfirmDialog>}
   </main>;
 }
 

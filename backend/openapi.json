@@ -616,6 +616,11 @@
           "config": {
             "$ref": "#/components/schemas/AssistantConfig-Output"
           },
+          "conversation_count": {
+            "default": 0,
+            "title": "Conversation Count",
+            "type": "integer"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -2006,6 +2011,43 @@
           "next_cursor"
         ],
         "title": "ContactsResponse",
+        "type": "object"
+      },
+      "ConversationBulkDeleteRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "ConversationBulkDeleteRequest",
+        "type": "object"
+      },
+      "ConversationBulkDeleteResponse": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "skipped_in_progress": {
+            "title": "Skipped In Progress",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted",
+          "skipped_in_progress"
+        ],
+        "title": "ConversationBulkDeleteResponse",
         "type": "object"
       },
       "ConversationCreatedResponse": {
@@ -5194,6 +5236,16 @@
             }
           },
           {
+            "in": "query",
+            "name": "delete_conversations",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete Conversations",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "header",
             "name": "X-Tenant-Id",
             "required": false,
@@ -6972,7 +7024,116 @@
         ]
       }
     },
+    "/conversations/bulk-delete": {
+      "post": {
+        "operationId": "bulk_delete_conversations_conversations_bulk_delete_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationBulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationBulkDeleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Delete Conversations",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
     "/conversations/{conversation_id}": {
+      "delete": {
+        "operationId": "delete_conversation_conversations__conversation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Conversation",
+        "tags": [
+          "conversations"
+        ]
+      },
       "get": {
         "operationId": "get_conversation_conversations__conversation_id__get",
         "parameters": [
