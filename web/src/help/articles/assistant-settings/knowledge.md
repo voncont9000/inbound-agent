@@ -2,7 +2,7 @@
 title: Add business knowledge
 category: assistant-settings
 order: 4
-summary: Keep the assistant's FAQs, business details and knowledge sources up to date.
+summary: Keep the assistant's FAQs, office hours and knowledge sources up to date.
 related: [conversations/knowledge-gaps, getting-started/create-from-website, assistant-settings/settings-overview]
 ---
 
@@ -11,8 +11,10 @@ Knowledge helps the assistant answer questions using information supplied by you
 ## Add business information
 
 1. Open the assistant's settings and select **Knowledge**.
-2. Review the frequently asked questions, office hours, price list and contact details.
+2. Review the frequently asked questions and office hours.
 3. Add or edit the information the assistant may share, then choose **Save changes**.
+
+Published prices and contact details are under **General** › **Instructions** (**Custom prompt**), not Knowledge.
 
 ## Add and import a knowledge source
 

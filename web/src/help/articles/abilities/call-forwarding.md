@@ -11,16 +11,14 @@ Call forwarding transfers a live call to a configured person or destination. Con
 ## Add a transfer target
 
 1. Open the assistant's settings and select **Abilities**.
-2. Enable call transfer and add a transfer target with the details your team uses.
+2. In the **Call forwarding** card, enable the ability and add a transfer target with the details your team uses.
 3. Choose whether the target is available **Only during office hours**.
 4. Set the messages used when the assistant hands off a call or cannot complete the transfer.
 5. Choose **Save changes**.
 
-## Enable the live transfer action
+## Test call forwarding
 
-1. Open **Advanced** and select **transfer call** under **Live actions**.
-2. Check that at least one transfer target is configured.
-3. Make a **Test call** using a scenario that should be transferred.
+The switch on the **Call forwarding** card also enables the transfer action. Check that at least one transfer target is configured, then make a **Test call** using a scenario that should be transferred.
 
 ### Good to know
 

@@ -19,7 +19,7 @@ Rules tell the assistant how to handle conversations. Use clear, specific direct
 
 1. Add pronunciation guidance for names or terms the assistant may say aloud.
 2. Review the urgency guidance and specify what the team should treat as urgent.
-3. For structured urgency conditions, open **Advanced** and review **Urgency rules**.
+3. Review **Keyword and date urgency rules** in the Rules tab alongside the written urgency guidance.
 4. Save your changes and make a **Test call** using an example scenario.
 
 ### Good to know

@@ -18,7 +18,7 @@ Tasks record follow-up work such as callbacks, urgent concerns, complaints or re
 ## Adjust urgency handling
 
 1. Open the assistant's settings and select **Rules** to review written urgency guidance.
-2. Select **Advanced** to review **Urgency rules**.
+2. In **Rules**, review the **Keyword and date urgency rules** section.
 3. Add a **Keyword** rule or a **Date deadline** rule and specify its reason.
 4. Choose **Save changes** and test an example.
 

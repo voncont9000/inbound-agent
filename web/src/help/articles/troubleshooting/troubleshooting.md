@@ -13,10 +13,10 @@ Start with the relevant check below. If the issue remains, collect the conversat
 | The assistant gives an incorrect answer | Check the relevant Knowledge entry and rules, then test the updated answer. |
 | A website import says it returned no readable text | Check the website address and try adding a document or entering the information directly. |
 | Gmail says it is not enabled for this deployment | Ask your administrator whether Gmail is available for your workspace. |
-| Calendar is not enabled or booking cannot connect | Ask your administrator whether Google Calendar is available, then check the connection in Channels. |
-| The booking card says live actions are missing | Enable the availability and booking options under Advanced → Live actions. |
+| Calendar is not enabled or booking cannot connect | Ask your administrator whether Google Calendar is available, then check the connection in the Calendar booking card under Abilities. |
+| The booking card says live actions are missing | Choose **Turn them on** in the Calendar booking card under Abilities. |
 | A WhatsApp reply did not send after 24 hours | A template is required outside the customer service window; review the template-needed task. |
-| Call forwarding has no targets | Add at least one transfer target under Abilities and check that transfer is enabled under Advanced. |
+| Call forwarding has no targets | Add at least one transfer target and enable Call forwarding in its card under Abilities. |
 
 ## The assistant gives the wrong information
 
