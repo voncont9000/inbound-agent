@@ -119,6 +119,33 @@ async def test_private_url_source_is_rejected_by_default(tenant_pair) -> None:
     assert response.status_code == 422
 
 
+async def test_bare_domain_url_source_is_normalized_before_storage(
+    tenant_pair, monkeypatch
+) -> None:
+    account = tenant_pair["first"]
+    client = account["client"]
+    monkeypatch.setattr(get_settings(), "knowledge_allow_private_urls", True)
+    templates = (await client.get("/templates")).json()
+    config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    assistant = await client.post(
+        "/assistants",
+        json={"name": "Website assistant", "template": "uk_law_firm", "config": config},
+    )
+    assistant_id = assistant.json()["id"]
+
+    response = await client.post(
+        f"/assistants/{assistant_id}/knowledge/sources",
+        json={"kind": "url", "uri": "  example.com/about  "},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["uri"] == "https://example.com/about"
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        source = await session.get(KnowledgeSource, UUID(response.json()["id"]))
+    assert source is not None
+    assert source.uri == "https://example.com/about"
+
+
 async def test_failed_refresh_retains_chunks_and_does_not_replace_digest(
     tenant_pair, monkeypatch
 ) -> None:

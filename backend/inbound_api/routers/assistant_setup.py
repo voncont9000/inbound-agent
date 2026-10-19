@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, HTTPException
 from inbound_core.config import load_assistant_config
 from inbound_core.setup_draft import SetupDraft, apply_setup_draft
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
@@ -13,7 +13,7 @@ from inbound_api.models import Job, KnowledgeDigest, KnowledgeSource, Membership
 from inbound_api.routers.assistants import create_assistant
 from inbound_api.schemas import AssistantCreate, AssistantResponse, JobResponse
 from inbound_api.services.audit import write_audit
-from inbound_api.services.url_safety import is_public_http_url
+from inbound_api.services.url_safety import is_public_http_url, normalize_website_url
 from inbound_api.settings import get_settings
 
 router = APIRouter(tags=["assistants"])
@@ -28,6 +28,11 @@ class AssistantSetupDraftCreate(BaseModel):
     website_url: str
     template: str
 
+    @field_validator("website_url", mode="before")
+    @classmethod
+    def normalize_website_url_before_validation(cls, value: object) -> object:
+        return normalize_website_url(value) if isinstance(value, str) else value
+
 
 class AssistantSetupComplete(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -37,6 +42,13 @@ class AssistantSetupComplete(BaseModel):
     template: str
     website_url: str | None = None
     accepted: SetupDraft = Field(default_factory=SetupDraft)
+
+    @field_validator("website_url", mode="before")
+    @classmethod
+    def normalize_optional_website_url_before_validation(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return normalize_website_url(value) or None
 
 
 def _template_config(template_name: str):

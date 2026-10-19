@@ -6,6 +6,7 @@ import { ErrorState, LoadingState } from "../components/States";
 import { DraftSectionCard, type DraftSectionStatus } from "../components/setup/DraftSectionCard";
 import { DraftSectionEditor, DraftSectionPreview, type DraftSectionName } from "../components/setup/DraftSectionEditor";
 import { settingsTabPath } from "../lib/settingsTabs";
+import { normalizeWebsiteUrl } from "../lib/url";
 
 type SetupStep = "form" | "waiting" | "review";
 type DraftJobResult = { draft: Schemas["SetupDraft"]; warnings?: string[] };
@@ -80,11 +81,12 @@ export function AssistantSetupPage() {
 
   function makeCompletion(accepted: Schemas["SetupDraft"]) {
     const name = assistantName.trim() || businessName.trim();
+    const normalizedWebsiteUrl = normalizeWebsiteUrl(websiteUrl);
     complete.mutate({
       name,
       business_name: businessName.trim(),
       template: selectedTemplate,
-      ...(websiteUrl.trim() ? { website_url: websiteUrl.trim() } : {}),
+      ...(normalizedWebsiteUrl ? { website_url: normalizedWebsiteUrl } : {}),
       accepted,
     });
   }
@@ -92,10 +94,11 @@ export function AssistantSetupPage() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedTemplate) return;
-    if (websiteUrl.trim()) {
+    const normalizedWebsiteUrl = normalizeWebsiteUrl(websiteUrl);
+    if (normalizedWebsiteUrl) {
       startDraft.mutate({
         business_name: businessName.trim(),
-        website_url: websiteUrl.trim(),
+        website_url: normalizedWebsiteUrl,
         template: selectedTemplate,
       });
     } else {
@@ -158,7 +161,7 @@ export function AssistantSetupPage() {
         </div>
         <div className="field">
           <label htmlFor="setup-website-url">Website URL (optional)</label>
-          <input id="setup-website-url" type="url" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} />
+          <input id="setup-website-url" type="text" inputMode="url" autoComplete="url" placeholder="example.co.uk" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} />
         </div>
         <fieldset className="stack">
           <legend>Start from template</legend>

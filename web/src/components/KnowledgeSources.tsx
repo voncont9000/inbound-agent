@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, uploadKnowledgeFile } from "../api/client";
+import { normalizeWebsiteUrl } from "../lib/url";
 import { Badge, EmptyState, FieldError, LoadingState } from "./States";
 
 function isHttpUrl(value: string) {
@@ -64,8 +65,8 @@ export function KnowledgeSources({ assistantId, maxChars }: { assistantId: strin
       {sourcesQuery.isLoading && <LoadingState />}
       {sourcesQuery.data?.items.map((source) => <div className="list-row" key={source.id}><div><strong>{source.kind}</strong> · {source.uri}<br /><span className="muted">{source.fetched_at ? `Fetched ${formatDate(source.fetched_at)}` : "Not imported yet"}</span></div><Badge tone={source.status === "succeeded" ? "success" : "warning"}>{source.status}</Badge></div>)}
       {!sourcesQuery.isLoading && !sourcesQuery.data?.items.length && <EmptyState>No knowledge sources yet.</EmptyState>}
-      <form className="toolbar" onSubmit={(event) => { event.preventDefault(); if (!isHttpUrl(url)) { setUrlError("Enter a valid http or https URL."); return; } sourceAdd.mutate({ uri: url }); }}>
-        <div className="field"><label htmlFor="website-url">Website URL</label><input id="website-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} aria-invalid={Boolean(urlError)} aria-describedby={urlError ? "website-url-error" : undefined} /></div>
+      <form className="toolbar" onSubmit={(event) => { event.preventDefault(); const normalizedUrl = normalizeWebsiteUrl(url); if (!isHttpUrl(normalizedUrl)) { setUrlError("Enter a valid http or https URL."); return; } sourceAdd.mutate({ uri: normalizedUrl }); }}>
+        <div className="field"><label htmlFor="website-url">Website URL</label><input id="website-url" type="text" inputMode="url" autoComplete="url" placeholder="example.co.uk" value={url} onChange={(event) => setUrl(event.target.value)} aria-invalid={Boolean(urlError)} aria-describedby={urlError ? "website-url-error" : undefined} /></div>
         <button type="submit">Add website</button>
         <FieldError id="website-url-error">{urlError}</FieldError>
       </form>

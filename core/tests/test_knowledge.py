@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import URLError
 from urllib.parse import urlsplit
+from urllib.request import HTTPSHandler, Request
 
 import pytest
 
@@ -14,6 +15,7 @@ from inbound_core.knowledge import (
     _fetch_checked,
     _PinnedHTTPConnection,
     _PinnedHTTPSConnection,
+    _PinnedHTTPSHandler,
     _RequestPacer,
     build_chunks,
     build_manifest,
@@ -246,3 +248,25 @@ def test_pinned_https_connection_preserves_hostname_for_sni(
 
     assert context.hostname == "crawler.example"
     assert connection.sock == "wrapped-socket"
+
+
+def test_pinned_https_handler_uses_context_without_check_hostname(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(HTTPSHandler, "_check_hostname", raising=False)
+    handler = _PinnedHTTPSHandler(lambda address: address.is_global)
+    handler.__dict__.pop("_check_hostname", None)
+    sentinel = object()
+    calls: list[tuple[tuple, dict]] = []
+
+    def do_open(*args, **kwargs):
+        calls.append((args, kwargs))
+        return sentinel
+
+    monkeypatch.setattr(handler, "do_open", do_open)
+
+    result = handler.https_open(Request("https://example.com/"))
+
+    assert result is sentinel
+    assert len(calls) == 1
+    assert calls[0][1] == {"context": handler._context}
