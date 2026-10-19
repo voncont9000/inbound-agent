@@ -7,7 +7,7 @@ import { tenantFixtures } from "../mocks/fixtures";
 import type { AssistantConfig } from "../lib/config";
 
 describe("CallSettingsSection", () => {
-  it("explains Speechify speed support", () => {
+  it("explains speech speed in plain language", () => {
     render(
       <CallSettingsSection
         config={tenantFixtures[0].assistants[0].config as AssistantConfig}
@@ -17,7 +17,7 @@ describe("CallSettingsSection", () => {
     );
 
     expect(
-      screen.getByText("Speechify uses relative prosody rates to adjust speed."),
+      screen.getByText("1.00× is the voice's natural pace. Lower is slower, higher is faster."),
     ).toBeTruthy();
   });
 
