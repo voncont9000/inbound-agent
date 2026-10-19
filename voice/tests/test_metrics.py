@@ -1,11 +1,30 @@
+import asyncio
+from datetime import datetime
+from types import SimpleNamespace
+
 import pytest
+from pipecat.frames.frames import (
+    BotStoppedSpeakingFrame,
+    InterruptionFrame,
+    TranscriptionFrame,
+    TTSTextFrame,
+)
 
 from inbound_voice.metrics import (
+    CallMetricsObserver,
     TurnLatencyTracker,
     calculate_cost,
     summarize_turn_end_latencies,
     summarize_turn_latencies,
 )
+
+
+class RecordingTranscriptSink:
+    def __init__(self) -> None:
+        self.transcripts: list[tuple[str, str, str | None]] = []
+
+    def append_transcript(self, role: str, text: str, timestamp: str | None = None) -> None:
+        self.transcripts.append((role, text, timestamp))
 
 
 def test_turn_latency_tracks_only_latest_pending_turn() -> None:
@@ -252,3 +271,109 @@ def test_unknown_llm_model_has_unknown_llm_components() -> None:
     assert cost["components"]["llm_input"] is None
     assert cost["components"]["llm_output"] is None
     assert cost["unknown_components"] == ["llm_input", "llm_output"]
+
+
+def test_assistant_transcript_flushes_on_bot_stopped_speaking() -> None:
+    sink = RecordingTranscriptSink()
+    observer = CallMetricsObserver(sink)
+
+    async def run() -> None:
+        for frame in (
+            TTSTextFrame(text="Hello,", aggregated_by="test"),
+            TTSTextFrame(text="you", aggregated_by="test"),
+            TTSTextFrame(text="are", aggregated_by="test"),
+            BotStoppedSpeakingFrame(),
+        ):
+            await observer.on_push_frame(SimpleNamespace(frame=frame))
+
+    asyncio.run(run())
+
+    assert [(role, text) for role, text, _ in sink.transcripts] == [("assistant", "Hello, you are")]
+    assert datetime.fromisoformat(sink.transcripts[0][2])
+
+
+def test_interruption_splits_assistant_transcript_rows() -> None:
+    sink = RecordingTranscriptSink()
+    observer = CallMetricsObserver(sink)
+
+    async def run() -> None:
+        for frame in (
+            TTSTextFrame(text="Hello,", aggregated_by="test"),
+            TTSTextFrame(text="you", aggregated_by="test"),
+            InterruptionFrame(),
+            TTSTextFrame(text="are", aggregated_by="test"),
+            BotStoppedSpeakingFrame(),
+        ):
+            await observer.on_push_frame(SimpleNamespace(frame=frame))
+
+    asyncio.run(run())
+
+    assert [(role, text) for role, text, _ in sink.transcripts] == [
+        ("assistant", "Hello, you"),
+        ("assistant", "are"),
+    ]
+
+
+def test_final_caller_transcription_flushes_assistant_text_first() -> None:
+    sink = RecordingTranscriptSink()
+    observer = CallMetricsObserver(sink)
+
+    async def run() -> None:
+        for frame in (
+            TTSTextFrame(text="Hello,", aggregated_by="test"),
+            TranscriptionFrame(
+                text="Are you there?",
+                user_id="caller",
+                timestamp="2026-10-19T12:00:00Z",
+                finalized=True,
+            ),
+            TTSTextFrame(text="Yes.", aggregated_by="test"),
+            BotStoppedSpeakingFrame(),
+        ):
+            await observer.on_push_frame(SimpleNamespace(frame=frame))
+
+    asyncio.run(run())
+
+    assert [(role, text) for role, text, _ in sink.transcripts] == [
+        ("assistant", "Hello,"),
+        ("caller", "Are you there?"),
+        ("assistant", "Yes."),
+    ]
+
+
+def test_assistant_text_with_inter_frame_spaces_is_concatenated() -> None:
+    sink = RecordingTranscriptSink()
+    observer = CallMetricsObserver(sink)
+    first = TTSTextFrame(text=" Hello", aggregated_by="test")
+    second = TTSTextFrame(text=" there", aggregated_by="test")
+    first.includes_inter_frame_spaces = True
+    second.includes_inter_frame_spaces = True
+
+    async def run() -> None:
+        await observer.on_push_frame(SimpleNamespace(frame=first))
+        await observer.on_push_frame(SimpleNamespace(frame=second))
+        await observer.on_push_frame(SimpleNamespace(frame=BotStoppedSpeakingFrame()))
+
+    asyncio.run(run())
+
+    assert [(role, text) for role, text, _ in sink.transcripts] == [("assistant", "Hello there")]
+
+
+def test_explicit_assistant_flush_writes_remaining_text_and_skips_empty() -> None:
+    sink = RecordingTranscriptSink()
+    observer = CallMetricsObserver(sink)
+
+    async def run() -> None:
+        await observer.on_push_frame(
+            SimpleNamespace(frame=TTSTextFrame(text="One more word", aggregated_by="test"))
+        )
+        observer.flush_assistant_transcript()
+        observer.flush_assistant_transcript()
+        await observer.on_push_frame(
+            SimpleNamespace(frame=TTSTextFrame(text="   ", aggregated_by="test"))
+        )
+        observer.flush_assistant_transcript()
+
+    asyncio.run(run())
+
+    assert [(role, text) for role, text, _ in sink.transcripts] == [("assistant", "One more word")]

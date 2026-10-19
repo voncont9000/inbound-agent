@@ -82,6 +82,21 @@ def test_skip_rules(headers, labels, settings, reason):
     )
 
 
+@pytest.mark.parametrize(
+    ("mailbox", "sender", "settings", "expected"),
+    [
+        ("a@gmail.com", "b@gmail.com", {}, None),
+        ("a@gmail.com", "a@gmail.com", {}, "self_sender"),
+        ("a@firm.co.uk", "b@firm.co.uk", {}, "internal_sender"),
+        ("a@firm.co.uk", "b@firm.co.uk", {"include_internal": True}, None),
+    ],
+)
+def test_public_mailbox_domains_are_not_treated_as_internal(mailbox, sender, settings, expected):
+    message = make_message([("From", sender)])
+
+    assert gmail_messages.skip_reason(message, mailbox, settings) == expected
+
+
 def test_include_internal_and_quote_stripping():
     message = make_message([("From", "user@example.com")])
     assert (
