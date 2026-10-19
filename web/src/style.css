@@ -293,6 +293,17 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .settings-tabs a:hover { color: var(--ink); }
 .settings-tabs a.active, .settings-tabs a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--accent-strong); }
 .save-bar { position: sticky; top: var(--topbar-h); z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; background: rgb(246 248 247 / 92%); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: var(--space-3) 0; }
+.voice-picker-filters { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.65rem; }
+.voice-picker-filters input { flex: 1 1 14rem; }
+.voice-picker-filters select { flex: 0 1 11rem; width: auto; }
+.readback-modes { border: 0; margin: 0; padding: 0; }
+.readback-modes legend { font-weight: 700; margin-bottom: 0.4rem; }
+.prompt-details { border-top: 1px solid var(--line); padding-top: 0.85rem; }
+.prompt-detail { display: grid; gap: 0.25rem; }
+.prompt-detail h3 { margin: 0; font-size: 0.95rem; }
+.prompt-detail .muted { margin: 0; }
+.intake-field-chip { border: 1px solid var(--line); border-radius: 999px; padding: 0.55rem 1rem; }
+.voice-picker-count { align-items: baseline; display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0; }
 .save-bar .button-row { align-items: flex-start; }
 .save-bar .stack { gap: 0.3rem; }
 .dirty-indicator { font-weight: 700; color: var(--warning-ink); }

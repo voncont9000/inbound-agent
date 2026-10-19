@@ -148,7 +148,7 @@ describe("global test-call bar", () => {
 
   it("connects a WhatsApp channel using its phone number ID", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderApp(`/assistants/${assistantId}/settings/advanced`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.selectOptions(screen.getByLabelText("Channel"), "whatsapp");
     await user.type(screen.getByLabelText("WhatsApp phone_number_id"), "123456789");

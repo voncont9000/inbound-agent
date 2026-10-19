@@ -163,32 +163,38 @@ can go live by reviewing generated settings instead of filling in technical fiel
 template- and prompt-driven and vertical-neutral.
 
 **Settings structure**
-- FR-S1: Assistant settings are split into tabs: **General** (name, language, voice, greeting),
-  **Rules**, **Knowledge**, **Abilities**, **Channels**, **Advanced**. The current single form is retired.
-- FR-S2: Progressive disclosure. Each tab shows only essential fields; low-level values (booking
-  notice, horizon, buffer, slot step, max slots, holding lines, transfer messages, review threshold,
-  readback mode) live under **Advanced** with template defaults.
+- FR-S1: Assistant settings are split into tabs: **General** (name, language, voice, greeting,
+  instructions), **Rules**, **Knowledge**, **Abilities**, **Channels**, **Advanced**. The current single
+  form is retired. Each setting appears exactly once; see [settings.md](./settings.md) for the tab
+  ownership and the consolidation audit.
+- FR-S2: Progressive disclosure. Each tab shows only essential fields; low-level values default from
+  the template. Booking timing and holding lines sit collapsed inside the booking card, transfer
+  messages inside the forwarding card, and the review threshold and call settings under **Advanced**.
 - FR-S3: **Abilities as cards** (calendar booking, call forwarding, after-conversation actions,
   callbacks/tasks, readback). Every card is off until switched on and shows at most 2-3 required
-  fields; the rest are defaulted.
+  fields; the rest are defaulted. The readback card owns the readback mode (email or critical) and the
+  `confirm_critical_fields` live action.
 - FR-S4: **No technical keys in the UI.** Service keys, field names, appointment-type keys and contact
   keys are generated from the human label (slugified, unique per assistant) and stay stable when the
   label is later edited.
 - FR-S5: Intake fields and urgency rules come from the chosen template. Urgency rules can be written
-  as plain sentences ("Urgent if a tribunal deadline is within 4 weeks"); keyword rules remain
-  available under Advanced.
+  as plain sentences ("Urgent if a tribunal deadline is within 4 weeks"); keyword and date rules
+  remain available on the same **Rules** tab.
 - FR-S6: A persistent **Test call** control on every authenticated page: a slim bar at the bottom of the app that starts a browser call with the selected assistant (picker when there is more than one, remembers the last one), shows connecting / in-call (timer, mute, hang up) / ended (link to the conversation) states, is collapsible and keyboard accessible, and is hidden for roles that cannot run test calls (staff).
 
 *Status (FR-S1–S4, FR-S6):* built in the web app. Settings live at `/assistants/:id/settings/:tab`
 (`general`, `rules`, `knowledge`, `abilities`, `channels`, `advanced`); `/assistants/:id/settings`
 and the old `/assistants/:id/knowledge` page redirect to these tabs. One **Save changes** button saves the whole config
-from any tab, and tabs that have validation errors show a count. Knowledge sources and the digest still save on their own.
+from any tab, and tabs that have validation errors show a count. Config versions are still stored and
+served by the API, but the settings page no longer shows version history. Knowledge sources and the digest still save on their own.
 Ability cards switch the matching live actions on or off (booking: `check_availability` and
-`book_appointment`; forwarding: `transfer_call`). Keys are generated in the browser
+`book_appointment`; forwarding: `transfer_call`; readback: `confirm_critical_fields`), and Advanced
+lists only the live actions no card owns. Services and intake fields, prices and contact details are
+edited under General › Instructions, next to the custom prompt they are rendered into; they stay
+structured because extraction, readback and urgency rules use their keys. Keys are generated in the browser
 (`web/src/lib/keys.ts`) and match the backend key patterns. Saved keys never change. Post-action
 keys are generated the same way. Turning off booking confirms before removing configured
-appointment types. Voice selection on General (FR-S8) is not built here. Rule presets (FR-S13) go
-into the slot marked in `web/src/components/settings/RulesTab.tsx`.
+appointment types.
 
 **Website-based setup**
 - FR-S7: Creating an assistant asks for business name, website URL and template. The website is crawled
@@ -204,7 +210,9 @@ into the slot marked in `web/src/components/settings/RulesTab.tsx`.
   values default to `en-GB`. Speech prompts, STT settings, and TTS settings derive from this
   configuration; text channels use the corresponding written-language instruction.
 - FR-S9 **implemented for Speechify**: the authenticated picker filters the shared voice
-  catalogue by locale and shows name, accent, gender, and preview. The backend caches results
+  catalogue by locale and shows name, accent, gender, and preview. It lists up to six recommended
+  voices (current voice and default first), with search, gender and accent filters, and a
+  **Show all voices** expander. The backend caches results
   for 24 hours and returns static Beatrice if no key is configured or Speechify is unavailable.
   Voice precedence is assistant `voice_id`, `TTS_VOICE`, then `beatrice_32`. Simba 3.2 remains
   the English model; non-English and `multi` use Simba 3.0.

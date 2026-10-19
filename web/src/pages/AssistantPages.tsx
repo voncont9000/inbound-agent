@@ -7,7 +7,6 @@ import { TestCallButton } from "../components/TestCallButton";
 import { SettingsTabContent } from "../components/settings/SettingsTabContent";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
-import { diffConfigs } from "../lib/diff";
 import { isSettingsTab, settingsTabPath, settingsTabs, tabForPath, type SettingsTabId } from "../lib/settingsTabs";
 import { Badge, EmptyState, ErrorState, ErrorSummary, LoadingState, PageHeader } from "../components/States";
 
@@ -94,12 +93,10 @@ export function AssistantSettingsPage() {
   const queryClient = useQueryClient();
   const assistantQuery = useQuery({ queryKey: ["assistant", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}", { params: { path: { assistant_id: id } } })) });
   const schemaQuery = useQuery({ queryKey: ["assistant-config-schema"], queryFn: () => unwrap(api.GET("/assistant-config/schema")) });
-  const versionsQuery = useQuery({ queryKey: ["assistant-versions", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/versions", { params: { path: { assistant_id: id } } })) });
   const [config, setConfig] = useState<AssistantConfig | null>(null);
   const [assistantName, setAssistantName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState("");
-  const [selectedVersion, setSelectedVersion] = useState("");
   const activeTab: SettingsTabId = isSettingsTab(tab) ? tab : "general";
   useEffect(() => {
     if (!assistantQuery.data) return;
@@ -117,8 +114,8 @@ export function AssistantSettingsPage() {
       setConfig(structuredClone(assistant.config));
       setAssistantName(assistant.name);
       setErrors({});
-      setSaveMessage(`Saved version ${assistant.version}`);
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["assistant", id] }), queryClient.invalidateQueries({ queryKey: ["assistant-versions", id] })]);
+      setSaveMessage("Changes saved");
+      await queryClient.invalidateQueries({ queryKey: ["assistant", id] });
     },
     onError: (caught) => {
       if (caught instanceof ApiError && caught.status === 422) {
@@ -166,7 +163,6 @@ export function AssistantSettingsPage() {
     save.mutate({ name: assistantName, template: baseline.template, config: payloadConfig });
   }
 
-  const chosen = versionsQuery.data?.items.find(({ id: versionId }) => versionId === selectedVersion);
   const fieldErrors = Object.entries(allErrors).filter(([path]) => path !== "_form");
   const errorCount = (tabId: SettingsTabId) => fieldErrors.filter(([path]) => tabForPath(path) === tabId).length;
   const tabErrors = Object.fromEntries(fieldErrors.filter(([path]) => tabForPath(path) === activeTab));
@@ -177,7 +173,7 @@ export function AssistantSettingsPage() {
       <TestCallButton assistantId={baseline.id} />
     </div>
     <div className="save-bar" role="region" aria-label="Save changes">
-      <span className={isDirty ? "dirty-indicator" : "muted"}>{isDirty ? "Unsaved changes" : `Version ${baseline.version} is up to date`}</span>
+      <span className={isDirty ? "dirty-indicator" : "muted"}>{isDirty ? "Unsaved changes" : "All changes saved"}</span>
       <div className="button-row">
         <span className="help">One save covers every tab.</span>
         <button type="button" className="button-primary" onClick={saveConfig} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</button>
@@ -206,21 +202,5 @@ export function AssistantSettingsPage() {
         setAssistantName={(name) => { setAssistantName(name); setSaveMessage(""); }}
       />
     </div>
-    <section className="panel stack"><h2>Version history</h2>
-      {versionsQuery.isLoading && <LoadingState />}
-      <ul>{versionsQuery.data?.items.map((version) => <li key={version.id}><button type="button" onClick={() => setSelectedVersion(version.id)}>Version {version.version} — {formatDate(version.created_at)}</button></li>)}</ul>
-      {chosen && <VersionDiff oldConfig={chosen.config} currentConfig={baseline.config} />}
-    </section>
   </main>;
-}
-
-function VersionDiff({ oldConfig, currentConfig }: { oldConfig: unknown; currentConfig: unknown }) {
-  const diff = diffConfigs(oldConfig, currentConfig);
-  return <div className="table-wrap"><table><caption>Selected version compared with the current saved configuration</caption><thead><tr><th>Path</th><th>Change</th><th>Old value</th><th>Current value</th></tr></thead><tbody>
-    {diff.length ? diff.map((change) => <tr key={change.path}><td><code>{change.path}</code></td><td>{change.kind}</td><td>{change.oldValue ?? "—"}</td><td>{change.newValue ?? "—"}</td></tr>) : <tr><td colSpan={4}>No differences.</td></tr>}
-  </tbody></table></div>;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }

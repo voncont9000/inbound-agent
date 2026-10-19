@@ -294,8 +294,8 @@ The operator UI is in `web/`, built with React, TypeScript, React Query, and pla
 | `/login`, `/signup` | Cookie-session authentication and account creation |
 | `/` | Home dashboard: conversation, handling, booking, task, time-saved, latency, and cost stats with a chart |
 | `/assistants` | Assistant list and template-based setup |
-| `/assistants/:id/settings/:tab` | Tabbed configuration editor (General, Rules, Knowledge, Abilities, Channels, Advanced) with one save for the whole config, version comparison, and a Test call button that starts a call in the global test-call bar |
-| `/assistants/:id/settings`, `/assistants/:id/knowledge` | Redirect to the General and Knowledge tabs (the Knowledge tab holds sources, import jobs, digest, FAQs, office hours, price list and contacts) |
+| `/assistants/:id/settings/:tab` | Tabbed configuration editor (General, Rules, Knowledge, Abilities, Channels, Advanced) with one save for the whole config and a Test call button on every tab that starts a call in the global test-call bar; each setting appears once (see [settings.md](./settings.md)). Config version history stays in the API but is not shown |
+| `/assistants/:id/settings`, `/assistants/:id/knowledge` | Redirect to the General and Knowledge tabs (the Knowledge tab holds sources, import jobs, digest, FAQs and office hours; prices and contacts are under General › Instructions) |
 | `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
 | `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
 | `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |

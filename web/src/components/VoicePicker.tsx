@@ -1,13 +1,22 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "./States";
 import type { Locale } from "../lib/config";
+import { RECOMMENDED_VOICE_COUNT, recommendedVoices } from "../lib/voices";
 
 type VoiceCatalogue = Schemas["VoiceCatalogueResponse"];
 type VoiceCard = Schemas["VoiceCard"];
 
 const queryKey = (locale: Locale) => ["voices", locale] as const;
+
+function uniqueValues(voices: VoiceCard[], key: "gender" | "accent") {
+  return [...new Set(voices.map((voice) => voice[key]).filter(Boolean))].sort();
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 function getVoiceCatalogue(locale: Locale) {
   return unwrap(
@@ -30,6 +39,11 @@ export function VoicePicker({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [changingLanguage, setChangingLanguage] = useState(false);
+  const [search, setSearch] = useState("");
+  const [gender, setGender] = useState("");
+  const [accent, setAccent] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const listId = useId();
   const voicesQuery = useQuery({
     queryKey: queryKey(language),
     queryFn: () => getVoiceCatalogue(language),
@@ -38,7 +52,20 @@ export function VoicePicker({
   useEffect(() => {
     audioRef.current?.pause();
     setPlayingVoiceId(null);
+    setAccent("");
   }, [language]);
+
+  const allVoices = useMemo(() => voicesQuery.data?.voices ?? [], [voicesQuery.data]);
+  const selectedVoiceId = voiceId ?? voicesQuery.data?.default_voice_id ?? "";
+  const query = search.trim().toLowerCase();
+  const filtering = Boolean(query || gender || accent);
+  const visibleVoices = useMemo(() => {
+    if (!filtering) return showAll ? allVoices : recommendedVoices(allVoices, language, selectedVoiceId);
+    return allVoices.filter((voice) =>
+      (!query || `${voice.name} ${voice.accent} ${voice.locale}`.toLowerCase().includes(query)) &&
+      (!gender || voice.gender === gender) &&
+      (!accent || voice.accent === accent));
+  }, [allVoices, filtering, showAll, language, selectedVoiceId, query, gender, accent]);
 
   const selectLanguage = async (event: ChangeEvent<HTMLSelectElement>) => {
     const nextLanguage = event.currentTarget.value as Locale;
@@ -106,7 +133,9 @@ export function VoicePicker({
 
   const catalogue = voicesQuery.data;
   if (!catalogue) return <EmptyState>No voices are available.</EmptyState>;
-  const selectedVoiceId = voiceId ?? catalogue.default_voice_id;
+  const genders = uniqueValues(catalogue.voices, "gender");
+  const accents = uniqueValues(catalogue.voices, "accent");
+  const canExpand = !filtering && catalogue.voices.length > RECOMMENDED_VOICE_COUNT;
   const multilingualUnavailable =
     language === "multi" &&
     !catalogue.locales.some(({ code }) => code === "multi");
@@ -139,9 +168,26 @@ export function VoicePicker({
       )}
       <fieldset className="voice-picker-fieldset" disabled={changingLanguage}>
         <legend>Voice</legend>
+        {catalogue.voices.length > RECOMMENDED_VOICE_COUNT && <div className="voice-picker-filters">
+          <input
+            type="search"
+            aria-label="Search voices"
+            placeholder="Search by name or accent"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {genders.length > 1 && <select aria-label="Gender" value={gender} onChange={(event) => setGender(event.target.value)}>
+            <option value="">Any gender</option>
+            {genders.map((item) => <option key={item} value={item}>{capitalize(item)}</option>)}
+          </select>}
+          {accents.length > 1 && <select aria-label="Accent" value={accent} onChange={(event) => setAccent(event.target.value)}>
+            <option value="">Any accent</option>
+            {accents.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>}
+        </div>}
         {catalogue.voices.length ? (
-          <div className="voice-picker-list" role="radiogroup" aria-label="Voice">
-            {catalogue.voices.map((voice) => {
+          <div className="voice-picker-list" role="radiogroup" aria-label="Voice" id={listId}>
+            {visibleVoices.map((voice) => {
               const selected = voice.id === selectedVoiceId;
               const playing = playingVoiceId === voice.id;
               return (
@@ -177,10 +223,21 @@ export function VoicePicker({
                 </div>
               );
             })}
+            {!visibleVoices.length && <p className="muted">No voices match these filters.</p>}
           </div>
         ) : (
           <EmptyState>No voices are available for this language.</EmptyState>
         )}
+        <p className="help voice-picker-count">
+          {filtering
+            ? `${visibleVoices.length} of ${catalogue.voices.length} voices match.`
+            : canExpand && !showAll
+              ? `Recommended voices for this language (${visibleVoices.length} of ${catalogue.voices.length}).`
+              : ""}
+          {canExpand && <button type="button" className="button-link" aria-expanded={showAll} aria-controls={listId} onClick={() => setShowAll(!showAll)}>
+            {showAll ? "Show recommended voices" : `Show all ${catalogue.voices.length} voices`}
+          </button>}
+        </p>
       </fieldset>
       {changingLanguage && (
         <p role="status" className="muted">

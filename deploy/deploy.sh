@@ -39,7 +39,10 @@ if [[ -z "$DOMAIN" ]]; then
   exit 1
 fi
 
-compose build
+compose build backend
+compose build caddy
+compose build phone
+docker builder prune -af
 compose run --rm migrate
 compose up -d --remove-orphans
 
