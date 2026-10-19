@@ -182,7 +182,7 @@ template- and prompt-driven and vertical-neutral.
   [templates.md](./templates.md)). Urgency rules can be written as plain sentences ("Urgent if a
   tribunal deadline is within 4 weeks"); keyword and date rules remain available on the same
   **Rules** tab.
-- FR-S6: A persistent **Test call / Test chat** control on every assistant page.
+- FR-S6: A persistent **Test call** control on every authenticated page: a slim bar at the bottom of the app that starts a browser call with the selected assistant (picker when there is more than one, remembers the last one), shows connecting / in-call (timer, mute, hang up) / ended (link to the conversation) states, is collapsible and keyboard accessible, and is hidden for roles that cannot run test calls (staff).
 
 *Status (FR-S1–S4, FR-S6):* built in the web app. Settings live at `/assistants/:id/settings/:tab`
 (`general`, `rules`, `knowledge`, `abilities`, `channels`, `advanced`); `/assistants/:id/settings`

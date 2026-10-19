@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, unwrap, type Schemas } from "../api/client";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CallRecordingPlayer } from "../components/CallRecordingPlayer";
-import { Badge, EmptyState, ErrorState, LoadingState } from "../components/States";
+import { Badge, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 
 type IntakeRecord = Record<string, unknown>;
 type IntakeField = {
@@ -68,7 +68,7 @@ export function InboxPage() {
     setSearchParams(next);
   }
   return <main className="page" id="main-content">
-    <p className="eyebrow">Operator</p><h1>Inbox</h1>
+    <PageHeader eyebrow="Operator" title="Inbox" lede="Every conversation your assistants handled, across phone, web, email and WhatsApp." />
     <div className="toolbar">
       <div className="field"><label htmlFor="filter-channel">Channel</label><select id="filter-channel" value={channel} onChange={(event) => updateParam("channel", event.target.value)}><option value="all">All channels</option>{channels.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
       <div className="field"><label htmlFor="filter-status">Status</label><select id="filter-status" value={status} onChange={(event) => updateParam("status", event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
@@ -80,10 +80,10 @@ export function InboxPage() {
     {rows.length > 0 && <div className="table-wrap"><table><thead><tr><th>Channel</th><th>Status</th><th>Contact</th><th>Summary</th><th>Started</th><th>Review</th></tr></thead><tbody>
       {rows.map((conversation) => <tr key={conversation.id}>
         <td><Badge>{channelIcon[conversation.channel]} {conversation.channel}</Badge></td>
-        <td>{conversation.status}</td>
+        <td><Badge tone={statusTone(conversation.status)}>{conversation.status}</Badge></td>
         <td>{conversation.person_id ? <Link to={`/contacts/${conversation.person_id}`}>{conversation.contact_name ?? conversation.external_ref}</Link> : conversation.contact_name ?? conversation.external_ref}</td>
         <td><Link to={`/conversations/${conversation.id}`}>{conversation.summary ?? "No summary"}</Link></td>
-        <td>{formatDate(conversation.started_at)}</td>
+        <td className="cell-muted">{formatDate(conversation.started_at)}</td>
         <td><div className="button-row">{conversation.test_call && <Badge tone="neutral">Test call</Badge>}{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</div></td>
       </tr>)}
     </tbody></table></div>}
@@ -92,6 +92,13 @@ export function InboxPage() {
 }
 
 const channelIcon: Record<string, string> = { phone: "☎", web: "◎", gmail: "✉", whatsapp: "◉" };
+
+function statusTone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
+  if (["completed", "done", "answered"].includes(status)) return "success";
+  if (["failed"].includes(status)) return "danger";
+  if (["active", "open"].includes(status)) return "info";
+  return "neutral";
+}
 
 export function ConversationPage() {
   const { id = "" } = useParams();
@@ -139,7 +146,7 @@ export function ConversationPage() {
   const contact = detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{detail.external_ref}</Link> : detail.external_ref;
   const emailTriage = asRecord(detail.metrics.email_triage);
   return <main className="page" id="main-content">
-    <p className="eyebrow">Conversation · {detail.channel} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</p><h1>{detail.summary ?? "Conversation details"}</h1>
+    <PageHeader eyebrow={`Conversation · ${detail.channel}`} title={<>{detail.summary ?? "Conversation details"} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<Link className="button" to="/inbox">Back to inbox</Link>} />
     <div className="panel card-grid"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
     {booking && <section className="panel stack">
       <h2>Appointment booking</h2>
@@ -305,11 +312,11 @@ export function ContactsPage() {
   });
   const [filter, setFilter] = useState("");
   const rows = (contacts.data?.pages.flatMap(({ items }) => items) ?? []).filter(({ display_name }) => display_name.toLowerCase().includes(filter.toLowerCase()));
-  return <main className="page" id="main-content"><p className="eyebrow">People</p><h1>Contacts</h1>
+  return <main className="page" id="main-content"><PageHeader eyebrow="People" title="Contacts" lede="Callers and senders your assistants have identified." />
     <div className="field"><label htmlFor="contact-filter">Filter by name</label><input id="contact-filter" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
     {contacts.isLoading && <LoadingState />}{contacts.error && <ErrorState message="Contacts could not be loaded." />}
     {!rows.length && !contacts.isLoading && <EmptyState>No contacts found.</EmptyState>}
-    <div className="table-wrap"><table><thead><tr><th>Name</th><th>Created</th><th>Updated</th><th>Status</th></tr></thead><tbody>{rows.map((contact) => <tr key={contact.id}><td><Link to={`/contacts/${contact.id}`}>{contact.display_name}</Link></td><td>{formatDate(contact.created_at)}</td><td>{formatDate(contact.updated_at)}</td><td>{contact.merged_into_id ? <Badge>merged</Badge> : "Active"}</td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr><th>Name</th><th>Created</th><th>Updated</th><th>Status</th></tr></thead><tbody>{rows.map((contact) => <tr key={contact.id}><td><Link to={`/contacts/${contact.id}`}>{contact.display_name}</Link></td><td className="cell-muted">{formatDate(contact.created_at)}</td><td className="cell-muted">{formatDate(contact.updated_at)}</td><td>{contact.merged_into_id ? <Badge>merged</Badge> : <Badge tone="success">Active</Badge>}</td></tr>)}</tbody></table></div>
     {contacts.hasNextPage && <button type="button" onClick={() => void contacts.fetchNextPage()} disabled={contacts.isFetchingNextPage}>Load more</button>}
   </main>;
 }
@@ -353,7 +360,7 @@ export function ContactPage() {
   if (detailQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;
   if (detailQuery.error || !detail) return <main className="page" id="main-content"><ErrorState message="Contact could not be loaded." /></main>;
   const mergeChoices = (contactsQuery.data?.items ?? []).filter((contact) => contact.id !== id && !contact.merged_into_id);
-  return <main className="page" id="main-content"><p className="eyebrow">Contact</p><h1>{detail.display_name}</h1>
+  return <main className="page" id="main-content"><PageHeader eyebrow="Contact" title={detail.display_name} actions={<Link className="button" to="/contacts">All contacts</Link>} />
     <div className="toolbar"><div className="field"><label htmlFor="merge-contact">Merge another contact into this one</label><select id="merge-contact" value={otherId} onChange={(event) => setOtherId(event.target.value)}><option value="">Choose a contact</option>{mergeChoices.map((contact) => <option key={contact.id} value={contact.id}>{contact.display_name}</option>)}</select></div><button type="button" disabled={!otherId} onClick={() => setDialog("merge")}>Merge contact</button></div>
     <section className="panel"><h2>Identities</h2>{detail.identities.map((identity) => <div className="list-row" key={identity.id}><label className="check-row"><input type="checkbox" checked={selectedIdentities.includes(identity.id)} onChange={(event) => setSelectedIdentities((current) => event.target.checked ? [...current, identity.id] : current.filter((item) => item !== identity.id))} />{identity.type}: {identity.value_normalized}</label><span>{identity.verified ? "Verified" : "Unverified"} · {identity.source} · {identity.confidence.toFixed(2)}</span></div>)}{!detail.identities.length && <p className="muted">No identities yet.</p>}<button type="button" disabled={!selectedIdentities.length} onClick={() => setDialog("split")}>Split selected identities</button></section>
     <section className="panel"><h2>Active facts</h2>{detail.active_facts.map((fact) => <div className="list-row" key={fact.id}><span><strong>{fact.predicate}</strong>: {displayValue(fact.value)}<br /><span className="muted">{fact.evidence} · confidence {fact.confidence.toFixed(2)} · since {formatDate(fact.valid_from)}</span></span></div>)}{!detail.active_facts.length && <p className="muted">No facts yet.</p>}</section>
@@ -385,10 +392,10 @@ export function TasksPage() {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["tasks"] }); },
   });
   const rows = tasks.data?.items ?? [];
-  return <main className="page" id="main-content"><p className="eyebrow">Follow-up</p><h1>Tasks</h1>
+  return <main className="page" id="main-content"><PageHeader eyebrow="Follow-up" title="Tasks" lede="Callbacks, bookings and other follow-ups created from conversations." />
     <div className="toolbar"><div className="field"><label htmlFor="task-status-filter">Status</label><select id="task-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{["open", "done", "dismissed"].map((status) => <option key={status}>{status}</option>)}</select></div><div className="field"><label htmlFor="task-kind-filter">Kind</label><input id="task-kind-filter" value={kindFilter === "all" ? "" : kindFilter} onChange={(event) => setKindFilter(event.target.value || "all")} placeholder="All kinds" /></div><div className="field"><label htmlFor="task-assistant-filter">Assistant</label><select id="task-assistant-filter" value={assistantFilter} onChange={(event) => setAssistantFilter(event.target.value)}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div></div>
     {tasks.isLoading && <LoadingState />}{tasks.error && <ErrorState message="Tasks could not be loaded." />}{!rows.length && !tasks.isLoading && !tasks.error && <EmptyState>No tasks match these filters.</EmptyState>}
-    <div className="table-wrap"><table><thead><tr><th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id}><td>{task.kind}</td><td>{task.status}</td><td>{task.source}</td><td>{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr><th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id}><td className="cell-primary">{task.kind}</td><td><Badge tone={statusTone(task.status)}>{task.status}</Badge></td><td>{task.source}</td><td className="cell-muted">{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
   </main>;
 }
 
@@ -409,7 +416,7 @@ export function KnowledgeGapsPage() {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["knowledge-gaps"] }); },
   });
   const rows = gaps.data?.items ?? [];
-  return <main className="page" id="main-content"><p className="eyebrow">Knowledge</p><h1>Knowledge gaps</h1>
+  return <main className="page" id="main-content"><PageHeader eyebrow="Knowledge" title="Knowledge gaps" lede="Questions your assistants could not answer. Add the answer to your knowledge to close the gap." />
     <div className="toolbar"><div className="field"><label htmlFor="gap-filter">Status</label><select id="gap-filter" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All statuses</option><option value="open">Open</option><option value="answered">Answered</option><option value="dismissed">Dismissed</option></select></div><div className="field"><label htmlFor="gap-assistant-filter">Assistant</label><select id="gap-assistant-filter" value={assistantFilter} onChange={(event) => setAssistantFilter(event.target.value)}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div></div>
     {gaps.isLoading && <LoadingState />}{gaps.error && <ErrorState message="Knowledge gaps could not be loaded." />}{!rows.length && !gaps.isLoading && !gaps.error && <EmptyState>No knowledge gaps match this status.</EmptyState>}
     <div className="card-grid">{rows.map((gap) => <article className="panel stack" key={gap.id}><div className="button-row"><Badge tone={gap.status === "open" ? "warning" : "success"}>{gap.status}</Badge><span className="muted">{formatDate(gap.created_at)}</span></div><h2>{gap.question}</h2><p>{gap.evidence}</p><Link to={`/conversations/${gap.conversation_id}`}>View conversation</Link><div className="button-row">{gap.status !== "answered" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "answered" })}>Mark answered</button>}{gap.status !== "dismissed" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "dismissed" })}>Dismiss</button>}{gap.status !== "open" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "open" })}>Reopen</button>}</div></article>)}</div>

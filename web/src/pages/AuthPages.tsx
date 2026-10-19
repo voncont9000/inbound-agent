@@ -30,8 +30,8 @@ export function LoginPage() {
     }
   }
 
-  return <main id="main-content" className="auth-card">
-    <p className="eyebrow">Operator workspace</p>
+  return <div className="auth-shell"><main id="main-content" className="auth-card">
+    <p className="auth-brand"><span className="eyebrow">Inbound operator</span></p>
     <h1>Sign in</h1>
     <p className="intro">Use your account to review conversations and manage your assistants.</p>
     <form className="stack" onSubmit={submit}>
@@ -41,7 +41,7 @@ export function LoginPage() {
       <button className="button-primary" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
     </form>
     <p className="muted">New here? <Link to="/signup">Create an account</Link></p>
-  </main>;
+  </main></div>;
 }
 
 export function SignupPage() {
@@ -68,8 +68,8 @@ export function SignupPage() {
       setBusy(false);
     }
   }
-  return <main id="main-content" className="auth-card">
-    <p className="eyebrow">Operator workspace</p>
+  return <div className="auth-shell"><main id="main-content" className="auth-card">
+    <p className="auth-brand"><span className="eyebrow">Inbound operator</span></p>
     <h1>Create your account</h1>
     <form className="stack" onSubmit={submit}>
       {error && <p role="alert" className="state-error">{error}</p>}
@@ -80,5 +80,5 @@ export function SignupPage() {
       <button className="button-primary" type="submit" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
     </form>
     <p className="muted">Already registered? <Link to="/login">Sign in</Link></p>
-  </main>;
+  </main></div>;
 }

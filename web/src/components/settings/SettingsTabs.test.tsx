@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { settingsTabs } from "../../lib/settingsTabs";
@@ -17,11 +17,14 @@ describe("assistant settings tabs", () => {
     expect(await screen.findByRole("heading", { name: "Brightside reception" })).toBeInTheDocument();
   });
 
-  it.each(settingsTabs.map(({ id, label }) => [id, label]))("shows the %s tab with Test call and Save controls", async (tab, label) => {
+  it.each(settingsTabs.map(({ id, label }) => [id, label]))("shows the %s tab with global test call and Save controls", async (tab, label) => {
     renderApp(`/assistants/${assistantId}/settings/${tab}`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     expect(screen.getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("button", { name: "Test call" })).toBeInTheDocument();
+    const testCallBar = screen.getByRole("region", { name: "Test call" });
+    expect(within(testCallBar).getByRole("button", { name: "Start test call" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Test call" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Help:/ })).toHaveAttribute("href", expect.stringMatching(/^\/help\//));
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
   });
 

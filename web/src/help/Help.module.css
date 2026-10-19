@@ -50,8 +50,8 @@
 
 .sidebarCategory a:hover,
 .sidebarCategory a[aria-current="page"] {
-  background: #eaf2ef;
-  color: #153b34;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .content {
@@ -90,7 +90,7 @@
 .categoryCard a,
 .result h2 a,
 .related a {
-  color: #153b34;
+  color: var(--accent-strong);
 }
 
 .result {
@@ -175,9 +175,9 @@
   height: 1.7rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid #4d756c;
+  border: 1px solid var(--accent);
   border-radius: 50%;
-  color: #153b34;
+  color: var(--accent-strong);
   font-size: 0.9rem;
   font-weight: 700;
   line-height: 1;
@@ -187,7 +187,7 @@
 
 .helpLink:hover,
 .helpLink:focus-visible {
-  background: #eaf2ef;
+  background: var(--accent-soft);
 }
 
 @media (max-width: 760px) {

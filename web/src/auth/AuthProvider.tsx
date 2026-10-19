@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
@@ -19,6 +19,13 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function rememberMemberships(memberships: Schemas["TenantResponse"][]) {
+  localStorage.setItem(
+    "inbound.memberships",
+    JSON.stringify(memberships.map(({ id, name, role }) => ({ id, name, role }))),
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -35,8 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("inbound.tenant", id);
     void queryClient.resetQueries();
   };
+  const memberships = me.data?.memberships;
+  useEffect(() => {
+    if (memberships) rememberMemberships(memberships);
+  }, [memberships]);
 
   async function saveAuth(response: Schemas["AuthResponse"]) {
+    rememberMemberships(response.tenants);
     const membership = response.tenants[0];
     if (membership) setSelectedTenant(membership.id);
     await queryClient.invalidateQueries({ queryKey: ["me"] });
