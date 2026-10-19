@@ -683,6 +683,11 @@
             "title": "Template",
             "type": "string"
           },
+          "use_sample_content": {
+            "default": false,
+            "title": "Use Sample Content",
+            "type": "boolean"
+          },
           "website_url": {
             "anyOf": [
               {
@@ -2767,7 +2772,7 @@
         "additionalProperties": false,
         "properties": {
           "enquiry": {
-            "default": "A customer or prospective customer asking about the business's services, prices, availability or their own case, which you can answer or move forward from the business context.",
+            "default": "A customer or prospective customer asking about the business's services, prices, availability or their own request, which you can answer or move forward from the business context.",
             "title": "Enquiry",
             "type": "string"
           },
@@ -4445,13 +4450,42 @@
           "config": {
             "$ref": "#/components/schemas/AssistantConfig-Output"
           },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "sample_business_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Business Name"
+          },
+          "sets_up": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sets Up",
+            "type": "array"
           }
         },
         "required": [
           "name",
+          "label",
+          "description",
+          "sets_up",
           "config"
         ],
         "title": "TemplateResponse",

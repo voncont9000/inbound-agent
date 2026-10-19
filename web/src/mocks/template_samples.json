@@ -1,0 +1,188 @@
+{
+  "dental_clinic": {
+    "business_name": "Riverside Dental Practice (sample clinic)",
+    "company_info": "SAMPLE CONTENT - replace with your clinic's details.\nRiverside Dental Practice is a mixed NHS and private dental practice at 4 Quay Road,\nBristol BS1 4AB. The practice is open Monday to Friday 08:30-17:30 and Saturday mornings\n09:00-13:00 for private patients. It has ground-floor surgeries with step-free access.\nEmergency appointments are held back every morning for registered patients in pain.\nOutside opening hours, patients with a dental emergency should call NHS 111.\nServices include check-ups, hygiene, fillings, root canal treatment, crowns, whitening and\nInvisalign.\n",
+    "faqs": [
+      {
+        "answer": "The NHS list is currently full. New patients can join the waiting list or register as private patients.",
+        "question": "Are you taking new NHS patients?"
+      },
+      {
+        "answer": "Call NHS 111 for urgent dental care. If you have severe swelling affecting your breathing or swallowing, or heavy bleeding that will not stop, call 999.",
+        "question": "What should I do in a dental emergency out of hours?"
+      },
+      {
+        "answer": "Please give at least 24 hours' notice. Missed private appointments may be charged.",
+        "question": "How much notice do I need to give to cancel?"
+      },
+      {
+        "answer": "Yes, interest-free finance is available for private treatment over 500 pounds.",
+        "question": "Do you offer payment plans?"
+      }
+    ],
+    "price_list": [
+      {
+        "notes": "Sample price. Includes two small X-rays.",
+        "price": "65 pounds",
+        "service": "Private new patient examination"
+      },
+      {
+        "notes": "Sample price. 30 minutes.",
+        "price": "70 pounds",
+        "service": "Hygienist appointment"
+      },
+      {
+        "notes": "Sample price. Check current NHS charges.",
+        "price": "27.40 pounds",
+        "service": "NHS Band 1 course of treatment"
+      }
+    ]
+  },
+  "home_services": {
+    "business_name": "Brightside Plumbing & Heating (sample trades business)",
+    "company_info": "SAMPLE CONTENT - replace with your business's details.\nBrightside Plumbing & Heating is a family-run, Gas Safe registered team covering Leeds and\npostcodes LS1 to LS29. The office is open Monday to Friday 08:00-18:00 and Saturday\n09:00-13:00. A 24-hour emergency callout service runs every day for leaks, burst pipes and\nloss of heating or hot water. Services include boiler servicing, boiler repairs and new\ninstalls, radiators, bathrooms, blocked drains and general plumbing. All work carries a\n12-month guarantee.\n",
+    "faqs": [
+      {
+        "answer": "We cover Leeds postcodes LS1 to LS29. Outside that area we may be able to help for larger jobs; the office will confirm.",
+        "question": "Do you cover my area?"
+      },
+      {
+        "answer": "Yes, all our heating engineers are Gas Safe registered.",
+        "question": "Are you Gas Safe registered?"
+      },
+      {
+        "answer": "Quotes for new boilers and bathrooms are free. Repairs are charged at the callout rate.",
+        "question": "Do you give free quotes?"
+      },
+      {
+        "answer": "We take card, bank transfer and cash on completion of the job.",
+        "question": "How do I pay?"
+      }
+    ],
+    "price_list": [
+      {
+        "notes": "Sample price. Parts extra.",
+        "price": "85 pounds including the first hour",
+        "service": "Daytime callout"
+      },
+      {
+        "notes": "Sample price. Parts extra.",
+        "price": "140 pounds including the first hour",
+        "service": "Emergency callout (evenings, weekends)"
+      },
+      {
+        "notes": "Sample price.",
+        "price": "95 pounds",
+        "service": "Annual boiler service"
+      }
+    ]
+  },
+  "lettings_agency": {
+    "business_name": "Harbour Lettings & Sales (sample agency)",
+    "company_info": "SAMPLE CONTENT - replace with your agency's details.\nHarbour Lettings & Sales is an independent estate and lettings agent at 21 High Street,\nBrighton BN1 1AA, covering Brighton and Hove. The office is open Monday to Friday\n09:00-17:30 and Saturday 10:00-16:00. The agency offers sales, lettings, fully managed\nlettings and free market appraisals. Viewings run Monday to Saturday. Managed tenants can\nreport emergency repairs 24 hours a day through the out-of-hours line.\nThe agency is a member of The Property Ombudsman and a client money protection scheme.\n",
+    "faqs": [
+      {
+        "answer": "Proof of ID, proof of address and income for referencing. A holding deposit of one week's rent reserves the property.",
+        "question": "What do I need to rent a property?"
+      },
+      {
+        "answer": "Five weeks' rent, protected in a government-approved deposit scheme.",
+        "question": "How much is the tenancy deposit?"
+      },
+      {
+        "answer": "That depends on the landlord. Tell us about your pet and we will check for each property.",
+        "question": "Do you accept pets?"
+      },
+      {
+        "answer": "Let-only is 8 percent and fully managed is 12 percent of the monthly rent, plus VAT.",
+        "question": "What fees do you charge landlords?"
+      }
+    ],
+    "price_list": [
+      {
+        "notes": "Sample price.",
+        "price": "12 percent of monthly rent plus VAT",
+        "service": "Fully managed lettings"
+      },
+      {
+        "notes": "Sample price.",
+        "price": "8 percent of monthly rent plus VAT",
+        "service": "Let-only service"
+      },
+      {
+        "notes": "Sample price.",
+        "price": "Free",
+        "service": "Market appraisal"
+      }
+    ]
+  },
+  "restaurant": {
+    "business_name": "The Copper Pot (sample restaurant)",
+    "company_info": "SAMPLE CONTENT - replace with your restaurant's details.\nThe Copper Pot is a 60-cover neighbourhood bistro at 12 Market Street, Bath BA1 1AA, serving\nseasonal British cooking. Lunch is served Wednesday to Sunday 12:00-14:30 and dinner\nWednesday to Saturday 17:30-22:00. The restaurant is closed on Mondays and Tuesdays.\nThere is step-free access and an accessible toilet. Well-behaved dogs are welcome on the terrace.\nThe private dining room seats up to 18 guests. Groups of 8 or more order from a set menu and\npay a deposit of 10 pounds per person.\n",
+    "faqs": [
+      {
+        "answer": "Yes. Tell us about any allergy when booking and tell your server on arrival. Our kitchen handles all 14 major allergens, so we cannot guarantee any dish is allergen-free.",
+        "question": "Do you cater for allergies?"
+      },
+      {
+        "answer": "There are always vegetarian and vegan dishes on the menu, and the kitchen can adapt several others.",
+        "question": "Do you have vegetarian and vegan options?"
+      },
+      {
+        "answer": "There is no private parking. The nearest car park is Charlotte Street, a five-minute walk away.",
+        "question": "Is there parking?"
+      },
+      {
+        "answer": "Yes, for a 2 pound per person cakeage charge.",
+        "question": "Can I bring my own cake?"
+      }
+    ],
+    "price_list": [
+      {
+        "notes": "Sample price. Wednesday to Friday only.",
+        "price": "Two courses 24 pounds, three courses 29 pounds",
+        "service": "Set lunch"
+      },
+      {
+        "notes": "Sample price. Groups of 8 or more.",
+        "price": "From 45 pounds per person",
+        "service": "Group set menu"
+      }
+    ]
+  },
+  "uk_law_firm": {
+    "business_name": "Demo & Co Solicitors (sample law firm)",
+    "company_info": "SAMPLE CONTENT - replace with your firm's details.\nDemo & Co Solicitors is a consumer law firm at 8 Castle Street, Hereford HR1 2NL, regulated\nby the Solicitors Regulation Authority. The office is open Monday to Friday 09:00-17:30.\nThe firm helps individuals with residential conveyancing (purchases, sales and remortgages)\nand employment law (dismissal, redundancy, discrimination and settlement agreements).\nInitial enquiries are free; a solicitor calls back to discuss the matter and fees.\nComplaints go to the complaints partner at complaints@demoandco.example. If a complaint is\nnot resolved within eight weeks, clients can contact the Legal Ombudsman.\n",
+    "faqs": [
+      {
+        "answer": "For some employment claims. A solicitor will confirm whether it is available after reviewing the matter.",
+        "question": "Do you offer no win, no fee?"
+      },
+      {
+        "answer": "A typical purchase takes 12 to 16 weeks from offer to completion, depending on the chain and searches.",
+        "question": "How long does conveyancing take?"
+      },
+      {
+        "answer": "Yes. Employers often contribute to the fee; a solicitor will confirm after seeing the agreement.",
+        "question": "Can you review my settlement agreement?"
+      }
+    ],
+    "price_list": [
+      {
+        "notes": "Sample price range.",
+        "price": "1,250 to 1,800 pounds plus VAT and disbursements",
+        "service": "Residential conveyancing purchase, freehold"
+      },
+      {
+        "notes": "Sample price.",
+        "price": "595 pounds plus VAT and disbursements",
+        "service": "Residential remortgage"
+      },
+      {
+        "notes": "Sample price range.",
+        "price": "500 to 900 pounds plus VAT",
+        "service": "Employment settlement agreement review"
+      }
+    ]
+  }
+}

@@ -68,6 +68,10 @@ class MeResponse(BaseModel):
 
 class TemplateResponse(BaseModel):
     name: str
+    label: str
+    description: str
+    sets_up: list[str]
+    sample_business_name: str | None = None
     config: AssistantConfig
 
 
