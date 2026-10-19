@@ -517,6 +517,23 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", listener);
   });
 
+  it("renders call transcript rows with speaker labels and elapsed time", async () => {
+    renderApp(`/conversations/${conversationId}`, { loggedIn: true });
+    const transcript = await screen.findByRole("list", { name: "Conversation transcript" });
+    const rows = within(transcript).getAllByRole("listitem");
+
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveAttribute("data-role", "caller");
+    expect(within(rows[0]).getByText("Caller")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("0:00")).toBeInTheDocument();
+    expect(rows[1]).toHaveAttribute("data-role", "caller");
+    expect(within(rows[1]).getByText("Caller")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("0:05")).toBeInTheDocument();
+    expect(rows[2]).toHaveAttribute("data-role", "assistant");
+    expect(within(rows[2]).getByText("Assistant")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("0:18")).toBeInTheDocument();
+  });
+
   it("updates inbox URL filters and sends channel plus review filters", async () => {
     const user = userEvent.setup();
     const requested: URL[] = [];

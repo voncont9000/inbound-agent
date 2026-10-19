@@ -371,6 +371,8 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
   const channel = (["phone", "web", "gmail", "whatsapp"] as const)[index % 4];
   const rawName = tenantIndex === 0 ? "boiler_repair.caller_name" : "employment.caller_name";
   const callerName = caller.name;
+  const startedAt = date(index + 1);
+  const atOffset = (seconds: number) => new Date(Date.parse(startedAt) + seconds * 1000).toISOString();
   const postName = index === 0 ? (tenantIndex === 0 ? "Jamie M." : "Alex M.") : callerName;
   const liveFields = {
     caller_name: { value: callerName, confirmed: true, confirmed_at: date(index + 2) },
@@ -420,17 +422,23 @@ function makeConversation(tenantIndex: number, index: number): Schemas["Conversa
     needs_review: review,
     test_call: tenantIndex === 0 && index === 0,
     status: (["completed", "completed", "active", "failed", "completed", "completed"] as const)[index],
-    started_at: date(index + 1), ended_at: index === 2 ? null : date(index + 1), summary,
+    started_at: startedAt, ended_at: index === 2 ? null : startedAt, summary,
     end_reason: transferred ? "transferred" : index === 3 ? "connection_lost" : "caller_hangup",
     transfer: transferred ? { target_key: "duty_solicitor", status: "no-answer", latency_ms: 1200 } : null,
     recording: tenantIndex === 0 && index === 0
-      ? { duration_seconds: 185, size_bytes: 3700000, created_at: date(index + 1), expires_at: "2026-03-03T10:30:00Z", is_test: true }
+      ? { duration_seconds: 185, size_bytes: 3700000, created_at: startedAt, expires_at: "2026-03-03T10:30:00Z", is_test: true }
       : null,
-    messages: [
-      { id: `${id}-m1`, role: "caller", text: summary, ts: date(index + 1), meta: {} },
-      { id: `${id}-m2`, role: "assistant", text: "Of course. Can I take your name and a callback number?", ts: date(index + 1), meta: {} },
-      { id: `${id}-m3`, role: "caller", text: `${callerName}, and the best number is ${caller.phone}.`, ts: date(index + 1), meta: {} },
-    ],
+    messages: tenantIndex === 0 && index === 0
+      ? [
+        { id: `${id}-m1`, role: "caller", text: "Hello, my boiler has stopped working.", ts: startedAt, meta: {} },
+        { id: `${id}-m2`, role: "caller", text: "There has been no heating since this morning.", ts: atOffset(5), meta: {} },
+        { id: `${id}-m3`, role: "assistant", text: "I can help arrange a repair. When did it stop working?", ts: atOffset(18), meta: {} },
+      ]
+      : [
+        { id: `${id}-m1`, role: "caller", text: summary, ts: startedAt, meta: {} },
+        { id: `${id}-m2`, role: "assistant", text: "Of course. Can I take your name and a callback number?", ts: startedAt, meta: {} },
+        { id: `${id}-m3`, role: "caller", text: `${callerName}, and the best number is ${caller.phone}.`, ts: startedAt, meta: {} },
+      ],
     intakes, tasks,
     metrics: { call_duration_seconds: 185 + index * 10, providers: { stt: "mock-stt", tts: "mock-tts" }, turn_latency_summary: { p50_seconds: 0.42, p95_seconds: 0.81, max_seconds: 1.02 }, turn_end_latency_summary: { p50_seconds: 0.19, p95_seconds: 0.31, max_seconds: 0.44 }, usage: { stt_seconds: 180, tts_characters: 490 }, ...(transferred ? { transfer: { target_key: "duty_solicitor", status: "no-answer", latency_ms: 1200 } } : {}) },
     estimated_cost: { currency: "GBP", components: { stt: 0.01, tts: 0.02, llm_input: 0.01, llm_output: 0.02, twilio: 0.04, extraction: 0.005 }, total: 0.105, unknown_components: [] },
