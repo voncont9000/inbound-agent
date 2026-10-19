@@ -20,6 +20,9 @@ The Compose project name is `inbound`. Named volumes hold Postgres data, backend
 outbox, voice spool files, per-call files, and Caddy certificates. Per-call artifacts can contain
 caller PII and live in the `voice-runs` volume. `migrate` is a one-shot service; backend and worker
 start only after it succeeds. Container logs rotate at 10 MiB with five files retained.
+`migrate` runs with WhatsApp/Gmail/Calendar and post-action sender modes forced off, so it needs no
+provider credentials beyond the database URLs and required `VOICE_SERVICE_TOKEN`; enabling a provider
+does not require passing its secrets to `migrate`.
 `/healthz` checks the backend database using the application role; it is intentionally omitted
 from the public OpenAPI schema.
 
