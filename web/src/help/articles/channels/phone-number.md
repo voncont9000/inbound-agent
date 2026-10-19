@@ -12,8 +12,8 @@ Phone routing must be arranged for your workspace. The app does not provide a nu
 
 1. Open the assistant's settings and select **Advanced**.
 2. Choose **Add a channel manually**.
-3. Select the phone channel and enter the channel details provided by your administrator.
-4. Save the assistant settings.
+3. Select the phone channel type and enter the phone number your administrator provided.
+4. Choose **Add channel**. The channel is saved straight away; you don't need **Save changes**.
 
 ## Check the connection
 
