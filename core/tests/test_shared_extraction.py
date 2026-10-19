@@ -6,13 +6,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from inbound_core.config import AssistantConfig, RulesConfig, SentenceUrgencyRule
+from inbound_core.config import AssistantConfig, OfficeHours, RulesConfig, SentenceUrgencyRule
 from inbound_core.extraction import (
     _extraction_prompt,
     _extraction_schema,
     build_intake_artifacts,
     build_post_call_tasks,
     extract_intake,
+    is_office_open,
 )
 from inbound_core.intake import build_service_model, days_until_deadline
 from inbound_core.pricing import calculate_cost, load_price_table
@@ -189,6 +190,104 @@ def test_business_context_is_channel_neutral_and_includes_deadline_rules() -> No
     assert "DEADLINE INSTRUCTIONS" in prompt
     assert "after the conversation" in prompt
     assert "Speak " not in prompt
+
+
+def _office_config(days: list[str] | None = None) -> AssistantConfig:
+    return _config().model_copy(
+        update={
+            "office_hours": OfficeHours(
+                days=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+                if days is None
+                else days,
+                opens="09:00",
+                closes="17:30",
+                timezone="Europe/London",
+            )
+        }
+    )
+
+
+def test_phone_business_context_includes_local_weekday_time_and_closed_status() -> None:
+    prompt = render_business_context(
+        _office_config(),
+        channel="phone",
+        now=datetime(2026, 10, 19, 20, 59, tzinfo=UTC),
+    )
+
+    assert (
+        "Today is Monday 19 October 2026 (2026-10-19). The local time is 21:59 "
+        "(Europe/London), so the office is currently closed."
+    ) in prompt
+
+
+def test_phone_business_context_reports_open_and_closed_weekend_hours() -> None:
+    monday_prompt = render_business_context(
+        _office_config(),
+        channel="phone",
+        now=datetime(2026, 10, 19, 9, 0, tzinfo=UTC),
+    )
+    saturday_prompt = render_business_context(
+        _office_config(),
+        channel="phone",
+        now=datetime(2026, 10, 24, 9, 0, tzinfo=UTC),
+    )
+
+    assert (
+        "The local time is 10:00 (Europe/London), so the office is currently open." in monday_prompt
+    )
+    assert (
+        "The local time is 10:00 (Europe/London), so the office is currently closed."
+        in saturday_prompt
+    )
+
+
+def test_text_business_context_has_weekday_without_current_open_status() -> None:
+    prompt = render_business_context(
+        _office_config(),
+        channel="whatsapp",
+        now=datetime(2026, 10, 19, 20, 59, tzinfo=UTC),
+    )
+    date_section = prompt.split("TODAY'S DATE AND TIME\n", 1)[1].split("\n\nPOLICIES", 1)[0]
+
+    assert "Today is Monday 19 October 2026 (2026-10-19)." in date_section
+    assert "local time" not in date_section
+    assert "currently" not in date_section
+
+
+def test_phone_business_context_omits_open_status_without_configured_days() -> None:
+    prompt = render_business_context(
+        _office_config([]),
+        channel="phone",
+        now=datetime(2026, 10, 19, 20, 59, tzinfo=UTC),
+    )
+    date_section = prompt.split("TODAY'S DATE AND TIME\n", 1)[1].split("\n\nPOLICIES", 1)[0]
+
+    assert "The local time is 21:59 (Europe/London)." in date_section
+    assert "currently" not in date_section
+
+
+def test_is_office_open_supports_abbreviated_weekday_names() -> None:
+    assert is_office_open(
+        _office_config(["Mon", "Tue", "Wed", "Thu", "Fri"]),
+        datetime(2026, 10, 19, 9, 0, tzinfo=UTC),
+    )
+
+
+def test_is_office_open_uses_local_hours_and_excludes_closing_time() -> None:
+    config = _office_config()
+
+    assert is_office_open(config, datetime(2026, 10, 19, 8, 0, tzinfo=UTC)) is True
+    assert is_office_open(config, datetime(2026, 10, 19, 16, 30, tzinfo=UTC)) is False
+
+
+def test_is_office_open_returns_none_without_configured_days() -> None:
+    assert (
+        is_office_open(
+            _office_config([]),
+            datetime(2026, 10, 19, 9, 0, tzinfo=UTC),
+        )
+        is None
+    )
 
 
 def test_default_rules_do_not_change_text_channel_business_context() -> None:

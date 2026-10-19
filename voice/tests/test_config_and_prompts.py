@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
@@ -19,7 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assistant = load_assistant_config(ROOT / "config" / "assistants" / "demo_firm.yaml")
-    prompt = render_system_prompt(assistant, today=date(2026, 10, 17))
+    prompt = render_system_prompt(
+        assistant,
+        today=date(2026, 10, 17),
+        now=datetime(2026, 10, 17, 10, 0, tzinfo=UTC),
+    )
 
     assert assistant.business_name == "Demo & Co Solicitors"
     assert assistant.language == "en-GB"
@@ -33,7 +37,7 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "Never confirm or deny" in prompt
     assert "Never estimate, invent or promise a quote" in prompt
     assert "call 999" in prompt
-    assert "Today is 2026-10-17" in prompt
+    assert "Today is Saturday 17 October 2026 (2026-10-17)" in prompt
     assert "termination_date" in prompt
     assert assistant.live_actions == []
     assert "confirm_critical_fields" not in prompt
@@ -65,6 +69,17 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "end_call" not in prompt
 
 
+def test_system_prompt_uses_passed_call_time_for_local_office_status() -> None:
+    assistant = load_assistant_config(ROOT / "config" / "assistants" / "demo_firm.yaml")
+    prompt = render_system_prompt(
+        assistant,
+        now=datetime(2026, 10, 19, 20, 59, tzinfo=UTC),
+    )
+
+    assert "Today is Monday 19 October 2026 (2026-10-19)." in prompt
+    assert "21:59 (Europe/London), so the office is currently closed." in prompt
+
+
 def test_system_prompt_matches_pre_shared_context_goldens() -> None:
     golden_path = ROOT / "tests" / "fixtures" / "render_system_prompt_before_shared_context.json"
     goldens = json.loads(golden_path.read_text(encoding="utf-8"))
@@ -81,6 +96,7 @@ def test_system_prompt_matches_pre_shared_context_goldens() -> None:
                 if context_card == "true"
                 else None
             ),
+            now=datetime(2026, 1, 15, 10, 0, tzinfo=UTC),
         )
 
         assert actual == expected, key
@@ -100,7 +116,12 @@ def test_prompt_only_mentions_enabled_actions() -> None:
 
 def test_booking_prompt_matches_silent_tool_golden() -> None:
     assistant = load_assistant_config(ROOT / "config" / "assistants" / "booking_firm.yaml")
-    prompt = render_system_prompt(assistant, today=date(2026, 1, 15), booking_enabled=True)
+    prompt = render_system_prompt(
+        assistant,
+        today=date(2026, 1, 15),
+        booking_enabled=True,
+        now=datetime(2026, 1, 15, 10, 0, tzinfo=UTC),
+    )
     golden = (ROOT / "tests" / "fixtures" / "booking_system_prompt.txt").read_text(encoding="utf-8")
 
     assert prompt == golden
@@ -111,12 +132,17 @@ def test_booking_prompt_matches_silent_tool_golden() -> None:
 
 def test_caller_context_is_inserted_only_when_nonblank() -> None:
     assistant = load_assistant_config(ROOT / "config" / "assistants" / "demo_firm.yaml")
-    original = render_system_prompt(assistant)
+    now = datetime(2026, 1, 15, 10, 0, tzinfo=UTC)
+    original = render_system_prompt(assistant, now=now)
 
-    assert render_system_prompt(assistant, context_card=None) == original
-    assert render_system_prompt(assistant, context_card=" \n ") == original
+    assert render_system_prompt(assistant, context_card=None, now=now) == original
+    assert render_system_prompt(assistant, context_card=" \n ", now=now) == original
 
-    prompt = render_system_prompt(assistant, context_card="  Previously asked about a callback.  ")
+    prompt = render_system_prompt(
+        assistant,
+        context_card="  Previously asked about a callback.  ",
+        now=now,
+    )
 
     assert "WHAT WE ALREADY KNOW ABOUT THIS CALLER" in prompt
     assert "<<<CALLER CONTEXT\nPreviously asked about a callback.\nCALLER CONTEXT>>>" in prompt

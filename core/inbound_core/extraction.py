@@ -517,6 +517,13 @@ def _is_during_office_hours(
     return local.weekday() in days and opens <= local_time < closes
 
 
+def is_office_open(config: AssistantConfig, at: datetime) -> bool | None:
+    schedule = _office_schedule(config)
+    if schedule is None:
+        return None
+    return _is_during_office_hours(at, schedule)
+
+
 def _next_office_opening(
     after: datetime,
     schedule: tuple[ZoneInfo, set[int], datetime_time, datetime_time],
@@ -543,12 +550,13 @@ def _callback_due_at(
     if call_end.tzinfo is None or call_end.utcoffset() is None:
         call_end = call_end.replace(tzinfo=UTC)
     preferred = _parse_aware_datetime(preferred_time_iso)
-    schedule = _office_schedule(config)
     if preferred is not None and call_end <= preferred <= call_end + timedelta(days=14):
-        if schedule is None or _is_during_office_hours(preferred, schedule):
+        if is_office_open(config, preferred) is not False:
             return preferred.isoformat()
-        opening = _next_office_opening(preferred, schedule)
+        schedule = _office_schedule(config)
+        opening = _next_office_opening(preferred, schedule) if schedule else None
         return opening.isoformat() if opening is not None else None
+    schedule = _office_schedule(config)
     if schedule is None:
         return None
     opening = _next_office_opening(call_end, schedule)
