@@ -131,7 +131,7 @@
   .mobileBrand { display: block; }
   .mobileBrand .brand { padding: 0; color: var(--ink); }
   .userName { display: none; }
-  .mobileNav { display: block; background: var(--sidebar); color: var(--sidebar-ink); padding: 0.75rem; border-bottom: 1px solid var(--line); }
+  .mobileNav { display: block; position: sticky; top: var(--topbar-h); z-index: 15; background: var(--sidebar); color: var(--sidebar-ink); padding: 0.75rem; border-bottom: 1px solid var(--line); }
   .mobileNav[hidden] { display: none; }
   .mobileNav .navigation { flex-direction: row; flex-wrap: wrap; gap: 0.25rem; }
   .mobileNav .navigation a { padding: 0.5rem 0.75rem; }
