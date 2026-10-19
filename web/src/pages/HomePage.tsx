@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { ConversationsChart } from "../components/ConversationsChart";
 import { channelLabels } from "../lib/dashboard";
-import { EmptyState, ErrorState, LoadingState } from "../components/States";
+import { EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 import styles from "../components/Dashboard.module.css";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
@@ -89,7 +89,7 @@ export function HomePage() {
 
   const data = summary.data;
   return <main className="page" id="main-content">
-    <p className="eyebrow">Overview</p><h1>Home</h1>
+    <PageHeader eyebrow="Overview" title="Home" lede="How your assistants are handling inbound conversations." />
     <div className="toolbar">
       <div className="field"><label htmlFor="dashboard-range">Time range</label>
         <select id="dashboard-range" value={range} onChange={(event) => update(event.target.value === "custom"

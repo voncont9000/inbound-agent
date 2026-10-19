@@ -9,7 +9,7 @@ import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
 import { diffConfigs } from "../lib/diff";
 import { isSettingsTab, settingsTabPath, settingsTabs, tabForPath, type SettingsTabId } from "../lib/settingsTabs";
-import { Badge, EmptyState, ErrorState, ErrorSummary, LoadingState } from "../components/States";
+import { Badge, EmptyState, ErrorState, ErrorSummary, LoadingState, PageHeader } from "../components/States";
 
 function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
   const result = structuredClone(config);
@@ -42,7 +42,7 @@ export function AssistantsPage() {
   });
   const selected = templatesQuery.data?.find(({ name }) => name === selectedTemplate);
   return <main className="page" id="main-content">
-    <p className="eyebrow">Configuration</p><h1>Assistants</h1>
+    <PageHeader eyebrow="Configuration" title="Assistants" lede="Each assistant answers for one business, with its own voice, rules and knowledge." />
     <div className="button-row"><button className="button-primary" type="button" onClick={() => setShowCreate((value) => !value)}>Create from template</button>
       <Link className="button-primary" to="/assistants/new">Set up from website</Link>
     </div>
@@ -173,7 +173,7 @@ export function AssistantSettingsPage() {
   const otherTabsWithErrors = settingsTabs.filter(({ id: tabId }) => tabId !== activeTab && errorCount(tabId) > 0);
   return <main className="page" id="main-content">
     <div className="settings-header">
-      <div><p className="eyebrow">Assistant settings</p><h1>{baseline.name}</h1></div>
+      <div className="page-header-text"><p className="eyebrow">Assistant settings</p><h1>{baseline.name}</h1></div>
       <TestCallButton assistantId={baseline.id} />
     </div>
     <div className="save-bar" role="region" aria-label="Save changes">

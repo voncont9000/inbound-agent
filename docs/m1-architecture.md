@@ -294,11 +294,21 @@ The operator UI is in `web/`, built with React, TypeScript, React Query, and pla
 | `/login`, `/signup` | Cookie-session authentication and account creation |
 | `/` | Home dashboard: conversation, handling, booking, task, time-saved, latency, and cost stats with a chart |
 | `/assistants` | Assistant list and template-based setup |
-| `/assistants/:id/settings/:tab` | Tabbed configuration editor (General, Rules, Knowledge, Abilities, Channels, Advanced) with one save for the whole config, version comparison, and a Test call control on every tab |
+| `/assistants/:id/settings/:tab` | Tabbed configuration editor (General, Rules, Knowledge, Abilities, Channels, Advanced) with one save for the whole config, version comparison, and a Test call button that starts a call in the global test-call bar |
 | `/assistants/:id/settings`, `/assistants/:id/knowledge` | Redirect to the General and Knowledge tabs (the Knowledge tab holds sources, import jobs, digest, FAQs, office hours, price list and contacts) |
 | `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
 | `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
 | `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |
+
+### App shell and design system
+
+`src/App.tsx` renders the authenticated shell: a dark sidebar (icon navigation, current workspace), a sticky top bar (workspace switcher, user, log out) that collapses into a hamburger menu below 900px, the routed page, and the global test-call bar. Visual styling comes from a small set of CSS variables in `src/style.css` (`--ink`, `--muted`, `--line`, `--surface`, `--canvas`, `--accent*`, `--danger*`, `--warning*`, `--info*`, `--radius*`, `--shadow*`, `--text-*`, `--space-*`) plus reusable classes: `.page`, `.page-header`/`PageHeader`, `.toolbar`, `.card`/`.panel`, `.table-wrap`, `.stat`, `.badge-*`, `.button-primary|secondary|ghost|danger|sm`, and the `.state` family used by `LoadingState`, `ErrorState` and `EmptyState` in `src/components/States.tsx`. Settings tabs and the setup page use the same tokens without page-specific overrides. Focus rings use `--focus`, every control has a label, and the sidebar/topbar/bar are keyboard reachable.
+
+### Global test-call bar
+
+`TestCallProvider` (`src/call/TestCallProvider.tsx`) owns one browser test call for the whole app and `TestCallBar` (`src/components/TestCallBar.tsx`) renders it as a sticky bar at the bottom of every authenticated page. It is hidden for `staff` memberships, because `POST /assistants/{id}/test-calls` is owner-only. The bar shows an assistant picker when the workspace has more than one assistant and remembers the last choice per tenant in localStorage (`inbound.testcall.assistant.<tenant>`); the collapsed state is stored in `inbound.testcall.collapsed`.
+
+States: `idle` → `connecting` (test-call link requested, microphone opened, WebSocket connecting) → `in_call` (timer, mute toggles the microphone tracks, hang up closes the socket) → `ended` (duration plus a link to the resulting conversation, found by polling `GET /conversations?channel=web` for a `test_call` conversation of that assistant started after the call began; falls back to the inbox) or `error` (API detail, microphone or connection error, with "Try again" and an "Open in new tab" link to the hosted page). `src/call/webCall.ts` reuses the hosted call page's protocol instead of embedding it: it derives the WebSocket URL from the test-call URL (`…/call/?call_token=x` → `wss://…/call/ws?call_token=x`), captures 16 kHz PCM16 with an AudioWorklet and plays 24 kHz PCM16 replies, honouring `{"type":"clear"}` frames, exactly like `voice/inbound_voice/static/web_call.html`. No backend change was needed. In mock mode `src/mocks/fakeWebCall.ts` connects without audio; tests inject a fake session factory through `renderApp(path, { createWebCallSession })`.
 
 The backend routes may return `501` while product behavior is being implemented. For local UI work and screenshots run `npm run dev:mock` (equivalent to `VITE_USE_MOCKS=1 npm run dev`); the browser-only MSW worker serves the API, and the normal `npm run dev` continues to proxy to the backend. Mock login accepts `demo@example.com` with any password except `wrong`. The first workspace is the general home-services demo; the second demonstrates a law-firm template.
 

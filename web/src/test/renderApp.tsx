@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import App from "../App";
 import { AuthProvider } from "../auth/AuthProvider";
+import type { WebCallSessionFactory } from "../call/webCall";
 import { setMockSession } from "../mocks/db";
 
 function LocationProbe() {
@@ -10,7 +11,7 @@ function LocationProbe() {
   return <output className="sr-only" data-testid="current-location">{location.pathname}{location.search}</output>;
 }
 
-export function renderApp(path = "/", options: { loggedIn?: boolean } = {}) {
+export function renderApp(path = "/", options: { loggedIn?: boolean; createWebCallSession?: WebCallSessionFactory } = {}) {
   localStorage.clear();
   setMockSession(options.loggedIn ?? false);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -19,7 +20,7 @@ export function renderApp(path = "/", options: { loggedIn?: boolean } = {}) {
     ...render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[path]}>
-          <AuthProvider><App /><LocationProbe /></AuthProvider>
+          <AuthProvider><App createWebCallSession={options.createWebCallSession} /><LocationProbe /></AuthProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     ),
