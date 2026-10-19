@@ -1,5 +1,7 @@
 import type { Schemas } from "../api/client";
 import type { AssistantConfig, Locale } from "../lib/config";
+import templateData from "./templates.json";
+import templateSampleData from "./template_samples.json";
 
 const ids = {
   tenants: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"],
@@ -535,11 +537,16 @@ function makeTenant(index: number): TenantFixture {
 }
 
 export const tenantFixtures: TenantFixture[] = [makeTenant(0), makeTenant(1)];
-export const templates: Schemas["TemplateResponse"][] = [
-  { name: "home_services", config: plumbingConfig },
-  { name: "uk_law_firm", config: lawConfig },
-  { name: "blank", config: { ...plumbingConfig, business_name: "Your business", greeting: "Hello, how can I help?", instructions: "", services: {}, urgency_rules: [], policies: [], price_list: [], contacts: {}, knowledge: { faqs: [], max_digest_chars: 24000 }, live_actions: [], post_actions: [], readback: "off" } },
-];
+export const templates = templateData as unknown as Schemas["TemplateResponse"][];
+export const templateSamples = templateSampleData as Record<
+  string,
+  {
+    business_name: string;
+    company_info: string | null;
+    faqs: { question: string; answer: string }[];
+    price_list: { service: string; price: string; notes: string }[];
+  }
+>;
 
 export const setupDraftFixture: Schemas["SetupDraft"] = {
   company_info: "## About\nHarbor Dental Studio provides general dental care for patients in Bristol.",

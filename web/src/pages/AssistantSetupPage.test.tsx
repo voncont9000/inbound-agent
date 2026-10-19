@@ -10,7 +10,18 @@ describe("website-based assistant setup", () => {
   it("submits only accepted sections and includes edited values", async () => {
     const user = userEvent.setup();
     renderApp("/assistants/new", { loggedIn: true });
-    await screen.findByRole("heading", { name: "Set up from your website" });
+    await screen.findByRole("heading", { name: "Create an assistant" });
+    expect(await screen.findByRole("radio", { name: /Blank/ })).toBeChecked();
+    for (const label of [
+      "Blank",
+      "UK B2C law firm",
+      "Restaurant",
+      "Dental or medical clinic",
+      "Home services and trades",
+      "Real estate and lettings",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
     await user.type(screen.getByLabelText("Business name"), "Harbor Dental Studio");
     await user.type(screen.getByLabelText("Website URL (optional)"), "https://harbordental.example");
     await user.click(screen.getByRole("button", { name: "Read website" }));
@@ -57,7 +68,7 @@ describe("website-based assistant setup", () => {
   it("creates an assistant directly when no website is supplied", async () => {
     const user = userEvent.setup();
     renderApp("/assistants/new", { loggedIn: true });
-    await screen.findByRole("heading", { name: "Set up from your website" });
+    await screen.findByRole("heading", { name: "Create an assistant" });
     await user.type(screen.getByLabelText("Business name"), "Harbor Dental Studio");
     await user.click(screen.getByRole("button", { name: "Create assistant" }));
 
@@ -71,7 +82,7 @@ describe("website-based assistant setup", () => {
   it("normalizes a bare domain for setup drafting and completion", async () => {
     const user = userEvent.setup();
     renderApp("/assistants/new", { loggedIn: true });
-    await screen.findByRole("heading", { name: "Set up from your website" });
+    await screen.findByRole("heading", { name: "Create an assistant" });
     await user.type(screen.getByLabelText("Business name"), "Harbor Dental Studio");
     const websiteInput = screen.getByLabelText("Website URL (optional)");
     expect(websiteInput).toHaveAttribute("type", "text");
@@ -97,7 +108,7 @@ describe("website-based assistant setup", () => {
     );
     const user = userEvent.setup();
     renderApp("/assistants/new", { loggedIn: true });
-    await screen.findByRole("heading", { name: "Set up from your website" });
+    await screen.findByRole("heading", { name: "Create an assistant" });
     await user.type(screen.getByLabelText("Business name"), "Harbor Dental Studio");
     await user.type(screen.getByLabelText("Website URL (optional)"), "https://harbordental.example");
     await user.click(screen.getByRole("button", { name: "Read website" }));
@@ -109,5 +120,28 @@ describe("website-based assistant setup", () => {
     expect(mockDb.setupCompletions).toHaveLength(1);
     expect(mockDb.setupCompletions[0].accepted).toEqual({});
     expect(mockDb.setupCompletions[0].website_url).toBe("https://harbordental.example");
+  });
+
+  it("creates a demo assistant with selected template sample content", async () => {
+    const user = userEvent.setup();
+    renderApp("/assistants/new", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Create an assistant" });
+    const lawCard = (await screen.findByText("UK B2C law firm")).closest("article");
+    expect(lawCard).not.toBeNull();
+    await user.click(within(lawCard!).getByRole("button", { name: "Create demo assistant" }));
+
+    await waitFor(() => expect(screen.getByTestId("current-location").textContent).toMatch(/^\/assistants\/.+\/settings\/general$/));
+    expect(mockDb.setupCompletions).toHaveLength(1);
+    expect(mockDb.setupCompletions[0]).toMatchObject({
+      name: "UK B2C law firm demo",
+      business_name: "Demo & Co Solicitors (sample law firm)",
+      template: "uk_law_firm",
+      accepted: {},
+      use_sample_content: true,
+    });
+    const created = mockDb.tenants[0].assistants.at(-1);
+    expect(created?.config.knowledge?.faqs?.length).toBeGreaterThan(0);
+    expect(created?.config.price_list.length).toBeGreaterThan(0);
+    expect(mockDb.tenants[0].assistantData[created!.id].digest.content).toContain("SAMPLE CONTENT");
   });
 });

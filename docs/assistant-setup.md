@@ -1,14 +1,25 @@
 # Website-based assistant setup
 
-Website-based setup creates a new assistant from a template and optionally drafts
+Assistant setup creates a new assistant from a template and optionally drafts
 configuration sections from a public business website. The user reviews each
 draft section before it can be applied. Setup without a website creates an
 assistant with the selected template defaults.
 
 ## Flow and endpoints
 
-The web flow asks for the business name, an optional assistant name, an optional
-website URL, and a template. When a website is supplied, the app submits a draft
+The template picker starts with **Blank** selected when it is available. Blank
+is neutral: industry-specific policies, rules, intake fields, urgency rules,
+prompts, greetings, email triage and technical terms come from the chosen
+industry template, not from generic code defaults. See
+[Assistant templates](templates.md) for the library and its configuration.
+
+Cards with sample content also offer **Create demo assistant**. This creates a
+demo with the template's sample business name, company information, FAQs and
+price list. Those sample details are isolated from normal template selection
+and should be replaced before the demo is used with customers.
+
+The setup flow asks for the business name, an optional assistant name, an
+optional website URL, and a template. When a website is supplied, the app submits a draft
 request and polls the resulting job. The user can accept, edit and accept, or
 discard each drafted section. Sections left pending are not sent during
 completion. If drafting fails, the user can continue with template defaults.
@@ -48,16 +59,26 @@ Unavailable sections are `null`. `warnings` reports parsing issues,
 
 `POST /assistant-setup/complete` is owner-only and returns the created
 assistant (`201`). It accepts `name`, `business_name`, `template`, optional
-`website_url`, and `accepted`, which is a `SetupDraft` containing only sections
-the user chose to apply. The accepted data is applied to a deep copy of the
-template. Accepted FAQs are merged with template FAQs, with accepted entries
-winning question duplicates. The assistant is created through the standard
-assistant creation path, including its initial configuration version.
+`website_url`, `accepted`, and `use_sample_content` (default `false`).
+`accepted` is a `SetupDraft` containing only sections the user chose to apply.
+When `use_sample_content` is true, the selected template must define a sample;
+sample sections are used as the starting draft and each non-null accepted
+section overrides the corresponding sample section. Otherwise only the
+explicitly accepted sections are applied. FAQs are merged with the template's
+existing FAQs, with accepted entries winning question duplicates. The assistant
+is created through the standard assistant creation path, including its initial
+configuration version.
 
-Accepted `company_info` is stored as the assistant's knowledge digest, not in
+Effective `company_info` is stored as the assistant's knowledge digest, not in
 the assistant configuration. If a website URL is provided at completion, it is
 saved as a pending knowledge source and a knowledge import is queued
-automatically. The crawl runs in a worker after setup is complete.
+automatically. The crawl runs in a worker after setup is complete. The
+`setup_completed` audit metadata records the effective section names and
+`use_sample_content`.
+
+`GET /templates` returns templates sorted by configured order and name. Each
+response contains `name`, `label`, `description`, `sets_up`,
+`sample_business_name` (null when no demo exists), and the resolved `config`.
 
 ## Safety and acceptance
 
