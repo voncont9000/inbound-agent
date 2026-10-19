@@ -1,4 +1,4 @@
-import { ChannelConnections } from "../ChannelConnections";
+import { ChannelConnections, ManualChannelForm } from "../ChannelConnections";
 import { Field, type SettingsTabProps } from "./fields";
 
 export function ChannelsTab({ assistantId, config, update }: SettingsTabProps) {
@@ -13,5 +13,6 @@ export function ChannelsTab({ assistantId, config, update }: SettingsTabProps) {
         ["not_relevant", "Not relevant"],
       ] as const).map(([key, label]) => <Field key={key} path={`email_triage.${key}`} label={label}>{(fieldId) => <textarea id={fieldId} value={config.email_triage?.[key] ?? ""} onChange={(event) => update((draft) => { if (draft.email_triage) draft.email_triage[key] = event.target.value; })} />}</Field>)}
     </section>
+    <ManualChannelForm assistantId={assistantId} />
   </>;
 }

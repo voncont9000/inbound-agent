@@ -12,6 +12,7 @@ A personalised, vertical-agnostic AI agent that takes customer inquiries via pho
 - [After-conversation actions](docs/actions.md)
 - [Website-based assistant setup](docs/assistant-setup.md): draft, review, and acceptance flow
 - [Help centre research](docs/help-center-research.md); in-app help articles are authored in `web/src/help/articles`
+- [Assistant settings layout](docs/settings.md): which tab owns each setting, voice picker, and the consolidation audit
 - [Fonio teardown](docs/fonio-teardown.md): reverse-engineering notes on the reference product, made with [REA](https://github.com/morluto/rea)
 
 ## Local development

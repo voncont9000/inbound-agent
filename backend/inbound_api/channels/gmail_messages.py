@@ -25,6 +25,32 @@ SKIP_LOCAL_PARTS = {
     "postmaster",
     "notifications",
 }
+PUBLIC_MAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "googlemail.com",
+        "outlook.com",
+        "hotmail.com",
+        "hotmail.co.uk",
+        "live.com",
+        "live.co.uk",
+        "msn.com",
+        "yahoo.com",
+        "yahoo.co.uk",
+        "ymail.com",
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        "aol.com",
+        "proton.me",
+        "protonmail.com",
+        "gmx.de",
+        "gmx.net",
+        "gmx.com",
+        "web.de",
+        "t-online.de",
+    }
+)
 SUPPORTED_ATTACHMENTS = {
     "text/plain": ".txt",
     "text/markdown": ".md",
@@ -72,7 +98,11 @@ def skip_reason(message: dict[str, Any], mailbox: str, settings: dict[str, Any])
     sender_local, _, sender_domain = sender.partition("@")
     if sender == mailbox:
         return "self_sender"
-    if sender_domain == mailbox_domain and not settings.get("include_internal", False):
+    if (
+        sender_domain == mailbox_domain
+        and mailbox_domain not in PUBLIC_MAIL_DOMAINS
+        and not settings.get("include_internal", False)
+    ):
         return "internal_sender"
     if sender_local.casefold() in SKIP_LOCAL_PARTS:
         return "automated_sender"
