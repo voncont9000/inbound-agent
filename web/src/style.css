@@ -293,6 +293,23 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .settings-tabs a:hover { color: var(--ink); }
 .settings-tabs a.active, .settings-tabs a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--accent-strong); }
 .save-bar { position: sticky; top: var(--topbar-h); z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; background: rgb(246 248 247 / 92%); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: var(--space-3) 0; }
+.page-template-setup { max-width: 1060px; }
+.template-picker-fieldset { display: grid; gap: var(--space-3); border: 0; margin: 0; padding: 0; min-width: 0; }
+.template-picker-fieldset legend { font-size: var(--text-sm); font-weight: 700; margin-bottom: var(--space-1); padding: 0; }
+.template-picker-fieldset > .help { margin: 0; }
+.template-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); min-width: 0; }
+.template-card { display: grid; align-content: start; gap: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: var(--space-4); min-width: 0; }
+.template-card-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.template-choice { display: flex; align-items: flex-start; gap: var(--space-3); cursor: pointer; min-width: 0; }
+.template-choice input { margin-top: 0.25rem; flex-shrink: 0; }
+.template-copy { display: grid; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.template-copy > span { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.template-copy ul { display: grid; gap: var(--space-1); margin: 0; padding-left: 1.2rem; font-size: var(--text-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.template-demo { display: grid; justify-items: start; gap: var(--space-2); border-top: 1px solid var(--line); padding-top: var(--space-3); }
+.template-demo .muted { margin: 0; font-size: var(--text-xs); }
+@media (min-width: 760px) {
+  .template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .voice-picker-filters { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.65rem; }
 .voice-picker-filters input { flex: 1 1 14rem; }
 .voice-picker-filters select { flex: 0 1 11rem; width: auto; }
@@ -312,7 +329,7 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .ability-card-header h2 { margin-bottom: 0.3rem; }
 .ability-card-header p { margin: 0; }
 .ability-card-on { border-left: 4px solid var(--accent); }
-.switch { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 600; cursor: pointer; color: var(--ink); }
+.switch { display: inline-flex; align-items: center; gap: var(--space-2); flex-shrink: 0; font-weight: 600; cursor: pointer; color: var(--ink); white-space: nowrap; }
 .switch input { appearance: none; width: 2.6rem; height: 1.5rem; border-radius: 999px; background: var(--line-strong); position: relative; padding: 0; border: 0; cursor: pointer; transition: background 0.15s; }
 .switch input::after { content: ""; position: absolute; top: 0.2rem; left: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: white; transition: transform 0.15s; box-shadow: var(--shadow-sm); }
 .switch input:checked { background: var(--accent); }

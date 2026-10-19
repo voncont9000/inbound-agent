@@ -18,6 +18,8 @@ describe("web route contracts", () => {
       "/contacts/:id",
       "/tasks",
       "/knowledge-gaps",
+      "/help",
+      "/help/:category/:article",
     ]);
   });
 });

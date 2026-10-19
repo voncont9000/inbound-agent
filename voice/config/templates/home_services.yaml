@@ -1,0 +1,129 @@
+template:
+  label: Home services and trades
+  description: Books callouts for plumbing, heating and electrical work, captures the full address and flags emergencies such as leaks, no heat or gas smells.
+  order: 40
+  sets_up:
+    - Emergency callout, quote request and general enquiry intake with address and postcode
+    - Gas and electrical safety policy (gas emergency line, 999)
+    - Urgency for leaks, flooding, no heating or hot water and sparking
+    - Email triage tuned for jobs and quotes
+  # SAMPLE CONTENT: demo business details only applied by "Create demo assistant". Replace before going live.
+  sample:
+    business_name: Brightside Plumbing & Heating (sample trades business)
+    company_info: |
+      SAMPLE CONTENT - replace with your business's details.
+      Brightside Plumbing & Heating is a family-run, Gas Safe registered team covering Leeds and
+      postcodes LS1 to LS29. The office is open Monday to Friday 08:00-18:00 and Saturday
+      09:00-13:00. A 24-hour emergency callout service runs every day for leaks, burst pipes and
+      loss of heating or hot water. Services include boiler servicing, boiler repairs and new
+      installs, radiators, bathrooms, blocked drains and general plumbing. All work carries a
+      12-month guarantee.
+    faqs:
+      - question: Do you cover my area?
+        answer: We cover Leeds postcodes LS1 to LS29. Outside that area we may be able to help for larger jobs; the office will confirm.
+      - question: Are you Gas Safe registered?
+        answer: Yes, all our heating engineers are Gas Safe registered.
+      - question: Do you give free quotes?
+        answer: Quotes for new boilers and bathrooms are free. Repairs are charged at the callout rate.
+      - question: How do I pay?
+        answer: We take card, bank transfer and cash on completion of the job.
+    price_list:
+      - {service: Daytime callout, price: "85 pounds including the first hour", notes: "Sample price. Parts extra."}
+      - {service: "Emergency callout (evenings, weekends)", price: "140 pounds including the first hour", notes: "Sample price. Parts extra."}
+      - {service: Annual boiler service, price: "95 pounds", notes: "Sample price."}
+language: en-GB
+business_name: Your business
+greeting: "Hello, you are speaking with our AI assistant. How can I help?"
+instructions: |
+  Use short, natural spoken sentences. Ask one question at a time.
+  When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
+  question twice in a row.
+
+  At the beginning of every call, say: "{greeting}"
+
+  Find out what the problem is, how urgent it is and where the property is. Always collect the
+  full address including the postcode, and check whether the caller owns or rents the property.
+  For emergencies, follow the safety policies first, then take the details so an engineer can
+  call back as a priority.
+  Take jobs as requests: say the office will confirm the engineer and time. Never promise an
+  arrival time yourself.
+  Answer prices only from the business information. Be honest when the office is closed.
+  Office hours: {office_hours}.
+
+  When the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye
+  in response.
+readback: critical
+office_hours:
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday]
+  opens: "08:00"
+  closes: "18:00"
+  timezone: Europe/London
+price_list: []
+policies:
+  - "If the caller smells gas, tell them to leave the property, not to use switches or flames, and to call the National Gas Emergency line on 0800 111 999 now. If anyone is in danger, tell them to call 999."
+  - "If there is sparking, burning smells from electrics or water near electrics, tell them to switch off at the consumer unit only if it is safe, keep away, and call 999 if there is fire or injury."
+  - "For a leak or burst pipe, suggest turning off the water at the stopcock if they can do so safely."
+  - "Never promise an arrival time, diagnose a fault or quote for work. Give prices only from the published price list and offer a quote visit for anything else."
+  - "Always collect the full address and postcode of the job, and say which part of the property is affected."
+  - "If a customer complains about previous work, apologise, take the details and say the office manager will call back. Do not admit liability."
+rules:
+  ai_disclosure: at_start
+  style: friendly
+  off_topic: redirect
+  angry_caller: de_escalate
+  sales_calls: take_message
+contacts: {}
+services:
+  emergency_callout:
+    label: Emergency callout
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: address, label: Job address, type: string, critical: true}
+      - {name: postcode, label: Postcode, type: string, critical: true}
+      - {name: problem, label: Problem described, type: string, critical: true}
+      - {name: problem_type, label: Problem type, type: enum, choices: [leak_or_burst_pipe, no_heating_or_hot_water, blocked_drain, electrical_fault, gas_smell, other]}
+      - {name: water_off, label: Water turned off, type: boolean}
+      - {name: vulnerable_occupant, label: "Elderly, disabled or young children at the property", type: boolean}
+      - {name: property_status, label: Owner or tenant, type: enum, choices: [owner, tenant, landlord, agent]}
+      - {name: access_notes, label: Access notes, type: string}
+  quote_request:
+    label: Quote or booked job
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: email, label: Email address, type: email}
+      - {name: address, label: Job address, type: string, critical: true}
+      - {name: postcode, label: Postcode, type: string, critical: true}
+      - {name: job_type, label: Job type, type: enum, choices: [boiler_service, boiler_repair, new_boiler, radiators, bathroom, general_plumbing, electrical, other]}
+      - {name: job_description, label: Job description, type: string}
+      - {name: preferred_dates, label: Preferred dates, type: string}
+      - {name: property_status, label: Owner or tenant, type: enum, choices: [owner, tenant, landlord, agent]}
+  general_enquiry:
+    label: General enquiry
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: reason, label: Reason for contact, type: string}
+urgency_rules:
+  - type: keyword
+    phrases: ["smell gas", "gas leak", "carbon monoxide", "flooding", "burst pipe", "water coming through", "leak", "no heating", "no hot water", "sparking", "burning smell"]
+    reason: "Caller described an emergency at the property: {phrase}"
+  - type: sentence
+    text: "A vulnerable person (elderly, disabled, unwell or a baby) is at a property without heating or water."
+live_actions: []
+post_actions: []
+email_triage:
+  enquiry: >-
+    A customer asking for a callout, quote or booked job, or about services, prices, coverage
+    area or availability, which you can answer or move forward from the business context.
+  needs_human: >-
+    Emergencies, complaints about previous work, payment disputes, insurance claims, supplier or
+    job applications, and anything the business context does not cover.
+  spam: "Unsolicited marketing, phishing, scams or automated bulk mail."
+  not_relevant: >-
+    Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt,
+    or a message clearly meant for a different business.
+call_settings:
+  technical_terms: [boiler, combi, radiator, stopcock, consumer unit, Gas Safe]
+review_confidence_threshold: 0.7

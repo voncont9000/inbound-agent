@@ -134,16 +134,18 @@ describe("global test-call bar", () => {
     expect(localStorage.getItem("inbound.testcall.assistant.10000000-0000-4000-8000-000000000001")).toBe(secondAssistantId);
   });
 
-  it("starts the bar call from the assistant settings Test call button", async () => {
+  it("starts a call from the global bar while on assistant settings", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const { factory, calls } = fakeFactory();
-    renderApp(`/assistants/${assistantId}/settings`, { loggedIn: true, createWebCallSession: factory });
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true, createWebCallSession: factory });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("button", { name: "Test call" }));
+    expect(screen.queryByRole("button", { name: "Test call" })).not.toBeInTheDocument();
+    expect(within(bar()).getAllByRole("button", { name: "Start test call" })).toHaveLength(1);
+    await user.click(within(bar()).getByRole("button", { name: "Start test call" }));
     await waitFor(() => expect(calls).toHaveLength(1));
     act(() => calls[0].events.onConnected());
     expect(within(bar()).getByText(/In call with/)).toHaveTextContent("Brightside reception");
-    expect(screen.getByRole("button", { name: "In test call" })).toBeDisabled();
+    expect(within(bar()).getByRole("button", { name: "Hang up" })).toBeInTheDocument();
   });
 
   it("connects a WhatsApp channel using its phone number ID", async () => {

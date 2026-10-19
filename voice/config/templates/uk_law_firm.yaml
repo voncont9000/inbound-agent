@@ -1,3 +1,35 @@
+template:
+  label: UK B2C law firm
+  description: Takes enquiries for conveyancing and employment law, never gives legal advice, records parties for conflict checks and flags tribunal deadlines.
+  order: 10
+  sets_up:
+    - Conveyancing and employment intake with critical contact fields
+    - No legal advice, client confidentiality, conflict-check and complaints policies
+    - Urgency for danger, hearings or arrests today and employment tribunal deadlines
+    - Email triage tuned for legal enquiries
+  # SAMPLE CONTENT: demo business details only applied by "Create demo assistant". Replace before going live.
+  sample:
+    business_name: Demo & Co Solicitors (sample law firm)
+    company_info: |
+      SAMPLE CONTENT - replace with your firm's details.
+      Demo & Co Solicitors is a consumer law firm at 8 Castle Street, Hereford HR1 2NL, regulated
+      by the Solicitors Regulation Authority. The office is open Monday to Friday 09:00-17:30.
+      The firm helps individuals with residential conveyancing (purchases, sales and remortgages)
+      and employment law (dismissal, redundancy, discrimination and settlement agreements).
+      Initial enquiries are free; a solicitor calls back to discuss the matter and fees.
+      Complaints go to the complaints partner at complaints@demoandco.example. If a complaint is
+      not resolved within eight weeks, clients can contact the Legal Ombudsman.
+    faqs:
+      - question: Do you offer no win, no fee?
+        answer: For some employment claims. A solicitor will confirm whether it is available after reviewing the matter.
+      - question: How long does conveyancing take?
+        answer: A typical purchase takes 12 to 16 weeks from offer to completion, depending on the chain and searches.
+      - question: Can you review my settlement agreement?
+        answer: Yes. Employers often contribute to the fee; a solicitor will confirm after seeing the agreement.
+    price_list:
+      - {service: "Residential conveyancing purchase, freehold", price: "1,250 to 1,800 pounds plus VAT and disbursements", notes: "Sample price range."}
+      - {service: Residential remortgage, price: "595 pounds plus VAT and disbursements", notes: "Sample price."}
+      - {service: Employment settlement agreement review, price: "500 to 900 pounds plus VAT", notes: "Sample price range."}
 language: en-GB
 business_name: Law firm
 greeting: "Hello, you are speaking with our AI assistant. How can I help?"
@@ -155,4 +187,6 @@ post_actions: []
 #       events: [conversation_completed]
 #     subject_template: "Thanks for contacting {{ business_name }}"
 #     body_template: "We have received your enquiry."
+call_settings:
+  technical_terms: [conveyancing, freehold, leasehold, ACAS, tribunal, remortgage, completion, exchange, solicitor, redundancy, settlement agreement]
 review_confidence_threshold: 0.7

@@ -11,6 +11,7 @@ import { AssistantSetupPage } from "./pages/AssistantSetupPage";
 import { HomePage } from "./pages/HomePage";
 import { AssistantsPage, AssistantSettingsPage, AssistantSettingsRedirect } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
+import { HelpArticlePage, HelpHomePage } from "./help/HelpPages";
 
 const icon = (path: string) => <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
 
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/tasks", label: "Tasks", icon: icon("M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11") },
   { to: "/knowledge-gaps", label: "Knowledge gaps", icon: icon("M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20") },
   { to: "/assistants", label: "Assistants", icon: icon("M12 2a3 3 0 0 1 3 3v1h2a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h2V5a3 3 0 0 1 3-3M9 13h.01M15 13h.01M9 17h6") },
+  { to: "/help", label: "Help", icon: icon("M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0") },
 ];
 
 function Brand() {
@@ -105,6 +107,8 @@ export default function App({ createWebCallSession }: { createWebCallSession?: W
               <Route path="/contacts/:id" element={<ContactPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/knowledge-gaps" element={<KnowledgeGapsPage />} />
+              <Route path="/help" element={<HelpHomePage />} />
+              <Route path="/help/:category/:article" element={<HelpArticlePage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

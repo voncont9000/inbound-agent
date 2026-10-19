@@ -4,7 +4,9 @@ from urllib.parse import urljoin
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from inbound_core.config import assistant_config_json_schema, load_assistant_config
+from inbound_core.config import assistant_config_json_schema
+from inbound_core.templates import find_template
+from inbound_core.templates import list_templates as load_templates
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,20 +46,23 @@ _tenant_session_dependency = Depends(get_tenant_session)
 
 
 def _template_exists(name: str) -> bool:
-    return any(
-        path.is_file() and path.stem == name for path in get_settings().templates_dir.glob("*.yaml")
-    )
+    return find_template(get_settings().templates_dir, name) is not None
 
 
 @router.get("/templates", response_model=list[TemplateResponse])
 async def list_templates(_: TenantContext = _staff) -> list[TemplateResponse]:
-    templates = get_settings().templates_dir
     return [
         TemplateResponse(
-            name=path.stem,
-            config=load_assistant_config(path, template_dir=templates),
+            name=template.name,
+            label=template.meta.label,
+            description=template.meta.description,
+            sets_up=template.meta.sets_up,
+            sample_business_name=(
+                template.meta.sample.business_name if template.meta.sample else None
+            ),
+            config=template.config,
         )
-        for path in sorted(path for path in templates.glob("*.yaml") if path.is_file())
+        for template in load_templates(get_settings().templates_dir)
     ]
 
 

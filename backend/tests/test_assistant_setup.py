@@ -4,11 +4,12 @@ from uuid import UUID
 
 import psycopg
 import pytest
+from inbound_core.templates import find_template
 from sqlalchemy import func, select, text
 
 from inbound_api.db import tenant_session
 from inbound_api.jobs import run_next_job
-from inbound_api.models import Assistant, Job, KnowledgeDigest, KnowledgeSource
+from inbound_api.models import Assistant, AuditLog, Job, KnowledgeDigest, KnowledgeSource
 from inbound_api.routers import assistant_setup as assistant_setup_router
 from inbound_api.services import assistant_setup
 from inbound_api.services import job_handlers as _job_handlers  # noqa: F401
@@ -370,6 +371,89 @@ async def test_complete_setup_with_template_defaults_creates_no_knowledge_rows(
     assert digest_count == 0
     assert source_count == 0
     assert import_jobs == []
+
+
+async def test_complete_setup_can_use_template_sample_content_and_override_sections(
+    tenant_pair,
+) -> None:
+    account = tenant_pair["first"]
+    client = account["client"]
+    templates = (await client.get("/templates")).json()
+    template = next(item for item in templates if item["name"] == "uk_law_firm")
+    sample = find_template(get_settings().templates_dir, "uk_law_firm").meta.sample
+    assert sample is not None
+    assert template["sample_business_name"] == sample.business_name
+    accepted_price_list = [{"service": "Consultation", "price": "£99", "notes": "Accepted price."}]
+
+    sample_response = await client.post(
+        "/assistant-setup/complete",
+        json={
+            "name": "Demo firm sample",
+            "business_name": "My sample firm",
+            "template": "uk_law_firm",
+            "accepted": {},
+            "use_sample_content": True,
+        },
+    )
+
+    assert sample_response.status_code == 201, sample_response.text
+    sample_assistant = sample_response.json()
+    assert sample_assistant["config"]["price_list"] == [
+        item.model_dump(mode="json") for item in sample.price_list
+    ]
+    assert sample_assistant["config"]["knowledge"]["faqs"] == [
+        faq.model_dump(mode="json") for faq in sample.faqs
+    ]
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        digest = await session.scalar(
+            select(KnowledgeDigest).where(
+                KnowledgeDigest.assistant_id == UUID(sample_assistant["id"])
+            )
+        )
+        audit = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "assistant.setup_completed",
+                AuditLog.target_id == UUID(sample_assistant["id"]),
+            )
+        )
+    assert digest is not None
+    assert digest.content == sample.company_info
+    assert audit is not None
+    assert audit.diff["use_sample_content"] is True
+
+    response = await client.post(
+        "/assistant-setup/complete",
+        json={
+            "name": "Demo firm",
+            "business_name": "My firm",
+            "template": "uk_law_firm",
+            "accepted": {"price_list": accepted_price_list},
+            "use_sample_content": True,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assistant = response.json()
+    assert assistant["config"]["business_name"] == "My firm"
+    assert assistant["config"]["price_list"] == accepted_price_list
+
+
+async def test_complete_setup_rejects_sample_content_for_blank_template(tenant_pair) -> None:
+    client = tenant_pair["first"]["client"]
+
+    response = await client.post(
+        "/assistant-setup/complete",
+        json={
+            "name": "Blank assistant",
+            "business_name": "My business",
+            "template": "blank",
+            "accepted": {},
+            "use_sample_content": True,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Template has no sample content"
 
 
 async def test_complete_setup_treats_blank_website_url_as_absent(tenant_pair) -> None:

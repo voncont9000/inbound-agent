@@ -299,6 +299,9 @@ The operator UI is in `web/`, built with React, TypeScript, React Query, and pla
 | `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
 | `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
 | `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |
+| `/help`, `/help/:category/:article` | In-app help centre and searchable articles |
+
+Help articles live in `web/src/help/articles/<category>/<slug>.md`. Add the required front matter fields `title`, `category` (matching the folder), numeric `order`, and one-sentence `summary`; use `related: [category/slug, ...]` for optional related articles.
 
 ### App shell and design system
 
