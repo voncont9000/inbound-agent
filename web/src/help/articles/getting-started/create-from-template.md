@@ -25,6 +25,10 @@ Templates with sample business details have a **Create demo assistant** button. 
 3. Check its rules, knowledge and enabled abilities.
 4. Use **Save changes** after reviewing the settings.
 
+## Delete assistants
+
+Owners can delete an assistant from the Assistants overview. The overview shows how many conversations it has. Deleting an assistant with conversations permanently deletes those conversations, including transcripts and recordings; contacts are kept. An assistant with an active conversation cannot be deleted until that conversation has finished.
+
 ### Good to know
 
 Templates are starting points, not a complete description of your organisation. Check every name, service, policy and response before going live. A demo assistant contains sample business details; replace them before use.

@@ -4,7 +4,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from inbound_core.call_report import CallTransferMetrics
 from pydantic import ValidationError
 from sqlalchemy import literal_column, not_, select
@@ -26,6 +26,8 @@ from inbound_api.models import (
 from inbound_api.schemas import (
     ActionRunSummary,
     CallRecordingSummary,
+    ConversationBulkDeleteRequest,
+    ConversationBulkDeleteResponse,
     ConversationDetailResponse,
     ConversationListResponse,
     ConversationReviewCreate,
@@ -36,6 +38,7 @@ from inbound_api.schemas import (
     TaskSummary,
 )
 from inbound_api.services.audit import write_audit
+from inbound_api.services.conversation_delete import delete_conversations
 from inbound_api.services.pagination import page_query
 from inbound_api.services.recordings import LocalRecordingStore
 from inbound_api.services.review import merged_needs_review
@@ -43,6 +46,7 @@ from inbound_api.settings import get_settings
 
 router = APIRouter(tags=["conversations"])
 _staff = Depends(require_role(MembershipRole.STAFF))
+_owner = Depends(require_role(MembershipRole.OWNER))
 _tenant_session_dependency = Depends(get_tenant_session)
 
 _HAS_REVIEW = literal_column(
@@ -123,6 +127,36 @@ async def list_conversations(
         items=[_conversation_summary(row, *summaries.get(row.id, (None, False))) for row in rows],
         next_cursor=next_cursor,
     )
+
+
+@router.post(
+    "/conversations/bulk-delete",
+    response_model=ConversationBulkDeleteResponse,
+)
+async def bulk_delete_conversations(
+    payload: ConversationBulkDeleteRequest,
+    ctx: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> ConversationBulkDeleteResponse:
+    result = await delete_conversations(session, ctx, payload.ids)
+    return ConversationBulkDeleteResponse(
+        deleted=len(result.deleted_ids),
+        skipped_in_progress=len(result.skipped_in_progress_ids),
+    )
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+async def delete_conversation(
+    conversation_id: UUID,
+    ctx: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> Response:
+    result = await delete_conversations(session, ctx, [conversation_id])
+    if not result.deleted_ids and not result.skipped_in_progress_ids:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if result.skipped_in_progress_ids:
+        raise HTTPException(status_code=409, detail="Conversation is still in progress")
+    return Response(status_code=204)
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetailResponse)

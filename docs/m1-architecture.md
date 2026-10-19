@@ -73,11 +73,16 @@ but staff do not satisfy owner access.
 
 ## Platform API
 
-The platform API provides assistant templates, creation, listing, detail, version history,
-updates, and deletion; channel connection listing/creation/deletion; knowledge source and
-digest management; conversation listing/detail/reviews; tasks; knowledge gaps; and job
-status. Deleting an assistant with conversations returns `409`. Tenant-scoped IDs that
-are invisible under RLS return `404`.
+The platform API provides assistant templates, creation, listing (including conversation
+counts), detail, version history, updates, and deletion; channel connection
+listing/creation/deletion; knowledge source and digest management; conversation
+listing/detail/reviews and deletion; tasks; knowledge gaps; and job status. Owner-only
+`DELETE /assistants/{assistant_id}` preserves its `409` when conversations exist unless
+`delete_conversations=true` is supplied; it returns `409` if any are active.
+Owner-only `DELETE /conversations/{conversation_id}` deletes one completed conversation,
+while `POST /conversations/bulk-delete` deletes 1–100 IDs and reports active conversations
+skipped. Conversation deletion removes transcripts and recordings while keeping contacts.
+Tenant-scoped IDs that are invisible under RLS return `404`.
 
 Conversation, task, and knowledge-gap lists use descending `(created_at, id)` keyset
 pagination with URL-safe base64 cursors and limits from 1 to 200. Intake review flags
@@ -293,10 +298,10 @@ The operator UI is in `web/`, built with React, TypeScript, React Query, and pla
 |---|---|
 | `/login`, `/signup` | Cookie-session authentication and account creation |
 | `/` | Home dashboard: conversation, handling, booking, task, time-saved, latency, and cost stats with a chart |
-| `/assistants` | Assistant list and template-based setup |
+| `/assistants` | Assistant list, conversation counts, and template-based setup; owners can delete assistants |
 | `/assistants/:id/settings/:tab` | Tabbed configuration editor (General, Rules, Knowledge, Abilities, Channels, Advanced) with one save for the whole config and a Test call button on every tab that starts a call in the global test-call bar; each setting appears once (see [settings.md](./settings.md)). Config version history stays in the API but is not shown |
 | `/assistants/:id/settings`, `/assistants/:id/knowledge` | Redirect to the General and Knowledge tabs (the Knowledge tab holds sources, import jobs, digest, FAQs and office hours; prices and contacts are under General › Instructions) |
-| `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, and review |
+| `/inbox`, `/conversations/:id` | Conversation filters, transcript, intake comparison, review, and owner-only deletion |
 | `/contacts`, `/contacts/:id` | Contact context, identity merge, and split |
 | `/tasks`, `/knowledge-gaps` | Follow-up task and unanswered-question queues |
 | `/help`, `/help/:category/:article` | In-app help centre and searchable articles |

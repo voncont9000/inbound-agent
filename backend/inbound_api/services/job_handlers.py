@@ -73,7 +73,10 @@ def _slot_from_id(appointment_types, slot_id: str) -> Slot:
 
 @register("graph_ingest")
 async def graph_ingest(session: AsyncSession, payload: dict) -> None:
-    await graph.ingest_conversation(session, UUID(payload["conversation_id"]))
+    conversation_id = UUID(payload["conversation_id"])
+    if await session.get(Conversation, conversation_id) is None:
+        return
+    await graph.ingest_conversation(session, conversation_id)
 
 
 @register("message_reply")

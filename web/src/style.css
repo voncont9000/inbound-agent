@@ -286,7 +286,7 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .voice-picker { display: grid; gap: 0.65rem; }
 .voice-picker-fieldset { border: 0; margin: 0; padding: 0; }
 .voice-picker-fieldset legend { font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2); padding: 0; }
-.voice-picker-list { display: grid; gap: 0.65rem; }
+.voice-picker-list { border: 1px solid var(--line); border-radius: var(--radius-sm); display: grid; gap: 0.65rem; max-height: 22rem; overflow-y: auto; padding: var(--space-2); }
 .voice-picker-card { align-items: center; border: 1px solid var(--line); border-radius: var(--radius); display: flex; gap: var(--space-4); justify-content: space-between; padding: 0.85rem var(--space-4); background: var(--surface); }
 .voice-picker-card-selected { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .voice-picker-choice { align-items: flex-start; cursor: pointer; display: flex; flex: 1; gap: 0.75rem; color: var(--ink); }

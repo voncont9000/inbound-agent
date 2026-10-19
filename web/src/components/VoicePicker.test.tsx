@@ -197,6 +197,17 @@ describe("VoicePicker", () => {
     expect(screen.getByText("No voices match these filters.")).toBeInTheDocument();
   });
 
+  it("resets the voice list scroll position when filters change", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn());
+    const list = await screen.findByRole("radiogroup", { name: "Voice" });
+    list.scrollTop = 140;
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Gender" }), "male");
+
+    await waitFor(() => expect(list.scrollTop).toBe(0));
+  });
+
   it("plays and stops one shared preview and disables missing previews", async () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, "play")

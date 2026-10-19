@@ -45,6 +45,13 @@ export async function unwrap<T>(promise: Promise<ApiResult<T>>): Promise<T> {
   return result.data;
 }
 
+export async function unwrapNoContent(promise: Promise<ApiResult<unknown>>): Promise<void> {
+  const result = await promise;
+  if (result.error !== undefined || !result.response.ok) {
+    throw new ApiError(errorMessage(result.error), result.response.status, result.error);
+  }
+}
+
 export async function uploadKnowledgeFile(assistantId: string, file: File) {
   return unwrap(api.POST("/assistants/{assistant_id}/knowledge/sources", {
     params: { path: { assistant_id: assistantId } },

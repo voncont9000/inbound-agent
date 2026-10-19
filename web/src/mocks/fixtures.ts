@@ -532,9 +532,13 @@ function makeTenant(index: number): TenantFixture {
   const assistant: Schemas["AssistantResponse"] = {
     id: ids.assistants[index], name: index === 0 ? "Brightside reception" : "Demo & Co reception",
     template: index === 0 ? "home_services" : "uk_law_firm", config, version: 3, created_at: date(1), updated_at: date(10),
+    conversation_count: 0,
   };
   const conversations = Array.from({ length: 6 }, (_, item) => makeConversation(index, item));
   if (index === 0) conversations.push(makeGmailDraftConversation());
+  assistant.conversation_count = conversations.filter(
+    (conversation) => conversation.assistant_id === assistant.id,
+  ).length;
   const contacts = makeContacts(index);
   const taskList = conversations.flatMap(({ tasks }) => tasks);
   return {

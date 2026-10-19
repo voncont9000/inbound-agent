@@ -472,6 +472,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk Delete Conversations */
+        post: operations["bulk_delete_conversations_conversations_bulk_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -483,7 +500,8 @@ export interface paths {
         get: operations["get_conversation_conversations__conversation_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Conversation */
+        delete: operations["delete_conversation_conversations__conversation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1069,6 +1087,11 @@ export interface components {
         /** AssistantResponse */
         AssistantResponse: {
             config: components["schemas"]["AssistantConfig-Output"];
+            /**
+             * Conversation Count
+             * @default 0
+             */
+            conversation_count: number;
             /**
              * Created At
              * Format: date-time
@@ -1656,6 +1679,18 @@ export interface components {
             items: components["schemas"]["ContactSummary"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** ConversationBulkDeleteRequest */
+        ConversationBulkDeleteRequest: {
+            /** Ids */
+            ids: string[];
+        };
+        /** ConversationBulkDeleteResponse */
+        ConversationBulkDeleteResponse: {
+            /** Deleted */
+            deleted: number;
+            /** Skipped In Progress */
+            skipped_in_progress: number;
         };
         /** ConversationCreatedResponse */
         ConversationCreatedResponse: {
@@ -3098,7 +3133,9 @@ export interface operations {
     };
     delete_assistant_assistants__assistant_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                delete_conversations?: boolean;
+            };
             header?: {
                 "X-Tenant-Id"?: string | null;
             };
@@ -3984,6 +4021,41 @@ export interface operations {
             };
         };
     };
+    bulk_delete_conversations_conversations_bulk_delete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationBulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationBulkDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_conversation_conversations__conversation_id__get: {
         parameters: {
             query?: never;
@@ -4005,6 +4077,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConversationDetailResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_conversation_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

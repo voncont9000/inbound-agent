@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from inbound_core.config import assistant_config_json_schema
 from inbound_core.templates import find_template
 from inbound_core.templates import list_templates as load_templates
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,8 @@ from inbound_api.models import (
     Assistant,
     AssistantConfigVersion,
     ChannelConnection,
+    Conversation,
+    ConversationStatus,
     MembershipRole,
 )
 from inbound_api.schemas import (
@@ -33,6 +35,9 @@ from inbound_api.schemas import (
     TestCallResponse,
 )
 from inbound_api.services.audit import write_audit
+from inbound_api.services.conversation_delete import (
+    delete_conversations as delete_conversations_service,
+)
 from inbound_api.services.diff import config_diff
 from inbound_api.services.gmail_queue import enqueue_gmail_sync
 from inbound_api.services.phone import normalise_phone
@@ -76,7 +81,21 @@ async def list_assistants(
     ctx: TenantContext = _staff, session: AsyncSession = _tenant_session_dependency
 ) -> AssistantListResponse:
     rows = await session.scalars(select(Assistant).order_by(Assistant.created_at.desc()))
-    return AssistantListResponse(items=[AssistantResponse.model_validate(row) for row in rows])
+    assistants = list(rows)
+    count_rows = await session.execute(
+        select(Conversation.assistant_id, func.count(Conversation.id)).group_by(
+            Conversation.assistant_id
+        )
+    )
+    counts = dict(count_rows.all())
+    return AssistantListResponse(
+        items=[
+            AssistantResponse.model_validate(assistant).model_copy(
+                update={"conversation_count": counts.get(assistant.id, 0)}
+            )
+            for assistant in assistants
+        ]
+    )
 
 
 @router.post("/assistants", response_model=AssistantResponse, status_code=201)
@@ -199,18 +218,30 @@ async def update_assistant(
 @router.delete("/assistants/{assistant_id}", status_code=204)
 async def delete_assistant(
     assistant_id: UUID,
+    delete_conversations: bool = False,
     ctx: TenantContext = _owner,
     session: AsyncSession = _tenant_session_dependency,
 ) -> None:
     assistant = await session.get(Assistant, assistant_id)
     if assistant is None:
         raise HTTPException(status_code=404, detail="Assistant not found")
-    conversation_id = await session.scalar(
-        text("SELECT id FROM conversations WHERE assistant_id = :assistant_id LIMIT 1"),
-        {"assistant_id": assistant_id},
+    conversations = list(
+        await session.scalars(
+            select(Conversation).where(Conversation.assistant_id == assistant_id).with_for_update()
+        )
     )
-    if conversation_id is not None:
+    if conversations and not delete_conversations:
         raise HTTPException(status_code=409, detail="Assistant has conversations")
+    if any(item.status == ConversationStatus.ACTIVE for item in conversations):
+        raise HTTPException(status_code=409, detail="Conversation is still in progress")
+    if conversations:
+        result = await delete_conversations_service(
+            session,
+            ctx,
+            [conversation.id for conversation in conversations],
+        )
+        if result.skipped_in_progress_ids:
+            raise HTTPException(status_code=409, detail="Conversation is still in progress")
     await write_audit(session, ctx, "assistant.deleted", "assistant", assistant_id)
     await enqueue(
         session,

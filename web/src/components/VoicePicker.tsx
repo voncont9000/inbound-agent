@@ -37,6 +37,9 @@ export function VoicePicker({
 }) {
   const queryClient = useQueryClient();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const selectedVoiceRef = useRef<HTMLInputElement | null>(null);
+  const initialVoiceScrolled = useRef(false);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [changingLanguage, setChangingLanguage] = useState(false);
   const [search, setSearch] = useState("");
@@ -55,6 +58,10 @@ export function VoicePicker({
     setAccent("");
   }, [language]);
 
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [search, gender, accent, showAll]);
+
   const allVoices = useMemo(() => voicesQuery.data?.voices ?? [], [voicesQuery.data]);
   const selectedVoiceId = voiceId ?? voicesQuery.data?.default_voice_id ?? "";
   const query = search.trim().toLowerCase();
@@ -66,6 +73,19 @@ export function VoicePicker({
       (!gender || voice.gender === gender) &&
       (!accent || voice.accent === accent));
   }, [allVoices, filtering, showAll, language, selectedVoiceId, query, gender, accent]);
+
+  useEffect(() => {
+    const list = listRef.current;
+    const selected = selectedVoiceRef.current;
+    if (
+      initialVoiceScrolled.current ||
+      !list ||
+      !selected ||
+      typeof selected.scrollIntoView !== "function"
+    ) return;
+    selected.scrollIntoView({ block: "nearest" });
+    initialVoiceScrolled.current = true;
+  }, [visibleVoices, selectedVoiceId]);
 
   const selectLanguage = async (event: ChangeEvent<HTMLSelectElement>) => {
     const nextLanguage = event.currentTarget.value as Locale;
@@ -186,7 +206,7 @@ export function VoicePicker({
           </select>}
         </div>}
         {catalogue.voices.length ? (
-          <div className="voice-picker-list" role="radiogroup" aria-label="Voice" id={listId}>
+          <div ref={listRef} className="voice-picker-list" role="radiogroup" aria-label="Voice" id={listId}>
             {visibleVoices.map((voice) => {
               const selected = voice.id === selectedVoiceId;
               const playing = playingVoiceId === voice.id;
@@ -201,6 +221,7 @@ export function VoicePicker({
                       name="assistant-voice"
                       value={voice.id}
                       checked={selected}
+                      ref={selected ? selectedVoiceRef : undefined}
                       onChange={() => selectVoice(voice)}
                     />
                     <span className="voice-picker-copy">

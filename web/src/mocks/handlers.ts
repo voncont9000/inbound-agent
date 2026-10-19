@@ -21,6 +21,29 @@ function findAssistant(tenant: TenantFixture, id: string) {
   return tenant.assistants.find((assistant) => assistant.id === id);
 }
 
+function assistantWithConversationCount(tenant: TenantFixture, assistant: Schemas["AssistantResponse"]) {
+  return {
+    ...assistant,
+    conversation_count: tenant.conversations.filter(
+      (conversation) => conversation.assistant_id === assistant.id,
+    ).length,
+  };
+}
+
+function removeConversation(tenant: TenantFixture, id: string) {
+  const index = tenant.conversations.findIndex((conversation) => conversation.id === id);
+  if (index === -1) return false;
+  tenant.conversations.splice(index, 1);
+  tenant.contacts.forEach((contact) => {
+    contact.conversations = contact.conversations.filter((conversation) => conversation.id !== id);
+  });
+  tenant.gaps = tenant.gaps.filter((gap) => gap.conversation_id !== id);
+  tenant.tasks = tenant.tasks.map((task) => (
+    task.conversation_id === id ? { ...task, conversation_id: null } : task
+  ));
+  return true;
+}
+
 function toConversationSummary(detail: Schemas["ConversationDetailResponse"]): Schemas["ConversationSummary"] {
   return {
     id: detail.id,
@@ -208,6 +231,7 @@ export const handlers = [
       version: 1,
       created_at: createdAt,
       updated_at: createdAt,
+      conversation_count: 0,
     };
     tenant.assistants.push(assistant);
     tenant.assistantData[id] = {
@@ -283,7 +307,12 @@ export const handlers = [
     if (!mockDb.loggedIn) return HttpResponse.json<ApiErrorResponse>({ detail: "Not authenticated" }, { status: 401 });
     return HttpResponse.json<Schemas["MeResponse"]>({ user: mockDb.user, tenant: mockDb.memberships.find(({ id }) => id === selectedTenantId(request)) ?? mockDb.memberships[0], memberships: mockDb.memberships });
   }),
-  http.get<never, never, Schemas["AssistantListResponse"]>("*/api/assistants", ({ request }) => HttpResponse.json<Schemas["AssistantListResponse"]>({ items: selectedTenant(request).assistants })),
+  http.get<never, never, Schemas["AssistantListResponse"]>("*/api/assistants", ({ request }) => {
+    const tenant = selectedTenant(request);
+    return HttpResponse.json<Schemas["AssistantListResponse"]>({
+      items: tenant.assistants.map((assistant) => assistantWithConversationCount(tenant, assistant)),
+    });
+  }),
   http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>("*/api/assistants/:id/channels", ({ params }) => HttpResponse.json<Schemas["ChannelConnectionsResponse"]>({ items: mockDb.channels[String(params.id)] ?? [] })),
   http.post<{ id: string }, Schemas["ChannelConnectionCreate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/assistants/:id/channels", async ({ params, request }) => {
     const assistantId = String(params.id);
@@ -327,6 +356,7 @@ export const handlers = [
       version: 1,
       created_at: createdAt,
       updated_at: createdAt,
+      conversation_count: 0,
     };
     const baseState = tenant.assistantData[baseAssistant.id];
     tenant.assistants.push(assistant);
@@ -337,9 +367,34 @@ export const handlers = [
     };
     return HttpResponse.json<Schemas["AssistantResponse"]>(assistant, { status: 201 });
   }),
+  http.delete<{ id: string }>("*/api/assistants/:id", async ({ request, params }) => {
+    const tenant = selectedTenant(request);
+    const assistantId = String(params.id);
+    const assistantIndex = tenant.assistants.findIndex(({ id }) => id === assistantId);
+    if (assistantIndex === -1) {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    }
+    const url = new URL(request.url);
+    const deleteConversations = url.searchParams.get("delete_conversations") === "true";
+    const conversations = tenant.conversations.filter(
+      (conversation) => conversation.assistant_id === assistantId,
+    );
+    if (conversations.length && !deleteConversations) {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant has conversations" }, { status: 409 });
+    }
+    if (conversations.some(({ status }) => status === "active")) {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Conversation is still in progress" }, { status: 409 });
+    }
+    conversations.forEach(({ id }) => removeConversation(tenant, id));
+    tenant.assistants.splice(assistantIndex, 1);
+    delete tenant.assistantData[assistantId];
+    delete mockDb.channels[assistantId];
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.get<{ id: string }, never, ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistants/:id", ({ request, params }) => {
-    const assistant = findAssistant(selectedTenant(request), String(params.id));
-    return assistant ? HttpResponse.json<Schemas["AssistantResponse"]>(assistant) : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    const tenant = selectedTenant(request);
+    const assistant = findAssistant(tenant, String(params.id));
+    return assistant ? HttpResponse.json<Schemas["AssistantResponse"]>(assistantWithConversationCount(tenant, assistant)) : HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
   }),
   http.put<{ id: string }, Schemas["AssistantUpdate"], ApiResponse<Schemas["AssistantResponse"]>>("*/api/assistants/:id", async ({ request, params }) => {
     const body = await requestJson<Schemas["AssistantUpdate"]>(request);
@@ -460,6 +515,36 @@ export const handlers = [
     const items = filtered.slice(cursor, cursor + limit).map(toConversationSummary);
     const next = cursor + limit < filtered.length ? String(cursor + limit) : null;
     return HttpResponse.json<Schemas["ConversationListResponse"]>({ items, next_cursor: next });
+  }),
+  http.post<never, Schemas["ConversationBulkDeleteRequest"], ApiResponse<Schemas["ConversationBulkDeleteResponse"]>>("*/api/conversations/bulk-delete", async ({ request }) => {
+    const tenant = selectedTenant(request);
+    const { ids } = await requestJson<Schemas["ConversationBulkDeleteRequest"]>(request);
+    let deleted = 0;
+    let skippedInProgress = 0;
+    for (const id of new Set(ids)) {
+      const conversation = tenant.conversations.find((item) => item.id === id);
+      if (conversation?.status === "active") {
+        skippedInProgress += 1;
+      } else if (removeConversation(tenant, id)) {
+        deleted += 1;
+      }
+    }
+    return HttpResponse.json<Schemas["ConversationBulkDeleteResponse"]>({
+      deleted,
+      skipped_in_progress: skippedInProgress,
+    });
+  }),
+  http.delete<{ id: string }, never, ApiResponse<null>>("*/api/conversations/:id", ({ request, params }) => {
+    const tenant = selectedTenant(request);
+    const conversation = tenant.conversations.find(({ id }) => id === params.id);
+    if (!conversation) {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Conversation not found" }, { status: 404 });
+    }
+    if (conversation.status === "active") {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Conversation is still in progress" }, { status: 409 });
+    }
+    removeConversation(tenant, String(params.id));
+    return new HttpResponse(null, { status: 204 });
   }),
   http.get<{ id: string }, never, ApiResponse<Schemas["ConversationDetailResponse"]>>("*/api/conversations/:id", ({ request, params }) => {
     const conversation = selectedTenant(request).conversations.find(({ id }) => id === params.id);
