@@ -30,7 +30,7 @@ Sidebar: **Overview**, **Assistants**, **Conversations**, and **More**. More con
 |---|---|
 | Overview `/` | Calls answered, calls handled by assistants, time saved, call-history chart (calls/minutes), credit balance and spend per assistant. Insights unlock after 15 conversations. |
 | Assistants `/agents` → `/agents/:id/{general,rules,knowledge,prompt,technical}` | Per-assistant config (below). Fixed bottom bar with **Assign Number** and **Test call** (a browser web call). |
-| Conversations `/inbox` | One feed for all channels. The detail view has a title, channel (e.g. *Webcall*), duration, AI summary, timestamped transcript (Assistant/Caller), extracted **Results**, and **Export**. |
+| Conversations `/inbox` | One feed for all channels. The detail view has a title, channel (e.g. *Webcall*), duration, AI summary, and a transcript with one row per turn, a clear Assistant/Caller label, and the time since the call started, plus extracted **Results** and **Export**. |
 | Phone Numbers | Tabs All / Inbound / Outbound / WhatsApp. Buy a number. Table of Name / Number / Usage / Assignment. |
 | WhatsApp | WhatsApp Business activation, which needs a subscription. |
 | Scheduling | Event types (General, Availability, Notifications, Data Collection, Agents, Advanced). Connect a Google or Microsoft calendar. Public booking page. |

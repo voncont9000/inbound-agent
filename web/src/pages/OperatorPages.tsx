@@ -5,6 +5,8 @@ import { api, unwrap, type Schemas } from "../api/client";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CallRecordingPlayer } from "../components/CallRecordingPlayer";
 import { Badge, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
+import { formatDate } from "../lib/date";
+import { transcriptRows } from "../lib/transcript";
 
 type IntakeRecord = Record<string, unknown>;
 type IntakeField = {
@@ -21,7 +23,6 @@ type IntakeField = {
 
 const channels = ["phone", "web", "gmail", "whatsapp"] as const;
 const statuses = ["active", "completed", "failed"] as const;
-const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
 
 function formatBookingStart(value: unknown, timezone: unknown) {
   if (typeof value !== "string") return null;
@@ -145,6 +146,7 @@ export function ConversationPage() {
   if (detailQuery.error || !detail) return <main className="page" id="main-content"><ErrorState message="Conversation could not be loaded." /></main>;
   const contact = detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{detail.external_ref}</Link> : detail.external_ref;
   const emailTriage = asRecord(detail.metrics.email_triage);
+  const transcript = transcriptRows(detail.messages, detail.channel, detail.started_at);
   return <main className="page" id="main-content">
     <PageHeader eyebrow={`Conversation · ${detail.channel}`} title={<>{detail.summary ?? "Conversation details"} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<Link className="button" to="/inbox">Back to inbox</Link>} />
     <div className="panel card-grid"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
@@ -163,7 +165,19 @@ export function ConversationPage() {
     {detail.channel === "gmail" && Object.keys(emailTriage).length > 0 && <section className="panel"><h2>Email triage</h2><div className="card-grid"><div><strong>Category</strong><p>{String(emailTriage.category ?? "—")}</p></div><div><strong>Reason</strong><p>{String(emailTriage.reason ?? "—")}</p></div></div></section>}
     {detail.transfer && <section className="panel"><h2>Transfer</h2><div className="card-grid"><div><strong>Target</strong><p>{detail.transfer.target_key}</p></div><div><strong>Status</strong><p>{detail.transfer.status}</p></div><div><strong>Latency</strong><p>{detail.transfer.latency_ms == null ? "—" : `${detail.transfer.latency_ms} ms`}</p></div></div></section>}
     <CallRecordingPlayer conversationId={id} recording={detail.recording} />
-    <section className="panel"><h2>Transcript</h2><div className="transcript">{detail.messages.map((message) => <article className={`message message-${message.role}`} key={message.id}><strong>{message.role} {message.role === "assistant" && message.meta.draft === true && <Badge tone="neutral">Draft in Gmail</Badge>}</strong><div>{message.text}</div><time>{formatDate(message.ts)}</time></article>)}</div></section>
+    <section className="panel">
+      <h2>Transcript</h2>
+      <ol className="call-transcript" aria-label="Conversation transcript">
+        {transcript.map((row) => <li className="call-transcript-row" data-role={row.role} key={row.id}>
+          <time className="call-transcript-time" dateTime={row.ts}>{row.time}</time>
+          <strong className="call-transcript-speaker">
+            {row.speaker}
+            {row.draft && <Badge tone="neutral">Draft in Gmail</Badge>}
+          </strong>
+          <div className="call-transcript-text">{row.text}</div>
+        </li>)}
+      </ol>
+    </section>
     <section className="panel stack"><h2>Intake comparison</h2>
       {!intakes.merged && <p className="muted">Merged intake is unavailable. Live and post-call values are shown where available.</p>}
       <div className="table-scroll">

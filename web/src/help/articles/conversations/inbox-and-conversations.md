@@ -8,6 +8,8 @@ related: [conversations/contacts, conversations/tasks-and-urgency, assistant-set
 
 The inbox brings together conversations for the selected workspace. Open a conversation to review its transcript, intake details and any channel-specific information.
 
+Calls show one row per turn, with a clear speaker label and the time elapsed since the call started.
+
 ## Find a conversation
 
 1. Open [Inbox](/inbox).
