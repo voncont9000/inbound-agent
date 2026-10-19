@@ -36,7 +36,7 @@ export function ChannelConnections({ assistantId }: { assistantId: string }) {
     {channels.isLoading && <LoadingState />}
     {channels.error && <ErrorState message="Channel connections could not be loaded." />}
     {channels.data?.items.map((channel) => <p key={channel.id}>{channel.kind}: <strong>{channel.external_id}</strong></p>)}
-    {channels.data && !channels.data.items.length && <p className="muted">No channels connected yet. Add a phone or WhatsApp number under Advanced.</p>}
+    {channels.data && !channels.data.items.length && <p className="muted">No channels connected yet. Add a phone or WhatsApp number below.</p>}
     {gmailMode.data?.mode === "google" && <div className="stack">
       <p className="help">Gmail is draft-only. Replies are saved as drafts for review and are never sent automatically.</p>
       <button className="button-primary" type="button" disabled={startGmailOAuth.isPending} onClick={() => startGmailOAuth.mutate()}>
@@ -95,11 +95,9 @@ export function ManualChannelForm({ assistantId }: { assistantId: string }) {
     },
     onError: (caught) => setError(caught instanceof Error ? caught.message : "Unable to add channel."),
   });
-  const channels = useChannels(assistantId);
   return <section className="panel stack" aria-labelledby="manual-channel-heading">
     <h2 id="manual-channel-heading">Add a channel manually</h2>
     <p className="help">Connect a phone number, WhatsApp phone number ID, or test inbox by its external ID.</p>
-    {channels.data?.items.map((channel) => <p key={channel.id}>{channel.kind}: <strong>{channel.external_id}</strong></p>)}
     {gmailMode.data?.mode !== "off" && (gmailMode.data?.mode !== "google" || kind !== "gmail") && <form className="form-grid" onSubmit={(event) => {
       event.preventDefault();
       event.stopPropagation();

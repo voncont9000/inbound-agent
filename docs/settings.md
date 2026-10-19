@@ -1,0 +1,54 @@
+# Assistant settings layout
+
+Settings live at `/assistants/:id/settings/:tab` (`general`, `rules`, `knowledge`, `abilities`,
+`channels`, `advanced`). One **Save changes** button saves the whole `AssistantConfig` from any tab.
+Validation errors are routed to the tab that owns the field by `tabForPath` in
+`web/src/lib/settingsTabs.ts`; keep that function in sync when a control moves.
+
+Each setting is shown exactly once. The settings reorganization is UI-only: it does not change the
+config shape or existing saved assistants. The template library and new-assistant defaults are
+documented in [templates.md](templates.md).
+
+| Tab | Owns |
+| --- | --- |
+| General | Assistant name, business name, language and voice, greeting, **Instructions** (custom prompt) with the prompt details below it: services and intake fields, prices, contact details |
+| Rules | Rule presets, custom rules, pronunciation, sentence urgency rules, keyword and date urgency rules |
+| Knowledge | Office hours, FAQs, knowledge sources and digest |
+| Abilities | Calendar booking (appointment types, booking timing and holding messages), call forwarding (transfer targets, forwarding messages), after-conversation actions, readback (mode and live confirmation) |
+| Channels | Channel connections, add a channel manually, email triage |
+| Advanced | Live actions that no ability card owns (`flag_urgent`, `request_callback`, `log_complaint`, `end_call`), review threshold, call settings and recording |
+
+## Voice picker
+
+The General tab shows up to six recommended voices for the selected language: the current voice,
+the catalogue default, then voices for the exact locale, alternating genders. A search box (name,
+accent, locale) and gender/accent filters search the whole catalogue; **Show all N voices** expands
+the list. Each voice keeps its Play/Stop sample button. The recommendation is computed in the
+browser (`web/src/lib/voices.ts`); the `/voices` API is unchanged.
+
+## Consolidation audit (2026-10-19)
+
+| Setting | Old location(s) | New location | Reason |
+| --- | --- | --- | --- |
+| Config version history and diff | Settings page, below the tabs | Not shown | Product owner request. Backend versioning and `GET /assistants/{id}/versions` are unchanged; the save bar says "All changes saved" instead of a version number. |
+| Voice list | General: every catalogue voice | General: 6 recommended + search, gender/accent filters, "Show all voices" | The full catalogue was too long to scan. |
+| Instructions | General: "Instructions" textarea | General › Instructions: "Custom prompt" | Grouped with the other details that feed the prompt. |
+| Services and intake fields | Abilities: "Services and intake fields" card with an on/off switch | General › Instructions, collapsed under the prompt with a count summary; full structured editor (label, type, choices, required, critical, description) | They only shape what the assistant asks for, so they belong with the prompt. Kept structured because extraction, critical-field readback and date urgency rules use the generated field keys. The on/off switch was dropped (an empty list means none). |
+| Price list | Knowledge: "Price list" | General › Instructions › Prices | Only rendered into the prompt ("PUBLISHED PRICES"). Kept as rows so the published-price rules still apply. |
+| Contact details | Knowledge: "Contact details" | General › Instructions › Contact details | Only rendered into the prompt ("CONTACTS"); company-info style data. Generated keys unchanged. |
+| Readback mode | Abilities: Readback on/off card (said "choose under Advanced"); Advanced: "Readback mode" radios (off/email/critical) | Abilities › Readback: switch = off, radios = email / critical | The same setting was in two places. |
+| `confirm_critical_fields` live action | Advanced: Live actions | Abilities › Readback: "Record the caller's confirmation" | It is the live half of readback; turning readback off also removes it. |
+| `check_availability`, `book_appointment` live actions | Abilities: Calendar booking switch; Advanced: Live actions checkboxes | Abilities › Calendar booking only (switch, plus a "Turn them on" button if they are missing) | Duplicate control; the booking card note used to send users to Advanced. |
+| `transfer_call` live action | Abilities: Call forwarding switch; Advanced: Live actions checkbox | Abilities › Call forwarding switch only | Duplicate control. |
+| Other live actions (`flag_urgent`, `request_callback`, `log_complaint`, `end_call`) | Advanced: Live actions | Advanced: Live actions (unchanged) | No ability card owns them. |
+| Booking timing and holding messages (calendar ID, holding lines, notice, horizon, buffer, slot step, max slots, attendee updates) | Advanced: "Booking timing" (empty until booking was on under Abilities) | Abilities › Calendar booking › "Booking timing and messages" (collapsed) | All booking settings in one card. |
+| Appointment types | Abilities › Calendar booking | Unchanged | Structured; used by the booking tools. |
+| Transfer targets | Abilities › Call forwarding | Unchanged | Structured; used by `transfer_call`. |
+| Forwarding handoff / no-answer messages | Advanced: "Call forwarding messages" | Abilities › Call forwarding › "Forwarding messages" (collapsed) | All forwarding settings in one card. |
+| Keyword and date urgency rules | Advanced: "Urgency rules" | Rules: "Keyword and date urgency rules", next to the sentence "Urgent if…" rules | All `urgency_rules` in one tab. Kept structured; date rules reference intake field keys. |
+| Sentence urgency rules | Rules: "Urgent if…" | Unchanged | — |
+| Add a channel manually | Advanced: "Add a channel manually" | Channels, below the channel connections | Channel setup in one tab; its duplicate list of connected channels was removed. |
+| Office hours, FAQs, knowledge sources | Knowledge | Unchanged | Facts the assistant looks up, not prompt instructions. |
+| Rule presets, custom rules, pronunciation | Rules | Unchanged | — |
+| Email triage | Channels | Unchanged | — |
+| Review threshold, call settings, recording | Advanced | Unchanged | Technical values with template defaults. |

@@ -32,8 +32,8 @@ describe("operator workflows", () => {
     expect(phone).toHaveAttribute("type", "tel");
     await user.type(phone, "+447700900123");
     await user.type(screen.getByLabelText("When to use"), "The caller asks for a person.");
-    await user.click(screen.getByRole("link", { name: "Advanced" }));
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Forwarding messages" }));
     const handoffMessage = screen.getByLabelText("Handoff message");
     await user.clear(handoffMessage);
     await user.type(handoffMessage, "A colleague will speak with you shortly.");
@@ -117,36 +117,42 @@ describe("operator workflows", () => {
       }
     };
     server.events.on("request:start", putListener);
-    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
     expect(screen.queryByLabelText("Field name")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Service key")).not.toBeInTheDocument();
 
     await user.clear(screen.getAllByLabelText("Choices")[0]);
-    await user.click(screen.getByRole("link", { name: "General" }));
+    await user.click(screen.getByRole("link", { name: "Abilities" }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/abilities`));
+    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`));
     expect(await screen.findByRole("heading", { name: /errors to fix/ })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Choices")[0]).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("link", { name: /Abilities.*1 to fix/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /General.*1 to fix/ })).toBeInTheDocument();
     expect(putCount).toBe(0);
 
     await user.type(screen.getAllByLabelText("Choices")[0], "a, b");
     const serviceLabel = screen.getAllByLabelText("Service label")[0];
     await user.clear(serviceLabel);
     await user.type(serviceLabel, "Boiler servicing");
-    await user.click(screen.getByRole("link", { name: "Advanced" }));
+    await user.click(screen.getByRole("link", { name: "Rules" }));
     await user.clear(screen.getByLabelText("Phrases (comma or newline separated)"));
     await user.type(screen.getByLabelText("Phrases (comma or newline separated)"), "gas leak, flooding");
+    await user.click(screen.getByRole("link", { name: "Abilities" }));
+    if (!(screen.getByRole("switch", { name: "Readback" }) as HTMLInputElement).checked) await user.click(screen.getByRole("switch", { name: "Readback" }));
     await user.click(screen.getByRole("radio", { name: /Read email addresses back letter by letter/ }));
     await user.click(screen.getByRole("radio", { name: /Read back every field marked critical/ }));
+    await user.click(screen.getByRole("link", { name: "Advanced" }));
+    expect(screen.queryByRole("radio", { name: /Read back every field marked critical/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /transfer call/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /request callback/ }));
     const threshold = screen.getByRole("slider", { name: /confidence threshold/i });
     fireEvent.change(threshold, { target: { value: "0.8" } });
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(capturedBody).toBeDefined());
-    expect(await screen.findByText("Saved version 4")).toBeInTheDocument();
+    expect(await screen.findByText("Changes saved")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
     const savedConfig = capturedBody?.config as Record<string, unknown>;
     expect(savedConfig.readback).toBe("critical");
@@ -172,8 +178,9 @@ describe("operator workflows", () => {
     }, { status: 422 })));
     await user.click(screen.getByRole("link", { name: "General" }));
     await user.type(screen.getByLabelText("Greeting"), " Welcome.");
+    await user.click(screen.getByRole("link", { name: "Knowledge" }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/abilities`));
+    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`));
     await waitFor(() => expect(screen.getAllByText("Label rejected by server.")).toHaveLength(2));
     const firstLabel = screen.getAllByLabelText("Field label")[0];
     expect(firstLabel).toHaveAttribute("aria-invalid", "true");
@@ -190,8 +197,9 @@ describe("operator workflows", () => {
       }
     };
     server.events.on("request:start", listener);
-    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
     await user.click(screen.getByRole("button", { name: "Add service" }));
     const labels = screen.getAllByLabelText("Service label");
     const newService = labels[labels.length - 1];
@@ -204,7 +212,7 @@ describe("operator workflows", () => {
     await waitFor(() => expect(capturedBody).toBeDefined());
     const services = (capturedBody?.config as { services: Record<string, { label: string; fields: Array<{ name: string; label: string }> }> }).services;
     expect(services.boiler_repair_2).toMatchObject({ label: "Boiler repair", fields: [{ name: "caller_name", label: "Caller name" }] });
-    expect(await screen.findByText("Saved version 4")).toBeInTheDocument();
+    expect(await screen.findByText("Changes saved")).toBeInTheDocument();
 
     capturedBody = undefined;
     const savedLabels = screen.getAllByLabelText("Service label");
@@ -238,7 +246,7 @@ describe("operator workflows", () => {
     await user.clear(labels[1]);
     await user.type(labels[1], "Consultation");
     await user.type(screen.getAllByLabelText("When to use this appointment type")[1], "Follow-up visits.");
-    await user.click(screen.getByRole("link", { name: "Advanced" }));
+    await user.click(screen.getByRole("button", { name: "Booking timing and messages" }));
     const checkMessage = screen.getByLabelText("Availability holding message");
     await user.clear(checkMessage);
     await user.type(checkMessage, "Checking the diary now.");
@@ -436,8 +444,9 @@ describe("operator workflows", () => {
       }
     };
     server.events.on("request:start", listener);
-    renderApp(`/assistants/${assistantId}/settings/knowledge`, { loggedIn: true });
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Edit contact details" }));
     expect(screen.queryByLabelText("Contact key")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Office")).toHaveValue(contacts.office);
 

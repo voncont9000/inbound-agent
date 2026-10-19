@@ -1017,6 +1017,7 @@ async def run_bot(
                     except Exception as error:
                         logger.warning("Could not complete voice API call start: {}", error)
                 try:
+                    metrics_observer.flush_assistant_transcript()
                     report = build_call_report(
                         sink.directory,
                         external_call_id,
@@ -1132,6 +1133,7 @@ async def finalize_call_intake(
     call_started_at: datetime | None = None,
     call_ended_at: datetime | None = None,
 ) -> dict[str, Any]:
+    metrics_observer.flush_assistant_transcript()
     model = env.get("EXTRACTION_MODEL", DEFAULT_EXTRACTION_MODEL).strip()
     key = env.get("GOOGLE_API_KEY", "").strip()
     live_path = sink.directory / "intake.live.json"

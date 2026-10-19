@@ -17,41 +17,38 @@ export function settingsTabPath(assistantId: string, tab: SettingsTabId = "gener
   return `/assistants/${assistantId}/settings/${tab}`;
 }
 
-const advancedBooking = /^booking\.(check_message|book_message|min_notice_hours|horizon_days|buffer_minutes|slot_step_minutes|max_slots_offered|send_updates)$/;
-
 /** The tab that shows the input for a config error path such as `services.x.fields.0.name`. */
 export function tabForPath(path: string): SettingsTabId {
   const root = path.split(".")[0];
-  if (advancedBooking.test(path)) return "advanced";
-  if (/^urgency_rules\.\d+\.text$/.test(path)) return "rules";
   switch (root) {
     case "rules":
       return "rules";
     case "language":
     case "voice_id":
+    case "instructions":
+    case "services":
+    case "price_list":
+    case "contacts":
       return "general";
     case "policies":
+    case "urgency_rules":
       return "rules";
     case "office_hours":
-    case "price_list":
     case "knowledge":
-    case "contacts":
       return "knowledge";
-    case "services":
     case "booking":
     case "transfer_targets":
+    case "transfer_handoff_message":
+    case "transfer_failed_message":
+    case "readback":
     case "post_actions":
       return "abilities";
     case "email_triage":
       return "channels";
-    case "readback":
     case "live_actions":
-    case "urgency_rules":
     case "call_settings":
     case "recording":
     case "review_confidence_threshold":
-    case "transfer_handoff_message":
-    case "transfer_failed_message":
       return "advanced";
     default:
       return "general";
