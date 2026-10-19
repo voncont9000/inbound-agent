@@ -50,30 +50,15 @@ describe("RulePresetsEditor", () => {
     expect(screen.getByTestId("config")).toHaveTextContent('"style":null');
   });
 
-  it("adds pronunciation and sentence urgency entries", async () => {
+  it("adds pronunciation entries", async () => {
     const user = userEvent.setup();
-    const configWithKeyword = {
-      ...initialConfig,
-      urgency_rules: [{ type: "keyword", phrases: ["within 4 weeks"] }],
-    } as unknown as AssistantConfig;
-    render(<EditorHarness initial={configWithKeyword} />);
+    render(<EditorHarness />);
 
     await user.click(screen.getByRole("button", { name: "Add pronunciation" }));
     await user.type(screen.getByLabelText("Term 1"), "ACAS");
     await user.type(screen.getByLabelText("Say it as 1"), "Ay-cass");
-    await user.click(screen.getByRole("button", { name: "Add urgent rule" }));
-    await user.type(
-      screen.getByLabelText("Urgent if… 1"),
-      "Urgent if a deadline is within 4 weeks",
-    );
 
     expect(screen.getByTestId("config")).toHaveTextContent('"term":"ACAS","say_as":"Ay-cass"');
-    expect(screen.getByTestId("config")).toHaveTextContent(
-      '"type":"keyword","phrases":["within 4 weeks"]',
-    );
-    expect(screen.getByTestId("config")).toHaveTextContent(
-      '"type":"sentence","text":"Urgent if a deadline is within 4 weeks"',
-    );
   });
 
   it("shows pronunciation validation errors", () => {

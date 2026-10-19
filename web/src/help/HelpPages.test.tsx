@@ -74,6 +74,7 @@ describe("help centre pages", () => {
     const link = screen.getByRole("link", { name: "Help: Set conversation rules" });
     expect(link).toHaveAttribute("href", "/help/assistant-settings/rules");
     expect(link).toHaveAttribute("title", "Help: Set conversation rules");
+    expect(link).toHaveTextContent("? Help");
   });
 
   it("includes the contextual help link on assistant settings", async () => {

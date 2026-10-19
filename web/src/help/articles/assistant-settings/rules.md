@@ -18,9 +18,10 @@ Rules tell the assistant how to handle conversations. Use clear, specific direct
 ## Set pronunciation and urgency guidance
 
 1. Add pronunciation guidance for names or terms the assistant may say aloud.
-2. Review the urgency guidance and specify what the team should treat as urgent.
-3. Review **Keyword and date urgency rules** in the Rules tab alongside the written urgency guidance.
-4. Save your changes and make a **Test call** using an example scenario.
+2. In **Urgency**, add plain-language conditions under **Urgent if…**. These sentence rules are the primary way to mark conversations urgent.
+3. To use structured rules, expand **More rule types: keywords and date deadlines**. It opens by default when the assistant already has a keyword or date deadline rule.
+4. Choose **Keywords** or **Date deadline**. For a date deadline, select a service and date field, then set the month and day adjustments and urgency threshold. The read-only preview uses the field's configured label and reflects those values.
+5. Save your changes and make a **Test call** using an example scenario.
 
 ### Good to know
 

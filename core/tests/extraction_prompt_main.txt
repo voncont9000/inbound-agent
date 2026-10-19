@@ -7,7 +7,7 @@ Call start: 2026-01-01T00:00:00+00:00 (Europe/London).
 Office hours: Monday 09:00-17:00
 (Europe/London).
 Return summary as one or two neutral sentences describing the enquiry, with no advice.
-For list fields such as key_dates, return a list of strings such as "2026-08-10: dismissed".
+For list fields such as key_dates, return a list of strings such as "2026-08-10: delivery date".
 When the caller spells a value, preserve that spelling. For caller_name, when an email
 local part clearly matches the caller's name, use its spelling (for example,
 "siobhan.mcallister@" means "Siobhan McAllister").

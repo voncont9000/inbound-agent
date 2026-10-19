@@ -45,8 +45,8 @@ browser (`web/src/lib/voices.ts`); the `/voices` API is unchanged.
 | Appointment types | Abilities › Calendar booking | Unchanged | Structured; used by the booking tools. |
 | Transfer targets | Abilities › Call forwarding | Unchanged | Structured; used by `transfer_call`. |
 | Forwarding handoff / no-answer messages | Advanced: "Call forwarding messages" | Abilities › Call forwarding › "Forwarding messages" (collapsed) | All forwarding settings in one card. |
-| Keyword and date urgency rules | Advanced: "Urgency rules" | Rules: "Keyword and date urgency rules", next to the sentence "Urgent if…" rules | All `urgency_rules` in one tab. Kept structured; date rules reference intake field keys. |
-| Sentence urgency rules | Rules: "Urgent if…" | Unchanged | — |
+| Keyword and date urgency rules | Advanced: "Urgency rules" | Rules: one "Urgency" section; structured rules are under "More rule types: keywords and date deadlines" | All `urgency_rules` in one section. Sentence rules appear first; date rules still reference intake field keys. |
+| Sentence urgency rules | Rules: "Urgent if…" | Rules: "Urgency" | Sentence rules are the primary option; keyword and date rules are progressively disclosed. |
 | Add a channel manually | Advanced: "Add a channel manually" | Channels, below the channel connections | Channel setup in one tab; its duplicate list of connected channels was removed. |
 | Office hours, FAQs, knowledge sources | Knowledge | Unchanged | Facts the assistant looks up, not prompt instructions. |
 | Rule presets, custom rules, pronunciation | Rules | Unchanged | — |

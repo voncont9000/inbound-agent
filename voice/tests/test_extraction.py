@@ -151,7 +151,7 @@ def test_extraction_coerces_values_and_marks_invalid_values() -> None:
         "Resolve a clear preferred time into preferred_time_iso"
         in client.models.arguments["contents"]
     )
-    assert '"2026-08-10: dismissed"' in client.models.arguments["contents"]
+    assert '"2026-08-10: delivery date"' in client.models.arguments["contents"]
     assert schema == _extraction_schema(config)
     assert "1. caller:" in client.models.arguments["contents"]
     assert (

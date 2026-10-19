@@ -1,6 +1,5 @@
 import type { AssistantConfig } from "../lib/config";
 import { FieldError } from "./States";
-import { Field } from "./settings/fields";
 import { invalidProps } from "./settings/errors";
 
 type RulesConfig = NonNullable<AssistantConfig["rules"]>;
@@ -34,9 +33,6 @@ export function RulePresetsEditor({
 }) {
   const rules = config.rules ?? DEFAULT_RULES;
   const pronunciations = rules.pronunciations ?? [];
-  const sentenceRules = config.urgency_rules.flatMap((rule, index) =>
-    rule.type === "sentence" ? [{ rule, index }] : [],
-  );
 
   return <section className="panel stack" aria-labelledby="rules-heading">
     <h2 id="rules-heading">Rules</h2>
@@ -189,35 +185,5 @@ export function RulePresetsEditor({
       })}>Add pronunciation</button>
     </div>
 
-    <div className="stack">
-      <h3>Urgent if…</h3>
-      <p className="help">
-        Plain sentences checked after each conversation; a match creates an urgent task with the reason.
-      </p>
-      {sentenceRules.map(({ rule, index }, position) => <div className="inline-editor" key={`sentence-rule-${index}`}>
-        <Field
-          path={`urgency_rules.${index}.text`}
-          label={`Urgent if… ${position + 1}`}
-          error={errors[`urgency_rules.${index}.text`]}
-        >
-          {(fieldId, describedBy) => <input
-            id={fieldId}
-            placeholder="Urgent if a deadline is within 4 weeks"
-            value={rule.text}
-            aria-describedby={describedBy}
-            onChange={(event) => update((draft) => {
-              const current = draft.urgency_rules[index];
-              if (current?.type === "sentence") current.text = event.target.value;
-            })}
-          />}
-        </Field>
-        <button type="button" onClick={() => update((draft) => { draft.urgency_rules.splice(index, 1); })}>
-          Remove urgent rule
-        </button>
-      </div>)}
-      <button type="button" onClick={() => update((draft) => {
-        draft.urgency_rules.push({ type: "sentence", text: "" });
-      })}>Add urgent rule</button>
-    </div>
   </section>;
 }
