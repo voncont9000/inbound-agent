@@ -49,7 +49,7 @@ function AppShell() {
         {navigation}
         <div className={shell.sidebarFooter}>
           <span className={shell.workspaceLabel}>Workspace</span>
-          <span className={shell.workspaceName}>{tenant?.name}</span>
+          <span className={shell.workspaceName}>{memberships.find(({ id }) => id === selectedTenant)?.name ?? tenant?.name}</span>
         </div>
       </aside>
       <div className={shell.mainArea}>

@@ -1,5 +1,6 @@
 /* Design tokens */
 :root {
+  --topbar-h: 56px;
   --ink: #15201f;
   --ink-soft: #2f403d;
   --muted: #5f726e;
@@ -80,7 +81,7 @@ a:hover { color: var(--accent-strong); }
 .skip-link:focus { left: var(--space-4); top: var(--space-4); }
 
 /* Layout */
-.page { width: min(1260px, 100%); margin: 0 auto; padding: var(--space-6) clamp(1rem, 3vw, 2.5rem) var(--space-8); }
+.page { min-width: 0; overflow-wrap: anywhere; width: min(1260px, 100%); margin: 0 auto; padding: var(--space-6) clamp(1rem, 3vw, 2.5rem) var(--space-8); }
 .page-narrow { max-width: 720px; }
 
 .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-6); }
@@ -291,7 +292,7 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .settings-tabs a { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.65rem 0.9rem; text-decoration: none; color: var(--muted); font-weight: 600; font-size: var(--text-sm); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .settings-tabs a:hover { color: var(--ink); }
 .settings-tabs a.active, .settings-tabs a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--accent-strong); }
-.save-bar { position: sticky; top: 56px; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; background: rgb(246 248 247 / 92%); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: var(--space-3) 0; }
+.save-bar { position: sticky; top: var(--topbar-h); z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; background: rgb(246 248 247 / 92%); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: var(--space-3) 0; }
 .save-bar .button-row { align-items: flex-start; }
 .save-bar .stack { gap: 0.3rem; }
 .dirty-indicator { font-weight: 700; color: var(--warning-ink); }
@@ -306,4 +307,4 @@ code { color: var(--accent-strong); font-size: 0.9em; background: var(--surface-
 .switch input:checked { background: var(--accent); }
 .switch input:checked::after { transform: translateX(1.1rem); }
 .slot { border: 1px dashed var(--line-strong); }
-@media (max-width: 760px) { .form-grid { grid-template-columns: 1fr; } .save-bar { top: 0; } }
+@media (max-width: 760px) { .form-grid { grid-template-columns: 1fr; } }

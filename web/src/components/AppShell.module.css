@@ -96,8 +96,8 @@
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
-  z-index: 10;
-  min-height: 56px;
+  z-index: 20;
+  min-height: var(--topbar-h);
 }
 
 .topbarLeft, .topbarRight { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
