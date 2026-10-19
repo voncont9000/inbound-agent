@@ -29,7 +29,7 @@ describe("assistant settings tabs", () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings/knowledge`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    for (const heading of ["Knowledge sources", "Knowledge digest", "Frequently asked questions", "Office hours", "Price list"]) {
+    for (const heading of ["Knowledge sources", "Knowledge digest", "Frequently asked questions", "Office hours"]) {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     }
     await user.click(screen.getByRole("link", { name: "Rules" }));
@@ -57,7 +57,7 @@ describe("assistant settings tabs", () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    expect(screen.getByText(/Version \d+ is up to date/)).toBeInTheDocument();
+    expect(screen.getByText("All changes saved")).toBeInTheDocument();
     expect(await screen.findByLabelText("Language")).toHaveValue("en-GB");
     expect(await screen.findByRole("radio", { name: /Beatrice/i })).toBeChecked();
     await user.type(screen.getByLabelText("Business name"), " Ltd");

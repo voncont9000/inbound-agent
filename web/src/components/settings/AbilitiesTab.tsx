@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import type { Schemas } from "../../api/client";
 import type { AssistantConfig } from "../../lib/config";
 import { enumAt } from "../../lib/configSchema";
 import { followLabel, keyFromLabel } from "../../lib/keys";
@@ -8,9 +7,16 @@ import { PostActionsEditor } from "../PostActionsEditor";
 import { AbilityCard, Field, MoreOptions, type SettingsTabProps } from "./fields";
 import { invalidProps, hasErrorUnder } from "./errors";
 
-type FieldSpec = Schemas["FieldSpec"];
 type BookingConfig = NonNullable<AssistantConfig["booking"]>;
 type LiveAction = AssistantConfig["live_actions"][number];
+
+const bookingNumbers = [
+  ["min_notice_hours", "Minimum notice (hours)", 0, undefined],
+  ["horizon_days", "Booking horizon (days)", 1, 60],
+  ["buffer_minutes", "Buffer between appointments (minutes)", 0, undefined],
+  ["slot_step_minutes", "Slot step (minutes)", 5, 240],
+  ["max_slots_offered", "Maximum slots offered", 1, 5],
+] as const;
 
 const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   calendar_id: "primary",
@@ -31,6 +37,8 @@ const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   send_updates: "all",
 };
 
+const BOOKING_TIMING_PATHS = ["booking.calendar_id", "booking.check_message", "booking.book_message", "booking.send_updates", ...bookingNumbers.map(([key]) => `booking.${key}`)];
+
 const BOOKING_ACTIONS: LiveAction[] = ["check_availability", "book_appointment"];
 
 function withActions(actions: LiveAction[], added: LiveAction[], enabled: boolean) {
@@ -47,7 +55,7 @@ export function AbilitiesTab(props: SettingsTabProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const postActionsOn = actionsOpen || Boolean(config.post_actions?.length);
   return <>
-    <p className="help">Turn on what this assistant may do. Everything stays off until you switch it on, and the assistant never offers an ability that is off.</p>
+    <p className="help">Turn on what this assistant may do. Everything stays off until you switch it on, and the assistant never offers an ability that is off. Each ability keeps all of its options in its own card.</p>
     <BookingCard {...props} />
     <ForwardingCard {...props} />
     <AbilityCard id="post-actions" title="After-conversation actions" description="Send emails, notify your team, add a spreadsheet row or call a webhook when a conversation ends." enabled={postActionsOn} onToggle={(enabled) => {
@@ -58,10 +66,7 @@ export function AbilitiesTab(props: SettingsTabProps) {
     }}>
       <PostActionsEditor assistantId={props.assistantId} config={config} update={update} />
     </AbilityCard>
-    <AbilityCard id="readback" title="Readback" description="Read important details back to the caller so they can confirm them. Choose exactly what is read back under Advanced." enabled={config.readback !== "off"} onToggle={(enabled) => update((draft) => { draft.readback = enabled ? "critical" : "off"; })}>
-      <p className="muted">Reading back: {config.readback === "email" ? "email addresses, letter by letter" : "every field marked critical"}.</p>
-    </AbilityCard>
-    <ServicesCard {...props} />
+    <ReadbackCard {...props} />
   </>;
 }
 
@@ -83,7 +88,7 @@ function BookingCard({ assistantId, config, saved, update, errors }: SettingsTab
       draft.booking = enabled ? structuredClone(DEFAULT_BOOKING_CONFIG) : null;
       draft.live_actions = withActions(draft.live_actions, BOOKING_ACTIONS, enabled);
     });
-  }} status={missingActions ? <p className="help" role="note">Live booking also needs the availability and booking live actions under Advanced.</p> : undefined}>
+  }} status={missingActions ? <div className="help" role="note">Live booking also needs the availability and booking actions. <button type="button" className="button-link" onClick={() => update((draft) => { draft.live_actions = withActions(draft.live_actions, BOOKING_ACTIONS, true); })}>Turn them on</button></div> : undefined}>
     {booking && <>
       <CalendarConnection assistantId={assistantId} />
       <h3>Appointment types</h3>
@@ -110,6 +115,17 @@ function BookingCard({ assistantId, config, saved, update, errors }: SettingsTab
         if (!draft.booking) return;
         draft.booking.appointment_types.push({ key: keyFromLabel("Appointment", draft.booking.appointment_types.map(({ key }) => key), "appointment"), label: "Appointment", duration_minutes: 30, when_to_use: "", location_or_link: null });
       })}>Add appointment type</button>
+      <MoreOptions label="Booking timing and messages" forceOpen={hasErrorUnder(errors, BOOKING_TIMING_PATHS)}>
+          <div className="form-grid">
+            <Field path="booking.calendar_id" label="Calendar ID" help="Use primary for the connected Google account's primary calendar.">{(fieldId, describedBy) => <input id={fieldId} value={booking.calendar_id} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.calendar_id = event.target.value; })} />}</Field>
+            <Field path="booking.check_message" label="Availability holding message">{(fieldId) => <input id={fieldId} value={booking.check_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.check_message = event.target.value; })} />}</Field>
+            <Field path="booking.book_message" label="Booking holding message">{(fieldId) => <input id={fieldId} value={booking.book_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.book_message = event.target.value; })} />}</Field>
+            {bookingNumbers.map(([key, label, min, max]) => <Field key={key} path={`booking.${key}`} label={label} error={errors[`booking.${key}`]}>{(fieldId, describedBy) => <input id={fieldId} type="number" min={min} max={max} value={booking[key]} {...invalidProps(errors, `booking.${key}`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking[key] = Number(event.target.value); })} />}</Field>)}
+            <Field path="booking.send_updates" label="Calendar attendee updates">{(fieldId) => <select id={fieldId} value={booking.send_updates} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.send_updates = event.target.value as BookingConfig["send_updates"]; })}>
+              <option value="all">All attendees</option><option value="externalOnly">External attendees</option><option value="none">No updates</option>
+            </select>}</Field>
+          </div>
+      </MoreOptions>
     </>}
   </AbilityCard>;
 }
@@ -144,88 +160,28 @@ function ForwardingCard({ config, saved, update, errors }: SettingsTabProps) {
       draft.transfer_targets ??= [];
       draft.transfer_targets.push({ key: keyFromLabel("", draft.transfer_targets.map(({ key }) => key), "target"), label: "", phone: "", when_to_use: "", office_hours_only: true });
     })}>Add transfer target</button>
+    <MoreOptions label="Forwarding messages">
+        <Field path="transfer_handoff_message" label="Handoff message">{(fieldId) => <textarea id={fieldId} value={config.transfer_handoff_message} onChange={(event) => update((draft) => { draft.transfer_handoff_message = event.target.value; })} />}</Field>
+        <Field path="transfer_failed_message" label="Message when nobody answers">{(fieldId) => <textarea id={fieldId} value={config.transfer_failed_message} onChange={(event) => update((draft) => { draft.transfer_failed_message = event.target.value; })} />}</Field>
+    </MoreOptions>
   </AbilityCard>;
 }
 
-function renameServiceKey(draft: AssistantConfig, from: string, to: string) {
-  if (from === to) return;
-  draft.services = Object.fromEntries(Object.entries(draft.services).map(([key, value]) => [key === from ? to : key, value]));
-  draft.urgency_rules.forEach((rule) => { if (rule.type === "date_deadline" && rule.service === from) rule.service = to; });
-}
+const readbackHelp: Record<string, string> = {
+  email: "Read email addresses back letter by letter so the caller can confirm them.",
+  critical: "Read back every field marked critical (for example name, phone, email or key dates) and ask the caller to confirm.",
+};
 
-function ServicesCard({ config, saved, update, errors, schema }: SettingsTabProps) {
-  const [open, setOpen] = useState(false);
-  const [choiceText, setChoiceText] = useState<Record<string, string>>({});
-  const typeOptions = useMemo(() => enumAt(schema, ["$defs", "FieldSpec", "properties", "type", "enum"], ["string", "email", "phone", "date", "boolean", "integer", "number", "enum", "list"]), [schema]);
-  const serviceKeys = Object.keys(config.services);
-  const enabled = open || serviceKeys.length > 0;
-  return <AbilityCard id="services" title="Services and intake fields" description="The services you offer and the details the assistant collects for each one." enabled={enabled} onToggle={(on) => {
-    if (on) { setOpen(true); return; }
-    if (serviceKeys.length && !confirmRemoval("Remove all services and their intake fields?")) return;
-    setOpen(false);
-    update((draft) => {
-      draft.services = {};
-      draft.urgency_rules = draft.urgency_rules.filter((rule) => rule.type !== "date_deadline");
-    });
-  }}>
-    {serviceKeys.map((serviceKey, serviceIndex) => {
-      const service = config.services[serviceKey];
-      const savedFieldNames = (saved.services[serviceKey]?.fields ?? []).map(({ name }) => name);
-      return <section className="inline-editor stack" key={`service-${serviceIndex}`} aria-label={service.label || "New service"}>
-        <Field path={`services.${serviceKey}.label`} label="Service label" error={errors[`services.${serviceKey}.label`]}>{(fieldId, describedBy) => <input id={fieldId} value={service.label} aria-describedby={describedBy} onChange={(event) => update((draft) => {
-          const label = event.target.value;
-          draft.services[serviceKey].label = label;
-          const nextKey = followLabel({ key: serviceKey, label, taken: Object.keys(draft.services), saved: Object.keys(saved.services), fallback: "service" });
-          renameServiceKey(draft, serviceKey, nextKey);
-        })} />}</Field>
-        {service.fields.map((field, fieldIndex) => {
-          const base = `services.${serviceKey}.fields.${fieldIndex}`;
-          return <div className="inline-editor stack" key={`field-${fieldIndex}`}>
-            <div className="form-grid">
-              <Field path={`${base}.label`} label="Field label" error={errors[`${base}.label`] ?? errors[`${base}.name`]}>{(fieldId, describedBy) => <input id={fieldId} value={field.label} {...invalidProps(errors, `${base}.label`)} aria-describedby={describedBy} onChange={(event) => update((draft) => {
-                const item = draft.services[serviceKey].fields[fieldIndex];
-                const previousName = item.name;
-                item.label = event.target.value;
-                item.name = followLabel({ key: item.name, label: item.label, taken: draft.services[serviceKey].fields.map(({ name }) => name), saved: savedFieldNames, fallback: "field" });
-                draft.urgency_rules.forEach((rule) => { if (rule.type === "date_deadline" && rule.service === serviceKey && rule.field === previousName) rule.field = item.name; });
-              })} />}</Field>
-              <Field path={`${base}.type`} label="Field type" error={errors[`${base}.type`]}>{(fieldId, describedBy) => <select id={fieldId} value={field.type} aria-describedby={describedBy} onChange={(event) => {
-                setChoiceText((current) => { const next = { ...current }; delete next[`${base}.choices`]; return next; });
-                update((draft) => {
-                  const item = draft.services[serviceKey].fields[fieldIndex];
-                  item.type = event.target.value as FieldSpec["type"];
-                  if (item.type !== "enum") delete item.choices;
-                  else item.choices = [];
-                });
-              }}>{typeOptions.map((type) => <option key={type} value={type}>{type}</option>)}</select>}</Field>
-              {field.type === "enum" && <Field path={`${base}.choices`} label="Choices" error={errors[`${base}.choices`]}>{(fieldId, describedBy) => <input id={fieldId} value={choiceText[`${base}.choices`] ?? field.choices?.join(", ") ?? ""} {...invalidProps(errors, `${base}.choices`)} aria-describedby={describedBy} onChange={(event) => {
-                const value = event.target.value;
-                setChoiceText((current) => ({ ...current, [`${base}.choices`]: value }));
-                update((draft) => { draft.services[serviceKey].fields[fieldIndex].choices = value.split(",").map((choice) => choice.trim()); });
-              }} />}</Field>}
-            </div>
-            <div className="button-row">
-              <label className="check-row"><input type="checkbox" checked={field.required} onChange={(event) => update((draft) => { draft.services[serviceKey].fields[fieldIndex].required = event.target.checked; })} />Required</label>
-              <button type="button" onClick={() => update((draft) => { draft.services[serviceKey].fields.splice(fieldIndex, 1); })}>Remove field</button>
-            </div>
-            <MoreOptions forceOpen={hasErrorUnder(errors, [`${base}.description`])}>
-              <label className="check-row"><input type="checkbox" checked={field.critical} onChange={(event) => update((draft) => { draft.services[serviceKey].fields[fieldIndex].critical = event.target.checked; })} />Critical (read back for confirmation)</label>
-              <Field path={`${base}.description`} label="Description">{(fieldId) => <input id={fieldId} value={field.description} onChange={(event) => update((draft) => { draft.services[serviceKey].fields[fieldIndex].description = event.target.value; })} />}</Field>
-            </MoreOptions>
-          </div>;
-        })}
-        <div className="button-row">
-          <button type="button" onClick={() => update((draft) => {
-            const fields = draft.services[serviceKey].fields;
-            fields.push({ name: keyFromLabel("", fields.map(({ name }) => name), "field"), label: "", type: "string", required: false, critical: false, description: "" });
-          })}>Add field</button>
-          <button type="button" onClick={() => update((draft) => {
-            delete draft.services[serviceKey];
-            draft.urgency_rules = draft.urgency_rules.filter((rule) => rule.type !== "date_deadline" || rule.service !== serviceKey);
-          })}>Remove service</button>
-        </div>
-      </section>;
-    })}
-    <button type="button" onClick={() => update((draft) => { draft.services[keyFromLabel("", Object.keys(draft.services), "service")] = { label: "", fields: [] }; })}>Add service</button>
+function ReadbackCard({ config, update, schema }: SettingsTabProps) {
+  const modes = useMemo(() => enumAt(schema, ["properties", "readback", "enum"], ["off", "email", "critical"]).filter((mode) => mode !== "off"), [schema]);
+  return <AbilityCard id="readback" title="Readback" description="Read important details back to the caller so they can confirm them." enabled={config.readback !== "off"} onToggle={(enabled) => update((draft) => {
+    draft.readback = enabled ? "critical" : "off";
+    if (!enabled) draft.live_actions = withActions(draft.live_actions, ["confirm_critical_fields"], false);
+  })}>
+    <fieldset className="stack readback-modes"><legend>What to read back</legend>
+      {modes.map((mode) => <label key={mode} className="radio-row"><input type="radio" name="readback" value={mode} checked={config.readback === mode} onChange={() => update((draft) => { draft.readback = mode as AssistantConfig["readback"]; })} /><span>{readbackHelp[mode] ?? mode}</span></label>)}
+    </fieldset>
+    <label className="check-row"><input type="checkbox" checked={config.live_actions.includes("confirm_critical_fields")} onChange={(event) => update((draft) => { draft.live_actions = withActions(draft.live_actions, ["confirm_critical_fields"], event.target.checked); })} />Record the caller&apos;s confirmation during the call (adds a live action)</label>
+    <p className="help">Mark which intake fields are critical under General › Instructions › Services and intake fields.</p>
   </AbilityCard>;
 }

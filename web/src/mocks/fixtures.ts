@@ -86,8 +86,28 @@ export function voiceCatalogueFor(locale: Locale): Schemas["VoiceCatalogueRespon
         preview_url: `https://preview.example/${locale}-2.mp3`,
         is_default: false,
       },
+      ...extraVoices(locale),
     ],
   };
+}
+
+const extraVoiceNames = ["Harper", "Elliot", "Maya", "Theo", "Isla", "Arlo", "Nora", "Felix", "Ivy", "Oscar"];
+const extraVoiceAccents: Partial<Record<Locale, string[]>> = {
+  "en-GB": ["British", "American", "Australian", "Irish"],
+  "en-US": ["American", "British", "Canadian"],
+};
+
+function extraVoices(locale: Locale): Schemas["VoiceCard"][] {
+  const accents = extraVoiceAccents[locale] ?? [voiceDetails[locale].accent];
+  return extraVoiceNames.map((name, index) => ({
+    id: `voice-${locale}-${index + 3}`,
+    name,
+    gender: index % 2 === 0 ? "female" : "male",
+    accent: accents[index % accents.length],
+    locale: voiceDetails[locale].firstLocale ?? locale,
+    preview_url: `https://preview.example/${locale}-${index + 3}.mp3`,
+    is_default: false,
+  }));
 }
 
 export const testCallResponse: Schemas["TestCallResponse"] = {

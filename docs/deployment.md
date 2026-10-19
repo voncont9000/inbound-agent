@@ -119,10 +119,14 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.producti
 ```
 
 The first deploy uses `./deploy/deploy.sh`. `SKIP_PULL=1` is optional only after deliberately
-checking out the intended revision. Normal deploys run `git pull --ff-only`, build the images,
-execute Alembic migrations, start services, wait for health, request
-`https://$DOMAIN/api/healthz`, and prune dangling images. Caddy obtains and renews public
-certificates automatically; ensure inbound 80/443 reach this server. Check
+checking out the intended revision. Normal deploys run `git pull --ff-only`, build the backend,
+Caddy, and phone images sequentially, execute Alembic migrations, start services, wait for health,
+request `https://$DOMAIN/api/healthz`, and prune dangling images. The voice image is CPU-only and
+excludes PyTorch (`torch`); a local Docker build measured 369,408,654 bytes (369 MB). The phone
+service builds the shared `inbound-voice:latest` image used by webcall. The deploy script prunes
+Docker's builder cache after image builds and before migrations, then starts the built images
+without rebuilding. Caddy obtains and renews public certificates automatically; ensure inbound
+80/443 reach this server. Check
 `docker compose ... logs --tail=100 caddy backend worker phone webcall` if startup fails. Do not
 expose database or Redis ports to the Internet.
 

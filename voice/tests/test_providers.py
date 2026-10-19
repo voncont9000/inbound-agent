@@ -12,10 +12,11 @@ from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService, ElevenLabs
 from pipecat.services.google.llm import GoogleLLMService
 from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.soniox.stt import SonioxSTTService
-from pipecat.services.speechify.tts import SpeechifyHttpTTSService
+from pipecat.services.speechify.tts import SpeechifyHttpTTSService, _SpeechMarkAccumulator
 
 from inbound_voice.pronunciation import PronunciationTransform
 from inbound_voice.providers import (
+    SpeechifyRateTTSService,
     VoiceProviders,
     create_llm,
     create_stt,
@@ -337,6 +338,54 @@ def test_create_tts() -> None:
     assert deepgram._settings.voice == "aura-2-pandora-en"
     assert deepgram._settings.speed == 1.2
     assert deepgram_default._settings.speed is None
+
+
+def test_speechify_speed_uses_relative_prosody_and_escapes_text() -> None:
+    async def create_services() -> tuple[object, object, object]:
+        environment = _environment()
+        providers = resolve_providers(environment)
+        async with aiohttp.ClientSession() as session:
+            return tuple(
+                create_tts(providers, environment, session, speed=speed)
+                for speed in (1.2, 0.9, 1.0)
+            )
+
+    faster, slower, unchanged = asyncio.run(create_services())
+    text = "Hello & <team>"
+
+    assert isinstance(faster, SpeechifyRateTTSService)
+    assert (
+        faster._build_payload(text)["input"]
+        == '<speak><prosody rate="+20%">Hello &amp; &lt;team&gt;</prosody></speak>'
+    )
+    assert isinstance(slower, SpeechifyRateTTSService)
+    assert (
+        slower._build_payload(text)["input"]
+        == '<speak><prosody rate="-10%">Hello &amp; &lt;team&gt;</prosody></speak>'
+    )
+    assert type(unchanged) is SpeechifyHttpTTSService
+    assert unchanged._build_payload(text)["input"] == text
+
+
+def test_speechify_rate_speech_marks_map_to_plain_spoken_text() -> None:
+    text = "Hello & welcome."
+    marks = [
+        {"type": "word", "value": "Hello", "start": 0, "end": 5, "start_time": 0, "end_time": 300},
+        {"type": "word", "value": "&", "start": 6, "end": 7, "start_time": 400, "end_time": 500},
+        {
+            "type": "word",
+            "value": "welcome.",
+            "start": 8,
+            "end": 16,
+            "start_time": 600,
+            "end_time": 900,
+        },
+    ]
+
+    words = _SpeechMarkAccumulator(text).add(marks)
+
+    assert [word for word, _ in words] == ["Hello", "&", "welcome."]
+    assert all("<speak>" not in word and "<prosody" not in word for word, _ in words)
 
 
 @pytest.mark.parametrize(

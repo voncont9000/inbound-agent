@@ -7,6 +7,20 @@ import { tenantFixtures } from "../mocks/fixtures";
 import type { AssistantConfig } from "../lib/config";
 
 describe("CallSettingsSection", () => {
+  it("explains speech speed in plain language", () => {
+    render(
+      <CallSettingsSection
+        config={tenantFixtures[0].assistants[0].config as AssistantConfig}
+        update={() => {}}
+        errors={{}}
+      />,
+    );
+
+    expect(
+      screen.getByText("1.00× is the voice's natural pace. Lower is slower, higher is faster."),
+    ).toBeTruthy();
+  });
+
   it("updates call and recording settings", () => {
     function Harness() {
       const [config, setConfig] = useState(
