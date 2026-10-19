@@ -796,7 +796,7 @@ describe("operator workflows", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(
-      "Delete 2 conversations? Transcripts and recordings are permanently deleted. Contacts are kept.",
+      "Their transcripts and recordings are permanently deleted. Contacts are kept. This can't be undone.",
     )).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 

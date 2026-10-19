@@ -57,7 +57,7 @@ function requestErrorMessage(error: unknown, fallback: string) {
 }
 
 function conversationDeleteText(count: number) {
-  return `Delete ${count} conversation${count === 1 ? "" : "s"}? Transcripts and recordings are permanently deleted. Contacts are kept.`;
+  return `${count === 1 ? "Its transcript and recording are" : "Their transcripts and recordings are"} permanently deleted. Contacts are kept. This can't be undone.`;
 }
 
 export function InboxPage() {
@@ -373,7 +373,7 @@ export function ConversationPage() {
       }}
       onConfirm={() => deleteConversation.mutate()}
     >
-      <p>{conversationDeleteText(1).replace(/^Delete 1 conversation\? /, "")}</p>
+      <p>{conversationDeleteText(1)}</p>
     </ConfirmDialog>}
   </main>;
 }
