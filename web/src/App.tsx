@@ -7,6 +7,7 @@ import { AssistantSetupPage } from "./pages/AssistantSetupPage";
 import { HomePage } from "./pages/HomePage";
 import { AssistantsPage, AssistantSettingsPage, AssistantSettingsRedirect } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
+import { HelpArticlePage, HelpHomePage } from "./help/HelpPages";
 
 function AppShell() {
   const { user, memberships, selectedTenant, setSelectedTenant, logout } = useAuth();
@@ -24,6 +25,7 @@ function AppShell() {
           <NavLink to="/tasks">Tasks</NavLink>
           <NavLink to="/knowledge-gaps">Knowledge gaps</NavLink>
           <NavLink to="/assistants">Assistants</NavLink>
+          <NavLink to="/help">Help</NavLink>
         </nav>
       </aside>
       <div className={shell.mainArea}>
@@ -66,6 +68,8 @@ export default function App() {
             <Route path="/contacts/:id" element={<ContactPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/knowledge-gaps" element={<KnowledgeGapsPage />} />
+            <Route path="/help" element={<HelpHomePage />} />
+            <Route path="/help/:category/:article" element={<HelpArticlePage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
