@@ -5,8 +5,9 @@ Settings live at `/assistants/:id/settings/:tab` (`general`, `rules`, `knowledge
 Validation errors are routed to the tab that owns the field by `tabForPath` in
 `web/src/lib/settingsTabs.ts`; keep that function in sync when a control moves.
 
-Each setting is shown exactly once. Moves are UI-only: the config shape, defaults and templates are
-unchanged, so saved configs load and behave as before.
+Each setting is shown exactly once. The settings reorganization is UI-only: it does not change the
+config shape or existing saved assistants. The template library and new-assistant defaults are
+documented in [templates.md](templates.md).
 
 | Tab | Owns |
 | --- | --- |

@@ -1,6 +1,23 @@
 import psycopg
 
 
+async def test_templates_include_metadata_in_configured_order(tenant_pair) -> None:
+    client = tenant_pair["first"]["client"]
+
+    response = await client.get("/templates")
+
+    assert response.status_code == 200
+    templates = response.json()
+    assert len(templates) == 6
+    assert templates[0]["name"] == "blank"
+    assert templates[0]["label"] == "Blank"
+    assert templates[0]["sets_up"]
+    law_template = next(item for item in templates if item["name"] == "uk_law_firm")
+    assert law_template["label"] == "UK B2C law firm"
+    assert law_template["sets_up"]
+    assert law_template["sample_business_name"] == "Demo & Co Solicitors (sample law firm)"
+
+
 async def test_assistant_versions_channels_and_audit(tenant_pair, owner_database_url) -> None:
     first = tenant_pair["first"]
     client = first["client"]

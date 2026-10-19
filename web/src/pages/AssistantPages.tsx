@@ -36,6 +36,14 @@ export function AssistantsPage() {
   const [error, setError] = useState("");
   const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
   const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => unwrap(api.GET("/templates")), enabled: showCreate });
+  useEffect(() => {
+    if (showCreate && !selectedTemplate && templatesQuery.data?.length) {
+      setSelectedTemplate(
+        templatesQuery.data.find(({ name }) => name === "blank")?.name ??
+          templatesQuery.data[0].name,
+      );
+    }
+  }, [selectedTemplate, showCreate, templatesQuery.data]);
   const create = useMutation({
     mutationFn: (input: Schemas["AssistantCreate"]) => unwrap(api.POST("/assistants", { body: input })),
     onSuccess: (assistant) => navigate(settingsTabPath(assistant.id)),
@@ -61,7 +69,7 @@ export function AssistantsPage() {
         <fieldset className="stack"><legend>Template</legend>
           {(templatesQuery.data ?? []).map((template) => <label key={template.name} className="radio-row">
             <input type="radio" name="template" value={template.name} checked={selectedTemplate === template.name} onChange={() => setSelectedTemplate(template.name)} />
-            <span><strong>{template.name.replaceAll("_", " ")}</strong><br /><span className="muted">{template.config.business_name} · {Object.values(template.config.services).map((service) => service.label).join(", ") || "Blank configuration"}</span></span>
+            <span><strong>{template.label}</strong><br /><span className="muted">{template.description}</span></span>
           </label>)}
         </fieldset>
         <div className="field"><label htmlFor="new-assistant-name">Assistant name</label><input id="new-assistant-name" required value={assistantName} onChange={(event) => setAssistantName(event.target.value)} /></div>

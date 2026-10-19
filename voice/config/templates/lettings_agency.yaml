@@ -1,0 +1,136 @@
+template:
+  label: Real estate and lettings
+  description: Books viewing requests, takes tenant maintenance reports and routes landlord and valuation enquiries.
+  order: 50
+  sets_up:
+    - Viewing request, maintenance report, valuation and general enquiry intake
+    - No promises on availability, offers or deposits; tenant and landlord confidentiality
+    - Urgency for emergency repairs (leaks, no heating, security, gas)
+    - Email triage tuned for viewings, tenants and landlords
+  # SAMPLE CONTENT: demo business details only applied by "Create demo assistant". Replace before going live.
+  sample:
+    business_name: Harbour Lettings & Sales (sample agency)
+    company_info: |
+      SAMPLE CONTENT - replace with your agency's details.
+      Harbour Lettings & Sales is an independent estate and lettings agent at 21 High Street,
+      Brighton BN1 1AA, covering Brighton and Hove. The office is open Monday to Friday
+      09:00-17:30 and Saturday 10:00-16:00. The agency offers sales, lettings, fully managed
+      lettings and free market appraisals. Viewings run Monday to Saturday. Managed tenants can
+      report emergency repairs 24 hours a day through the out-of-hours line.
+      The agency is a member of The Property Ombudsman and a client money protection scheme.
+    faqs:
+      - question: What do I need to rent a property?
+        answer: Proof of ID, proof of address and income for referencing. A holding deposit of one week's rent reserves the property.
+      - question: How much is the tenancy deposit?
+        answer: Five weeks' rent, protected in a government-approved deposit scheme.
+      - question: Do you accept pets?
+        answer: That depends on the landlord. Tell us about your pet and we will check for each property.
+      - question: What fees do you charge landlords?
+        answer: Let-only is 8 percent and fully managed is 12 percent of the monthly rent, plus VAT.
+    price_list:
+      - {service: Fully managed lettings, price: "12 percent of monthly rent plus VAT", notes: "Sample price."}
+      - {service: Let-only service, price: "8 percent of monthly rent plus VAT", notes: "Sample price."}
+      - {service: Market appraisal, price: "Free", notes: "Sample price."}
+language: en-GB
+business_name: Your agency
+greeting: "Hello, you are speaking with the agency's AI assistant. How can I help?"
+instructions: |
+  Use short, natural spoken sentences. Ask one question at a time.
+  When the caller volunteers details, acknowledge them briefly and continue. Never ask the same
+  question twice in a row.
+
+  At the beginning of every call, say: "{greeting}"
+
+  Find out whether the caller wants to view a property, is a tenant reporting a repair, is a
+  landlord or seller, or has another enquiry.
+  For viewings, collect the property they are interested in, when they can view and whether
+  they are buying or renting. Take viewings as requests: say a negotiator will confirm the time.
+  For repairs, collect the property address, the problem and whether it is an emergency, plus
+  access arrangements.
+  Answer questions about fees and process only from the business information. Be honest when the
+  office is closed. Office hours: {office_hours}.
+
+  When the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye
+  in response.
+readback: critical
+office_hours:
+  days: [Monday, Tuesday, Wednesday, Thursday, Friday]
+  opens: "09:00"
+  closes: "17:30"
+  timezone: Europe/London
+price_list: []
+policies:
+  - "Never confirm that a property is available, that an offer will be accepted or that an application is approved. Take the details and say a negotiator will get back to them."
+  - "Never confirm a viewing time yourself; take it as a request."
+  - "Never share details about a landlord, tenant, seller or buyer with anyone else, including addresses, phone numbers or offers."
+  - "If a tenant smells gas, tell them to leave the property and call the National Gas Emergency line on 0800 111 999. If anyone is in danger, tell them to call 999."
+  - "Answer fees only from the published price list. Never give a property valuation; offer a free market appraisal instead."
+  - "If a caller disputes a deposit or complains, take the details and say the branch manager will call back. Do not admit liability."
+rules:
+  ai_disclosure: at_start
+  style: formal
+  off_topic: redirect
+  angry_caller: de_escalate
+  sales_calls: take_message
+contacts: {}
+services:
+  viewing_request:
+    label: Viewing request
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: email, label: Email address, type: email, critical: true}
+      - {name: property_reference, label: Property address or reference, type: string, critical: true}
+      - {name: buying_or_renting, label: Buying or renting, type: enum, choices: [buying, renting]}
+      - {name: preferred_times, label: Preferred viewing times, type: string}
+      - {name: move_in_date, label: Desired move-in date, type: date}
+      - {name: buyer_position, label: Buyer position, type: enum, choices: [first_time_buyer, nothing_to_sell, sale_agreed, need_to_sell, cash_buyer, not_applicable]}
+      - {name: household, label: Household and pets, type: string}
+  maintenance_request:
+    label: Maintenance or repair report
+    fields:
+      - {name: caller_name, label: Tenant name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: property_address, label: Property address, type: string, critical: true}
+      - {name: postcode, label: Postcode, type: string, critical: true}
+      - {name: issue, label: Issue described, type: string, critical: true}
+      - {name: issue_type, label: Issue type, type: enum, choices: [leak, heating_or_hot_water, electrical, gas, security, appliance, damp_or_mould, pests, other]}
+      - {name: emergency, label: Emergency, type: boolean}
+      - {name: access_permission, label: Contractor access permission, type: boolean}
+      - {name: access_notes, label: Access notes, type: string}
+  valuation_or_landlord:
+    label: Valuation or landlord enquiry
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: email, label: Email address, type: email}
+      - {name: property_address, label: Property address, type: string, critical: true}
+      - {name: enquiry_type, label: Enquiry type, type: enum, choices: [sales_valuation, lettings_valuation, landlord_management, existing_landlord]}
+      - {name: timescale, label: Timescale, type: string}
+  general_enquiry:
+    label: General enquiry
+    fields:
+      - {name: caller_name, label: Name, type: string, critical: true}
+      - {name: phone, label: Phone number, type: phone, critical: true}
+      - {name: reason, label: Reason for contact, type: string}
+urgency_rules:
+  - type: keyword
+    phrases: ["smell gas", "gas leak", "carbon monoxide", "flooding", "burst pipe", "water coming through", "no heating", "no hot water", "break-in", "locked out", "front door won't lock", "sparking"]
+    reason: "Tenant described an emergency repair: {phrase}"
+  - type: sentence
+    text: "A tenant reports a repair that makes the property unsafe, insecure or uninhabitable."
+live_actions: []
+post_actions: []
+email_triage:
+  enquiry: >-
+    Someone asking to view a property, about availability, fees, the rental or buying process,
+    or a tenant reporting a routine repair, which you can answer or move forward from the
+    business context.
+  needs_human: >-
+    Offers and negotiations, deposit disputes, complaints, emergency repairs, legal notices,
+    landlord instructions, and anything the business context does not cover.
+  spam: "Unsolicited marketing, phishing, scams or automated bulk mail."
+  not_relevant: >-
+    Genuine mail that needs no reply, such as a thank-you with no question, a portal
+    notification receipt, or a message clearly meant for a different business.
+review_confidence_threshold: 0.7

@@ -1,0 +1,2003 @@
+[
+  {
+    "config": {
+      "booking": null,
+      "business_name": "Your business",
+      "call_settings": {
+        "interruption_sensitivity": "normal",
+        "max_call_message": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+        "max_call_minutes": null,
+        "silence_goodbye_message": "I'll end the call now. Thank you for calling. Goodbye.",
+        "silence_timeout_seconds": null,
+        "speech_speed": 1.0,
+        "still_there_prompt": "Are you still there?",
+        "technical_terms": [],
+        "uninterruptible_greeting": false
+      },
+      "contacts": {},
+      "email_triage": {
+        "enquiry": "A customer or prospective customer asking about the business's services, prices, availability or their own request, which you can answer or move forward from the business context.",
+        "needs_human": "A person must decide or act: complaints, disputes, threats or safety concerns, requests the business context does not cover, or anything you cannot answer without inventing facts.",
+        "not_relevant": "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+        "spam": "Unsolicited marketing, phishing, scams or automated bulk mail."
+      },
+      "greeting": "Hello, you are speaking with our AI assistant. How can I help?",
+      "instructions": "Use short, natural spoken sentences. Ask one question at a time.\nWhen the caller volunteers details, acknowledge them briefly and continue. Never ask the same\nquestion twice in a row.\n\nAt the beginning of every call, say: \"{greeting}\"\n\nAsk for each critical field at a natural point. If the caller does not answer, acknowledge it,\nmove on, and return to it once before the end.\nCollect other details conversationally; they are extracted after the call.\nOnly answer from the business information you have. If you do not know, say so and offer to\npass the question to the team.\nBe honest when the business is closed. Opening hours: {office_hours}.\n\nWhen the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye\nin response.\n",
+      "knowledge": {
+        "digest_path": null,
+        "faqs": [],
+        "max_digest_chars": 24000,
+        "sources": []
+      },
+      "language": "en-GB",
+      "live_actions": [],
+      "office_hours": {
+        "closes": "17:00",
+        "days": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday"
+        ],
+        "opens": "09:00",
+        "timezone": "Europe/London"
+      },
+      "policies": [],
+      "post_actions": [],
+      "price_list": [],
+      "readback": "off",
+      "recording": {
+        "consent_message": "This call may be recorded for quality and training purposes.",
+        "enabled": false,
+        "retention_days": 30
+      },
+      "review_confidence_threshold": 0.7,
+      "rules": {
+        "ai_disclosure": "at_start",
+        "angry_caller": null,
+        "off_topic": null,
+        "pronunciations": [],
+        "sales_calls": null,
+        "style": null
+      },
+      "services": {
+        "general_enquiry": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "A short summary of what the customer wants.",
+              "label": "Reason for contact",
+              "name": "reason",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "General enquiry"
+        }
+      },
+      "transfer_failed_message": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "transfer_handoff_message": "I'm putting you through now, please hold.",
+      "transfer_targets": [],
+      "urgency_rules": [],
+      "voice_id": null
+    },
+    "description": "A neutral assistant with no industry rules. Start here and add your own policies, intake fields and urgency rules.",
+    "label": "Blank",
+    "name": "blank",
+    "sample_business_name": null,
+    "sets_up": [
+      "AI disclosure at the start of the call",
+      "One general enquiry with name, phone, email and reason",
+      "Generic email triage categories"
+    ]
+  },
+  {
+    "config": {
+      "booking": null,
+      "business_name": "Law firm",
+      "call_settings": {
+        "interruption_sensitivity": "normal",
+        "max_call_message": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+        "max_call_minutes": null,
+        "silence_goodbye_message": "I'll end the call now. Thank you for calling. Goodbye.",
+        "silence_timeout_seconds": null,
+        "speech_speed": 1.0,
+        "still_there_prompt": "Are you still there?",
+        "technical_terms": [
+          "conveyancing",
+          "freehold",
+          "leasehold",
+          "ACAS",
+          "tribunal",
+          "remortgage",
+          "completion",
+          "exchange",
+          "solicitor",
+          "redundancy",
+          "settlement agreement"
+        ],
+        "uninterruptible_greeting": false
+      },
+      "contacts": {},
+      "email_triage": {
+        "enquiry": "Someone asking about the firm's services, fees or their own employment or property matter, including \"do I have a claim?\"-type questions, which get a reply that gives no legal advice and offers the next step.",
+        "needs_human": "Complaints about the firm or another solicitor, existing clients chasing a live matter, threats, opposing parties or their representatives, press, and anything urgent or sensitive the context doesn't cover.",
+        "not_relevant": "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+        "spam": "Unsolicited marketing, phishing, scams or automated bulk mail."
+      },
+      "greeting": "Hello, you are speaking with our AI assistant. How can I help?",
+      "instructions": "Use short, natural spoken sentences. Ask one question at a time.\nWhen the caller volunteers details, acknowledge them briefly and continue. Never ask the same\nquestion twice in a row.\n\nAt the beginning of every call, say: \"{greeting}\"\n\nAsk for each critical field at a natural point. If the caller does not answer, acknowledge it,\nmove on, and return to it once before the end.\nCollect other details conversationally; they are extracted after the call. Do not call a tool\nfor each detail.\nOffer to pass unanswered questions to the team.\n\nIf the caller describes something urgent, acknowledge it and tell them the team will treat it\nas urgent. Do not delay the conversation to finish intake.\nBe honest when the business is closed. Office hours: {office_hours}.\n\nWhen the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye\nin response.\n",
+      "knowledge": {
+        "digest_path": null,
+        "faqs": [],
+        "max_digest_chars": 24000,
+        "sources": []
+      },
+      "language": "en-GB",
+      "live_actions": [],
+      "office_hours": {
+        "closes": "17:30",
+        "days": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday"
+        ],
+        "opens": "09:00",
+        "timezone": "Europe/London"
+      },
+      "policies": [
+        "You are not a solicitor and must never give legal advice. Give general information only from approved business information. For advice, arrange a solicitor callback; do not predict legal outcomes.",
+        "Never confirm or deny whether anyone is or was a client. Never discuss a matter or disclose personal information to a third party. Caller ID alone does not verify identity. Do not leave detailed voicemails.",
+        "Never say the firm will act or that a conflict check has passed. Record other-party names for a conflict check pending.",
+        "Answer prices only from the published price list. Never estimate, invent or promise a quote. If no listed price fits, offer a quote request or callback.",
+        "If the caller complains, acknowledge it, log it, and give the published complaints contact, procedure and Legal Ombudsman information.",
+        "If anyone is in immediate danger, tell them to call 999 now. Treat a hearing or arrest today, distress, or an imminent deadline as urgent; the team is alerted after the call.",
+        "For existing-client matter updates, take a message for the fee earner; never imply access to live matter status.",
+        "For employment termination dates, the system calculates the tribunal deadline. Do not calculate or reassure callers about legal time limits, and offer a callback."
+      ],
+      "post_actions": [],
+      "price_list": [],
+      "readback": "email",
+      "recording": {
+        "consent_message": "This call may be recorded for quality and training purposes.",
+        "enabled": false,
+        "retention_days": 30
+      },
+      "review_confidence_threshold": 0.7,
+      "rules": {
+        "ai_disclosure": "at_start",
+        "angry_caller": "de_escalate",
+        "off_topic": "redirect",
+        "pronunciations": [
+          {
+            "say_as": "Ay-cass",
+            "term": "ACAS"
+          }
+        ],
+        "sales_calls": "decline",
+        "style": "formal"
+      },
+      "services": {
+        "conveyancing": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Caller name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            },
+            {
+              "choices": [
+                "private",
+                "legal_expenses_insurance",
+                "legal_aid",
+                "no_win_no_fee"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Funding",
+              "name": "funding",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": [
+                "phone",
+                "email"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Contact preference",
+              "name": "contact_preference",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Other parties",
+              "name": "other_parties",
+              "required": false,
+              "type": "list"
+            },
+            {
+              "choices": [
+                "purchase",
+                "sale",
+                "both",
+                "remortgage"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Transaction type",
+              "name": "transaction_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Property address",
+              "name": "property_address",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Postcode",
+              "name": "postcode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Price",
+              "name": "price",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "freehold",
+                "leasehold",
+                "shared_ownership"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Tenure",
+              "name": "tenure",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "New build",
+              "name": "new_build",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Mortgage",
+              "name": "mortgage",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Lender",
+              "name": "lender",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "First-time buyer",
+              "name": "first_time_buyer",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Chain status",
+              "name": "chain_status",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Estate agent",
+              "name": "estate_agent",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Target exchange date",
+              "name": "target_exchange_date",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Target completion date",
+              "name": "target_completion_date",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Other-side solicitor",
+              "name": "other_side_solicitor",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Residential conveyancing"
+        },
+        "employment": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Caller name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            },
+            {
+              "choices": [
+                "private",
+                "legal_expenses_insurance",
+                "legal_aid",
+                "no_win_no_fee"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Funding",
+              "name": "funding",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": [
+                "phone",
+                "email"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Contact preference",
+              "name": "contact_preference",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Other parties",
+              "name": "other_parties",
+              "required": false,
+              "type": "list"
+            },
+            {
+              "choices": [
+                "dismissal",
+                "redundancy",
+                "discrimination",
+                "settlement_agreement",
+                "grievance"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Issue type",
+              "name": "issue_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Employer name",
+              "name": "employer_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Job title",
+              "name": "job_title",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Length of service",
+              "name": "length_of_service",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Termination date",
+              "name": "termination_date",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Last act complained of",
+              "name": "last_act_complained_of",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "ACAS early conciliation started",
+              "name": "acas_early_conciliation_started",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "Dates and event names mentioned by the caller.",
+              "label": "Key dates",
+              "name": "key_dates",
+              "required": false,
+              "type": "list"
+            }
+          ],
+          "label": "Employment law"
+        }
+      },
+      "transfer_failed_message": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "transfer_handoff_message": "I'm putting you through now, please hold.",
+      "transfer_targets": [],
+      "urgency_rules": [
+        {
+          "phrases": [
+            "in danger",
+            "immediate danger",
+            "domestic abuse",
+            "999",
+            "hearing today",
+            "arrested today",
+            "arrest today",
+            "distressed",
+            "deadline today",
+            "deadline within days"
+          ],
+          "reason": "Caller described an immediate safety or time-critical concern: {phrase}",
+          "type": "keyword"
+        },
+        {
+          "add_months": 3,
+          "field": "termination_date",
+          "minus_days": 1,
+          "reason": "Employment tribunal time limit may be within 28 days.",
+          "service": "employment",
+          "type": "date_deadline",
+          "urgent_within_days": 28
+        }
+      ],
+      "voice_id": null
+    },
+    "description": "Takes enquiries for conveyancing and employment law, never gives legal advice, records parties for conflict checks and flags tribunal deadlines.",
+    "label": "UK B2C law firm",
+    "name": "uk_law_firm",
+    "sample_business_name": "Demo & Co Solicitors (sample law firm)",
+    "sets_up": [
+      "Conveyancing and employment intake with critical contact fields",
+      "No legal advice, client confidentiality, conflict-check and complaints policies",
+      "Urgency for danger, hearings or arrests today and employment tribunal deadlines",
+      "Email triage tuned for legal enquiries"
+    ]
+  },
+  {
+    "config": {
+      "booking": null,
+      "business_name": "Your restaurant",
+      "call_settings": {
+        "interruption_sensitivity": "normal",
+        "max_call_message": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+        "max_call_minutes": null,
+        "silence_goodbye_message": "I'll end the call now. Thank you for calling. Goodbye.",
+        "silence_timeout_seconds": null,
+        "speech_speed": 1.0,
+        "still_there_prompt": "Are you still there?",
+        "technical_terms": [],
+        "uninterruptible_greeting": false
+      },
+      "contacts": {},
+      "email_triage": {
+        "enquiry": "A guest asking to book, change or cancel a table, asking about the menu, allergies, opening hours, private dining or events, which you can answer or move forward from the business context.",
+        "needs_human": "Complaints about a visit, food-safety or illness reports, refund or deposit disputes, press, supplier or job enquiries, and anything the business context does not cover.",
+        "not_relevant": "Genuine mail that needs no reply, such as a thank-you with no question, a booking-platform receipt, or a message clearly meant for a different business.",
+        "spam": "Unsolicited marketing, phishing, scams or automated bulk mail."
+      },
+      "greeting": "Hello, you are speaking with the restaurant's AI assistant. How can I help?",
+      "instructions": "Use short, warm, natural spoken sentences. Ask one question at a time.\nWhen the caller volunteers details, acknowledge them briefly and continue. Never ask the same\nquestion twice in a row.\n\nAt the beginning of every call, say: \"{greeting}\"\n\nFor a reservation, collect the date, time, number of guests and the name and phone number for\nthe booking, then ask whether anyone has allergies or dietary requirements. Take reservations\nas requests: say the team will confirm the table. Never confirm a table yourself.\nFor groups of 8 or more, private dining or events, collect the details and say the events\nteam will get back to them with options.\nAnswer questions about the menu, opening hours, location and facilities only from the\nbusiness information. If you do not know, offer to pass the question to the team.\nBe honest when the restaurant is closed. Opening hours: {office_hours}.\n\nWhen the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye\nin response.\n",
+      "knowledge": {
+        "digest_path": null,
+        "faqs": [],
+        "max_digest_chars": 24000,
+        "sources": []
+      },
+      "language": "en-GB",
+      "live_actions": [],
+      "office_hours": {
+        "closes": "22:00",
+        "days": [
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ],
+        "opens": "12:00",
+        "timezone": "Europe/London"
+      },
+      "policies": [
+        "Never confirm a reservation yourself. Take it as a request and say the team will confirm by phone or text.",
+        "Never promise that a dish is allergen-free or safe for an allergy. Record every allergy and say the kitchen will be told; for severe allergies, advise the guest to speak to the team before ordering.",
+        "If someone is having an allergic reaction or a medical emergency, tell them to call 999 now.",
+        "Answer menu, price and opening-hour questions only from the business information. Never invent dishes, prices or availability.",
+        "For groups of 8 or more, private dining and events, take the details for the events team; do not quote deposits or set menus unless they are in the business information.",
+        "If a guest complains about a visit, apologise, take the details and say a manager will get back to them. Do not offer refunds or vouchers."
+      ],
+      "post_actions": [],
+      "price_list": [],
+      "readback": "critical",
+      "recording": {
+        "consent_message": "This call may be recorded for quality and training purposes.",
+        "enabled": false,
+        "retention_days": 30
+      },
+      "review_confidence_threshold": 0.7,
+      "rules": {
+        "ai_disclosure": "at_start",
+        "angry_caller": "de_escalate",
+        "off_topic": "redirect",
+        "pronunciations": [],
+        "sales_calls": "take_message",
+        "style": "friendly"
+      },
+      "services": {
+        "general_enquiry": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Reason for contact",
+              "name": "reason",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "General enquiry"
+        },
+        "large_group_event": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Event date",
+              "name": "event_date",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Number of guests",
+              "name": "party_size",
+              "required": false,
+              "type": "integer"
+            },
+            {
+              "choices": [
+                "birthday",
+                "corporate",
+                "wedding",
+                "christening",
+                "wake",
+                "other"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Event type",
+              "name": "event_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Private room wanted",
+              "name": "private_room",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Budget per head",
+              "name": "budget_per_head",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Allergies and dietary requirements",
+              "name": "allergies",
+              "required": false,
+              "type": "list"
+            }
+          ],
+          "label": "Large group or event enquiry"
+        },
+        "reservation": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name for the booking",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Date",
+              "name": "booking_date",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Time",
+              "name": "booking_time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Number of guests",
+              "name": "party_size",
+              "required": false,
+              "type": "integer"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Allergies and dietary requirements",
+              "name": "allergies",
+              "required": false,
+              "type": "list"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Occasion",
+              "name": "occasion",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "inside",
+                "terrace",
+                "no_preference"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Seating preference",
+              "name": "seating_preference",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Accessibility needs",
+              "name": "accessibility_needs",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Table reservation"
+        }
+      },
+      "transfer_failed_message": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "transfer_handoff_message": "I'm putting you through now, please hold.",
+      "transfer_targets": [],
+      "urgency_rules": [
+        {
+          "phrases": [
+            "allergic reaction",
+            "anaphylaxis",
+            "food poisoning",
+            "can't breathe",
+            "epipen"
+          ],
+          "reason": "Caller described a possible allergic reaction or food-safety incident: {phrase}",
+          "type": "keyword"
+        },
+        {
+          "text": "The caller wants a table for today or tonight.",
+          "type": "sentence"
+        },
+        {
+          "text": "The caller is complaining about food safety, illness after a visit or a serious incident at the restaurant.",
+          "type": "sentence"
+        }
+      ],
+      "voice_id": null
+    },
+    "description": "Takes table reservation requests, answers opening hours and menu questions, records allergies and routes large-group and event enquiries.",
+    "label": "Restaurant",
+    "name": "restaurant",
+    "sample_business_name": "The Copper Pot (sample restaurant)",
+    "sets_up": [
+      "Reservation, large-group/event and general enquiry intake",
+      "Allergy and dietary policy (never guarantee allergen-free food)",
+      "Urgency for same-day bookings, allergic reactions and complaints about food safety",
+      "Email triage tuned for bookings and events"
+    ]
+  },
+  {
+    "config": {
+      "booking": null,
+      "business_name": "Your clinic",
+      "call_settings": {
+        "interruption_sensitivity": "normal",
+        "max_call_message": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+        "max_call_minutes": null,
+        "silence_goodbye_message": "I'll end the call now. Thank you for calling. Goodbye.",
+        "silence_timeout_seconds": null,
+        "speech_speed": 1.0,
+        "still_there_prompt": "Are you still there?",
+        "technical_terms": [],
+        "uninterruptible_greeting": false
+      },
+      "contacts": {},
+      "email_triage": {
+        "enquiry": "A patient or prospective patient asking to book, change or cancel an appointment, or about services, prices, registration or opening hours, which you can answer without clinical advice.",
+        "needs_human": "Anything describing symptoms, pain or treatment outcomes, complaints, requests for records or prescriptions, safeguarding concerns, and anything the business context does not cover.",
+        "not_relevant": "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+        "spam": "Unsolicited marketing, phishing, scams or automated bulk mail."
+      },
+      "greeting": "Hello, you are speaking with the practice's AI assistant. How can I help?",
+      "instructions": "Use short, calm, natural spoken sentences. Ask one question at a time.\nWhen the caller volunteers details, acknowledge them briefly and continue. Never ask the same\nquestion twice in a row.\n\nAt the beginning of every call, say: \"{greeting}\"\n\nFind out whether the caller is a new or existing patient and what they need: a routine\nappointment, a change to an existing appointment, or help with pain or an emergency.\nTake appointments as requests: say the reception team will confirm the time. Never confirm a\nslot yourself.\nIf the caller describes an emergency, follow the emergency policy first, then take their\ndetails so the team can call back as a priority.\nAnswer questions about services, prices and opening hours only from the business information.\nBe honest when the practice is closed. Opening hours: {office_hours}.\n\nWhen the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye\nin response.\n",
+      "knowledge": {
+        "digest_path": null,
+        "faqs": [],
+        "max_digest_chars": 24000,
+        "sources": []
+      },
+      "language": "en-GB",
+      "live_actions": [],
+      "office_hours": {
+        "closes": "17:30",
+        "days": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday"
+        ],
+        "opens": "08:30",
+        "timezone": "Europe/London"
+      },
+      "policies": [
+        "You are not a clinician. Never give medical or dental advice, diagnose, recommend medication or doses, or say whether symptoms are serious. Offer a callback from the clinical team instead.",
+        "If the caller has difficulty breathing or swallowing, swelling spreading to the eye or neck, heavy bleeding that will not stop, chest pain or a serious injury, tell them to call 999 now.",
+        "If the practice is closed and the caller needs urgent care that is not life-threatening, tell them to call NHS 111.",
+        "Never confirm or deny whether someone is a patient, and never discuss appointments, treatment or records with anyone other than the patient or a parent or guardian of a child patient.",
+        "Answer prices only from the published price list. Never estimate treatment costs; offer a consultation instead.",
+        "Take appointment requests and cancellations as messages for reception; never confirm a time yourself."
+      ],
+      "post_actions": [],
+      "price_list": [],
+      "readback": "critical",
+      "recording": {
+        "consent_message": "This call may be recorded for quality and training purposes.",
+        "enabled": false,
+        "retention_days": 30
+      },
+      "review_confidence_threshold": 0.7,
+      "rules": {
+        "ai_disclosure": "at_start",
+        "angry_caller": "de_escalate",
+        "off_topic": "redirect",
+        "pronunciations": [],
+        "sales_calls": "decline",
+        "style": "friendly"
+      },
+      "services": {
+        "appointment_request": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Patient name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Date of birth",
+              "name": "date_of_birth",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": [
+                "new",
+                "existing"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Patient status",
+              "name": "patient_status",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": [
+                "check_up",
+                "hygiene",
+                "treatment",
+                "consultation",
+                "other"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Appointment type",
+              "name": "appointment_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": [
+                "nhs",
+                "private",
+                "not_sure"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "NHS or private",
+              "name": "nhs_or_private",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Preferred days and times",
+              "name": "preferred_times",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            }
+          ],
+          "label": "Appointment request"
+        },
+        "change_appointment": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Patient name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Date of birth",
+              "name": "date_of_birth",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": [
+                "reschedule",
+                "cancel"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Change",
+              "name": "change_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Current appointment",
+              "name": "current_appointment",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Preferred days and times",
+              "name": "preferred_times",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Change or cancel an appointment"
+        },
+        "emergency": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Patient name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Date of birth",
+              "name": "date_of_birth",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": [
+                "new",
+                "existing"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Patient status",
+              "name": "patient_status",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "The caller's own words; never interpret or diagnose.",
+              "label": "Symptoms described",
+              "name": "symptoms",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "When symptoms started",
+              "name": "symptoms_started",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Pain or emergency"
+        }
+      },
+      "transfer_failed_message": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "transfer_handoff_message": "I'm putting you through now, please hold.",
+      "transfer_targets": [],
+      "urgency_rules": [
+        {
+          "phrases": [
+            "can't breathe",
+            "difficulty breathing",
+            "can't swallow",
+            "swelling",
+            "bleeding won't stop",
+            "knocked out",
+            "broken tooth",
+            "chest pain",
+            "unbearable pain"
+          ],
+          "reason": "Caller described a possible dental or medical emergency: {phrase}",
+          "type": "keyword"
+        },
+        {
+          "text": "The caller is in severe pain or describes an injury, swelling or bleeding.",
+          "type": "sentence"
+        }
+      ],
+      "voice_id": null
+    },
+    "description": "Takes appointment requests for new and existing patients, triages emergencies to 999/NHS 111 and never gives medical advice.",
+    "label": "Dental or medical clinic",
+    "name": "dental_clinic",
+    "sample_business_name": "Riverside Dental Practice (sample clinic)",
+    "sets_up": [
+      "New patient, appointment change and emergency intake",
+      "No medical advice, no diagnosis, patient confidentiality",
+      "Urgency for severe pain, swelling, bleeding and trauma",
+      "Email triage tuned for appointments and patient queries"
+    ]
+  },
+  {
+    "config": {
+      "booking": null,
+      "business_name": "Your business",
+      "call_settings": {
+        "interruption_sensitivity": "normal",
+        "max_call_message": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+        "max_call_minutes": null,
+        "silence_goodbye_message": "I'll end the call now. Thank you for calling. Goodbye.",
+        "silence_timeout_seconds": null,
+        "speech_speed": 1.0,
+        "still_there_prompt": "Are you still there?",
+        "technical_terms": [
+          "boiler",
+          "combi",
+          "radiator",
+          "stopcock",
+          "consumer unit",
+          "Gas Safe"
+        ],
+        "uninterruptible_greeting": false
+      },
+      "contacts": {},
+      "email_triage": {
+        "enquiry": "A customer asking for a callout, quote or booked job, or about services, prices, coverage area or availability, which you can answer or move forward from the business context.",
+        "needs_human": "Emergencies, complaints about previous work, payment disputes, insurance claims, supplier or job applications, and anything the business context does not cover.",
+        "not_relevant": "Genuine mail that needs no reply, such as a thank-you with no question, a delivery receipt, or a message clearly meant for a different business.",
+        "spam": "Unsolicited marketing, phishing, scams or automated bulk mail."
+      },
+      "greeting": "Hello, you are speaking with our AI assistant. How can I help?",
+      "instructions": "Use short, natural spoken sentences. Ask one question at a time.\nWhen the caller volunteers details, acknowledge them briefly and continue. Never ask the same\nquestion twice in a row.\n\nAt the beginning of every call, say: \"{greeting}\"\n\nFind out what the problem is, how urgent it is and where the property is. Always collect the\nfull address including the postcode, and check whether the caller owns or rents the property.\nFor emergencies, follow the safety policies first, then take the details so an engineer can\ncall back as a priority.\nTake jobs as requests: say the office will confirm the engineer and time. Never promise an\narrival time yourself.\nAnswer prices only from the business information. Be honest when the office is closed.\nOffice hours: {office_hours}.\n\nWhen the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye\nin response.\n",
+      "knowledge": {
+        "digest_path": null,
+        "faqs": [],
+        "max_digest_chars": 24000,
+        "sources": []
+      },
+      "language": "en-GB",
+      "live_actions": [],
+      "office_hours": {
+        "closes": "18:00",
+        "days": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday"
+        ],
+        "opens": "08:00",
+        "timezone": "Europe/London"
+      },
+      "policies": [
+        "If the caller smells gas, tell them to leave the property, not to use switches or flames, and to call the National Gas Emergency line on 0800 111 999 now. If anyone is in danger, tell them to call 999.",
+        "If there is sparking, burning smells from electrics or water near electrics, tell them to switch off at the consumer unit only if it is safe, keep away, and call 999 if there is fire or injury.",
+        "For a leak or burst pipe, suggest turning off the water at the stopcock if they can do so safely.",
+        "Never promise an arrival time, diagnose a fault or quote for work. Give prices only from the published price list and offer a quote visit for anything else.",
+        "Always collect the full address and postcode of the job, and say which part of the property is affected.",
+        "If a customer complains about previous work, apologise, take the details and say the office manager will call back. Do not admit liability."
+      ],
+      "post_actions": [],
+      "price_list": [],
+      "readback": "critical",
+      "recording": {
+        "consent_message": "This call may be recorded for quality and training purposes.",
+        "enabled": false,
+        "retention_days": 30
+      },
+      "review_confidence_threshold": 0.7,
+      "rules": {
+        "ai_disclosure": "at_start",
+        "angry_caller": "de_escalate",
+        "off_topic": "redirect",
+        "pronunciations": [],
+        "sales_calls": "take_message",
+        "style": "friendly"
+      },
+      "services": {
+        "emergency_callout": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Job address",
+              "name": "address",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Postcode",
+              "name": "postcode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Problem described",
+              "name": "problem",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "leak_or_burst_pipe",
+                "no_heating_or_hot_water",
+                "blocked_drain",
+                "electrical_fault",
+                "gas_smell",
+                "other"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Problem type",
+              "name": "problem_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Water turned off",
+              "name": "water_off",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Elderly, disabled or young children at the property",
+              "name": "vulnerable_occupant",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": [
+                "owner",
+                "tenant",
+                "landlord",
+                "agent"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Owner or tenant",
+              "name": "property_status",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Access notes",
+              "name": "access_notes",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Emergency callout"
+        },
+        "general_enquiry": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Reason for contact",
+              "name": "reason",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "General enquiry"
+        },
+        "quote_request": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Job address",
+              "name": "address",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Postcode",
+              "name": "postcode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "boiler_service",
+                "boiler_repair",
+                "new_boiler",
+                "radiators",
+                "bathroom",
+                "general_plumbing",
+                "electrical",
+                "other"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Job type",
+              "name": "job_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Job description",
+              "name": "job_description",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Preferred dates",
+              "name": "preferred_dates",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "owner",
+                "tenant",
+                "landlord",
+                "agent"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Owner or tenant",
+              "name": "property_status",
+              "required": false,
+              "type": "enum"
+            }
+          ],
+          "label": "Quote or booked job"
+        }
+      },
+      "transfer_failed_message": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "transfer_handoff_message": "I'm putting you through now, please hold.",
+      "transfer_targets": [],
+      "urgency_rules": [
+        {
+          "phrases": [
+            "smell gas",
+            "gas leak",
+            "carbon monoxide",
+            "flooding",
+            "burst pipe",
+            "water coming through",
+            "leak",
+            "no heating",
+            "no hot water",
+            "sparking",
+            "burning smell"
+          ],
+          "reason": "Caller described an emergency at the property: {phrase}",
+          "type": "keyword"
+        },
+        {
+          "text": "A vulnerable person (elderly, disabled, unwell or a baby) is at a property without heating or water.",
+          "type": "sentence"
+        }
+      ],
+      "voice_id": null
+    },
+    "description": "Books callouts for plumbing, heating and electrical work, captures the full address and flags emergencies such as leaks, no heat or gas smells.",
+    "label": "Home services and trades",
+    "name": "home_services",
+    "sample_business_name": "Brightside Plumbing & Heating (sample trades business)",
+    "sets_up": [
+      "Emergency callout, quote request and general enquiry intake with address and postcode",
+      "Gas and electrical safety policy (gas emergency line, 999)",
+      "Urgency for leaks, flooding, no heating or hot water and sparking",
+      "Email triage tuned for jobs and quotes"
+    ]
+  },
+  {
+    "config": {
+      "booking": null,
+      "business_name": "Your agency",
+      "call_settings": {
+        "interruption_sensitivity": "normal",
+        "max_call_message": "We've reached the time limit for this call, so I'll need to end it now. Thank you for calling. Goodbye.",
+        "max_call_minutes": null,
+        "silence_goodbye_message": "I'll end the call now. Thank you for calling. Goodbye.",
+        "silence_timeout_seconds": null,
+        "speech_speed": 1.0,
+        "still_there_prompt": "Are you still there?",
+        "technical_terms": [],
+        "uninterruptible_greeting": false
+      },
+      "contacts": {},
+      "email_triage": {
+        "enquiry": "Someone asking to view a property, about availability, fees, the rental or buying process, or a tenant reporting a routine repair, which you can answer or move forward from the business context.",
+        "needs_human": "Offers and negotiations, deposit disputes, complaints, emergency repairs, legal notices, landlord instructions, and anything the business context does not cover.",
+        "not_relevant": "Genuine mail that needs no reply, such as a thank-you with no question, a portal notification receipt, or a message clearly meant for a different business.",
+        "spam": "Unsolicited marketing, phishing, scams or automated bulk mail."
+      },
+      "greeting": "Hello, you are speaking with the agency's AI assistant. How can I help?",
+      "instructions": "Use short, natural spoken sentences. Ask one question at a time.\nWhen the caller volunteers details, acknowledge them briefly and continue. Never ask the same\nquestion twice in a row.\n\nAt the beginning of every call, say: \"{greeting}\"\n\nFind out whether the caller wants to view a property, is a tenant reporting a repair, is a\nlandlord or seller, or has another enquiry.\nFor viewings, collect the property they are interested in, when they can view and whether\nthey are buying or renting. Take viewings as requests: say a negotiator will confirm the time.\nFor repairs, collect the property address, the problem and whether it is an emergency, plus\naccess arrangements.\nAnswer questions about fees and process only from the business information. Be honest when the\noffice is closed. Office hours: {office_hours}.\n\nWhen the caller is ready to finish, say goodbye. When the caller says goodbye, say goodbye\nin response.\n",
+      "knowledge": {
+        "digest_path": null,
+        "faqs": [],
+        "max_digest_chars": 24000,
+        "sources": []
+      },
+      "language": "en-GB",
+      "live_actions": [],
+      "office_hours": {
+        "closes": "17:30",
+        "days": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday"
+        ],
+        "opens": "09:00",
+        "timezone": "Europe/London"
+      },
+      "policies": [
+        "Never confirm that a property is available, that an offer will be accepted or that an application is approved. Take the details and say a negotiator will get back to them.",
+        "Never confirm a viewing time yourself; take it as a request.",
+        "Never share details about a landlord, tenant, seller or buyer with anyone else, including addresses, phone numbers or offers.",
+        "If a tenant smells gas, tell them to leave the property and call the National Gas Emergency line on 0800 111 999. If anyone is in danger, tell them to call 999.",
+        "Answer fees only from the published price list. Never give a property valuation; offer a free market appraisal instead.",
+        "If a caller disputes a deposit or complains, take the details and say the branch manager will call back. Do not admit liability."
+      ],
+      "post_actions": [],
+      "price_list": [],
+      "readback": "critical",
+      "recording": {
+        "consent_message": "This call may be recorded for quality and training purposes.",
+        "enabled": false,
+        "retention_days": 30
+      },
+      "review_confidence_threshold": 0.7,
+      "rules": {
+        "ai_disclosure": "at_start",
+        "angry_caller": "de_escalate",
+        "off_topic": "redirect",
+        "pronunciations": [],
+        "sales_calls": "take_message",
+        "style": "formal"
+      },
+      "services": {
+        "general_enquiry": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Reason for contact",
+              "name": "reason",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "General enquiry"
+        },
+        "maintenance_request": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Tenant name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Property address",
+              "name": "property_address",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Postcode",
+              "name": "postcode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Issue described",
+              "name": "issue",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "leak",
+                "heating_or_hot_water",
+                "electrical",
+                "gas",
+                "security",
+                "appliance",
+                "damp_or_mould",
+                "pests",
+                "other"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Issue type",
+              "name": "issue_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Emergency",
+              "name": "emergency",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Contractor access permission",
+              "name": "access_permission",
+              "required": false,
+              "type": "boolean"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Access notes",
+              "name": "access_notes",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Maintenance or repair report"
+        },
+        "valuation_or_landlord": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Property address",
+              "name": "property_address",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "sales_valuation",
+                "lettings_valuation",
+                "landlord_management",
+                "existing_landlord"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Enquiry type",
+              "name": "enquiry_type",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Timescale",
+              "name": "timescale",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Valuation or landlord enquiry"
+        },
+        "viewing_request": {
+          "fields": [
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Name",
+              "name": "caller_name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Phone number",
+              "name": "phone",
+              "required": false,
+              "type": "phone"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Email address",
+              "name": "email",
+              "required": false,
+              "type": "email"
+            },
+            {
+              "choices": null,
+              "critical": true,
+              "description": "",
+              "label": "Property address or reference",
+              "name": "property_reference",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": [
+                "buying",
+                "renting"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Buying or renting",
+              "name": "buying_or_renting",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Preferred viewing times",
+              "name": "preferred_times",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Desired move-in date",
+              "name": "move_in_date",
+              "required": false,
+              "type": "date"
+            },
+            {
+              "choices": [
+                "first_time_buyer",
+                "nothing_to_sell",
+                "sale_agreed",
+                "need_to_sell",
+                "cash_buyer",
+                "not_applicable"
+              ],
+              "critical": false,
+              "description": "",
+              "label": "Buyer position",
+              "name": "buyer_position",
+              "required": false,
+              "type": "enum"
+            },
+            {
+              "choices": null,
+              "critical": false,
+              "description": "",
+              "label": "Household and pets",
+              "name": "household",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "label": "Viewing request"
+        }
+      },
+      "transfer_failed_message": "Sorry, nobody is available to take your call right now. Someone will call you back as soon as possible. Goodbye.",
+      "transfer_handoff_message": "I'm putting you through now, please hold.",
+      "transfer_targets": [],
+      "urgency_rules": [
+        {
+          "phrases": [
+            "smell gas",
+            "gas leak",
+            "carbon monoxide",
+            "flooding",
+            "burst pipe",
+            "water coming through",
+            "no heating",
+            "no hot water",
+            "break-in",
+            "locked out",
+            "front door won't lock",
+            "sparking"
+          ],
+          "reason": "Tenant described an emergency repair: {phrase}",
+          "type": "keyword"
+        },
+        {
+          "text": "A tenant reports a repair that makes the property unsafe, insecure or uninhabitable.",
+          "type": "sentence"
+        }
+      ],
+      "voice_id": null
+    },
+    "description": "Books viewing requests, takes tenant maintenance reports and routes landlord and valuation enquiries.",
+    "label": "Real estate and lettings",
+    "name": "lettings_agency",
+    "sample_business_name": "Harbour Lettings & Sales (sample agency)",
+    "sets_up": [
+      "Viewing request, maintenance report, valuation and general enquiry intake",
+      "No promises on availability, offers or deposits; tenant and landlord confidentiality",
+      "Urgency for emergency repairs (leaks, no heating, security, gas)",
+      "Email triage tuned for viewings, tenants and landlords"
+    ]
+  }
+]

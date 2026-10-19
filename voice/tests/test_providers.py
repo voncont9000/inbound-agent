@@ -16,7 +16,6 @@ from pipecat.services.speechify.tts import SpeechifyHttpTTSService, _SpeechMarkA
 
 from inbound_voice.pronunciation import PronunciationTransform
 from inbound_voice.providers import (
-    KEYTERMS,
     SpeechifyRateTTSService,
     VoiceProviders,
     create_llm,
@@ -117,7 +116,7 @@ def test_create_stt(provider: str, expected_type: type) -> None:
         environment,
         extra_terms=[" Acme Clinic ", "acme clinic", "Northstar"],
     )
-    terms = [*KEYTERMS, "Acme Clinic", "Northstar"]
+    terms = ["Acme Clinic", "Northstar"]
 
     assert isinstance(service, expected_type)
     if provider == "assemblyai":
@@ -153,7 +152,7 @@ def test_stt_combines_locale_language_and_extra_terms(
         voice_language=voice_language,
         extra_terms=[" Acme Clinic ", "acme clinic", "Northstar"],
     )
-    terms = [*KEYTERMS, "Acme Clinic", "Northstar"]
+    terms = ["Acme Clinic", "Northstar"]
 
     if provider == "soniox":
         assert service._settings.language_hints == expected_language
@@ -161,6 +160,27 @@ def test_stt_combines_locale_language_and_extra_terms(
     else:
         assert service._settings.language == expected_language
         assert service._settings.keyterm == terms
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_type"),
+    [
+        ("assemblyai", AssemblyAISTTService),
+        ("soniox", SonioxSTTService),
+        ("deepgram", DeepgramSTTService),
+    ],
+)
+def test_create_stt_omits_empty_configured_terms(provider: str, expected_type: type) -> None:
+    environment = _environment(STT_PROVIDER=provider)
+    service = create_stt(resolve_providers(environment), environment, extra_terms=[])
+
+    assert isinstance(service, expected_type)
+    if provider == "assemblyai":
+        assert service._settings.keyterms_prompt is None
+    elif provider == "soniox":
+        assert service._settings.context.terms is None
+    else:
+        assert service._settings.keyterm is None
 
 
 @pytest.mark.parametrize(

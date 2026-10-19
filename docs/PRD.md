@@ -7,7 +7,7 @@
 | Reference analysis | [Fonio teardown](./fonio-teardown.md), [Context graph](./context-graph.md) |
 
 ## 1. Summary
-A multi-tenant SaaS for businesses, with **consumer-facing UK law firms as the first template**: an AI agent that answers inbound customer enquiries on **phone** (speech-to-text → LLM → text-to-speech), **email** (Gmail) and **WhatsApp**, for one business. Each business configures its own assistant, intake fields, critical fields, urgency rules, optional live actions, and review threshold in a shape intended for later editing in app settings. Live actions are configurable and default to none; keyword urgency remains live, while other v1 urgency escalation and follow-up actions are post-call. All channels share one knowledge base, one contact store and one conversation inbox. It answers questions, captures structured lead and request data, books or routes requests, and hands off to a human when needed. The business owner sees every conversation with a summary and the extracted results.
+A multi-tenant SaaS for businesses, with a **library of assistant templates**: Blank is the neutral default for new assistants, and industry templates such as the UK law firm preset provide optional starting configurations (see [templates.md](./templates.md)). An AI agent answers inbound customer enquiries on **phone** (speech-to-text → LLM → text-to-speech), **email** (Gmail) and **WhatsApp**, for one business. Each business configures its own assistant, intake fields, critical fields, urgency rules, optional live actions, and review threshold in a shape intended for later editing in app settings. Live actions are configurable and default to none; keyword urgency remains live, while other v1 urgency escalation and follow-up actions are post-call. All channels share one knowledge base, one contact store and one conversation inbox. It answers questions, captures structured lead and request data, books or routes requests, and hands off to a human when needed. The business owner sees every conversation with a summary and the extracted results.
 
 ## 2. Problem
 Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) miss calls, answer emails late and handle WhatsApp by hand. The enquiries are repetitive: hours, prices, availability, orders, bookings, callbacks. Existing tools such as Fonio work, but they split voice, email and WhatsApp into separately priced products and depend on a lot of tuning parameters.
@@ -60,7 +60,7 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-A6: Abilities you can toggle in v1: look up/create contact, create task, book appointment (Google Calendar), write/read Google Sheets, send email. Later: transfer/forward call, send WhatsApp from a call, web search, webhooks/custom tools.
 - FR-A7: Test console: browser web call (voice) and simulated email/WhatsApp threads. Test conversations are marked as such.
 - FR-A8: Versioned config with an unsaved-changes indicator and rollback.
-- FR-A9: Assistant templates define services, typed intake fields, critical fields, urgency rules, configurable live actions, and a review-confidence threshold. Businesses can override template defaults; law firms are the first template. Live actions are opt-in and default to none. In v1, date-deadline urgency, callback requests, and complaints create post-call tasks; keyword urgency rules continue to run live on caller-final transcripts.
+- FR-A9: Assistant templates are a library of reusable configurations defining services, typed intake fields, critical fields, urgency rules, configurable live actions, and a review-confidence threshold. New assistants default to the neutral Blank template; industry templates supply industry-specific content. Businesses can override template defaults (see [templates.md](./templates.md)). Live actions are opt-in and default to none. In v1, date-deadline urgency, callback requests, and complaints create post-call tasks; keyword urgency rules continue to run live on caller-final transcripts.
 - FR-A10: Hybrid intake confirms configured critical fields live only when that action is enabled, and extracts remaining fields after the conversation. Store caller-affirmed readbacks and live/post-call values with provenance and confidence, merge without erasing either source, and send conflicts, invalid values, or low-confidence fields to a human review queue.
 - FR-A11: Configure call behavior in each business's prompt and settings rather than generic hard-coded prompt text. **M0:** assistants have multiline `instructions` and `readback: off|email|critical`; the law-firm template selects email readback. Use Twilio caller ID as a phone-field source unless the caller provides a different number, and hold incomplete UK phone-number turns for up to two seconds while allowing caller resumption.
 - FR-A12: Merged intake facts map to customer context-graph facts with their source conversation, evidence, confidence, and history; corrections supersede rather than erase prior values (see [context-graph.md](./context-graph.md)).
@@ -70,7 +70,7 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 - FR-P2: Real-time pipeline: provider media stream → streaming STT → LLM with tool calls → streaming TTS → caller. Implement it behind provider-agnostic interfaces so STT/LLM/TTS vendors can be swapped.
 - FR-P3: Turn-taking: voice-activity and semantic endpointing (don't cut the caller off at "um"), barge-in/interruption with adjustable sensitivity, optional backchannels, no-interrupt on the greeting.
 - FR-P4: Personalised greeting. An optional **pre-call context hook** (HTTP request templated with `{{from}}`, `{{to}}`) runs before the greeting, then contact matching runs on caller ID.
-- FR-P5: STT vocabulary boosting (key terms, names, products). TTS pronunciation dictionary. Voice speed.
+- FR-P5: STT vocabulary boosting uses each assistant's configured `call_settings.technical_terms` (names, streets, products), not hard-coded industry terms. TTS pronunciation dictionary. Voice speed.
 - FR-P6: Call controls: max duration, silence timeout with re-prompt then hang-up, take-a-message fallback that creates a callback task. **M0:** cold transfer to a configured person with office-hours availability, outcome reporting, and a follow-up task when the dial fails. Later: warm transfer with a whisper summary, DTMF sending.
 - FR-P7: Recording off by default. When on, it is announced in the greeting. If the caller opts out, the recording is not stored and the transcript is kept or deleted per setting. Retention is configurable (default 30 days).
 - FR-P8: Languages: English (UK accents and voices) at launch. More languages later via automatic language detection.
@@ -177,9 +177,11 @@ template- and prompt-driven and vertical-neutral.
 - FR-S4: **No technical keys in the UI.** Service keys, field names, appointment-type keys and contact
   keys are generated from the human label (slugified, unique per assistant) and stay stable when the
   label is later edited.
-- FR-S5: Intake fields and urgency rules come from the chosen template. Urgency rules can be written
-  as plain sentences ("Urgent if a tribunal deadline is within 4 weeks"); keyword and date rules
-  remain available on the same **Rules** tab.
+- FR-S5: Intake fields and urgency rules come from the chosen template. Blank provides only the
+  generic general-enquiry service; industry templates form a reusable library (see
+  [templates.md](./templates.md)). Urgency rules can be written as plain sentences ("Urgent if a
+  tribunal deadline is within 4 weeks"); keyword and date rules remain available on the same
+  **Rules** tab.
 - FR-S6: A persistent **Test call / Test chat** control on every assistant page.
 
 *Status (FR-S1–S4, FR-S6):* built in the web app. Settings live at `/assistants/:id/settings/:tab`
@@ -197,12 +199,15 @@ keys are generated the same way. Turning off booking confirms before removing co
 appointment types.
 
 **Website-based setup**
-- FR-S7: Creating an assistant asks for business name, website URL and template. The website is crawled
-  and an LLM drafts company info, FAQs, opening hours, price list and suggested services. The business
-  reviews and accepts each draft section; nothing generated is used until accepted. Setup without a
+- FR-S7: Creating an assistant offers a template library with Blank selected by default and optional
+  industry templates (see [templates.md](./templates.md)). The user can enter a website URL; it is
+  crawled and an LLM drafts company info, FAQs, opening hours, price list and suggested services.
+  The business reviews and accepts each draft section; nothing generated is used until accepted.
+  Templates with sample details offer a separate **Create demo assistant** flow. Setup without a
   website remains possible.
   - Status: Implemented with per-section review; only accepted sections are applied at completion.
-    A provided website URL also queues knowledge import automatically after completion.
+    Demo creation opts into template sample content with `use_sample_content`; a provided website
+    URL also queues knowledge import automatically after completion.
 
 **Languages and voices**
 - FR-S8 **implemented**: `language` is a shared locale code (`en-GB`, `en-US`, `de-DE`, `es-ES`,
@@ -229,7 +234,7 @@ appointment types.
 **Call settings and recording**
 - FR-S11: Per-assistant call settings: maximum call length, silence hang-up (with a configurable
   "are you still there?" prompt), speech speed, interruption sensitivity, uninterruptible greeting,
-  and technical terms (names, streets, product names) passed to recognition as hints.
+  and configured technical terms (names, streets, product names) passed to recognition as hints.
 - FR-S12: Optional call recording, off by default. When on, the greeting includes a consent line,
   recordings are stored per tenant, playable from the conversation, and deleted automatically after a
   configurable retention period (default 30 days).
