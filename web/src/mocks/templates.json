@@ -49,7 +49,7 @@
       "readback": "off",
       "recording": {
         "consent_message": "This call may be recorded for quality and training purposes.",
-        "enabled": false,
+        "enabled": true,
         "retention_days": 30
       },
       "review_confidence_threshold": 0.7,
@@ -191,7 +191,7 @@
       "readback": "email",
       "recording": {
         "consent_message": "This call may be recorded for quality and training purposes.",
-        "enabled": false,
+        "enabled": true,
         "retention_days": 30
       },
       "review_confidence_threshold": 0.7,
@@ -657,7 +657,7 @@
       "readback": "critical",
       "recording": {
         "consent_message": "This call may be recorded for quality and training purposes.",
-        "enabled": false,
+        "enabled": true,
         "retention_days": 30
       },
       "review_confidence_threshold": 0.7,
@@ -980,7 +980,7 @@
       "readback": "critical",
       "recording": {
         "consent_message": "This call may be recorded for quality and training purposes.",
-        "enabled": false,
+        "enabled": true,
         "retention_days": 30
       },
       "review_confidence_threshold": 0.7,
@@ -1309,7 +1309,7 @@
       "readback": "critical",
       "recording": {
         "consent_message": "This call may be recorded for quality and training purposes.",
-        "enabled": false,
+        "enabled": true,
         "retention_days": 30
       },
       "review_confidence_threshold": 0.7,
@@ -1658,7 +1658,7 @@
       "readback": "critical",
       "recording": {
         "consent_message": "This call may be recorded for quality and training purposes.",
-        "enabled": false,
+        "enabled": true,
         "retention_days": 30
       },
       "review_confidence_threshold": 0.7,
