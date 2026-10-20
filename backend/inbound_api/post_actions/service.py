@@ -65,8 +65,6 @@ async def plan_conversation_actions(
     conversation = await session.get(Conversation, conversation_id)
     if conversation is None:
         return {"queued": 0}
-    if conversation.metrics.get("test_call") is True:
-        return {"queued": 0}
     assistant = await session.get(Assistant, conversation.assistant_id)
     if assistant is None:
         return {"queued": 0}
@@ -263,7 +261,7 @@ async def build_action_context(
     tasks: list[Task] | None = None,
     events: list[str] | None = None,
     settings: Settings | None = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     settings = settings or get_settings()
     intake = await _merged_intake(session, conversation.id)
     fields = intake.get("fields", {})
@@ -307,6 +305,7 @@ async def build_action_context(
         "contact.email": email,
         "contact.phone": phone,
         "channel": conversation.channel.value,
+        "test_call": (conversation.metrics or {}).get("test_call") is True,
         "started_at": conversation.started_at.astimezone(
             ZoneInfo(config.office_hours.timezone)
         ).strftime("%Y-%m-%d %H:%M %Z"),
@@ -330,12 +329,21 @@ async def build_action_context(
     return variables
 
 
+def render_action_subject(template: str, context: dict[str, Any]) -> str:
+    subject = render_subject(template, context)
+    if context.get("test_call") is True:
+        if subject.startswith("[Test]"):
+            subject = subject.removeprefix("[Test]").lstrip()
+        return f"[Test] {subject}"
+    return subject
+
+
 async def _dispatch_action(
     session: AsyncSession,
     *,
     assistant: Assistant,
     action,
-    context: dict[str, str],
+    context: dict[str, Any],
     settings: Settings,
     email_sender: EmailSender | None,
     sheets_writer: SheetsWriter | None,
@@ -354,7 +362,7 @@ async def _dispatch_action(
         return await sender.send(
             assistant_id=assistant.id,
             to=[recipient],
-            subject=render_subject(action.subject_template, context),
+            subject=render_action_subject(action.subject_template, context),
             body=render_template(action.body_template, context),
         )
     if isinstance(action, NotifyStaffAction):
@@ -362,7 +370,7 @@ async def _dispatch_action(
         return await sender.send(
             assistant_id=assistant.id,
             to=[str(address) for address in action.to],
-            subject=render_subject(action.subject_template, context),
+            subject=render_action_subject(action.subject_template, context),
             body=render_template(action.body_template, context),
         )
     if isinstance(action, SheetsRowAction):
@@ -410,6 +418,7 @@ async def _dispatch_action(
             "action_key": action.key,
             "events": sorted(run.pending_events),
             "conversation_id": context["conversation.id"],
+            "test": context["test_call"],
             "context": context,
         }
         body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()

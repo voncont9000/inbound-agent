@@ -95,6 +95,11 @@ def test_template_rendering_substitutes_plain_text_and_ignores_unknown_names():
     assert render_subject("One\n{{contact.name}}\r", {"contact.name": "Ada"}) == "One Ada "
 
 
+def test_template_rendering_substitutes_boolean_context_values():
+    assert render_template("test call: {{test_call}}", {"test_call": True}) == "test call: true"
+    assert render_template("test call: {{test_call}}", {"test_call": False}) == "test call: false"
+
+
 @pytest.mark.parametrize("value", ["=SUM(A1:A2)", "+cmd", "-1", "@value", "\tvalue", "\rvalue"])
 def test_sheet_cells_escape_formula_prefixes_in_values_only(value):
     assert (
@@ -158,3 +163,4 @@ def test_template_variables_are_a_fixed_list_of_name_description_pairs():
         isinstance(name, str) and isinstance(description, str)
         for name, description in TEMPLATE_VARIABLES
     )
+    assert ("test_call", "True for browser test calls.") in TEMPLATE_VARIABLES
