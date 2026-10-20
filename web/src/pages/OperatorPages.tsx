@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, unwrap, unwrapNoContent, type Schemas } from "../api/client";
@@ -6,7 +6,7 @@ import { ApiError, errorMessage } from "../api/errors";
 import { useAuth } from "../auth/AuthProvider";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CallRecordingPlayer } from "../components/CallRecordingPlayer";
-import { Badge, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
+import { Badge, DeleteIcon, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 import { formatDate } from "../lib/date";
 import { transcriptRows } from "../lib/transcript";
 
@@ -182,14 +182,14 @@ export function InboxPage() {
         <td><div className="button-row">{conversation.test_call && <Badge tone="neutral">Test call</Badge>}{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</div></td>
         {canDelete && <td><button
           type="button"
-          className="button-ghost button-sm"
+          className="button-danger button-sm"
           aria-label="Delete conversation"
           title="Delete conversation"
           onClick={() => {
             setDeleteError("");
             setPendingDelete({ ids: [conversation.id], bulk: false });
           }}
-        ><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2m3 0-.8 14H5.8L5 6m4 4v6m6-6v6" /></svg></button></td>}
+        ><DeleteIcon /></button></td>}
       </tr>)}
     </tbody></table></div>}
     {conversations.hasNextPage && <button type="button" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button>}
@@ -209,7 +209,13 @@ export function InboxPage() {
   </main>;
 }
 
-const channelIcon: Record<string, string> = { phone: "☎", web: "◎", gmail: "✉", whatsapp: "◉" };
+const icon = (path: string) => <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
+const channelIcon: Record<string, ReactNode> = {
+  phone: icon("M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"),
+  web: icon("M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10"),
+  gmail: icon("M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2m18 2-10 7L2 7"),
+  whatsapp: icon("M21 11.5a8.4 8.4 0 0 1-12.1 7.7L3 21l1.8-5.7A8.4 8.4 0 1 1 21 11.5ZM8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"),
+};
 
 function statusTone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
   if (["completed", "done", "answered"].includes(status)) return "success";
@@ -291,11 +297,11 @@ export function ConversationPage() {
   const transcript = transcriptRows(detail.messages, detail.channel, detail.started_at);
   const channelName = detail.channel === "whatsapp" ? "WhatsApp" : detail.channel === "gmail" ? "Email" : `${detail.channel.charAt(0).toUpperCase()}${detail.channel.slice(1)}`;
   return <main className="page" id="main-content">
-    <PageHeader title={<>{detail.summary ?? "Conversation details"} <Badge tone="neutral">{channelName}</Badge> {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<div className="button-row">
-      {canDelete && <button type="button" className="button-ghost" onClick={() => {
+    <PageHeader title={<>{detail.summary ?? "Conversation details"} <Badge tone="neutral">{channelIcon[detail.channel]} {channelName}</Badge> {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<div className="button-row">
+      {canDelete && <button type="button" className="button-danger" onClick={() => {
         setDeleteError("");
         setDeleteDialogOpen(true);
-      }}>Delete conversation</button>}
+      }}><DeleteIcon /> Delete conversation</button>}
       <Link className="button" to="/inbox">Back to inbox</Link>
     </div>} />
     {deleteError && <p role="alert">{deleteError}</p>}

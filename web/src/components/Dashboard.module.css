@@ -25,11 +25,11 @@
 
 .value {
   margin: 0;
-  font-family: var(--font-hand);
-  font-size: 1.5rem;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
   color: var(--ink);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -49,8 +49,8 @@
 
 .axis {
   fill: var(--body);
-  font-family: var(--font-hand);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 12px;
 }
 
 .grid {
@@ -64,7 +64,8 @@
   margin: 0 0 0.6rem;
   padding: 0;
   list-style: none;
-  font-size: 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--body);
 }
 

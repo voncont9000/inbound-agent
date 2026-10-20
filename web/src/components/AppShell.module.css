@@ -26,7 +26,7 @@
   padding: 0.25rem 0.5rem;
 }
 
-.brand img { display: block; width: 128px; max-width: 100%; height: auto; }
+.brand img { display: block; width: 96px; max-width: 100%; height: auto; }
 .mobileBrand .brand { padding: 0; }
 .mobileBrand .brand img { width: 32px; height: 32px; }
 

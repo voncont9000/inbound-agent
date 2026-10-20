@@ -37,8 +37,6 @@ function AppShell() {
   const { user, tenant, memberships, selectedTenant, setSelectedTenant, logout } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const assistantArea = location.pathname.startsWith("/assistants/") && location.pathname !== "/assistants/new";
-  const assistantId = location.pathname.split("/")[2];
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
   const initials = (user?.display_name ?? "?").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const navigation = <nav className={shell.navigation} aria-label="Main navigation">
@@ -76,9 +74,6 @@ function AppShell() {
           </div>
         </header>
         <div id="mobile-navigation" className={shell.mobileNav} hidden={!menuOpen}>{navigation}</div>
-        {assistantArea && <nav className="subnav page" aria-label="Assistant sections" style={{ paddingBlock: 0 }}>
-          <NavLink to={`/assistants/${assistantId}/settings`}>Settings</NavLink>
-        </nav>}
         <div className={shell.content}><Outlet /></div>
         <TestCallBar />
       </div>

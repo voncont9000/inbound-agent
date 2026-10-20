@@ -2,6 +2,10 @@ import type { ReactNode } from "react";
 
 const glyph = (path: string) => <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
 
+export function DeleteIcon() {
+  return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2m3 0-.8 14H5.8L5 6m4 4v6m6-6v6" /></svg>;
+}
+
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return <div role="status" className="state state-inline"><span className="spinner" aria-hidden="true" />{label}</div>;
 }

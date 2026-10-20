@@ -11,6 +11,10 @@ function ChevronIcon({ up }: { up: boolean }) {
   return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{up ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}</svg>;
 }
 
+function HeadphonesIcon() {
+  return <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 14v-3a9 9 0 0 1 18 0v3M5 14h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2Zm14 0h-2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2Z" /></svg>;
+}
+
 function useTicker(active: boolean) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -40,23 +44,32 @@ export function TestCallBar() {
     <div className={styles.inner}>
       <div className={styles.status}>
         <span className={`${styles.dot} ${live ? styles.dotLive : ""} ${state.phase === "in_call" ? styles.dotPulse : ""}`} aria-hidden="true"><PhoneIcon /></span>
-        <p className={styles.text} role="status" aria-live="polite">
-          {state.phase === "idle" && (call.collapsed ? "Test call" : <>Try <strong>{assistantName}</strong> in a browser call. Use headphones.</>)}
-          {state.phase === "connecting" && <>Connecting to <strong>{assistantName}</strong>…</>}
-          {state.phase === "in_call" && <>In call with <strong>{assistantName}</strong> <time className={styles.timer} aria-label={`Call time ${elapsed}`}>{elapsed}</time>{state.muted && <span className={styles.mutedTag}>Muted</span>}</>}
+        <div className={styles.text} role="status" aria-live="polite">
+          {state.phase === "idle" && (call.collapsed
+            ? "Test call"
+            : call.assistants.length > 1
+              ? <>
+                <label className="sr-only" htmlFor={selectId}>Assistant to test</label>
+                <select id={selectId} className={styles.select} value={call.selectedAssistantId} onChange={(event) => call.selectAssistant(event.target.value)}>
+                  {call.assistants.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </>
+              : <strong className={styles.assistantName}>{assistantName}</strong>)}
+          {state.phase === "connecting" && <>Connecting to <strong className={styles.assistantName}>{assistantName}</strong>…</>}
+          {state.phase === "in_call" && <>
+            <span className={styles.inCallPrefix}>In call with</span>
+            <strong className={styles.assistantName}>{assistantName}</strong>
+            <time className={styles.timer} aria-label={`Call time ${elapsed}`}>{elapsed}</time>
+            <span className={styles.headphones} title="Use headphones" aria-label="Use headphones"><HeadphonesIcon /><span>Use headphones</span></span>
+            {state.muted && <span className={styles.mutedTag}>Muted</span>}
+          </>}
           {state.phase === "ended" && <>Call ended{duration ? ` · ${duration}` : ""}</>}
           {state.phase === "error" && <span className={styles.error} role="alert">{state.error}</span>}
-        </p>
+        </div>
       </div>
       <div id="test-call-bar-content" className={styles.controls} hidden={call.collapsed && state.phase === "idle"}>
         {state.phase === "idle" && <>
-          {call.assistants.length > 1 && <>
-            <label className="sr-only" htmlFor={selectId}>Assistant to test</label>
-            <select id={selectId} className={styles.select} value={call.selectedAssistantId} onChange={(event) => call.selectAssistant(event.target.value)}>
-              {call.assistants.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
-            </select>
-          </>}
-          <button type="button" className="button-accent button-sm" aria-label="Start test call" onClick={() => call.startCall()} disabled={!call.selectedAssistantId}>
+          <button type="button" className="button-accent button-sm" aria-label="Start test call" title="Use headphones" onClick={() => call.startCall()} disabled={!call.selectedAssistantId}>
             <PhoneIcon /> Test call
           </button>
         </>}

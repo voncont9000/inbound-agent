@@ -9,7 +9,7 @@ import { SettingsTabContent } from "../components/settings/SettingsTabContent";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
 import { isSettingsTab, settingsTabPath, settingsTabs, tabForPath, type SettingsTabId } from "../lib/settingsTabs";
-import { Badge, EmptyState, ErrorState, ErrorSummary, LoadingState, PageHeader } from "../components/States";
+import { Badge, DeleteIcon, EmptyState, ErrorState, ErrorSummary, LoadingState, PageHeader } from "../components/States";
 import { HelpLink } from "../help/HelpLink";
 import { settingsTabHelp } from "../help/settingsTabHelp";
 
@@ -124,10 +124,10 @@ export function AssistantsPage() {
       <p className="muted">{Object.values(assistant.config.services).map((service) => service.label).join(" · ")}</p>
       <div className="button-row">
         <Link to={settingsTabPath(assistant.id)}>Manage assistant</Link>
-        {canDelete && <button type="button" className="button-ghost" onClick={() => {
+        {canDelete && <button type="button" className="button-danger" onClick={() => {
           setDeleteError("");
           setDeleteTarget(assistant);
-        }}>Delete</button>}
+        }}><DeleteIcon /> Delete</button>}
       </div>
     </article>)}</div>
     {deleteTarget && <ConfirmDialog
