@@ -191,9 +191,9 @@ from any tab, and tabs that have validation errors show a count. Config versions
 served by the API, but the settings page no longer shows version history. Knowledge sources and the digest still save on their own.
 Ability cards switch the matching live actions on or off (booking: `check_availability` and
 `book_appointment`; forwarding: `transfer_call`; readback: `confirm_critical_fields`), and Advanced
-lists only the live actions no card owns. Services and intake fields, prices and contact details are
-edited under General › Instructions, next to the custom prompt they are rendered into; they stay
-structured because extraction, readback and urgency rules use their keys. Keys are generated in the browser
+lists only the live actions no card owns. Services and intake fields have their own card under General;
+they stay structured because extraction, readback and urgency rules use their keys. Prices and contact
+details have no editor any more (the config fields remain and are still rendered into the prompt). Keys are generated in the browser
 (`web/src/lib/keys.ts`) and match the backend key patterns. Saved keys never change. Post-action
 keys are generated the same way. Turning off booking confirms before removing configured
 appointment types.

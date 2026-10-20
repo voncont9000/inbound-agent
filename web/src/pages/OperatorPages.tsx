@@ -662,7 +662,34 @@ function MetricsCard({ metrics, estimatedCost }: { metrics: Record<string, unkno
   </div></section>;
 }
 
+
+function useRowSelection(rowIds: string[]) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
+  const selectedVisible = rowIds.filter((id) => selectedIds.includes(id)).length;
+  const allSelected = rowIds.length > 0 && selectedVisible === rowIds.length;
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = selectedVisible > 0 && selectedVisible < rowIds.length;
+  }, [rowIds.length, selectedVisible]);
+  return {
+    selectedIds,
+    selectAllRef,
+    allSelected,
+    clear: () => setSelectedIds([]),
+    toggle: (id: string) => setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id])),
+    toggleAll: () => setSelectedIds(allSelected ? [] : rowIds),
+  };
+}
+
+function useCanDelete() {
+  const { tenant, user, memberships, selectedTenant } = useAuth();
+  const role = memberships.find(({ id }) => id === selectedTenant)?.role ?? tenant?.role;
+  return Boolean(user) && role === "owner";
+}
+
 export function ContactsPage() {
+  const canDelete = useCanDelete();
+  const queryClient = useQueryClient();
   const contacts = useInfiniteQuery({
     queryKey: ["contacts"],
     queryFn: ({ pageParam }) => unwrap(api.GET("/contacts", { params: { query: { cursor: pageParam ?? undefined, limit: 50 } } })),
@@ -670,13 +697,48 @@ export function ContactsPage() {
     getNextPageParam: (page) => page.next_cursor,
   });
   const [filter, setFilter] = useState("");
-  const rows = (contacts.data?.pages.flatMap(({ items }) => items) ?? []).filter(({ display_name }) => display_name.toLowerCase().includes(filter.toLowerCase()));
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const rows = useMemo(() => (contacts.data?.pages.flatMap(({ items }) => items) ?? []).filter(({ display_name }) => display_name.toLowerCase().includes(filter.toLowerCase())), [contacts.data, filter]);
+  const rowIds = useMemo(() => rows.map(({ id }) => id), [rows]);
+  const selection = useRowSelection(rowIds);
+  const remove = useMutation({
+    mutationFn: (ids: string[]) => unwrap(api.POST("/contacts/bulk-delete", { body: { ids } })),
+    onSuccess: async () => {
+      setConfirmOpen(false);
+      selection.clear();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["conversations"] }),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+      ]);
+    },
+    onError: (error) => setDeleteError(requestErrorMessage(error, "Unable to delete contacts.")),
+  });
+  const count = selection.selectedIds.length;
   return <main className="page" id="main-content"><PageHeader title="Contacts" lede="Callers and senders your assistants have identified." />
-    <div className="field"><label htmlFor="contact-filter">Filter by name</label><input id="contact-filter" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
+    <div className="toolbar">
+      <div className="field"><label htmlFor="contact-filter">Filter by name</label><input id="contact-filter" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
+      {canDelete && count > 0 && <button type="button" className="button-danger" onClick={() => { setDeleteError(""); setConfirmOpen(true); }}><DeleteIcon /> Delete selected ({count})</button>}
+    </div>
     {contacts.isLoading && <LoadingState />}{contacts.error && <ErrorState message="Contacts could not be loaded." />}
     {!rows.length && !contacts.isLoading && <EmptyState>No contacts found.</EmptyState>}
-    <div className="table-wrap"><table><thead><tr><th>Name</th><th>Created</th><th>Updated</th><th>Status</th></tr></thead><tbody>{rows.map((contact) => <tr key={contact.id}><td><Link to={`/contacts/${contact.id}`}>{contact.display_name}</Link></td><td className="cell-muted">{formatDate(contact.created_at)}</td><td className="cell-muted">{formatDate(contact.updated_at)}</td><td>{contact.merged_into_id ? <Badge>merged</Badge> : <Badge tone="success">Active</Badge>}</td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr>
+      {canDelete && <th className="select-cell"><input ref={selection.selectAllRef} type="checkbox" aria-label="Select all contacts" checked={selection.allSelected} onChange={selection.toggleAll} /></th>}
+      <th>Name</th><th>Created</th><th>Updated</th><th>Status</th></tr></thead><tbody>{rows.map((contact) => <tr key={contact.id} aria-selected={canDelete ? selection.selectedIds.includes(contact.id) : undefined}>
+      {canDelete && <td className="select-cell"><input type="checkbox" aria-label={`Select ${contact.display_name}`} checked={selection.selectedIds.includes(contact.id)} onChange={() => selection.toggle(contact.id)} /></td>}
+      <td><Link to={`/contacts/${contact.id}`}>{contact.display_name}</Link></td><td className="cell-muted">{formatDate(contact.created_at)}</td><td className="cell-muted">{formatDate(contact.updated_at)}</td><td>{contact.merged_into_id ? <Badge>merged</Badge> : <Badge tone="success">Active</Badge>}</td></tr>)}</tbody></table></div>
     {contacts.hasNextPage && <button type="button" onClick={() => void contacts.fetchNextPage()} disabled={contacts.isFetchingNextPage}>Load more</button>}
+    {confirmOpen && <ConfirmDialog
+      title={`Delete ${count} contact${count === 1 ? "" : "s"}?`}
+      confirmLabel="Delete"
+      tone="danger"
+      onCancel={() => { setConfirmOpen(false); setDeleteError(""); }}
+      onConfirm={() => remove.mutate(selection.selectedIds)}
+    >
+      <p>Their conversations and tasks are kept, without a contact. This can't be undone.</p>
+      {deleteError && <p role="alert">{deleteError}</p>}
+    </ConfirmDialog>}
   </main>;
 }
 
@@ -733,10 +795,13 @@ export function ContactPage() {
 }
 
 export function TasksPage() {
+  const canDelete = useCanDelete();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
   const [assistantFilter, setAssistantFilter] = useState("all");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
   const tasks = useQuery({
     queryKey: ["tasks", statusFilter, kindFilter, assistantFilter],
@@ -750,11 +815,43 @@ export function TasksPage() {
     mutationFn: (input: { id: string; status: Schemas["TaskUpdate"]["status"] }) => unwrap(api.PATCH("/tasks/{task_id}", { params: { path: { task_id: input.id } }, body: { status: input.status } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["tasks"] }); },
   });
-  const rows = tasks.data?.items ?? [];
+  const rows = useMemo(() => tasks.data?.items ?? [], [tasks.data]);
+  const rowIds = useMemo(() => rows.map(({ id }) => id), [rows]);
+  const selection = useRowSelection(rowIds);
+  const remove = useMutation({
+    mutationFn: (ids: string[]) => unwrap(api.POST("/tasks/bulk-delete", { body: { ids } })),
+    onSuccess: async () => {
+      setConfirmOpen(false);
+      selection.clear();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["conversation"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+      ]);
+    },
+    onError: (error) => setDeleteError(requestErrorMessage(error, "Unable to delete tasks.")),
+  });
+  const count = selection.selectedIds.length;
   return <main className="page" id="main-content"><PageHeader title="Tasks" lede="Callbacks, bookings and other follow-ups created from conversations." />
-    <div className="toolbar"><div className="field"><label htmlFor="task-status-filter">Status</label><select id="task-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{["open", "done", "dismissed"].map((status) => <option key={status}>{status}</option>)}</select></div><div className="field"><label htmlFor="task-kind-filter">Kind</label><input id="task-kind-filter" value={kindFilter === "all" ? "" : kindFilter} onChange={(event) => setKindFilter(event.target.value || "all")} placeholder="All kinds" /></div><div className="field"><label htmlFor="task-assistant-filter">Assistant</label><select id="task-assistant-filter" value={assistantFilter} onChange={(event) => setAssistantFilter(event.target.value)}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div></div>
+    <div className="toolbar"><div className="field"><label htmlFor="task-status-filter">Status</label><select id="task-status-filter" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); selection.clear(); }}><option value="all">All statuses</option>{["open", "done", "dismissed"].map((status) => <option key={status}>{status}</option>)}</select></div><div className="field"><label htmlFor="task-kind-filter">Kind</label><input id="task-kind-filter" value={kindFilter === "all" ? "" : kindFilter} onChange={(event) => { setKindFilter(event.target.value || "all"); selection.clear(); }} placeholder="All kinds" /></div><div className="field"><label htmlFor="task-assistant-filter">Assistant</label><select id="task-assistant-filter" value={assistantFilter} onChange={(event) => { setAssistantFilter(event.target.value); selection.clear(); }}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div>
+      {canDelete && count > 0 && <button type="button" className="button-danger" onClick={() => { setDeleteError(""); setConfirmOpen(true); }}><DeleteIcon /> Delete selected ({count})</button>}
+    </div>
     {tasks.isLoading && <LoadingState />}{tasks.error && <ErrorState message="Tasks could not be loaded." />}{!rows.length && !tasks.isLoading && !tasks.error && <EmptyState>No tasks match these filters.</EmptyState>}
-    <div className="table-wrap"><table><thead><tr><th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id}><td className="cell-primary">{task.kind}</td><td><Badge tone={statusTone(task.status)}>{task.status}</Badge></td><td>{task.source}</td><td className="cell-muted">{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr>
+      {canDelete && <th className="select-cell"><input ref={selection.selectAllRef} type="checkbox" aria-label="Select all tasks" checked={selection.allSelected} onChange={selection.toggleAll} /></th>}
+      <th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id} aria-selected={canDelete ? selection.selectedIds.includes(task.id) : undefined}>
+      {canDelete && <td className="select-cell"><input type="checkbox" aria-label={`Select ${task.kind} task`} checked={selection.selectedIds.includes(task.id)} onChange={() => selection.toggle(task.id)} /></td>}
+      <td className="cell-primary">{task.kind}</td><td><Badge tone={statusTone(task.status)}>{task.status}</Badge></td><td>{task.source}</td><td className="cell-muted">{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
+    {confirmOpen && <ConfirmDialog
+      title={`Delete ${count} task${count === 1 ? "" : "s"}?`}
+      confirmLabel="Delete"
+      tone="danger"
+      onCancel={() => { setConfirmOpen(false); setDeleteError(""); }}
+      onConfirm={() => remove.mutate(selection.selectedIds)}
+    >
+      <p>This can't be undone.</p>
+      {deleteError && <p role="alert">{deleteError}</p>}
+    </ConfirmDialog>}
   </main>;
 }
 

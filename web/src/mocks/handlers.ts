@@ -583,6 +583,21 @@ export const handlers = [
     const all = tenant.contacts.map(toContactSummary);
     return HttpResponse.json<Schemas["ContactsResponse"]>({ items: all.slice(cursor, cursor + limit), next_cursor: cursor + limit < all.length ? String(cursor + limit) : null });
   }),
+  http.post<never, Schemas["BulkDeleteRequest"], ApiResponse<Schemas["BulkDeleteResponse"]>>("*/api/contacts/bulk-delete", async ({ request }) => {
+    const tenant = selectedTenant(request);
+    const { ids } = await requestJson<Schemas["BulkDeleteRequest"]>(request);
+    const wanted = new Set(ids);
+    const before = tenant.contacts.length;
+    tenant.contacts = tenant.contacts.filter(({ id }) => !wanted.has(id));
+    tenant.contacts.forEach((contact) => {
+      if (contact.merged_into_id && wanted.has(contact.merged_into_id)) contact.merged_into_id = null;
+    });
+    tenant.conversations.forEach((conversation) => {
+      if (conversation.person_id && wanted.has(conversation.person_id)) conversation.person_id = null;
+    });
+    tenant.tasks = tenant.tasks.map((task) => (task.person_id && wanted.has(task.person_id) ? { ...task, person_id: null } : task));
+    return HttpResponse.json<Schemas["BulkDeleteResponse"]>({ deleted: before - tenant.contacts.length });
+  }),
   http.get<{ id: string }, never, ApiResponse<Schemas["ContactDetailResponse"]>>("*/api/contacts/:id", ({ request, params }) => {
     const contact = selectedTenant(request).contacts.find(({ id }) => id === params.id);
     return contact ? HttpResponse.json<Schemas["ContactDetailResponse"]>(contact) : HttpResponse.json<ApiErrorResponse>({ detail: "Contact not found" }, { status: 404 });
@@ -626,6 +641,17 @@ export const handlers = [
         && (!assistantId || tenant.conversations.find((conversation) => conversation.id === task.conversation_id)?.assistant_id === assistantId),
       ),
     });
+  }),
+  http.post<never, Schemas["BulkDeleteRequest"], ApiResponse<Schemas["BulkDeleteResponse"]>>("*/api/tasks/bulk-delete", async ({ request }) => {
+    const tenant = selectedTenant(request);
+    const { ids } = await requestJson<Schemas["BulkDeleteRequest"]>(request);
+    const wanted = new Set(ids);
+    const before = tenant.tasks.length;
+    tenant.tasks = tenant.tasks.filter(({ id }) => !wanted.has(id));
+    tenant.conversations.forEach((conversation) => {
+      conversation.tasks = conversation.tasks.filter(({ id }) => !wanted.has(id));
+    });
+    return HttpResponse.json<Schemas["BulkDeleteResponse"]>({ deleted: before - tenant.tasks.length });
   }),
   http.patch<{ id: string }, Schemas["TaskUpdate"], ApiResponse<Schemas["TaskSummary"]>>("*/api/tasks/:id", async ({ request, params }) => {
     const { status } = await requestJson<Schemas["TaskUpdate"]>(request);

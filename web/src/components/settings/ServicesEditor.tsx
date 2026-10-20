@@ -2,78 +2,11 @@ import { useMemo, useState } from "react";
 import type { Schemas } from "../../api/client";
 import type { AssistantConfig } from "../../lib/config";
 import { enumAt } from "../../lib/configSchema";
-import { followLabel, humanizeKey, keyFromLabel } from "../../lib/keys";
+import { followLabel, keyFromLabel } from "../../lib/keys";
 import { Field, MoreOptions, type SettingsTabProps } from "./fields";
-import { invalidProps, hasErrorUnder } from "./errors";
+import { hasErrorUnder, invalidProps } from "./errors";
 
 type FieldSpec = Schemas["FieldSpec"];
-
-function plural(count: number, one: string, many = `${one}s`) {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
-/** Structured details that are rendered into the prompt next to the instructions. */
-export function PromptDetails(props: SettingsTabProps) {
-  const { config, errors } = props;
-  const serviceCount = Object.keys(config.services).length;
-  const fieldCount = Object.values(config.services).reduce((total, service) => total + service.fields.length, 0);
-  const contactCount = Object.keys(config.contacts).length;
-  return <div className="prompt-details stack">
-    <p className="help">Added to the prompt with your instructions. Keep facts here rather than in the text above so the assistant and extraction use the same names.</p>
-    <div className="prompt-detail">
-      <h3>Services and intake fields</h3>
-      <p className="muted">{plural(serviceCount, "service")}, {plural(fieldCount, "intake field")}. Field keys are used to extract and confirm caller details.</p>
-      <MoreOptions label="Edit services and intake fields" forceOpen={hasErrorUnder(errors, ["services"])}><ServicesEditor {...props} /></MoreOptions>
-    </div>
-    <div className="prompt-detail">
-      <h3>Prices</h3>
-      <p className="muted">{config.price_list.length ? plural(config.price_list.length, "published price") : "No published prices."}</p>
-      <MoreOptions label="Edit prices" forceOpen={hasErrorUnder(errors, ["price_list"])}><PriceListEditor {...props} /></MoreOptions>
-    </div>
-    <div className="prompt-detail">
-      <h3>Contact details</h3>
-      <p className="muted">{contactCount ? `${plural(contactCount, "contact")} the assistant may share.` : "No contact details to share."}</p>
-      <MoreOptions label="Edit contact details" forceOpen={hasErrorUnder(errors, ["contacts"])}><ContactsEditor {...props} /></MoreOptions>
-    </div>
-  </div>;
-}
-
-function PriceListEditor({ config, update }: SettingsTabProps) {
-  return <>
-      {config.price_list.map((item, index) => <div className="inline-editor" key={`price-${index}`}>
-        <div className="form-grid">{(["service", "price", "notes"] as const).map((key) => <Field key={key} path={`price_list.${index}.${key}`} label={key.replaceAll("_", " ")}>{(fieldId) => key === "notes" ? <textarea id={fieldId} value={item[key]} onChange={(event) => update((draft) => { draft.price_list[index][key] = event.target.value; })} /> : <input id={fieldId} value={item[key]} onChange={(event) => update((draft) => { draft.price_list[index][key] = event.target.value; })} />}</Field>)}</div>
-        <button type="button" onClick={() => update((draft) => { draft.price_list.splice(index, 1); })}>Remove price</button>
-      </div>)}
-      <button type="button" onClick={() => update((draft) => { draft.price_list.push({ service: "", price: "", notes: "" }); })}>Add price</button>
-  </>;
-}
-
-function ContactsEditor({ config, saved, update }: SettingsTabProps) {
-  const [contactLabels, setContactLabels] = useState<Record<number, string>>({});
-  return <>
-      {Object.entries(config.contacts).map(([key, value], index) => {
-        const isSaved = key in saved.contacts;
-        const label = contactLabels[index] ?? humanizeKey(key);
-        return <div className="form-grid" key={`contact-${index}`}>
-          {isSaved
-            ? <Field path={`contacts.${key}.value`} label={humanizeKey(key)}>{(fieldId) => <input id={fieldId} value={value} onChange={(event) => update((draft) => { draft.contacts[key] = event.target.value; })} />}</Field>
-            : <>
-              <Field path={`contacts.${key}.label`} label="Contact name">{(fieldId) => <input id={fieldId} value={label} onChange={(event) => {
-                const nextLabel = event.target.value;
-                setContactLabels((current) => ({ ...current, [index]: nextLabel }));
-                update((draft) => {
-                  const nextKey = followLabel({ key, label: nextLabel, taken: Object.keys(draft.contacts), saved: Object.keys(saved.contacts), fallback: "contact" });
-                  draft.contacts = Object.fromEntries(Object.entries(draft.contacts).map(([itemKey, itemValue]) => [itemKey === key ? nextKey : itemKey, itemValue]));
-                });
-              }} />}</Field>
-              <Field path={`contacts.${key}.value`} label="Contact value">{(fieldId) => <input id={fieldId} value={value} onChange={(event) => update((draft) => { draft.contacts[key] = event.target.value; })} />}</Field>
-            </>}
-          <button type="button" onClick={() => { setContactLabels({}); update((draft) => { delete draft.contacts[key]; }); }}>Remove contact</button>
-        </div>;
-      })}
-      <button type="button" onClick={() => update((draft) => { draft.contacts[keyFromLabel("", Object.keys(draft.contacts), "contact")] = ""; })}>Add contact</button>
-  </>;
-}
 
 function renameServiceKey(draft: AssistantConfig, from: string, to: string) {
   if (from === to) return;

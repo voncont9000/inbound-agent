@@ -29,6 +29,12 @@ function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
   return result;
 }
 
+const templateLabel = (template: string | null | undefined) => {
+  if (!template) return "Custom";
+  const words = template.replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 const switcherChannelIcon = (kind: string) => {
   const paths: Record<string, string> = {
     phone: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z",
@@ -182,7 +188,6 @@ export function AssistantsPage() {
       <h2 id="create-assistant-heading">Create an assistant</h2>
       {templatesQuery.isLoading && <LoadingState />}
       {templatesQuery.error && <ErrorState message="Templates could not be loaded." />}
-      {selected && <p className="muted"><strong>{selected.config.business_name}</strong> · {Object.values(selected.config.services).map((service) => service.label).join(", ") || "No services yet"}</p>}
       <form className="stack" onSubmit={(event) => {
         event.preventDefault();
         if (!selected) { setError("Choose a template."); return; }
@@ -195,6 +200,7 @@ export function AssistantsPage() {
             <span><strong>{template.label}</strong><br /><span className="muted">{template.description}</span></span>
           </label>)}
         </fieldset>
+        {selected && <p className="help template-summary">Starts as <strong>{selected.config.business_name}</strong> with {Object.values(selected.config.services).map((service) => service.label).join(", ") || "no services yet"}. Everything can be changed afterwards.</p>}
         <div className="field"><label htmlFor="new-assistant-name">Assistant name</label><input id="new-assistant-name" required value={assistantName} onChange={(event) => setAssistantName(event.target.value)} /></div>
         {error && <p role="alert">{error}</p>}
         <button className="button-primary" type="submit" disabled={create.isPending || !selected}>Create assistant</button>
@@ -203,17 +209,15 @@ export function AssistantsPage() {
     {assistants.isLoading && <LoadingState />}
     {assistants.error && <ErrorState message="Assistants could not be loaded." />}
     {!assistants.isLoading && !assistants.error && !assistants.data?.items.length && <EmptyState>No assistants yet.</EmptyState>}
-    <div className="card-grid">{assistants.data?.items.map((assistant) => <article className="panel" key={assistant.id}>
-      <p className="eyebrow">{assistant.template ?? "Custom"}</p>
-      <h2>{assistant.name}</h2><p>{assistant.config.business_name}</p>
+    <div className="card-grid">{assistants.data?.items.map((assistant) => <article className="panel assistant-card" key={assistant.id}>
+      <p className="eyebrow">{templateLabel(assistant.template)}</p>
+      <h2><Link className="assistant-card-link" to={settingsTabPath(assistant.id)}>{assistant.name}</Link></h2>
+      <p>{assistant.config.business_name}</p>
       <p className="muted">{Object.values(assistant.config.services).map((service) => service.label).join(" · ")}</p>
-      <div className="button-row">
-        <Link to={settingsTabPath(assistant.id)}>Manage assistant</Link>
-        {canDelete && <button type="button" className="button-danger" onClick={() => {
-          setDeleteError("");
-          setDeleteTarget(assistant);
-        }}><DeleteIcon /> Delete</button>}
-      </div>
+      {canDelete && <button type="button" className="button-danger assistant-card-delete" aria-label={`Delete ${assistant.name}`} title="Delete" onClick={() => {
+        setDeleteError("");
+        setDeleteTarget(assistant);
+      }}><DeleteIcon /></button>}
     </article>)}</div>
     {deleteTarget && <ConfirmDialog
       title={`Delete ${deleteTarget.name}?`}
