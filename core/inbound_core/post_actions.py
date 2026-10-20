@@ -25,6 +25,7 @@ TEMPLATE_VARIABLES: list[tuple[str, str]] = [
     ("contact.email", "The customer's email address, when known."),
     ("contact.phone", "The customer's phone number, when known."),
     ("channel", "The conversation channel."),
+    ("test_call", "True for browser test calls."),
     ("started_at", "The conversation start time in the assistant's timezone."),
     ("service", "The selected service label."),
     ("service_key", "The selected service key."),
@@ -69,12 +70,16 @@ def matched_events(
 
 def render_template(
     template: str,
-    context: Mapping[str, str],
+    context: Mapping[str, Any],
     *,
     sheet_cell: bool = False,
 ) -> str:
     def replace(match: re.Match[str]) -> str:
         value = context.get(match.group(1), "")
+        if isinstance(value, bool):
+            value = str(value).lower()
+        elif not isinstance(value, str):
+            value = format_value(value)
         if sheet_cell and value.startswith(_SHEET_FORMULA_PREFIXES):
             return f"'{value}"
         return value
@@ -82,7 +87,7 @@ def render_template(
     return _PLACEHOLDER.sub(replace, template)
 
 
-def render_subject(template: str, context: Mapping[str, str]) -> str:
+def render_subject(template: str, context: Mapping[str, Any]) -> str:
     return render_template(template, context).replace("\r", " ").replace("\n", " ")
 
 

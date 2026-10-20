@@ -16,7 +16,6 @@ from inbound_core.post_actions import (
     TEMPLATE_VARIABLES,
     derive_events,
     matched_events,
-    render_subject,
     render_template,
 )
 from sqlalchemy import select
@@ -32,7 +31,7 @@ from inbound_api.models import (
     PostActionSecret,
     Task,
 )
-from inbound_api.post_actions.service import build_action_context
+from inbound_api.post_actions.service import build_action_context, render_action_subject
 from inbound_api.schemas import (
     PostActionTestRequest,
     PostActionTestResponse,
@@ -123,7 +122,7 @@ async def test_post_action(
             would_skip = "Email sending is off"
         rendered = {
             "to": [to] if to else [],
-            "subject": render_subject(action.subject_template, context),
+            "subject": render_action_subject(action.subject_template, context),
             "body": render_template(action.body_template, context),
         }
     elif isinstance(action, NotifyStaffAction):
@@ -131,7 +130,7 @@ async def test_post_action(
             would_skip = "Email sending is off"
         rendered = {
             "to": [str(address) for address in action.to],
-            "subject": render_subject(action.subject_template, context),
+            "subject": render_action_subject(action.subject_template, context),
             "body": render_template(action.body_template, context),
         }
     elif isinstance(action, SheetsRowAction):
@@ -167,6 +166,7 @@ async def test_post_action(
                 "action_key": action.key,
                 "events": matched,
                 "conversation_id": str(conversation.id),
+                "test": context["test_call"],
                 "context": context,
             },
         }

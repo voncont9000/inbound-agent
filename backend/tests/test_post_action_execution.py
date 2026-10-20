@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -19,10 +20,11 @@ from inbound_api.models import (
     PostActionSecret,
     Task,
 )
-from inbound_api.post_actions.providers import FakeEmailSender
+from inbound_api.post_actions.providers import FakeEmailSender, FakeWebhookSender
 from inbound_api.post_actions.service import (
     execute_conversation_action,
     plan_conversation_actions,
+    render_action_subject,
 )
 from inbound_api.settings import Settings, get_settings
 
@@ -64,6 +66,12 @@ async def _assistant_and_conversation(tenant_pair, actions):
             )
         )
     return account, config, assistant_id, conversation_id
+
+
+def test_test_call_email_subject_prefix_is_added_once():
+    assert render_action_subject("Summary", {"test_call": True}) == "[Test] Summary"
+    assert render_action_subject("[Test] Summary", {"test_call": True}) == "[Test] Summary"
+    assert render_action_subject("Summary", {"test_call": False}) == "Summary"
 
 
 @pytest.mark.asyncio
@@ -124,6 +132,97 @@ async def test_execution_skips_missing_sheets_scope_and_unknown_customer_email(
     assert runs["customer"].status == "skipped"
     assert [task.kind for task in tasks] == ["action_setup_needed"]
     assert not (tmp_path / "emails.jsonl").exists()
+
+
+@pytest.mark.asyncio
+async def test_test_call_post_actions_are_planned_and_marked(tenant_pair, tmp_path, monkeypatch):
+    actions = [
+        {
+            "kind": "notify_staff",
+            "key": "staff",
+            "trigger": {"events": ["conversation_completed"]},
+            "to": ["staff@example.com"],
+            "subject_template": "Summary {{test_call}}",
+            "body_template": "Browser test: {{test_call}}",
+        },
+        {
+            "kind": "webhook",
+            "key": "hook",
+            "trigger": {"events": ["conversation_completed"]},
+            "url": "https://example.test/hook",
+        },
+    ]
+    account, _, assistant_id, test_conversation_id = await _assistant_and_conversation(
+        tenant_pair, actions
+    )
+    tenant_id = UUID(account["tenant_id"])
+    normal_conversation_id = uuid4()
+    async with tenant_session(tenant_id) as session:
+        test_conversation = await session.get(Conversation, test_conversation_id)
+        assert test_conversation is not None
+        test_conversation.metrics = {"test_call": True}
+        session.add(
+            Conversation(
+                id=normal_conversation_id,
+                tenant_id=tenant_id,
+                assistant_id=assistant_id,
+                channel=ConversationChannel.WHATSAPP,
+                external_ref=str(normal_conversation_id),
+                status=ConversationStatus.COMPLETED,
+                started_at=datetime.now(UTC),
+                ended_at=datetime.now(UTC),
+                summary="Customer asked for assistance.",
+            )
+        )
+
+    monkeypatch.setattr(
+        get_settings(), "credentials_encryption_key", Fernet.generate_key().decode()
+    )
+    secret = await account["client"].post(
+        f"/assistants/{assistant_id}/post-actions/hook/webhook-secret"
+    )
+    assert secret.status_code == 200, secret.text
+
+    settings = Settings(email_sender="fake", webhook_sender="fake", post_actions_fake_dir=tmp_path)
+    conversation_ids = (test_conversation_id, normal_conversation_id)
+    async with tenant_session(tenant_id) as session:
+        assert await plan_conversation_actions(session, test_conversation_id) == {"queued": 2}
+        assert await plan_conversation_actions(session, normal_conversation_id) == {"queued": 2}
+
+    for conversation_id in conversation_ids:
+        for action_key in ("staff", "hook"):
+            async with tenant_session(tenant_id) as session:
+                result = await execute_conversation_action(
+                    session,
+                    conversation_id=conversation_id,
+                    action_key=action_key,
+                    fire_count=1,
+                    settings=settings,
+                    email_sender=FakeEmailSender(tmp_path),
+                    webhook_sender=FakeWebhookSender(tmp_path),
+                )
+            assert result["status"] == "succeeded"
+
+    email_records = [
+        json.loads(line) for line in (tmp_path / "emails.jsonl").read_text().splitlines()
+    ]
+    assert [record["subject"] for record in email_records] == [
+        "[Test] Summary true",
+        "Summary false",
+    ]
+    assert [record["body"] for record in email_records] == [
+        "Browser test: true",
+        "Browser test: false",
+    ]
+
+    webhook_records = [
+        json.loads(line) for line in (tmp_path / "webhooks.jsonl").read_text().splitlines()
+    ]
+    assert [record["body"]["test"] for record in webhook_records] == [True, False]
+    assert [record["body"]["context"]["test_call"] for record in webhook_records] == [
+        True,
+        False,
+    ]
 
 
 @pytest.mark.asyncio

@@ -45,19 +45,22 @@ a header and value template. Webhook URLs must be HTTP(S); production delivery r
 | `needs_human` | A non-dismissed `needs_human` or `email_needs_human` task exists |
 | `complaint` | A non-dismissed `complaint` task exists |
 
-Test calls are excluded from planning. Runs are unique per conversation and action key. The
-planner records pending events before enqueueing execution, so duplicate planning jobs do not
-send again. If a later planning pass discovers a new trigger event, it adds only that event and
-creates a new fire count. Webhook event IDs include the run ID and fire count so consumers can
-deduplicate deliveries.
+Test calls are included in planning and delivery like other conversations. Email subjects are
+prefixed with `[Test] `, and webhook bodies include a top-level `test` boolean. The
+`test_call` template variable is true for browser test calls. Runs are unique per conversation
+and action key. The planner records pending events before enqueueing execution, so duplicate
+planning jobs do not send again. If a later planning pass discovers a new trigger event, it adds
+only that event and creates a new fire count. Webhook event IDs include the run ID and fire count
+so consumers can deduplicate deliveries.
 
 ## Template variables
 
 The owner settings page fetches the available variables from `GET /post-actions/variables`.
 They include `business_name`, `contact.name`, `contact.email`, `contact.phone`, `channel`,
 `started_at`, `service`, `service_key`, `intake.<field_name>`, `intake_table`, `summary`,
-`urgency`, `urgency_reasons`, `tasks`, `events`, `conversation.id`, and `conversation.link`.
-Unknown placeholders render as an empty string. Subject line CR/LF characters are sanitized.
+`urgency`, `urgency_reasons`, `tasks`, `events`, `test_call`, `conversation.id`, and
+`conversation.link`. Unknown placeholders render as an empty string. Subject line CR/LF
+characters are sanitized.
 Substituted Google Sheets cell values that begin with spreadsheet formula characters are
 escaped before being written.
 
@@ -95,7 +98,8 @@ events, conversation ID, and rendered context:
   "context": {"business_name": "Example"},
   "conversation_id": "00000000-0000-0000-0000-000000000000",
   "event_id": "run-uuid:1",
-  "events": ["urgent"]
+  "events": ["urgent"],
+  "test": false
 }
 ```
 

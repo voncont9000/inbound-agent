@@ -74,7 +74,19 @@ async def test_post_action_dry_run_and_webhook_secret_lifecycle(tenant_pair, mon
         )
 
     async with tenant_session(UUID(account["tenant_id"])) as session:
-        assert await plan_conversation_actions(session, conversation_id) == {"queued": 0}
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 1}
+        action_run_ids = list(
+            await session.scalars(
+                select(ActionRun.id).where(ActionRun.conversation_id == conversation_id)
+            )
+        )
+        assert len(action_run_ids) == 1
+
+    variables = await client.get("/post-actions/variables")
+    assert variables.status_code == 200, variables.text
+    assert {item["name"]: item["description"] for item in variables.json()}[
+        "test_call"
+    ] == "True for browser test calls."
 
     dry_run = await client.post(
         f"/assistants/{assistant_id}/post-actions/test",
@@ -85,13 +97,16 @@ async def test_post_action_dry_run_and_webhook_secret_lifecycle(tenant_pair, mon
     )
     assert dry_run.status_code == 200, dry_run.text
     assert dry_run.json()["rendered"]["to"] == ["staff@example.com"]
+    assert dry_run.json()["rendered"]["subject"].startswith("[Test] ")
     assert dry_run.json()["rendered"]["body"] == "Caller needs a callback."
     async with tenant_session(UUID(account["tenant_id"])) as session:
         assert (
-            await session.scalar(
-                select(ActionRun.id).where(ActionRun.conversation_id == conversation_id)
+            list(
+                await session.scalars(
+                    select(ActionRun.id).where(ActionRun.conversation_id == conversation_id)
+                )
             )
-            is None
+            == action_run_ids
         )
 
     encryption_key = Fernet.generate_key().decode()
