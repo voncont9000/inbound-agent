@@ -114,11 +114,30 @@ export function InboxPage() {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
+  const filterWrapRef = useRef<HTMLDivElement | null>(null);
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
   const channel = searchParams.get("channel") ?? "all";
   const status = searchParams.get("status") ?? "all";
   const reviewOnly = searchParams.get("has_review") === "true";
   const selectedConversationId = searchParams.get("id") ?? "";
   const filters = { channel, status, reviewOnly };
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !filterWrapRef.current?.contains(event.target)) setFiltersOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setFiltersOpen(false);
+      filterButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [filtersOpen]);
   useEffect(() => {
     setSelectedIds([]);
   }, [channel, status, reviewOnly]);
@@ -213,8 +232,8 @@ export function InboxPage() {
         <label className="sr-only" htmlFor="inbox-search">Search conversations</label>
         <input id="inbox-search" type="search" placeholder="Search conversations" value={search} onChange={(event) => setSearch(event.target.value)} />
       </div>
-      <div className="inbox-filter-wrap">
-        <button type="button" className="button-secondary inbox-filter-button" aria-expanded={filtersOpen} aria-controls="inbox-filter-popover" onClick={() => setFiltersOpen((open) => !open)}>
+      <div className="inbox-filter-wrap" ref={filterWrapRef}>
+        <button ref={filterButtonRef} type="button" className="button-secondary inbox-filter-button" aria-expanded={filtersOpen} aria-controls="inbox-filter-popover" onClick={() => setFiltersOpen((open) => !open)}>
           {icon("M4 5h16M7 12h10m-7 7h4")} Filters
         </button>
         {filtersOpen && <div className="inbox-filter-popover" id="inbox-filter-popover">

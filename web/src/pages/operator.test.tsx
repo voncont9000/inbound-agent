@@ -563,6 +563,34 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", listener);
   });
 
+  it("closes inbox filters on Escape and returns focus to the Filters button", async () => {
+    const user = userEvent.setup();
+    renderApp("/inbox", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Inbox" });
+    const trigger = screen.getByRole("button", { name: /Filters/ });
+
+    await user.click(trigger);
+    expect(await screen.findByLabelText("Channel")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes inbox filters on outside click without moving focus from the clicked control", async () => {
+    const user = userEvent.setup();
+    renderApp("/inbox", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
+    expect(await screen.findByLabelText("Channel")).toBeInTheDocument();
+
+    const search = screen.getByRole("searchbox", { name: "Search conversations" });
+    await user.click(search);
+
+    expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
+    expect(search).toHaveFocus();
+  });
+
   it("marks test calls in the inbox", async () => {
     renderApp("/inbox", { loggedIn: true });
     await screen.findByRole("heading", { name: "Inbox" });
