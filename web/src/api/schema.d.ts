@@ -387,6 +387,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/contacts/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk Delete Contacts */
+        post: operations["bulk_delete_contacts_contacts_bulk_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/contacts/{contact_id}": {
         parameters: {
             query?: never;
@@ -790,6 +807,23 @@ export interface paths {
         get: operations["list_tasks_tasks_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk Delete Tasks */
+        post: operations["bulk_delete_tasks_tasks_bulk_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1331,6 +1365,16 @@ export interface components {
             text: string;
             /** Timezone */
             timezone: string;
+        };
+        /** BulkDeleteRequest */
+        BulkDeleteRequest: {
+            /** Ids */
+            ids: string[];
+        };
+        /** BulkDeleteResponse */
+        BulkDeleteResponse: {
+            /** Deleted */
+            deleted: number;
         };
         /** BusyBlock */
         BusyBlock: {
@@ -3843,6 +3887,41 @@ export interface operations {
             };
         };
     };
+    bulk_delete_contacts_contacts_bulk_delete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_contact_contacts__contact_id__get: {
         parameters: {
             query?: never;
@@ -4701,6 +4780,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_delete_tasks_tasks_bulk_delete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
                 };
             };
             /** @description Validation Error */

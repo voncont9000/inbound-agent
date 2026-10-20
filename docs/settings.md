@@ -11,7 +11,7 @@ documented in [templates.md](templates.md).
 
 | Tab | Owns |
 | --- | --- |
-| General | Assistant name, business name, language and voice, greeting, **Instructions** (custom prompt) with the prompt details below it: services and intake fields, prices, contact details |
+| General | Assistant name, business name, language and voice, greeting, **Instructions** (custom prompt), **Services and intake fields** |
 | Rules | Rule presets, custom rules, pronunciation, sentence urgency rules, keyword and date urgency rules |
 | Knowledge | Office hours, FAQs, knowledge sources and digest |
 | Abilities | Calendar booking (appointment types, booking timing and holding messages), call forwarding (transfer targets, forwarding messages), after-conversation actions, readback (mode and live confirmation) |
@@ -38,10 +38,10 @@ browser (`web/src/lib/voices.ts`); the `/voices` API is unchanged.
 | --- | --- | --- | --- |
 | Config version history and diff | Settings page, below the tabs | Not shown | Product owner request. Backend versioning and `GET /assistants/{id}/versions` are unchanged; the save bar says "All changes saved" instead of a version number. |
 | Voice list | General: every catalogue voice | General: 6 recommended + search, gender/accent filters, "Show all voices" | The full catalogue was too long to scan. |
-| Instructions | General: "Instructions" textarea | General › Instructions: "Custom prompt" | Grouped with the other details that feed the prompt. |
-| Services and intake fields | Abilities: "Services and intake fields" card with an on/off switch | General › Instructions, collapsed under the prompt with a count summary; full structured editor (label, type, choices, required, critical, description) | They only shape what the assistant asks for, so they belong with the prompt. Kept structured because extraction, critical-field readback and date urgency rules use the generated field keys. The on/off switch was dropped (an empty list means none). |
-| Price list | Knowledge: "Price list" | General › Instructions › Prices | Only rendered into the prompt ("PUBLISHED PRICES"). Kept as rows so the published-price rules still apply. |
-| Contact details | Knowledge: "Contact details" | General › Instructions › Contact details | Only rendered into the prompt ("CONTACTS"); company-info style data. Generated keys unchanged. |
+| Instructions | General: "Instructions" textarea | General › Instructions: "Custom prompt" | Just the prompt; the structured details have their own card. |
+| Services and intake fields | Abilities: "Services and intake fields" card with an on/off switch | General › "Services and intake fields" card, editor always open (label, type, choices, required, critical, description) | They only shape what the assistant asks for, so they belong with the prompt. Kept structured because extraction, critical-field readback and date urgency rules use the generated field keys. The on/off switch was dropped (an empty list means none). |
+| Price list | Knowledge: "Price list" | No editor (config field kept) | Only rendered into the prompt ("PUBLISHED PRICES"). Prices belong in Knowledge (FAQs, digest) or the custom prompt; `price_list` is still accepted by the API and rendered when set. |
+| Contact details | Knowledge: "Contact details" | No editor (config field kept) | Only rendered into the prompt ("CONTACTS"). Put contact details in Knowledge or the custom prompt; `contacts` is still accepted by the API and rendered when set. |
 | Readback mode | Abilities: Readback on/off card (said "choose under Advanced"); Advanced: "Readback mode" radios (off/email/critical) | Abilities › Readback: switch = off, radios = email / critical | The same setting was in two places. |
 | `confirm_critical_fields` live action | Advanced: Live actions | Abilities › Readback: "Record the caller's confirmation" | It is the live half of readback; turning readback off also removes it. |
 | `check_availability`, `book_appointment` live actions | Abilities: Calendar booking switch; Advanced: Live actions checkboxes | Abilities › Calendar booking only (switch, plus a "Turn them on" button if they are missing) | Duplicate control; the booking card note used to send users to Advanced. |

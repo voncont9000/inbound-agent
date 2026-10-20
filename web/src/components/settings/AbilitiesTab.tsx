@@ -209,6 +209,6 @@ function ReadbackCard({ config, update, schema }: SettingsTabProps) {
       {modes.map((mode) => <label key={mode} className="radio-row"><input type="radio" name="readback" value={mode} checked={config.readback === mode} onChange={() => update((draft) => { draft.readback = mode as AssistantConfig["readback"]; })} /><span>{readbackHelp[mode] ?? mode}</span></label>)}
     </fieldset>
     <label className="check-row"><input type="checkbox" checked={config.live_actions.includes("confirm_critical_fields")} onChange={(event) => update((draft) => { draft.live_actions = withActions(draft.live_actions, ["confirm_critical_fields"], event.target.checked); })} />Record the caller&apos;s confirmation during the call (adds a live action)</label>
-    <p className="help">Mark which intake fields are critical under General › Instructions › Services and intake fields.</p>
+    <p className="help">Mark which intake fields are critical under General › Services and intake fields.</p>
   </AbilityCard>;
 }

@@ -6,11 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
 from inbound_api.models import Conversation, MembershipRole, Task
-from inbound_api.schemas import TaskListResponse, TaskSummary, TaskUpdate
+from inbound_api.schemas import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
+    TaskListResponse,
+    TaskSummary,
+    TaskUpdate,
+)
 from inbound_api.services.pagination import page_query
+from inbound_api.services.record_delete import delete_tasks
 
 router = APIRouter(tags=["tasks"])
 _staff = Depends(require_role(MembershipRole.STAFF))
+_owner = Depends(require_role(MembershipRole.OWNER))
 _tenant_session_dependency = Depends(get_tenant_session)
 
 
@@ -50,6 +58,16 @@ async def list_tasks(
     return TaskListResponse(
         items=[TaskSummary.model_validate(row) for row in rows], next_cursor=next_cursor
     )
+
+
+@router.post("/tasks/bulk-delete", response_model=BulkDeleteResponse)
+async def bulk_delete_tasks(
+    payload: BulkDeleteRequest,
+    ctx: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> BulkDeleteResponse:
+    deleted = await delete_tasks(session, ctx, payload.ids)
+    return BulkDeleteResponse(deleted=len(deleted))
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskSummary)

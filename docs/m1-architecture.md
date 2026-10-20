@@ -82,6 +82,10 @@ listing/detail/reviews and deletion; tasks; knowledge gaps; and job status. Owne
 Owner-only `DELETE /conversations/{conversation_id}` deletes one completed conversation,
 while `POST /conversations/bulk-delete` deletes 1–100 IDs and reports active conversations
 skipped. Conversation deletion removes transcripts and recordings while keeping contacts.
+Owner-only `POST /contacts/bulk-delete` and `POST /tasks/bulk-delete` take the same `{ids}` body
+(1–100) and return `{deleted}`; deleting a contact keeps its conversations, tasks and bookings with
+`person_id` cleared, removes its identities, commitments and merge-log rows, and unlinks contacts
+that were merged into it.
 Tenant-scoped IDs that are invisible under RLS return `404`.
 
 Conversation, task, and knowledge-gap lists use descending `(created_at, id)` keyset

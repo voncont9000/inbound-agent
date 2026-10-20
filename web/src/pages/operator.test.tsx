@@ -121,7 +121,6 @@ describe("operator workflows", () => {
     server.events.on("request:start", putListener);
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
     expect(screen.queryByLabelText("Field name")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Service key")).not.toBeInTheDocument();
 
@@ -202,7 +201,6 @@ describe("operator workflows", () => {
     server.events.on("request:start", listener);
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
     await user.click(screen.getByRole("button", { name: "Add service" }));
     const labels = screen.getAllByLabelText("Service label");
     const newService = labels[labels.length - 1];
@@ -437,33 +435,6 @@ describe("operator workflows", () => {
     await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
     await user.selectOptions(screen.getByLabelText("Add action"), "sheets_row");
     expect(await screen.findByRole("button", { name: "Connect Google Sheets" })).toBeInTheDocument();
-  });
-
-  it("keeps saved contact keys and generates a unique key for a new contact", async () => {
-    const user = userEvent.setup();
-    const contacts = mockDb.tenants[0].assistants[0].config.contacts;
-    let capturedBody: Record<string, unknown> | undefined;
-    const listener = ({ request }: { request: Request }) => {
-      if (request.method === "PUT" && request.url.includes("/assistants/")) {
-        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
-      }
-    };
-    server.events.on("request:start", listener);
-    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
-    await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("button", { name: "Edit contact details" }));
-    expect(screen.queryByLabelText("Contact key")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Office")).toHaveValue(contacts.office);
-
-    await user.click(screen.getByRole("button", { name: "Add contact" }));
-    const name = screen.getByLabelText("Contact name");
-    await user.clear(name);
-    await user.type(name, "Office");
-    await user.type(screen.getByLabelText("Contact value"), "0161 000 0000");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(capturedBody).toBeDefined());
-    expect((capturedBody?.config as { contacts: Record<string, string> }).contacts).toEqual({ ...contacts, office_2: "0161 000 0000" });
-    server.events.removeListener("request:start", listener);
   });
 
   it("appends created assistants and keeps the existing assistant state", async () => {
@@ -906,7 +877,7 @@ describe("operator workflows", () => {
     server.events.on("request:start", listener);
     renderApp("/assistants", { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete Brightside reception" }));
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(
@@ -965,5 +936,53 @@ describe("conversation list formatting", () => {
     expect(formatConversationDuration("phone", "2026-03-10T10:00:00Z", "2026-03-10T10:00:00.900Z")).toBeNull();
     expect(formatConversationDuration("whatsapp", "2026-03-10T10:00:00Z", "2026-03-10T10:01:05Z")).toBeNull();
     expect(formatConversationDuration("phone", "2026-03-10T10:00:00Z", null)).toBeNull();
+  });
+});
+
+describe("bulk deletion", () => {
+  it("deletes selected contacts", async () => {
+    const user = userEvent.setup();
+    const [first, second] = mockDb.tenants[0].contacts;
+    let requestedIds: string[] = [];
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "POST" && request.url.includes("/contacts/bulk-delete")) {
+        void request.clone().json().then((body) => { requestedIds = (body as { ids: string[] }).ids; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp("/contacts", { loggedIn: true });
+    await screen.findByRole("link", { name: first.display_name });
+    expect(screen.queryByRole("button", { name: /Delete selected/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: `Select ${first.display_name}` }));
+    await user.click(screen.getByRole("checkbox", { name: `Select ${second.display_name}` }));
+    await user.click(screen.getByRole("button", { name: "Delete selected (2)" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Their conversations and tasks are kept, without a contact. This can't be undone.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(requestedIds).toEqual([first.id, second.id]));
+    await waitFor(() => expect(screen.queryByRole("link", { name: first.display_name })).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Delete selected/ })).not.toBeInTheDocument();
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("selects all tasks and deletes them", async () => {
+    const user = userEvent.setup();
+    const total = mockDb.tenants[0].tasks.length;
+    expect(total).toBeGreaterThan(0);
+    let requestedIds: string[] = [];
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "POST" && request.url.includes("/tasks/bulk-delete")) {
+        void request.clone().json().then((body) => { requestedIds = (body as { ids: string[] }).ids; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp("/tasks", { loggedIn: true });
+    const selectAll = await screen.findByRole("checkbox", { name: "Select all tasks" });
+    await user.click(selectAll);
+    await user.click(screen.getByRole("button", { name: `Delete selected (${total})` }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(requestedIds).toHaveLength(total));
+    await screen.findByText("No tasks match these filters.");
+    server.events.removeListener("request:start", listener);
   });
 });

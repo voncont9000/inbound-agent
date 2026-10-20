@@ -113,6 +113,14 @@ class ConversationBulkDeleteResponse(BaseModel):
     skipped_in_progress: int
 
 
+class BulkDeleteRequest(BaseModel):
+    ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class BulkDeleteResponse(BaseModel):
+    deleted: int
+
+
 class TestCallResponse(BaseModel):
     url: str
     expires_at: int

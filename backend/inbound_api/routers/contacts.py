@@ -32,6 +32,8 @@ from inbound_api.models import (
     TaskStatus,
 )
 from inbound_api.schemas import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
     CommitmentResponse,
     ContactDetailResponse,
     ContactMergeRequest,
@@ -45,10 +47,12 @@ from inbound_api.schemas import (
     IdentityResponse,
     TaskSummary,
 )
+from inbound_api.services.record_delete import delete_persons
 from inbound_api.services.review import merged_needs_review
 
 router = APIRouter(tags=["contacts"])
 _staff = Depends(require_role(MembershipRole.STAFF))
+_owner = Depends(require_role(MembershipRole.OWNER))
 
 
 def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
@@ -292,6 +296,16 @@ async def get_contact(
             ],
             context_card=context_card,
         )
+
+
+@router.post("/contacts/bulk-delete", response_model=BulkDeleteResponse)
+async def bulk_delete_contacts(
+    payload: BulkDeleteRequest,
+    ctx: TenantContext = _owner,
+) -> BulkDeleteResponse:
+    async with tenant_session(ctx.tenant_id) as session:
+        deleted = await delete_persons(session, ctx, payload.ids)
+    return BulkDeleteResponse(deleted=len(deleted))
 
 
 @router.post("/contacts/{contact_id}/merge", response_model=ContactMergeResponse)
