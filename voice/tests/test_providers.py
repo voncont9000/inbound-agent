@@ -300,7 +300,7 @@ def test_prompt_stt_and_tts_share_the_assistant_locale() -> None:
     tts = asyncio.run(create_speechify())
     prompt = render_system_prompt(assistant)
 
-    assert "Speak German." in prompt
+    assert "Speak German, even if the instructions" in prompt
     assert stt._settings.language_hints == ["de"]
     assert tts._settings.language == "de-DE"
 
