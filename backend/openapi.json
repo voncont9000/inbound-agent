@@ -3986,7 +3986,7 @@
             "type": "string"
           },
           "enabled": {
-            "default": false,
+            "default": true,
             "title": "Enabled",
             "type": "boolean"
           },
@@ -4174,6 +4174,28 @@
           "fields"
         ],
         "title": "ServiceConfig",
+        "type": "object"
+      },
+      "ServicesDraftResponse": {
+        "properties": {
+          "services": {
+            "additionalProperties": true,
+            "title": "Services",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "services",
+          "warnings"
+        ],
+        "title": "ServicesDraftResponse",
         "type": "object"
       },
       "SetupDraft": {
@@ -6232,6 +6254,66 @@
         "summary": "Rotate Webhook Secret",
         "tags": [
           "post-actions"
+        ]
+      }
+    },
+    "/assistants/{assistant_id}/services-draft": {
+      "post": {
+        "description": "Suggest services and intake fields from the assistant's prompt and knowledge.",
+        "operationId": "draft_services_assistants__assistant_id__services_draft_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicesDraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft Services",
+        "tags": [
+          "assistants"
         ]
       }
     },

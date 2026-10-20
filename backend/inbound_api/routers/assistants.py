@@ -4,7 +4,8 @@ from urllib.parse import urljoin
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from inbound_core.config import assistant_config_json_schema
+from inbound_core.config import AssistantConfig, assistant_config_json_schema
+from inbound_core.setup_draft import build_services_draft_prompt, parse_services_draft
 from inbound_core.templates import find_template
 from inbound_core.templates import list_templates as load_templates
 from sqlalchemy import func, select
@@ -31,6 +32,7 @@ from inbound_api.schemas import (
     ChannelConnectionCreate,
     ChannelConnectionResponse,
     ChannelConnectionsResponse,
+    ServicesDraftResponse,
     TemplateResponse,
     TestCallResponse,
 )
@@ -40,6 +42,7 @@ from inbound_api.services.conversation_delete import (
 )
 from inbound_api.services.diff import config_diff
 from inbound_api.services.gmail_queue import enqueue_gmail_sync
+from inbound_api.services.knowledge_import import make_genai_client
 from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
 from inbound_api.web_call_tokens import issue
@@ -126,6 +129,37 @@ async def create_assistant(
     )
     await write_audit(session, ctx, "assistant.created", "assistant", assistant.id)
     return AssistantResponse.model_validate(assistant)
+
+
+@router.post("/assistants/{assistant_id}/services-draft", response_model=ServicesDraftResponse)
+async def draft_services(
+    assistant_id: UUID,
+    _: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> ServicesDraftResponse:
+    """Suggest services and intake fields from the assistant's prompt and knowledge."""
+    assistant = await session.get(Assistant, assistant_id)
+    if assistant is None:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    settings = get_settings()
+    api_key = (settings.google_api_key or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Suggestions are not configured.")
+    config = AssistantConfig.model_validate(assistant.config)
+    client = make_genai_client(api_key)
+    try:
+        response = await client.aio.models.generate_content(
+            model=settings.setup_draft_model,
+            contents=build_services_draft_prompt(config),
+            config={"response_mime_type": "application/json"},
+        )
+    finally:
+        await client.aio.aclose()
+    services, warnings = parse_services_draft(response.text or "", config)
+    return ServicesDraftResponse(
+        services={key: service.model_dump(mode="json") for key, service in services.items()},
+        warnings=warnings,
+    )
 
 
 @router.get("/assistants/{assistant_id}", response_model=AssistantResponse)

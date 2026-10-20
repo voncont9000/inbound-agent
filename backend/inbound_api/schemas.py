@@ -113,6 +113,11 @@ class ConversationBulkDeleteResponse(BaseModel):
     skipped_in_progress: int
 
 
+class ServicesDraftResponse(BaseModel):
+    services: dict[str, Any]
+    warnings: list[str]
+
+
 class BulkDeleteRequest(BaseModel):
     ids: list[UUID] = Field(min_length=1, max_length=100)
 

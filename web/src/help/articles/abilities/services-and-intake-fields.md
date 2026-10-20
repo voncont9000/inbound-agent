@@ -11,7 +11,7 @@ Services describe the work the assistant can discuss. Intake fields define the d
 ## Set up services and fields
 
 1. Open the assistant's settings and select **General**.
-2. Scroll to **Services and intake fields**.
+2. Scroll to **Services and intake fields**. Choose **Suggest from prompt** to have them proposed from your custom prompt and knowledge, or **Edit services and intake fields** to change them by hand.
 3. Add or review the services offered by your organisation.
 4. Add the intake fields you need and mark required fields where appropriate.
 5. Mark important fields as critical if callers should confirm them.
