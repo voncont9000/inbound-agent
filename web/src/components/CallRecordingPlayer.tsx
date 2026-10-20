@@ -12,7 +12,7 @@ export function CallRecordingPlayer({
   const duration = recording.duration_seconds == null
     ? "Duration unavailable"
     : `${Math.floor(recording.duration_seconds / 60)}:${String(Math.floor(recording.duration_seconds % 60)).padStart(2, "0")}`;
-  return <section className="panel stack">
+  return <section className="panel recording-panel" aria-label="Call recording">
     <div className="button-row">
       <h2>Call recording</h2>
       {recording.is_test && <Badge tone="neutral">Test</Badge>}

@@ -484,7 +484,11 @@ code { color: var(--accent-text); font-size: 0.9em; background: var(--surface-se
 .conversation-summary-strip svg { margin-top: 0.3rem; color: var(--accent-text); }
 .conversation-summary-label { margin-top: 0.1rem; color: var(--body); font-weight: 500; }
 .conversation-summary-strip p { margin: 0; }
-.conversation-history-heading { margin: 0 0 var(--space-3); text-transform: uppercase; letter-spacing: 0.06em; font-size: 12px; }
+.panel .conversation-history-heading { margin: 0 0 var(--space-3); text-transform: uppercase; letter-spacing: 0.06em; font: 500 12px/1.4 var(--font-sans); color: var(--body); }
+.recording-panel { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-4); }
+.recording-panel h2 { margin: 0; font: 500 14px/1.4 var(--font-sans); }
+.recording-panel p { margin: 0; color: var(--body); font-size: 13px; }
+.recording-panel audio { grid-column: 1 / -1; width: 100%; max-width: 520px; height: 40px; }
 .call-transcript-row[data-role="caller"] .call-transcript-text { color: var(--accent-text); }
 .call-transcript-row[data-role="caller"] .call-transcript-speaker { color: var(--accent-text); }
 .inbox-detail-panel { min-width: 0; min-height: 0; overflow: hidden; background: var(--surface-secondary); }
