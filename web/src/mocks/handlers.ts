@@ -313,6 +313,16 @@ export const handlers = [
       items: tenant.assistants.map((assistant) => assistantWithConversationCount(tenant, assistant)),
     });
   }),
+  http.post<{ id: string }, never, Schemas["ServicesDraftResponse"]>("*/api/assistants/:id/services-draft", () => HttpResponse.json<Schemas["ServicesDraftResponse"]>({
+    services: {
+      table_reservation: { label: "Table reservation", fields: [
+        { name: "name", label: "Name", type: "string", required: true, critical: true, description: "" },
+        { name: "phone_number", label: "Phone number", type: "phone", required: true, critical: true, description: "" },
+        { name: "party_size", label: "Party size", type: "integer", required: true, critical: false, description: "" },
+      ] },
+    },
+    warnings: [],
+  })),
   http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>("*/api/assistants/:id/channels", ({ params }) => HttpResponse.json<Schemas["ChannelConnectionsResponse"]>({ items: mockDb.channels[String(params.id)] ?? [] })),
   http.post<{ id: string }, Schemas["ChannelConnectionCreate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/assistants/:id/channels", async ({ params, request }) => {
     const assistantId = String(params.id);

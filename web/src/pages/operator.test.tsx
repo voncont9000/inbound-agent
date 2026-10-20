@@ -121,6 +121,7 @@ describe("operator workflows", () => {
     server.events.on("request:start", putListener);
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
     expect(screen.queryByLabelText("Field name")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Service key")).not.toBeInTheDocument();
 
@@ -201,6 +202,7 @@ describe("operator workflows", () => {
     server.events.on("request:start", listener);
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
     await user.click(screen.getByRole("button", { name: "Add service" }));
     const labels = screen.getAllByLabelText("Service label");
     const newService = labels[labels.length - 1];
@@ -983,6 +985,30 @@ describe("bulk deletion", () => {
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(requestedIds).toHaveLength(total));
     await screen.findByText("No tasks match these filters.");
+    server.events.removeListener("request:start", listener);
+  });
+});
+
+describe("services suggestions", () => {
+  it("replaces services with the suggestion and opens the editor", async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    expect(screen.queryByLabelText("Service label")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Suggest from prompt" }));
+    await screen.findByText("Suggested from your prompt and knowledge. Review, then save.");
+    expect(screen.getByLabelText("Service label")).toHaveValue("Table reservation");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    expect(Object.keys((capturedBody?.config as { services: Record<string, unknown> }).services)).toEqual(["table_reservation"]);
     server.events.removeListener("request:start", listener);
   });
 });

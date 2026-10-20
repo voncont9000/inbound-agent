@@ -298,6 +298,10 @@ code { color: var(--accent-text); font-size: 0.9em; background: var(--surface-se
 .select-cell input { margin: 0; display: block; }
 .toolbar > .button-danger { margin-left: auto; margin-bottom: 0.15rem; }
 .template-summary { margin: 0; }
+.services-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.services-card-header h2 { margin-bottom: var(--space-1); }
+.services-card-header p { margin: 0; }
+.services-card-header .button-row { flex: 0 0 auto; }
 .stack > button:not(.button-link), .stack > .button, .inline-editor > button, fieldset > button, .field > button, .form-grid > button, form.stack > .button-primary { justify-self: start; width: auto; }
 .list-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .list-row:last-child { border-bottom: 0; }
