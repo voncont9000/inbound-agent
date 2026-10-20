@@ -96,7 +96,7 @@ describe("operator workflows", () => {
       ),
     );
     renderApp(`/conversations/${transferConversationId}`, { loggedIn: true });
-    await screen.findByRole("heading", { name: /Enquiry about unfair dismissal/ });
+    await screen.findByText(/Enquiry about unfair dismissal/, { selector: ".conversation-summary-strip p" });
 
     const transfer = screen.getByRole("heading", { name: "Transfer" }).parentElement;
     expect(transfer).toHaveTextContent("duty_solicitor");
@@ -467,7 +467,7 @@ describe("operator workflows", () => {
     };
     server.events.on("request:start", listener);
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
-    await screen.findByRole("heading", { name: /Boiler not firing, no hot water/ });
+    await screen.findByText(/Boiler not firing, no hot water/, { selector: ".conversation-summary-strip p" });
     expect(screen.getByText("Test call", { selector: ".badge" })).toBeInTheDocument();
     expect(screen.getByText(/staff-alert · notify_staff/)).toBeInTheDocument();
     const intakeTable = screen.getByRole("table", { name: "Intake comparison by field" });
@@ -529,7 +529,7 @@ describe("operator workflows", () => {
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
     const rows = within(list).getAllByRole("article");
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toHaveTextContent("phone");
+    expect(rows[0]).toHaveTextContent("Phone");
     expect(rows[0]).toHaveTextContent("Jamie Morgan");
     server.events.removeListener("request:start", listener);
   });

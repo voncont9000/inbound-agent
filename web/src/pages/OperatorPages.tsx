@@ -295,6 +295,17 @@ export function InboxPage() {
                 />}
                 <div className="inbox-row-content">
                   <div className="inbox-row-title">
+                    <span className="inbox-row-contact">{contactName}</span>
+                    <time dateTime={conversation.started_at}>{time}</time>
+                  </div>
+                  <div className="inbox-row-meta">
+                    <span className="inbox-channel">{channelIcon[conversation.channel]}</span>
+                    <span>{channelLabel(conversation.channel)}{duration && <> · {duration}</>}</span>
+                    {conversation.test_call && <Badge tone="neutral">Test call</Badge>}
+                    {conversation.needs_review && <Badge tone="warning">Needs review</Badge>}
+                    {["active", "failed"].includes(conversation.status) && <Badge tone={statusTone(conversation.status)}>{conversation.status === "active" ? "Active" : "Failed"}</Badge>}
+                  </div>
+                  <div className="inbox-row-snippet">
                     <Link
                       to={`/conversations/${conversation.id}`}
                       aria-current={conversation.id === selectedConversationId ? "page" : undefined}
@@ -306,18 +317,7 @@ export function InboxPage() {
                         }
                       }}
                     >{conversation.summary ?? "No summary"}</Link>
-                    <time dateTime={conversation.started_at}>{time}</time>
                   </div>
-                  <div className="inbox-row-meta">
-                    <span className="inbox-channel">{channelIcon[conversation.channel]}<span className="sr-only">{conversation.channel}</span></span>
-                    <span className="inbox-contact">{contactName}</span>
-                    {duration && <span className="inbox-duration">{duration}</span>}
-                  </div>
-                  {(conversation.test_call || conversation.needs_review || ["active", "failed"].includes(conversation.status)) && <div className="inbox-row-badges">
-                    {conversation.test_call && <Badge tone="neutral">Test call</Badge>}
-                    {conversation.needs_review && <Badge tone="warning">Needs review</Badge>}
-                    {["active", "failed"].includes(conversation.status) && <Badge tone={statusTone(conversation.status)}>{conversation.status === "active" ? "Active" : "Failed"}</Badge>}
-                  </div>}
                 </div>
               </article>;
             })}
@@ -359,6 +359,8 @@ export function InboxPage() {
     </ConfirmDialog>}
   </main>;
 }
+
+const channelLabel = (channel: string) => channel === "whatsapp" ? "WhatsApp" : channel === "gmail" ? "Email" : channel === "web" ? "Web call" : "Phone";
 
 const icon = (path: string) => <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
 const channelIcon: Record<string, ReactNode> = {
@@ -456,18 +458,27 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
   if (detailQuery.error || !detail) return embedded
     ? <div className="conversation-detail-state"><ErrorState message="Conversation could not be loaded." /></div>
     : <main className="page" id="main-content"><ErrorState message="Conversation could not be loaded." /></main>;
-  const contact = detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{detail.external_ref}</Link> : detail.external_ref;
   const emailTriage = asRecord(detail.metrics.email_triage);
   const transcript = transcriptRows(detail.messages, detail.channel, detail.started_at);
-  const channelName = detail.channel === "whatsapp" ? "WhatsApp" : detail.channel === "gmail" ? "Email" : `${detail.channel.charAt(0).toUpperCase()}${detail.channel.slice(1)}`;
-  const badges = <span className="conversation-header-badges"><Badge tone="neutral">{channelIcon[detail.channel]} {channelName}</Badge>{detail.test_call && <Badge tone="neutral">Test call</Badge>}</span>;
+  const channelName = channelLabel(detail.channel);
+  const detailDuration = formatConversationDuration(detail.channel, detail.started_at, detail.ended_at);
+  const titleName = detail.contact_name ?? detail.external_ref;
+  const badges = <div className="conversation-meta">
+    <span className="conversation-meta-item">{channelIcon[detail.channel]} {channelName}</span>
+    <span className="conversation-meta-item">{formatDate(detail.started_at)}</span>
+    {detailDuration && <span className="conversation-meta-item">{detailDuration}</span>}
+    <span className="conversation-meta-item">{detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{titleName}</Link> : titleName}</span>
+    <Badge tone={statusTone(detail.status)}>{detail.status}</Badge>
+    {detail.test_call && <Badge tone="neutral">Test call</Badge>}
+    {detail.end_reason && <span className="conversation-meta-item">Ended: {detail.end_reason}</span>}
+  </div>;
   const deleteButton = canDelete && <button type="button" className={embedded ? "button-danger button-sm" : "button-danger"} aria-label={embedded ? "Delete conversation" : undefined} title={embedded ? "Delete conversation" : undefined} onClick={() => {
     setDeleteError("");
     setDeleteDialogOpen(true);
   }}>{embedded ? <DeleteIcon /> : <><DeleteIcon /> Delete conversation</>}</button>;
   const content = <>
     {deleteError && <p role="alert">{deleteError}</p>}
-    <div className="panel card-grid conversation-summary-card"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
+    {detail.summary && <div className="conversation-summary-strip">{icon("M12 3v3m0 12v3m9-9h-3M6 12H3m14.5-6.5-2 2m-7 7-2 2m0-11 2 2m7 7 2 2")}<span className="conversation-summary-label">Summary</span><p>{detail.summary}</p></div>}
     {booking && <section className="panel stack">
       <h2>Appointment booking</h2>
       <p><strong>{String(booking.label ?? booking.appointment_type ?? "Appointment")}</strong></p>
@@ -483,8 +494,8 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
     {detail.channel === "gmail" && Object.keys(emailTriage).length > 0 && <section className="panel"><h2>Email triage</h2><div className="card-grid"><div><strong>Category</strong><p>{String(emailTriage.category ?? "—")}</p></div><div><strong>Reason</strong><p>{String(emailTriage.reason ?? "—")}</p></div></div></section>}
     {detail.transfer && <section className="panel"><h2>Transfer</h2><div className="card-grid"><div><strong>Target</strong><p>{detail.transfer.target_key}</p></div><div><strong>Status</strong><p>{detail.transfer.status}</p></div><div><strong>Latency</strong><p>{detail.transfer.latency_ms == null ? "—" : `${detail.transfer.latency_ms} ms`}</p></div></div></section>}
     <CallRecordingPlayer conversationId={id} recording={detail.recording} />
-    <section className="panel">
-      <h2>Transcript</h2>
+    <section className="panel conversation-history">
+      <h2 className="eyebrow conversation-history-heading">History</h2>
       <ol className="call-transcript" aria-label="Conversation transcript">
         {transcript.map((row) => <li className="call-transcript-row" data-role={row.role} key={row.id}>
           <time className="call-transcript-time" dateTime={row.ts}>{row.time}</time>
@@ -548,13 +559,13 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
   return embedded
     ? <div className="conversation-detail">
       <header className="conversation-detail-header">
-        <div className="conversation-detail-title"><h2>{detail.summary ?? "Conversation details"}</h2>{badges}</div>
+        <div className="conversation-detail-title"><h2>{titleName}</h2>{badges}</div>
         {deleteButton}
       </header>
       <div className="conversation-detail-scroll">{content}</div>
     </div>
     : <main className="page" id="main-content">
-      <PageHeader title={detail.summary ?? "Conversation details"} lede={badges} actions={<div className="button-row">
+      <PageHeader title={titleName} lede={badges} actions={<div className="button-row">
         {deleteButton}
         <Link className="button" to="/inbox">Back to inbox</Link>
       </div>} />

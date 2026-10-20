@@ -319,7 +319,7 @@ class CallSettings(BaseModel):
 class RecordingSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    enabled: bool = False
+    enabled: bool = True
     consent_message: str = Field(
         default="This call may be recorded for quality and training purposes.",
         min_length=1,

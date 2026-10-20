@@ -327,21 +327,17 @@ export function AssistantSettingsPage() {
       <div className="page-header-text"><h1>{baseline.name}</h1></div>
       <AssistantSwitcher assistantId={id} assistantName={baseline.name} activeTab={activeTab} />
     </div>
-    <div className="save-bar" role="region" aria-label="Save changes">
-      <span className={isDirty ? "dirty-indicator" : "muted"}>{isDirty ? "Unsaved changes" : "All changes saved"}</span>
-      <div className="button-row">
-        <span className="help">One save covers every tab.</span>
-        <button type="button" className="button-primary" onClick={saveConfig} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</button>
-        <span aria-live="polite" role="status">{saveMessage}</span>
-      </div>
-    </div>
-    <div className="settings-tab-row">
+    <div className="settings-tab-row save-bar" role="region" aria-label="Settings sections and save">
       <nav className="settings-tabs" aria-label="Settings sections">
         {settingsTabs.map(({ id: tabId, label }) => <NavLink key={tabId} to={settingsTabPath(id, tabId)} aria-current={tabId === activeTab ? "page" : undefined}>
           {label}{errorCount(tabId) > 0 && <Badge tone="warning">{`${errorCount(tabId)} to fix`}</Badge>}
         </NavLink>)}
       </nav>
-      <HelpLink to={settingsTabHelp[activeTab]} />
+      <div className="settings-save" title="One save covers every tab.">
+        <span className={isDirty ? "dirty-indicator" : "muted"} aria-live="polite" role="status">{saveMessage || (isDirty ? "Unsaved changes" : "All changes saved")}</span>
+        <button type="button" className="button-primary" onClick={saveConfig} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</button>
+        <HelpLink to={settingsTabHelp[activeTab]} />
+      </div>
     </div>
     <div className="stack">
       <ErrorSummary errors={tabErrors} />
