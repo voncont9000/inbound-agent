@@ -201,10 +201,10 @@ export function AssistantsPage() {
   });
   const selected = templatesQuery.data?.find(({ name }) => name === selectedTemplate);
   return <main className="page" id="main-content">
-    <PageHeader title="Assistants" lede="Each assistant answers for one business, with its own voice, rules and knowledge." />
-    <div className="button-row"><button className="button-primary" type="button" onClick={() => setShowCreate((value) => !value)}>Create from template</button>
+    <PageHeader title="Assistants" lede="Each assistant answers for one business, with its own voice, rules and knowledge." actions={<>
+      <button className="button-primary" type="button" onClick={() => setShowCreate((value) => !value)}>Create from template</button>
       <Link className="button-primary" to="/assistants/new">Set up from website</Link>
-    </div>
+    </>} />
     {showCreate && <section className="panel" aria-labelledby="create-assistant-heading">
       <h2 id="create-assistant-heading">Create an assistant</h2>
       {templatesQuery.isLoading && <LoadingState />}
