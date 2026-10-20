@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -271,6 +272,15 @@ class SheetsRowAction(PostActionBase):
     spreadsheet_id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
     sheet_name: str = Field(default="Sheet1", min_length=1)
     columns: list[SheetColumn] = Field(min_length=1)
+
+    @field_validator("spreadsheet_id", mode="before")
+    @classmethod
+    def extract_spreadsheet_id(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        input_value = value.strip()
+        match = re.search(r"/spreadsheets/(?:u/\d+/)?d/([A-Za-z0-9_-]+)", input_value)
+        return match.group(1) if match else input_value
 
 
 class WebhookAction(PostActionBase):

@@ -34,6 +34,9 @@ An empty channel or service list means all channels or services. `notify_staff` 
 more validated recipient email addresses; `email_customer` always addresses the known customer
 email and cannot configure an arbitrary recipient. Sheets columns are ordered and each contains
 a header and value template. Webhook URLs must be HTTP(S); production delivery requires HTTPS.
+In web settings, choose action types from cards, add multiple actions independently, and use
+**Insert variable** in message and column templates instead of typing placeholder braces. A
+Google Sheets action accepts either a spreadsheet ID or a pasted Google Sheets URL.
 
 ## Events
 

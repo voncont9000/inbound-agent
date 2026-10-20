@@ -423,7 +423,9 @@ describe("operator workflows", () => {
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
     await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.selectOptions(screen.getByLabelText("Add action"), "email_customer");
+    expect(document.querySelector('section.stack[aria-label="After-conversation actions"]:not(.ability-card)')).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "After-conversation actions" })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
     await user.click(screen.getByRole("button", { name: "Send test" }));
     expect(await screen.findByText("Ready to send.")).toBeInTheDocument();
     expect(screen.getByText(/Thanks for contacting Brightside Plumbing/)).toBeInTheDocument();
@@ -435,8 +437,178 @@ describe("operator workflows", () => {
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
     await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.selectOptions(screen.getByLabelText("Add action"), "sheets_row");
+    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
     expect(await screen.findByRole("button", { name: "Connect Google Sheets" })).toBeInTheDocument();
+  });
+
+  it("adds multiple after-conversation actions and expands only the new action", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+    expect(screen.getByRole("button", { name: "Collapse Email the customer settings" })).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(screen.getByRole("button", { name: "Add another action" }));
+    await user.click(screen.getByRole("button", { name: /Notify your team/ }));
+
+    expect(screen.getByRole("button", { name: "Expand Email the customer settings" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Collapse Notify your team settings" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByLabelText("Subject template 1")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Staff recipients 2")).toBeVisible();
+  });
+
+  it("inserts a selected variable into a subject at the cursor", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+
+    const subject = screen.getByLabelText("Subject template 1") as HTMLInputElement;
+    await user.clear(subject);
+    await user.type(subject, "Hello world");
+    subject.setSelectionRange(6, 6);
+    const templateInput = subject.closest(".template-input") as HTMLElement;
+    await user.click(within(templateInput).getByRole("button", { name: "Insert variable" }));
+    await user.click(within(templateInput).getByRole("button", { name: /Customer name/ }));
+
+    await waitFor(() => {
+      expect(subject).toHaveValue("Hello {{contact.name}}world");
+      expect(subject).toHaveFocus();
+    });
+  });
+
+  it("dismisses the variable popover on Escape and outside pointerdown", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+
+    const subject = screen.getByLabelText("Subject template 1");
+    const templateInput = subject.closest(".template-input") as HTMLElement;
+    const scopedInput = within(templateInput);
+    const trigger = scopedInput.getByRole("button", { name: "Insert variable" });
+    await user.click(trigger);
+    expect(scopedInput.getByRole("button", { name: "Conversation summary" })).not.toHaveTextContent("Conversation summary.");
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(scopedInput.queryByRole("button", { name: /Customer name/ })).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
+    await user.click(trigger);
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(scopedInput.queryByRole("button", { name: /Customer name/ })).not.toBeInTheDocument());
+  });
+
+  it("inserts a slugged custom variable into a subject", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+
+    const subject = screen.getByLabelText("Subject template 1") as HTMLInputElement;
+    await user.clear(subject);
+    const templateInput = subject.closest(".template-input") as HTMLElement;
+    await user.click(within(templateInput).getByRole("button", { name: "Insert variable" }));
+    await user.click(within(templateInput).getByRole("button", { name: /Custom variable…/ }));
+    await user.type(screen.getByLabelText("Custom variable name"), "Booking ref");
+    const customForm = screen.getByLabelText("Custom variable name").closest("form") as HTMLFormElement;
+    await user.click(within(customForm).getByRole("button", { name: "Insert variable" }));
+
+    await waitFor(() => expect(subject).toHaveValue("{{booking_ref}}"));
+  });
+
+  it("stores a pasted Google Sheets link as its spreadsheet ID", async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+
+    const link = screen.getByLabelText("Google Sheet link 1");
+    const pastedLink = "https://docs.google.com/spreadsheets/u/0/d/sheet_123/edit#gid=0";
+    await user.click(link);
+    await user.paste(pastedLink);
+    expect(link).toHaveValue(pastedLink);
+    expect(screen.getByRole("link", { name: "Open sheet" })).toHaveAttribute("href", "https://docs.google.com/spreadsheets/d/sheet_123/edit");
+    expect(screen.getByText("Sheet linked · tab Sheet1")).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Tab name 1"));
+    await user.type(screen.getByLabelText("Tab name 1"), "Leads");
+    expect(screen.getByText("Sheet linked · tab Leads")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    const savedConfig = capturedBody?.config as { post_actions: Array<{ spreadsheet_id: string }> };
+    expect(savedConfig.post_actions[0]?.spreadsheet_id).toBe("sheet_123");
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("shows invalid Sheets links without writing them into the config", async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+
+    await user.type(screen.getByLabelText("Google Sheet link 1"), "https://docs.google.com/document/d/not-a-sheet/edit");
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid Google Sheets link or spreadsheet ID.");
+    expect(screen.queryByRole("link", { name: "Open sheet" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    const savedConfig = capturedBody?.config as { post_actions: Array<{ spreadsheet_id: string }> };
+    expect(savedConfig.post_actions[0]?.spreadsheet_id).toBe("");
+    server.events.removeListener("request:start", listener);
+  });
+
+  it("stores the selected variable in a Sheets column value", async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | undefined;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) {
+        void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+    await user.type(screen.getByLabelText("Google Sheet link 1"), "sheet_123");
+    const value = screen.getByLabelText("Column value 1-1");
+    await user.selectOptions(value, "summary");
+    await user.selectOptions(value, "contact.name");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(capturedBody).toBeDefined());
+    const savedConfig = capturedBody?.config as { post_actions: Array<{ columns: Array<{ value_template: string }> }> };
+    expect(savedConfig.post_actions[0]?.columns[0]?.value_template).toBe("{{contact.name}}");
+    server.events.removeListener("request:start", listener);
   });
 
   it("appends created assistants and keeps the existing assistant state", async () => {

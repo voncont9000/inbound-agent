@@ -12,9 +12,11 @@ After-conversation actions can notify staff, email a customer, add a Google Shee
 
 1. Open the assistant's settings and select **Abilities**.
 2. Enable **After-conversation actions**.
-3. Add the action type and configure its recipient or destination, trigger and message or field values.
-4. Use the available conversation and contact values in templates where needed.
-5. Choose **Save changes**.
+3. Choose an action card. Add more actions with **Add another action**; each action has its own settings.
+4. Configure its recipient or destination, trigger and message or field values.
+5. In a subject, message or Sheets column value, choose **Insert variable** to select a conversation or intake field. Choose **Custom variable…** to add a named placeholder.
+6. For a Sheets action, paste the link from your browser into **Google Sheet link**. You can also enter a spreadsheet ID.
+7. Choose **Save changes**.
 
 ## Preview an action
 
@@ -24,4 +26,4 @@ After-conversation actions can notify staff, email a customer, add a Google Shee
 
 ### Good to know
 
-**Send test** previews the action; it does not send the email, write the spreadsheet row or call the webhook. Delivery is at-least-once, so a retry can deliver an action more than once. Test calls never run after-conversation actions.
+**Send test** previews the action; it does not send the email, write the spreadsheet row or call the webhook. Browser test calls do run after-conversation actions: email subjects start with **[Test]**, and webhook payloads include `"test": true`. Delivery is at-least-once, so a retry can deliver an action more than once.
