@@ -82,6 +82,18 @@ assistant goes live.
    cd web && npm run api:types
    ```
 
+## Custom templates from sector and use case
+
+Besides the YAML library, an owner can generate a one-off template in the app: **Assistants →
+Create from template → Custom template**, then pick a sector and a use case (lists come from
+`GET /templates/custom-options`, defined in `core/inbound_core/custom_templates.py`) and
+optionally add a sentence of detail. `POST /templates/custom-draft` asks Gemini
+(`setup_draft_model`) for a label, description, `sets_up` bullets, greeting, instructions,
+policies and services, and `parse_custom_template` validates them on top of the `blank`
+template config. Unusable parts fall back to the blank defaults and are reported in `warnings`.
+The assistant is then created with `template: null` and the generated config, so nothing is
+written to the template library and no sector content reaches shared defaults.
+
 ## Template library
 
 ### Blank

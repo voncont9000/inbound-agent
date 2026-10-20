@@ -2515,6 +2515,118 @@
         "title": "ConversationSummary",
         "type": "object"
       },
+      "CustomTemplateOptions": {
+        "properties": {
+          "sectors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sectors",
+            "type": "array"
+          },
+          "use_cases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Use Cases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sectors",
+          "use_cases"
+        ],
+        "title": "CustomTemplateOptions",
+        "type": "object"
+      },
+      "CustomTemplateRequest": {
+        "properties": {
+          "details": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Details",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en-GB",
+                  "en-US",
+                  "de-DE",
+                  "es-ES",
+                  "es-MX",
+                  "fr-FR",
+                  "it-IT",
+                  "pt-BR",
+                  "multi"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "sector": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Sector",
+            "type": "string"
+          },
+          "use_case": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Use Case",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sector",
+          "use_case"
+        ],
+        "title": "CustomTemplateRequest",
+        "type": "object"
+      },
+      "CustomTemplateResponse": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/AssistantConfig-Output"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sets_up": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sets Up",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "label",
+          "description",
+          "sets_up",
+          "config",
+          "warnings"
+        ],
+        "title": "CustomTemplateResponse",
+        "type": "object"
+      },
       "DashboardCost": {
         "properties": {
           "ai": {
@@ -8770,6 +8882,115 @@
           }
         },
         "summary": "List Templates",
+        "tags": [
+          "assistants"
+        ]
+      }
+    },
+    "/templates/custom-draft": {
+      "post": {
+        "description": "Generate a starting template for a sector and use case, derived from the blank template.",
+        "operationId": "draft_custom_template_templates_custom_draft_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomTemplateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft Custom Template",
+        "tags": [
+          "assistants"
+        ]
+      }
+    },
+    "/templates/custom-options": {
+      "get": {
+        "operationId": "custom_template_options_templates_custom_options_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomTemplateOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Custom Template Options",
         "tags": [
           "assistants"
         ]

@@ -29,6 +29,8 @@ function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
   return result;
 }
 
+const CUSTOM_TEMPLATE = "__custom__";
+
 const templateLabel = (template: string | null | undefined) => {
   if (!template) return "Custom";
   const words = template.replaceAll("_", " ");
@@ -134,6 +136,25 @@ export function AssistantsPage() {
   const queryClient = useQueryClient();
   const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
   const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => unwrap(api.GET("/templates")), enabled: showCreate });
+  const isCustom = selectedTemplate === CUSTOM_TEMPLATE;
+  const [customForm, setCustomForm] = useState({ sector: "", use_case: "", details: "" });
+  const customOptions = useQuery({
+    queryKey: ["custom-template-options"],
+    queryFn: () => unwrap(api.GET("/templates/custom-options")),
+    enabled: showCreate && isCustom,
+  });
+  useEffect(() => {
+    if (!customOptions.data) return;
+    setCustomForm((form) => ({
+      ...form,
+      sector: form.sector || customOptions.data.sectors[0] || "",
+      use_case: form.use_case || customOptions.data.use_cases[0] || "",
+    }));
+  }, [customOptions.data]);
+  const customDraft = useMutation({
+    mutationFn: (input: Schemas["CustomTemplateRequest"]) => unwrap(api.POST("/templates/custom-draft", { body: input })),
+    onError: (caught) => setError(caught instanceof Error ? caught.message : "The template could not be generated."),
+  });
   useEffect(() => {
     if (showCreate && !selectedTemplate && templatesQuery.data?.length) {
       setSelectedTemplate(
@@ -190,6 +211,12 @@ export function AssistantsPage() {
       {templatesQuery.error && <ErrorState message="Templates could not be loaded." />}
       <form className="stack" onSubmit={(event) => {
         event.preventDefault();
+        if (isCustom) {
+          if (!customDraft.data) { setError("Generate the template first."); return; }
+          setError("");
+          create.mutate({ name: assistantName, template: null, config: customDraft.data.config });
+          return;
+        }
         if (!selected) { setError("Choose a template."); return; }
         setError("");
         create.mutate({ name: assistantName, template: selected.name, config: selected.config });
@@ -199,11 +226,51 @@ export function AssistantsPage() {
             <input type="radio" name="template" value={template.name} checked={selectedTemplate === template.name} onChange={() => setSelectedTemplate(template.name)} />
             <span><strong>{template.label}</strong><br /><span className="muted">{template.description}</span></span>
           </label>)}
+          <label className="radio-row">
+            <input type="radio" name="template" value={CUSTOM_TEMPLATE} checked={isCustom} onChange={() => setSelectedTemplate(CUSTOM_TEMPLATE)} />
+            <span><strong>Custom template</strong><br /><span className="muted">Generated for your sector and use case. Review it, then adjust anything in settings.</span></span>
+          </label>
         </fieldset>
-        {selected && <p className="help template-summary">Starts as <strong>{selected.config.business_name}</strong> with {Object.values(selected.config.services).map((service) => service.label).join(", ") || "no services yet"}. Everything can be changed afterwards.</p>}
+        {isCustom && <div className="stack custom-template">
+          {customOptions.isLoading && <LoadingState />}
+          {customOptions.error && <ErrorState message="Sectors and use cases could not be loaded." />}
+          {customOptions.data && <>
+            <div className="field-grid">
+              <div className="field">
+                <label htmlFor="custom-template-sector">Sector</label>
+                <select id="custom-template-sector" value={customForm.sector} onChange={(event) => setCustomForm({ ...customForm, sector: event.target.value })}>
+                  {customOptions.data.sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="custom-template-use-case">Use case</label>
+                <select id="custom-template-use-case" value={customForm.use_case} onChange={(event) => setCustomForm({ ...customForm, use_case: event.target.value })}>
+                  {customOptions.data.use_cases.map((useCase) => <option key={useCase} value={useCase}>{useCase}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="custom-template-details">Anything else (optional)</label>
+              <textarea id="custom-template-details" rows={2} maxLength={600} placeholder="For example: we only take bookings by phone, never quote prices" value={customForm.details} onChange={(event) => setCustomForm({ ...customForm, details: event.target.value })} />
+            </div>
+            <div className="button-row">
+              <button className="button-secondary" type="button" disabled={customDraft.isPending || !customForm.sector || !customForm.use_case} onClick={() => customDraft.mutate(customForm)}>
+                {customDraft.isPending ? "Generating…" : customDraft.data ? "Generate again" : "Generate template"}
+              </button>
+            </div>
+            {customDraft.data && <section className="panel custom-template-preview" aria-labelledby="custom-template-heading">
+              <p className="eyebrow">Generated template</p>
+              <h3 id="custom-template-heading">{customDraft.data.label}</h3>
+              {customDraft.data.description && <p className="muted">{customDraft.data.description}</p>}
+              {customDraft.data.sets_up.length > 0 && <ul>{customDraft.data.sets_up.map((item) => <li key={item}>{item}</li>)}</ul>}
+              {customDraft.data.warnings.length > 0 && <ul className="muted">{customDraft.data.warnings.map((item) => <li key={item}>{item}</li>)}</ul>}
+            </section>}
+          </>}
+        </div>}
+        {!isCustom && selected && <p className="help template-summary">Starts as <strong>{selected.config.business_name}</strong> with {Object.values(selected.config.services).map((service) => service.label).join(", ") || "no services yet"}. Everything can be changed afterwards.</p>}
         <div className="field"><label htmlFor="new-assistant-name">Assistant name</label><input id="new-assistant-name" required value={assistantName} onChange={(event) => setAssistantName(event.target.value)} /></div>
         {error && <p role="alert">{error}</p>}
-        <button className="button-primary" type="submit" disabled={create.isPending || !selected}>Create assistant</button>
+        <button className="button-primary" type="submit" disabled={create.isPending || (isCustom ? !customDraft.data : !selected)}>Create assistant</button>
       </form>
     </section>}
     {assistants.isLoading && <LoadingState />}
