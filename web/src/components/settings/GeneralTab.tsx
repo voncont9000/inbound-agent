@@ -18,7 +18,10 @@ export function GeneralTab(props: SettingsTabProps & { assistantName: string; se
     mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/services-draft", { params: { path: { assistant_id: assistantId } } })),
     onSuccess: (result) => {
       const services = result.services as AssistantConfig["services"];
-      if (Object.keys(services).length) update((draft) => { draft.services = services; });
+      if (Object.keys(services).length) update((draft) => {
+        draft.services = services;
+        draft.urgency_rules = draft.urgency_rules.filter((rule) => rule.type !== "date_deadline" || rule.service in services);
+      });
       setServicesOpen(true);
       setSuggestNote(result.warnings.length ? result.warnings.join(" ") : "Suggested from your prompt and knowledge. Review, then save.");
     },
