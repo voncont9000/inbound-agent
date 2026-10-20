@@ -167,8 +167,10 @@ WebSocket service.
 
 ## Turn-taking
 
-`SMART_TURN_STOP_SECS` defaults to `0.7` seconds. Pipecat uses this silence timeout when
-Smart Turn judges an utterance incomplete. `NUMBER_HOLD_SECS` defaults to `2.0` seconds and
+`SMART_TURN_STOP_SECS` defaults to `1.5` seconds. Pipecat uses this silence timeout only when
+Smart Turn judges an utterance incomplete, so finished turns get no extra delay. A `0.7`-second
+timeout can split a mid-sentence pause into two turns and cause a double reply; Pipecat's own
+default is `3` seconds. `NUMBER_HOLD_SECS` defaults to `2.0` seconds and
 holds only turns ending in a likely partial UK phone number; resumed speech stays in the same
 turn, while ordinary turns have no added delay. Set `IDLE_PROMPT_SECS` (default `8`) to control
 the idle interval: after bot speech, the assistant asks “Are you still there?” and, after a
