@@ -6,7 +6,7 @@ summary: Practise a call with your assistant before using it with callers.
 related: [getting-started/go-live-checklist, assistant-settings/general-language-voice]
 ---
 
-A test call lets you try an assistant before using it with real callers. Test calls are marked **Test call**, are excluded from dashboard conversation counts, and do not run after-conversation actions.
+A test call lets you try an assistant before using it with real callers. Test calls are marked **Test call**, are excluded from dashboard conversation counts, and run configured after-conversation actions. Email subjects are marked **[Test]**, and webhook payloads include `"test": true`.
 
 ## Start a test call
 
@@ -23,4 +23,4 @@ A test call lets you try an assistant before using it with real callers. Test ca
 
 ### Good to know
 
-Test calls are for practice. They do not send after-conversation notifications, customer emails, spreadsheet rows or webhooks.
+Test calls are for practice. They can send configured notifications, customer emails, spreadsheet rows or webhooks; use test destinations while evaluating. Email subjects are marked **[Test]**, and webhook payloads identify the call with `"test": true`.

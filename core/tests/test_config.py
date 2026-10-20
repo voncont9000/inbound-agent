@@ -8,10 +8,38 @@ from inbound_core.config import (
     CallSettings,
     EmailTriageConfig,
     RecordingSettings,
+    SheetsRowAction,
     assistant_config_json_schema,
     load_assistant_config,
 )
 from inbound_core.languages import DEFAULT_LOCALE, Locale, normalize_locale
+
+
+def _sheets_action(spreadsheet_id: str) -> SheetsRowAction:
+    return SheetsRowAction.model_validate({
+        "kind": "sheets_row",
+        "key": "save_row",
+        "trigger": {"events": ["conversation_completed"]},
+        "spreadsheet_id": spreadsheet_id,
+        "columns": [{"header": "Name", "value_template": "{{contact.name}}"}],
+    })
+
+
+def test_sheets_action_extracts_id_from_google_url() -> None:
+    action = _sheets_action("https://docs.google.com/spreadsheets/u/0/d/sheet_123/edit#gid=0")
+
+    assert action.spreadsheet_id == "sheet_123"
+
+
+def test_sheets_action_accepts_bare_id() -> None:
+    action = _sheets_action("sheet_123-abc")
+
+    assert action.spreadsheet_id == "sheet_123-abc"
+
+
+def test_sheets_action_rejects_unparseable_url() -> None:
+    with pytest.raises(ValidationError):
+        _sheets_action("https://docs.google.com/document/d/not-a-sheet/edit")
 
 
 def test_template_resolution_and_deep_merge(tmp_path: Path) -> None:

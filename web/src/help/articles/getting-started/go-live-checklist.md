@@ -29,4 +29,4 @@ Before callers or message senders use an assistant, check its details, knowledge
 
 ### Good to know
 
-Test calls do not run after-conversation actions. Check real conversations and channel-specific settings separately.
+Browser test calls also trigger configured after-conversation actions. Email subjects are marked **[Test]**, and webhook payloads include `"test": true`; use test destinations while evaluating.
