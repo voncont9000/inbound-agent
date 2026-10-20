@@ -86,7 +86,7 @@ function createAction(kind: ActionKind, key: string): PostAction {
   const trigger = { events: ["conversation_completed"] as Array<(typeof events)[number]>, channels: [], services: [] };
   if (kind === "email_customer") return { kind, key, enabled: true, trigger, subject_template: "Thanks for contacting {{business_name}}", body_template: "Hello {{contact.name}},\n\n{{summary}}" };
   if (kind === "notify_staff") return { kind, key, enabled: true, trigger, to: ["team@example.com"], subject_template: "New enquiry from {{contact.name}}", body_template: "{{summary}}\n\n{{intake_table}}" };
-  if (kind === "sheets_row") return { kind, key, enabled: true, trigger, spreadsheet_id: "", sheet_name: "Sheet1", columns: [{ header: "Contact", value_template: "{{contact.name}}" }] };
+  if (kind === "sheets_row") return { kind, key, enabled: true, trigger, spreadsheet_id: "", sheet_name: "Sheet1", columns: [{ header: "Started", value_template: "{{started_at}}" }, { header: "Name", value_template: "{{contact.name}}" }, { header: "Channel", value_template: "{{channel}}" }, { header: "Summary", value_template: "{{summary}}" }] };
   return { kind, key, enabled: true, trigger, url: "https://example.com/webhook" };
 }
 

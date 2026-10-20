@@ -33,7 +33,9 @@ Action keys are unique within an assistant. Trigger event lists are required and
 An empty channel or service list means all channels or services. `notify_staff` requires one or
 more validated recipient email addresses; `email_customer` always addresses the known customer
 email and cannot configure an arbitrary recipient. Sheets columns are ordered and each contains
-a header and value template. Webhook URLs must be HTTP(S); production delivery requires HTTPS.
+a header and value template. A new Sheets action starts with Started (`{{started_at}}`), Name
+(`{{contact.name}}`), Channel (`{{channel}}`) and Summary (`{{summary}}`), which can be renamed
+or removed. Webhook URLs must be HTTP(S); production delivery requires HTTPS.
 In web settings, choose action types from cards, add multiple actions independently, and use
 **Insert variable** in message and column templates instead of typing placeholder braces. A
 Google Sheets action accepts either a spreadsheet ID or a pasted Google Sheets URL.
