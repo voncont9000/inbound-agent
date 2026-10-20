@@ -5,6 +5,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from inbound_core.config import AssistantConfig, assistant_config_json_schema
+from inbound_core.custom_templates import (
+    SECTORS,
+    USE_CASES,
+    build_custom_template_prompt,
+    parse_custom_template,
+)
 from inbound_core.setup_draft import build_services_draft_prompt, parse_services_draft
 from inbound_core.templates import find_template
 from inbound_core.templates import list_templates as load_templates
@@ -32,6 +38,9 @@ from inbound_api.schemas import (
     ChannelConnectionCreate,
     ChannelConnectionResponse,
     ChannelConnectionsResponse,
+    CustomTemplateOptions,
+    CustomTemplateRequest,
+    CustomTemplateResponse,
     ServicesDraftResponse,
     TemplateResponse,
     TestCallResponse,
@@ -72,6 +81,52 @@ async def list_templates(_: TenantContext = _staff) -> list[TemplateResponse]:
         )
         for template in load_templates(get_settings().templates_dir)
     ]
+
+
+@router.get("/templates/custom-options", response_model=CustomTemplateOptions)
+async def custom_template_options(_: TenantContext = _staff) -> CustomTemplateOptions:
+    return CustomTemplateOptions(sectors=list(SECTORS), use_cases=list(USE_CASES))
+
+
+@router.post("/templates/custom-draft", response_model=CustomTemplateResponse)
+async def draft_custom_template(
+    payload: CustomTemplateRequest, _: TenantContext = _owner
+) -> CustomTemplateResponse:
+    """Generate a starting template for a sector and use case, derived from the blank template."""
+    settings = get_settings()
+    api_key = (settings.google_api_key or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Template generation is not configured.")
+    blank = find_template(settings.templates_dir, "blank")
+    if blank is None:
+        raise HTTPException(status_code=500, detail="Blank template is missing")
+    base = blank.config
+    if payload.language is not None:
+        base = base.model_copy(update={"language": payload.language})
+    client = make_genai_client(api_key)
+    try:
+        response = await client.aio.models.generate_content(
+            model=settings.setup_draft_model,
+            contents=build_custom_template_prompt(
+                sector=payload.sector,
+                use_case=payload.use_case,
+                details=payload.details,
+                base=base,
+            ),
+            config={"response_mime_type": "application/json"},
+        )
+    finally:
+        await client.aio.aclose()
+    draft = parse_custom_template(
+        response.text or "", base, fallback_label=f"{payload.sector}: {payload.use_case}"
+    )
+    return CustomTemplateResponse(
+        label=draft.label,
+        description=draft.description,
+        sets_up=draft.sets_up,
+        config=draft.config,
+        warnings=draft.warnings,
+    )
 
 
 @router.get("/assistant-config/schema", response_model=dict[str, Any])

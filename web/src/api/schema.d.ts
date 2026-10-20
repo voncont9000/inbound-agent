@@ -884,6 +884,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/templates/custom-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Custom Template
+         * @description Generate a starting template for a sector and use case, derived from the blank template.
+         */
+        post: operations["draft_custom_template_templates_custom_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates/custom-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Custom Template Options */
+        get: operations["custom_template_options_templates_custom_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/voices": {
         parameters: {
             query?: never;
@@ -1921,6 +1958,39 @@ export interface components {
              * @default false
              */
             test_call: boolean;
+        };
+        /** CustomTemplateOptions */
+        CustomTemplateOptions: {
+            /** Sectors */
+            sectors: string[];
+            /** Use Cases */
+            use_cases: string[];
+        };
+        /** CustomTemplateRequest */
+        CustomTemplateRequest: {
+            /**
+             * Details
+             * @default
+             */
+            details: string;
+            /** Language */
+            language?: ("en-GB" | "en-US" | "de-DE" | "es-ES" | "es-MX" | "fr-FR" | "it-IT" | "pt-BR" | "multi") | null;
+            /** Sector */
+            sector: string;
+            /** Use Case */
+            use_case: string;
+        };
+        /** CustomTemplateResponse */
+        CustomTemplateResponse: {
+            config: components["schemas"]["AssistantConfig-Output"];
+            /** Description */
+            description: string;
+            /** Label */
+            label: string;
+            /** Sets Up */
+            sets_up: string[];
+            /** Warnings */
+            warnings: string[];
         };
         /** DashboardCost */
         DashboardCost: {
@@ -4945,6 +5015,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_custom_template_templates_custom_draft_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomTemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    custom_template_options_templates_custom_options_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomTemplateOptions"];
                 };
             };
             /** @description Validation Error */

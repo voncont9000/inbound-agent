@@ -75,6 +75,26 @@ class TemplateResponse(BaseModel):
     config: AssistantConfig
 
 
+class CustomTemplateOptions(BaseModel):
+    sectors: list[str]
+    use_cases: list[str]
+
+
+class CustomTemplateRequest(BaseModel):
+    sector: str = Field(min_length=1, max_length=80)
+    use_case: str = Field(min_length=1, max_length=120)
+    details: str = Field(default="", max_length=600)
+    language: Locale | None = None
+
+
+class CustomTemplateResponse(BaseModel):
+    label: str
+    description: str
+    sets_up: list[str]
+    config: AssistantConfig
+    warnings: list[str]
+
+
 class AssistantCreate(BaseModel):
     name: str
     template: str | None = None

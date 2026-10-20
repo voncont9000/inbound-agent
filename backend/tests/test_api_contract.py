@@ -101,6 +101,8 @@ def test_all_feature_routers_are_mounted() -> None:
         "/auth/logout",
         "/me",
         "/templates",
+        "/templates/custom-options",
+        "/templates/custom-draft",
         "/assistant-config/schema",
         "/post-actions/variables",
         "/assistants",

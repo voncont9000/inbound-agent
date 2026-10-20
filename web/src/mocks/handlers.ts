@@ -170,6 +170,34 @@ export const handlers = [
     HttpResponse.json<Record<string, unknown>>(assistantConfigSchema),
   ),
   http.get<never, never, Schemas["TemplateResponse"][]>("*/api/templates", () => HttpResponse.json<Schemas["TemplateResponse"][]>(templates)),
+  http.get<never, never, Schemas["CustomTemplateOptions"]>("*/api/templates/custom-options", () => HttpResponse.json<Schemas["CustomTemplateOptions"]>({
+    sectors: ["Legal services", "Restaurants and hospitality", "Automotive and garages", "Other"],
+    use_cases: ["Answer enquiries and take messages", "Take bookings and reservations", "Qualify new leads"],
+  })),
+  http.post<never, Schemas["CustomTemplateRequest"], Schemas["CustomTemplateResponse"]>("*/api/templates/custom-draft", async ({ request }) => {
+    const body = await requestJson<Schemas["CustomTemplateRequest"]>(request);
+    const blank = templates.find(({ name }) => name === "blank") ?? templates[0];
+    const config = structuredClone(blank.config) as AssistantConfig;
+    if (body.language) config.language = body.language;
+    config.greeting = `Hello, you are speaking with the AI assistant for ${config.business_name}. How can I help?`;
+    config.policies = [`Follow the ${body.sector.toLocaleLowerCase()} rules for ${body.use_case.toLocaleLowerCase()}.`];
+    config.services = {
+      main_request: {
+        label: body.use_case,
+        fields: [
+          { name: "caller_name", label: "Name", type: "string", required: false, critical: true, description: "" },
+          { name: "phone", label: "Phone number", type: "phone", required: false, critical: true, description: "" },
+        ],
+      },
+    };
+    return HttpResponse.json<Schemas["CustomTemplateResponse"]>({
+      label: `${body.sector} ${body.use_case.toLocaleLowerCase()}`,
+      description: `Handles ${body.use_case.toLocaleLowerCase()} for a ${body.sector.toLocaleLowerCase()} business.`,
+      sets_up: [`${body.use_case} intake`, `${body.sector} policies`],
+      config,
+      warnings: [],
+    });
+  }),
   http.post<never, Schemas["AssistantSetupDraftCreate"], ApiResponse<Schemas["JobResponse"]>>("*/api/assistant-setup/drafts", async ({ request }) => {
     const body = await requestJson<Schemas["AssistantSetupDraftCreate"]>(request);
     mockDb.setupDraftRequests.push(body);
