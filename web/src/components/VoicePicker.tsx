@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from "r
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "./States";
+import { Field } from "./settings/fields";
 import type { Locale } from "../lib/config";
 import { RECOMMENDED_VOICE_COUNT, recommendedVoices } from "../lib/voices";
 
@@ -162,24 +163,17 @@ export function VoicePicker({
 
   return (
     <section className="voice-picker">
-      <label className="field-label" htmlFor="field-language">
-        Language
-      </label>
-      <select
-        id="field-language"
+      <Field path="language" label="Language" layout="row">{(fieldId) => <select
+        id={fieldId}
         value={language}
         onChange={selectLanguage}
         disabled={changingLanguage}
       >
-        {multilingualUnavailable && (
-          <option value="multi">Multilingual</option>
-        )}
+        {multilingualUnavailable && <option value="multi">Multilingual</option>}
         {catalogue.locales.map((locale) => (
-          <option key={locale.code} value={locale.code}>
-            {locale.label}
-          </option>
+          <option key={locale.code} value={locale.code}>{locale.label}</option>
         ))}
-      </select>
+      </select>}</Field>
       {multilingualUnavailable && (
         <p className="help" role="note">
           Multilingual isn't available with the current voice service, so the

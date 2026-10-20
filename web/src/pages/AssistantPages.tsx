@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, useNavigate, useParams } from "react-router-dom";
 import { api, unwrap, unwrapNoContent, type Schemas } from "../api/client";
@@ -27,6 +27,91 @@ function prepareConfigForSave(config: AssistantConfig): AssistantConfig {
     entry.say_as = entry.say_as.trim();
   });
   return result;
+}
+
+const switcherChannelIcon = (kind: string) => {
+  const paths: Record<string, string> = {
+    phone: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z",
+    web: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10",
+    gmail: "M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2m18 2-10 7L2 7",
+    whatsapp: "M21 11.5a8.4 8.4 0 0 1-12.1 7.7L3 21l1.8-5.7A8.4 8.4 0 1 1 21 11.5ZM8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01",
+  };
+  const path = paths[kind];
+  return path ? <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg> : null;
+};
+
+function AssistantSwitcherItem({ assistant, activeTab, current, onSelect }: {
+  assistant: { id: string; name: string };
+  activeTab: SettingsTabId;
+  current: boolean;
+  onSelect: () => void;
+}) {
+  const channels = useQuery({
+    queryKey: ["assistant-channels", assistant.id],
+    queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/channels", { params: { path: { assistant_id: assistant.id } } })),
+  });
+  const kinds = [...new Set(channels.data?.items.map(({ kind }) => kind) ?? [])];
+  const phone = channels.data?.items.find(({ kind }) => kind === "phone")?.external_id;
+  return <Link className="assistant-switcher-item" to={settingsTabPath(assistant.id, activeTab)} aria-current={current ? "page" : undefined} onClick={onSelect}>
+    <span className="assistant-switcher-item-text"><span>{assistant.name}</span><small>{phone ?? "No number"}</small></span>
+    <span className="assistant-switcher-channel-icons">{kinds.map((kind) => <span key={kind} aria-label={kind}>{switcherChannelIcon(kind)}</span>)}</span>
+  </Link>;
+}
+
+function AssistantSwitcher({ assistantId, assistantName, activeTab }: {
+  assistantId: string;
+  assistantName: string;
+  activeTab: SettingsTabId;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const switcherRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const assistants = useQuery({
+    queryKey: ["assistants"],
+    queryFn: () => unwrap(api.GET("/assistants")),
+  });
+  const channels = useQuery({
+    queryKey: ["assistant-channels", assistantId],
+    queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/channels", { params: { path: { assistant_id: assistantId } } })),
+  });
+  const phone = channels.data?.items.find(({ kind }) => kind === "phone")?.external_id;
+  const term = search.trim().toLocaleLowerCase();
+  const visible = assistants.data?.items.filter((assistant) => assistant.name.toLocaleLowerCase().includes(term)) ?? [];
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !switcherRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+  return <div className="assistant-switcher" ref={switcherRef}>
+    <button ref={triggerRef} type="button" className="assistant-switcher-trigger" aria-label="Switch assistant" aria-expanded={open} aria-controls="assistant-switcher-popover" onClick={() => setOpen((value) => !value)}>
+      <span className="assistant-switcher-trigger-text"><strong>{assistantName}</strong><span>{phone ?? "No number"}</span></span>
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m7 10 5 5 5-5" /></svg>
+    </button>
+    {open && <div className="assistant-switcher-popover" id="assistant-switcher-popover">
+      <label className="sr-only" htmlFor="assistant-switcher-search">Search assistants</label>
+      <input id="assistant-switcher-search" type="search" placeholder="Search assistants" value={search} onChange={(event) => setSearch(event.target.value)} />
+      {assistants.isLoading && <LoadingState />}
+      {assistants.error && <ErrorState message="Assistants could not be loaded." />}
+      <div className="assistant-switcher-list">
+        {visible.map((assistant) => <AssistantSwitcherItem key={assistant.id} assistant={assistant} activeTab={activeTab} current={assistant.id === assistantId} onSelect={() => setOpen(false)} />)}
+        {!assistants.isLoading && visible.length === 0 && <p className="muted">No assistants found.</p>}
+      </div>
+      <Link className="assistant-switcher-new" to="/assistants/new" onClick={() => setOpen(false)}>New assistant</Link>
+    </div>}
+  </div>;
 }
 
 export function AssistantsPage() {
@@ -236,6 +321,7 @@ export function AssistantSettingsPage() {
   return <main className="page" id="main-content">
     <div className="settings-header">
       <div className="page-header-text"><h1>{baseline.name}</h1></div>
+      <AssistantSwitcher assistantId={id} assistantName={baseline.name} activeTab={activeTab} />
     </div>
     <div className="save-bar" role="region" aria-label="Save changes">
       <span className={isDirty ? "dirty-indicator" : "muted"}>{isDirty ? "Unsaved changes" : "All changes saved"}</span>

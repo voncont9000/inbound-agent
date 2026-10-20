@@ -15,14 +15,16 @@ export type SettingsTabProps = {
   schema: unknown;
 };
 
-export function Field({ path, label, error, help, children }: { path: string; label: string; error?: string; help?: string; children: (id: string, describedBy?: string) => ReactNode }) {
+export function Field({ path, label, error, help, layout, children }: { path: string; label: string; error?: string; help?: string; layout?: "row"; children: (id: string, describedBy?: string) => ReactNode }) {
   const id = `field-${path}`;
   const errorId = `${id}-error`;
   const describedBy = [error ? errorId : "", help ? `${id}-help` : ""].filter(Boolean).join(" ") || undefined;
-  return <div className="field">
-    <label htmlFor={id}>{label}</label>
+  return <div className={`field${layout === "row" ? " field-row" : ""}`}>
+    {layout === "row"
+      ? <div className="field-label-stack"><label htmlFor={id}>{label}</label>{help && <span id={`${id}-help`} className="help">{help}</span>}</div>
+      : <label htmlFor={id}>{label}</label>}
     {children(id, describedBy)}
-    {help && <span id={`${id}-help`} className="help">{help}</span>}
+    {layout !== "row" && help && <span id={`${id}-help`} className="help">{help}</span>}
     <FieldError id={errorId}>{error}</FieldError>
   </div>;
 }
