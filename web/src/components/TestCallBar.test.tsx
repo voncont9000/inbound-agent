@@ -157,10 +157,13 @@ describe("global test-call bar", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    await user.selectOptions(screen.getByLabelText("Channel"), "whatsapp");
-    await user.type(screen.getByLabelText("WhatsApp phone_number_id"), "123456789");
-    await user.click(screen.getByRole("button", { name: "Add channel" }));
-    expect(await screen.findByText("123456789")).toBeInTheDocument();
+    const channels = await screen.findByRole("region", { name: "Channels" });
+    await within(channels).findByText("assistant@example.test");
+    await user.click(within(channels).getByRole("button", { name: "Add a channel" }));
+    await user.click(within(channels).getByRole("button", { name: /WhatsApp/ }));
+    await user.type(within(channels).getByLabelText("WhatsApp phone_number_id"), "123456789");
+    await user.click(within(channels).getByRole("button", { name: "Add channel" }));
+    expect(await within(channels).findByText("123456789")).toBeInTheDocument();
   });
 });
 

@@ -59,6 +59,14 @@ SUPPORTED_ATTACHMENTS = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
 }
 MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024
+INCLUDE_RECIPIENT_HEADERS = {
+    "to",
+    "cc",
+    "delivered-to",
+    "x-original-to",
+    "x-forwarded-to",
+    "envelope-to",
+}
 
 
 def headers_map(message: dict[str, Any]) -> dict[str, str]:
@@ -78,6 +86,48 @@ def headers_map(message: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+def _header_values(message: dict[str, Any], names: set[str]) -> list[str]:
+    payload = message.get("payload")
+    if not isinstance(payload, dict):
+        return []
+    headers = payload.get("headers")
+    if not isinstance(headers, list):
+        return []
+    return [
+        str(make_header(decode_header(value))).strip()
+        for item in headers
+        if isinstance(item, dict)
+        and isinstance(item.get("name"), str)
+        and item["name"].casefold() in names
+        and isinstance((value := item.get("value")), str)
+    ]
+
+
+def _include_rule_matches(
+    message: dict[str, Any], headers: dict[str, str], rules: list[Any]
+) -> bool:
+    recipient_values = _header_values(message, INCLUDE_RECIPIENT_HEADERS)
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        field = rule.get("field")
+        contains = rule.get("contains")
+        if not isinstance(contains, str) or not contains.strip():
+            continue
+        needle = contains.strip().casefold()
+        if field == "from":
+            values = [headers.get("from", "")]
+        elif field == "subject":
+            values = [headers.get("subject", "")]
+        elif field == "to":
+            values = recipient_values
+        else:
+            continue
+        if any(needle in value.casefold() for value in values):
+            return True
+    return False
+
+
 def parse_address(value: str | None) -> tuple[str, str]:
     if not value:
         return "", ""
@@ -93,6 +143,13 @@ def skip_reason(message: dict[str, Any], mailbox: str, settings: dict[str, Any])
     _, sender = parse_address(headers.get("from"))
     if not sender or "@" not in sender:
         return "invalid_sender"
+    include_rules = settings.get("include_rules")
+    if (
+        isinstance(include_rules, list)
+        and include_rules
+        and not _include_rule_matches(message, headers, include_rules)
+    ):
+        return "filtered_out"
     mailbox = mailbox.strip().lower()
     mailbox_domain = mailbox.rpartition("@")[2]
     sender_local, _, sender_domain = sender.partition("@")

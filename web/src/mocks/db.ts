@@ -19,15 +19,28 @@ function browserSession(): boolean {
 }
 
 function createDb(): MockDatabase {
+  const tenants = cloneFixtures();
+  const assistantId = tenants[0].assistants[0].id;
   return {
-    tenants: cloneFixtures(),
+    tenants,
     loggedIn: browserSession(),
     user: { ...authUser },
     memberships: JSON.parse(JSON.stringify(memberships)) as typeof memberships,
     jobs: {},
     setupDraftRequests: [],
     setupCompletions: [],
-    channels: {},
+    channels: {
+      [assistantId]: [{
+        id: "40000000-0000-4000-8000-000000000001",
+        assistant_id: assistantId,
+        kind: "gmail",
+        external_id: "assistant@example.test",
+        status: "active",
+        settings: { include_rules: [] },
+        created_at: "2026-02-01T10:30:00Z",
+        google_features: [],
+      }],
+    },
     postActionSecrets: {},
   };
 }

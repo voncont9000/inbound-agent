@@ -376,6 +376,28 @@ export const handlers = [
     mockDb.channels[assistantId] = [...connections, channel];
     return HttpResponse.json<Schemas["ChannelConnectionResponse"]>(channel, { status: 201 });
   }),
+  http.patch<{ id: string; channel_id: string }, Schemas["ChannelConnectionUpdate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/assistants/:id/channels/:channel_id", async ({ params, request }) => {
+    const assistantId = String(params.id);
+    const channelId = String(params.channel_id);
+    const tenant = selectedTenant(request);
+    if (!findAssistant(tenant, assistantId)) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    const channel = (mockDb.channels[assistantId] ?? []).find(({ id }) => id === channelId);
+    if (!channel) return HttpResponse.json<ApiErrorResponse>({ detail: "Channel connection not found" }, { status: 404 });
+    if (channel.kind !== "gmail") return HttpResponse.json<ApiErrorResponse>({ detail: "Include rules are only supported for Gmail" }, { status: 422 });
+    const body = await requestJson<Schemas["ChannelConnectionUpdate"]>(request);
+    const updated = { ...channel, settings: { ...channel.settings, include_rules: body.include_rules ?? [] } };
+    mockDb.channels[assistantId] = (mockDb.channels[assistantId] ?? []).map((item) => item.id === channelId ? updated : item);
+    return HttpResponse.json<Schemas["ChannelConnectionResponse"]>(updated);
+  }),
+  http.delete<{ id: string; channel_id: string }, never, ApiResponse<never>>("*/api/assistants/:id/channels/:channel_id", ({ params, request }) => {
+    const assistantId = String(params.id);
+    const channelId = String(params.channel_id);
+    if (!findAssistant(selectedTenant(request), assistantId)) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    const channels = mockDb.channels[assistantId] ?? [];
+    if (!channels.some(({ id }) => id === channelId)) return HttpResponse.json<ApiErrorResponse>({ detail: "Channel connection not found" }, { status: 404 });
+    mockDb.channels[assistantId] = channels.filter(({ id }) => id !== channelId);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.post<{ id: string }, never, ApiResponse<Schemas["TestCallResponse"]>>("*/api/assistants/:id/test-calls", ({ request, params }) => {
     return findAssistant(selectedTenant(request), String(params.id))
       ? HttpResponse.json<Schemas["TestCallResponse"]>(testCallResponse)

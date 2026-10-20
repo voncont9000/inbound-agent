@@ -106,6 +106,42 @@ def test_include_internal_and_quote_stripping():
     assert gmail_messages.strip_quoted_history("New\nOn Tue, someone wrote:\nold") == "New"
 
 
+@pytest.mark.parametrize(
+    ("headers", "field", "contains"),
+    [
+        ([("To", "team@vinci-labs.tech")], "to", "@vinci-labs.tech"),
+        ([("Delivered-To", "team@vinci-labs.tech")], "to", "TEAM@VINCI-LABS.TECH"),
+        ([("Cc", "team@vinci-labs.tech")], "to", "@vinci-labs.tech"),
+        ([("X-Original-To", "team@vinci-labs.tech")], "to", "@vinci-labs.tech"),
+        ([("X-Forwarded-To", "team@vinci-labs.tech")], "to", "@vinci-labs.tech"),
+        ([("Envelope-To", "team@vinci-labs.tech")], "to", "@vinci-labs.tech"),
+        ([("Subject", "Question about support")], "subject", "QUESTION"),
+        ([("From", "Alex Example <alex@example.net>")], "from", "alex example"),
+    ],
+)
+def test_include_rules_match_headers_case_insensitively(headers, field, contains):
+    message = make_message([("From", "customer@example.net"), *headers])
+    settings = {"include_rules": [{"field": field, "contains": f" {contains} "}]}
+
+    assert gmail_messages.skip_reason(message, "owner@example.com", settings) is None
+
+
+def test_include_rules_filter_non_matching_messages_and_empty_rules_are_unchanged():
+    message = make_message(
+        [("From", "customer@example.net"), ("To", "team@other.test"), ("Subject", "Question")]
+    )
+    assert (
+        gmail_messages.skip_reason(
+            message,
+            "owner@example.com",
+            {"include_rules": [{"field": "to", "contains": "@vinci-labs.tech"}]},
+        )
+        == "filtered_out"
+    )
+    assert gmail_messages.skip_reason(message, "owner@example.com", {"include_rules": []}) is None
+    assert gmail_messages.skip_reason(message, "owner@example.com", {}) is None
+
+
 def test_reply_thread_headers_and_re_subject():
     raw = _build_email_reply(
         to="customer@example.test",

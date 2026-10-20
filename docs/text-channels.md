@@ -120,6 +120,13 @@ category. Needs-human tasks use that reason (or â€œEmail requires human reviewâ€
 missing), and every category and reason is stored in `conversation.metrics.email_triage`.
 The conversation detail page displays the saved category and reason.
 
+Gmail channel settings may include an `include_rules` list. Rules are OR-matched case-insensitive
+substrings over the full From header, Subject, or recipient headers. A `to` rule checks `To`,
+`Cc`, `Delivered-To`, `X-Original-To`, `X-Forwarded-To`, and `Envelope-To`, which covers
+messages forwarded from a custom domain into a Gmail inbox. With no rules, existing message
+handling is unchanged; when rules are configured and none match, the message is skipped,
+left in Gmail, and labelled `AI/Skipped`.
+
 OAuth uses `openid email https://www.googleapis.com/auth/gmail.modify`. `gmail.modify`
 is a restricted Google scope, but is the narrowest single Gmail scope that supports
 reading messages/history, creating drafts, and applying labels. Production use requires

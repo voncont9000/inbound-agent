@@ -38,6 +38,7 @@ from inbound_api.schemas import (
     ChannelConnectionCreate,
     ChannelConnectionResponse,
     ChannelConnectionsResponse,
+    ChannelConnectionUpdate,
     CustomTemplateOptions,
     CustomTemplateRequest,
     CustomTemplateResponse,
@@ -447,3 +448,37 @@ async def delete_channel(
         raise HTTPException(status_code=404, detail="Channel connection not found")
     await write_audit(session, ctx, "channel.deleted", "channel_connection", channel_id)
     await session.delete(connection)
+
+
+@router.patch(
+    "/assistants/{assistant_id}/channels/{channel_id}",
+    response_model=ChannelConnectionResponse,
+)
+async def update_channel(
+    assistant_id: UUID,
+    channel_id: UUID,
+    payload: ChannelConnectionUpdate,
+    ctx: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> ChannelConnectionResponse:
+    if await session.get(Assistant, assistant_id) is None:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    connection = await session.scalar(
+        select(ChannelConnection).where(
+            ChannelConnection.id == channel_id,
+            ChannelConnection.assistant_id == assistant_id,
+        )
+    )
+    if connection is None:
+        raise HTTPException(status_code=404, detail="Channel connection not found")
+    if "include_rules" in payload.model_fields_set:
+        if connection.kind != "gmail":
+            raise HTTPException(
+                status_code=422, detail="Include rules are only supported for Gmail"
+            )
+        connection.settings = {
+            **connection.settings,
+            "include_rules": [rule.model_dump() for rule in payload.include_rules or []],
+        }
+        await write_audit(session, ctx, "channel.updated", "channel_connection", channel_id)
+    return ChannelConnectionResponse.model_validate(connection)

@@ -195,6 +195,25 @@ class ChannelConnectionCreate(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
+class EmailIncludeRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field: Literal["from", "to", "subject"]
+    contains: str
+
+    @field_validator("contains")
+    @classmethod
+    def validate_contains(cls, value: str) -> str:
+        value = value.strip()
+        if not 1 <= len(value) <= 200:
+            raise ValueError("contains must be between 1 and 200 characters")
+        return value
+
+
+class ChannelConnectionUpdate(BaseModel):
+    include_rules: list[EmailIncludeRule] | None = Field(default=None, max_length=20)
+
+
 class GmailOAuthStartRequest(BaseModel):
     features: list[str] = Field(default_factory=list)
 
