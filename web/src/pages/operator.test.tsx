@@ -5,11 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { Schemas } from "../api/client";
 import { server } from "../mocks/server";
 import { mockDb } from "../mocks/db";
+import { formatDate } from "../lib/date";
 import { renderApp } from "../test/renderApp";
 import { formatConversationDuration, groupConversationDays } from "./OperatorPages";
 
 const assistantId = "20000000-0000-4000-8000-000000000001";
 const conversationId = "50000000-0000-4000-8000-000000000001";
+const gmailConversationId = "50000000-0000-4000-8000-000000000007";
 const transferConversationId = "50000000-0000-4000-8000-000000000011";
 const contactId = "30000000-0000-4000-8000-000000000001";
 
@@ -585,6 +587,26 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", listener);
   });
 
+  it("starts new Sheets actions with the default columns", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
+    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+
+    const defaults = [
+      ["Started", "started_at"],
+      ["Name", "contact.name"],
+      ["Channel", "channel"],
+      ["Summary", "summary"],
+    ];
+    defaults.forEach(([header, value], index) => {
+      expect(screen.getByLabelText(`Column header 1-${index + 1}`)).toHaveValue(header);
+      expect(screen.getByLabelText(`Column value 1-${index + 1}`)).toHaveValue(value);
+    });
+  });
+
   it("stores the selected variable in a Sheets column value", async () => {
     const user = userEvent.setup();
     let capturedBody: Record<string, unknown> | undefined;
@@ -670,6 +692,7 @@ describe("operator workflows", () => {
   it("renders call transcript rows with speaker labels and elapsed time", async () => {
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
     const transcript = await screen.findByRole("list", { name: "Conversation transcript" });
+    expect(transcript).not.toHaveAttribute("data-layout");
     const rows = within(transcript).getAllByRole("listitem");
 
     expect(rows).toHaveLength(3);
@@ -682,6 +705,28 @@ describe("operator workflows", () => {
     expect(rows[2]).toHaveAttribute("data-role", "assistant");
     expect(within(rows[2]).getByText("Assistant")).toBeInTheDocument();
     expect(within(rows[2]).getByText("0:18")).toBeInTheDocument();
+  });
+
+  it("renders Gmail history as a message thread with formatted timestamps", async () => {
+    const conversation = structuredClone(mockDb.tenants[0].conversations.find(({ id }) => id === gmailConversationId)!);
+    const customerMessage = conversation.messages.find(({ role }) => role !== "assistant")!;
+    server.use(http.get<{ id: string }, never, Schemas["ConversationDetailResponse"]>(
+      "*/api/conversations/:id",
+      () => HttpResponse.json<Schemas["ConversationDetailResponse"]>(conversation),
+    ));
+    renderApp(`/conversations/${gmailConversationId}`, { loggedIn: true });
+
+    const transcript = await screen.findByRole("list", { name: "Conversation transcript" });
+    expect(transcript).toHaveAttribute("data-layout", "message");
+    const customerRow = within(transcript).getByText("Customer").closest("li");
+    expect(customerRow).not.toBeNull();
+    if (!customerRow) throw new Error("Customer transcript row was not rendered.");
+    expect(within(customerRow).getByText("Customer")).toBeInTheDocument();
+    const time = customerRow.querySelector("time");
+    expect(time).not.toBeNull();
+    if (!time) throw new Error("Customer transcript timestamp was not rendered.");
+    expect(time).toHaveAttribute("datetime", customerMessage.ts);
+    expect(time).toHaveTextContent(formatDate(customerMessage.ts));
   });
 
   it("updates inbox URL filters and sends channel plus review filters", async () => {

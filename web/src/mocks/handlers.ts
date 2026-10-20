@@ -121,7 +121,9 @@ export const handlers = [
   http.get<never, never, Schemas["PostActionVariable"][]>("*/api/post-actions/variables", () =>
     HttpResponse.json<Schemas["PostActionVariable"][]>([
       { name: "contact.name", description: "The customer's name." },
+      { name: "channel", description: "The conversation channel." },
       { name: "summary", description: "Conversation summary." },
+      { name: "started_at", description: "The conversation start time in the assistant's timezone." },
     ]),
   ),
   http.post<{ id: string }, Schemas["PostActionTestRequest"], ApiResponse<Schemas["PostActionTestResponse"]>>("*/api/assistants/:id/post-actions/test", async ({ request, params }) => {

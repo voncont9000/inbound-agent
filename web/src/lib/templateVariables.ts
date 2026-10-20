@@ -13,6 +13,7 @@ const friendlyLabels: Record<string, string> = {
   "contact.email": "Customer email",
   "contact.phone": "Customer phone",
   summary: "Conversation summary",
+  started_at: "Conversation start time",
   conversation_id: "Conversation ID",
   channel: "Channel",
   service: "Service",

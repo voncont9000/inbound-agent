@@ -460,6 +460,7 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
     : <main className="page" id="main-content"><ErrorState message="Conversation could not be loaded." /></main>;
   const emailTriage = asRecord(detail.metrics.email_triage);
   const transcript = transcriptRows(detail.messages, detail.channel, detail.started_at);
+  const messageLayout = detail.channel !== "phone" && detail.channel !== "web";
   const channelName = channelLabel(detail.channel);
   const detailDuration = formatConversationDuration(detail.channel, detail.started_at, detail.ended_at);
   const titleName = detail.contact_name ?? detail.external_ref;
@@ -508,14 +509,22 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
     <CallRecordingPlayer conversationId={id} recording={detail.recording} />
     <section className="panel conversation-history">
       <h2 className="eyebrow conversation-history-heading">History</h2>
-      <ol className="call-transcript" aria-label="Conversation transcript">
+      <ol className="call-transcript" data-layout={messageLayout ? "message" : undefined} aria-label="Conversation transcript">
         {transcript.map((row) => <li className="call-transcript-row" data-role={row.role} key={row.id}>
-          <time className="call-transcript-time" dateTime={row.ts}>{row.time}</time>
-          <strong className="call-transcript-speaker">
-            {row.speaker}
-            {row.draft && <Badge tone="neutral">Draft in Gmail</Badge>}
-          </strong>
-          <div className="call-transcript-text">{row.text}</div>
+          {messageLayout ? <>
+            <div className="call-transcript-meta">
+              <strong className="call-transcript-speaker">{row.speaker}{row.draft && <Badge tone="neutral">Draft in Gmail</Badge>}</strong>
+              <span className="call-transcript-date"><span className="call-transcript-separator" aria-hidden="true">·</span> <time className="call-transcript-time" dateTime={row.ts}>{row.time}</time></span>
+            </div>
+            <div className="call-transcript-text">{row.text}</div>
+          </> : <>
+            <time className="call-transcript-time" dateTime={row.ts}>{row.time}</time>
+            <strong className="call-transcript-speaker">
+              {row.speaker}
+              {row.draft && <Badge tone="neutral">Draft in Gmail</Badge>}
+            </strong>
+            <div className="call-transcript-text">{row.text}</div>
+          </>}
         </li>)}
       </ol>
     </section>

@@ -255,6 +255,12 @@ button:active, .button-primary:active, .button-secondary:active, .button-ghost:a
 .call-transcript-time { color: var(--body); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .call-transcript-speaker { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); min-width: 0; border-left: 2px solid var(--border); padding-left: var(--space-3); color: var(--ink); font-weight: 500; }
 .call-transcript-text { min-width: 0; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.call-transcript[data-layout="message"] .call-transcript-row { display: block; padding: var(--space-4) 0; border-top: 1px solid var(--border); }
+.call-transcript[data-layout="message"] .call-transcript-row:first-child { border-top: 0; padding-top: 0; }
+.call-transcript-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-bottom: var(--space-2); }
+.call-transcript[data-layout="message"] .call-transcript-speaker { border-left: 0; padding-left: 0; }
+.call-transcript-date { color: var(--body); white-space: nowrap; }
+.call-transcript[data-layout="message"] .call-transcript-row[data-role="caller"] .call-transcript-text { color: var(--ink); }
 
 @media (max-width: 600px) {
   .call-transcript-row { grid-template-columns: 4.5rem minmax(0, 1fr); row-gap: var(--space-1); }

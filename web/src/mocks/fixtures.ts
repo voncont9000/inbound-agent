@@ -474,7 +474,7 @@ function makeGmailDraftConversation(): Schemas["ConversationDetailResponse"] {
       {
         id: `${id}-m1`,
         role: "caller",
-        text: "Could I arrange a visit to look at my boiler?",
+        text: "Hello, I'm Jamie Morgan. The boiler has stopped heating the radiators properly, and there is only a little hot water. It started making a loud rattling noise last Thursday, then the heating stopped working yesterday evening.\n\nI'm at home most weekdays after 3 pm, and someone can let an engineer in if I have a little notice. The boiler is in the utility cupboard by the back door.\n\nCould you let me know when someone might be able to visit and whether there is anything I should check before then?\n\nThanks,\nJamie Morgan",
         ts: date(10),
         meta: { subject: "Boiler repair appointment", from: "jamie.morgan@example.com" },
       },
