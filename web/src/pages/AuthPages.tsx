@@ -62,7 +62,8 @@ export function SignupPage() {
     setError("");
     try {
       await signup(form);
-      navigate(safeNext(new URLSearchParams(location.search).get("next")), { replace: true });
+      const next = new URLSearchParams(location.search).get("next");
+      navigate(next ? safeNext(next) : "/assistants/new", { replace: true });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Unable to create account.");
     } finally {
