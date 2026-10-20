@@ -514,8 +514,7 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
           {messageLayout ? <>
             <div className="call-transcript-meta">
               <strong className="call-transcript-speaker">{row.speaker}{row.draft && <Badge tone="neutral">Draft in Gmail</Badge>}</strong>
-              <span className="call-transcript-separator" aria-hidden="true">·</span>
-              <time className="call-transcript-time" dateTime={row.ts}>{row.time}</time>
+              <span className="call-transcript-date"><span className="call-transcript-separator" aria-hidden="true">·</span> <time className="call-transcript-time" dateTime={row.ts}>{row.time}</time></span>
             </div>
             <div className="call-transcript-text">{row.text}</div>
           </> : <>

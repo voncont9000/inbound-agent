@@ -259,7 +259,7 @@ button:active, .button-primary:active, .button-secondary:active, .button-ghost:a
 .call-transcript[data-layout="message"] .call-transcript-row:first-child { border-top: 0; padding-top: 0; }
 .call-transcript-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-bottom: var(--space-2); }
 .call-transcript[data-layout="message"] .call-transcript-speaker { border-left: 0; padding-left: 0; }
-.call-transcript-separator { color: var(--body); }
+.call-transcript-date { color: var(--body); white-space: nowrap; }
 .call-transcript[data-layout="message"] .call-transcript-row[data-role="caller"] .call-transcript-text { color: var(--ink); }
 
 @media (max-width: 600px) {
