@@ -27,6 +27,7 @@ from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.soniox.stt import SonioxContextObject, SonioxSTTService
 from pipecat.services.speechify.tts import SpeechifyHttpTTSService
 from pipecat.transcriptions.language import Language
+from pipecat.utils.types import NOT_GIVEN
 
 from inbound_voice.pronunciation import PronunciationTransform
 
@@ -339,6 +340,14 @@ def create_stt(
             settings=AssemblyAISTTService.Settings(
                 model="universal-3-6-pro",
                 keyterms_prompt=provider_terms,
+                language_detection=(
+                    True if voice_language.soniox_language_identification else NOT_GIVEN
+                ),
+                language_codes=(
+                    NOT_GIVEN
+                    if voice_language.soniox_language_identification
+                    else list(voice_language.soniox_hints)
+                ),
             ),
         )
     if providers.stt == "soniox":

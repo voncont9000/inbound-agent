@@ -214,7 +214,7 @@ def test_new_call_and_recording_settings_default_and_normalize() -> None:
     )
     assert legacy.call_settings == CallSettings()
     assert legacy.recording == RecordingSettings()
-    assert legacy.recording.enabled is False
+    assert legacy.recording.enabled is True
     assert CallSettings(technical_terms=[" term ", "", "TERM", "Call"]).technical_terms == [
         "term",
         "Call",
