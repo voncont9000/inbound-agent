@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, unwrap, unwrapNoContent, type Schemas } from "../api/client";
 import { ApiError, errorMessage } from "../api/errors";
 import { useAuth } from "../auth/AuthProvider";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CallRecordingPlayer } from "../components/CallRecordingPlayer";
+import { ChannelIcon } from "../components/ChannelIcon";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Badge, DeleteIcon, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 import { formatDate } from "../lib/date";
 import { transcriptRows } from "../lib/transcript";
@@ -299,7 +300,7 @@ export function InboxPage() {
                     <time dateTime={conversation.started_at}>{time}</time>
                   </div>
                   <div className="inbox-row-meta">
-                    <span className="inbox-channel">{channelIcon[conversation.channel]}</span>
+                    <span className="inbox-channel"><ChannelIcon kind={conversation.channel} /></span>
                     <span>{channelLabel(conversation.channel)}{duration && <> · {duration}</>}</span>
                     {conversation.test_call && <Badge tone="neutral">Test call</Badge>}
                     {conversation.needs_review && <Badge tone="warning">Needs review</Badge>}
@@ -360,15 +361,9 @@ export function InboxPage() {
   </main>;
 }
 
-const channelLabel = (channel: string) => channel === "whatsapp" ? "WhatsApp" : channel === "gmail" ? "Email" : channel === "web" ? "Web call" : "Phone";
-
 const icon = (path: string) => <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
-const channelIcon: Record<string, ReactNode> = {
-  phone: icon("M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"),
-  web: icon("M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10"),
-  gmail: icon("M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2m18 2-10 7L2 7"),
-  whatsapp: icon("M21 11.5a8.4 8.4 0 0 1-12.1 7.7L3 21l1.8-5.7A8.4 8.4 0 1 1 21 11.5ZM8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"),
-};
+
+const channelLabel = (channel: string) => channel === "whatsapp" ? "WhatsApp" : channel === "gmail" ? "Email" : channel === "web" ? "Web call" : "Phone";
 
 function statusTone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
   if (["completed", "done", "answered"].includes(status)) return "success";
@@ -465,7 +460,7 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
   const detailDuration = formatConversationDuration(detail.channel, detail.started_at, detail.ended_at);
   const titleName = detail.contact_name ?? detail.external_ref;
   const badges = <div className="conversation-meta">
-    <span className="conversation-meta-item">{channelIcon[detail.channel]} {channelName}</span>
+    <span className="conversation-meta-item"><ChannelIcon kind={detail.channel} /> {channelName}</span>
     <span className="conversation-meta-item">{formatDate(detail.started_at)}</span>
     {detailDuration && <span className="conversation-meta-item">{detailDuration}</span>}
     <span className="conversation-meta-item">{detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{titleName}</Link> : titleName}</span>

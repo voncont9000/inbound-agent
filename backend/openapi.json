@@ -1728,6 +1728,27 @@
         "title": "ChannelConnectionResponse",
         "type": "object"
       },
+      "ChannelConnectionUpdate": {
+        "properties": {
+          "include_rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EmailIncludeRule"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Rules"
+          }
+        },
+        "title": "ChannelConnectionUpdate",
+        "type": "object"
+      },
       "ChannelConnectionsResponse": {
         "properties": {
           "items": {
@@ -2952,6 +2973,30 @@
           "body_template"
         ],
         "title": "EmailCustomerAction",
+        "type": "object"
+      },
+      "EmailIncludeRule": {
+        "additionalProperties": false,
+        "properties": {
+          "contains": {
+            "title": "Contains",
+            "type": "string"
+          },
+          "field": {
+            "enum": [
+              "from",
+              "to",
+              "subject"
+            ],
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "contains"
+        ],
+        "title": "EmailIncludeRule",
         "type": "object"
       },
       "EmailTriageConfig": {
@@ -5836,6 +5881,83 @@
           }
         },
         "summary": "Delete Channel",
+        "tags": [
+          "assistants"
+        ]
+      },
+      "patch": {
+        "operationId": "update_channel_assistants__assistant_id__channels__channel_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Channel Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelConnectionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Channel",
         "tags": [
           "assistants"
         ]

@@ -106,3 +106,83 @@ async def test_assistant_versions_channels_and_audit(tenant_pair, owner_database
         await client.delete(f"/assistants/{assistant_id}/channels/{channel_id}")
     ).status_code == 204
     assert (await client.delete(f"/assistants/{assistant_id}")).status_code == 204
+
+
+async def test_channel_include_rules_update(tenant_pair, owner_database_url) -> None:
+    first = tenant_pair["first"]
+    client = first["client"]
+    templates = (await client.get("/templates")).json()
+    config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    created = await client.post(
+        "/assistants",
+        json={"name": "Filter assistant", "template": "uk_law_firm", "config": config},
+    )
+    assert created.status_code == 201, created.text
+    assistant_id = created.json()["id"]
+    phone = await client.post(
+        f"/assistants/{assistant_id}/channels",
+        json={"kind": "phone", "external_id": "+442079460000"},
+    )
+    assert phone.status_code == 201, phone.text
+    gmail = await client.post(
+        f"/assistants/{assistant_id}/channels",
+        json={"kind": "gmail", "external_id": "inbox@example.com"},
+    )
+    assert gmail.status_code == 201, gmail.text
+    channel_id = gmail.json()["id"]
+    history_id = gmail.json()["settings"]["history_id"]
+    rules = [{"field": "to", "contains": " @vinci-labs.tech "}]
+
+    updated = await client.patch(
+        f"/assistants/{assistant_id}/channels/{channel_id}",
+        json={"include_rules": rules},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["settings"]["include_rules"] == [
+        {"field": "to", "contains": "@vinci-labs.tech"}
+    ]
+    assert updated.json()["settings"]["history_id"] == history_id
+    with psycopg.connect(owner_database_url) as connection:
+        audit_action = connection.execute(
+            "SELECT action FROM audit_log WHERE tenant_id::text = %s "
+            "AND target_id::text = %s AND action = 'channel.updated' LIMIT 1",
+            (str(first["tenant_id"]), channel_id),
+        ).fetchone()
+    assert audit_action == ("channel.updated",)
+
+    assert (
+        await client.patch(
+            f"/assistants/{assistant_id}/channels/{phone.json()['id']}",
+            json={"include_rules": []},
+        )
+    ).status_code == 422
+    assert (
+        await client.patch(
+            f"/assistants/{assistant_id}/channels/{phone.json()['id']}",
+            json={"include_rules": [{"field": "to", "contains": "  "}]},
+        )
+    ).status_code == 422
+    assert (
+        await client.patch(
+            f"/assistants/{assistant_id}/channels/{channel_id}",
+            json={"include_rules": [{"field": "bad", "contains": "domain"}]},
+        )
+    ).status_code == 422
+
+    other_assistant = await client.post(
+        "/assistants",
+        json={"name": "Other assistant", "template": "uk_law_firm", "config": config},
+    )
+    assert other_assistant.status_code == 201, other_assistant.text
+    assert (
+        await client.patch(
+            f"/assistants/{other_assistant.json()['id']}/channels/{channel_id}",
+            json={"include_rules": []},
+        )
+    ).status_code == 404
+    assert (
+        await client.patch(
+            f"/assistants/00000000-0000-4000-8000-000000000001/channels/{channel_id}",
+            json={"include_rules": []},
+        )
+    ).status_code == 404

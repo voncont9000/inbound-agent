@@ -141,7 +141,8 @@ export interface paths {
         delete: operations["delete_channel_assistants__assistant_id__channels__channel_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Channel */
+        patch: operations["update_channel_assistants__assistant_id__channels__channel_id__patch"];
         trace?: never;
     };
     "/assistants/{assistant_id}/knowledge/digest": {
@@ -1634,6 +1635,11 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** ChannelConnectionUpdate */
+        ChannelConnectionUpdate: {
+            /** Include Rules */
+            include_rules?: components["schemas"]["EmailIncludeRule"][] | null;
+        };
         /** ChannelConnectionsResponse */
         ChannelConnectionsResponse: {
             /** Items */
@@ -2142,6 +2148,16 @@ export interface components {
             /** Subject Template */
             subject_template: string;
             trigger: components["schemas"]["PostActionTrigger"];
+        };
+        /** EmailIncludeRule */
+        EmailIncludeRule: {
+            /** Contains */
+            contains: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "from" | "to" | "subject";
         };
         /** EmailTriageConfig */
         EmailTriageConfig: {
@@ -3436,6 +3452,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_channel_assistants__assistant_id__channels__channel_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelConnectionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelConnectionResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
