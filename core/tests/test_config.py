@@ -16,13 +16,15 @@ from inbound_core.languages import DEFAULT_LOCALE, Locale, normalize_locale
 
 
 def _sheets_action(spreadsheet_id: str) -> SheetsRowAction:
-    return SheetsRowAction.model_validate({
-        "kind": "sheets_row",
-        "key": "save_row",
-        "trigger": {"events": ["conversation_completed"]},
-        "spreadsheet_id": spreadsheet_id,
-        "columns": [{"header": "Name", "value_template": "{{contact.name}}"}],
-    })
+    return SheetsRowAction.model_validate(
+        {
+            "kind": "sheets_row",
+            "key": "save_row",
+            "trigger": {"events": ["conversation_completed"]},
+            "spreadsheet_id": spreadsheet_id,
+            "columns": [{"header": "Name", "value_template": "{{contact.name}}"}],
+        }
+    )
 
 
 def test_sheets_action_extracts_id_from_google_url() -> None:
