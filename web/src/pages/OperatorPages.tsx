@@ -472,6 +472,18 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
     {detail.test_call && <Badge tone="neutral">Test call</Badge>}
     {detail.end_reason && <span className="conversation-meta-item">Ended: {detail.end_reason}</span>}
   </div>;
+  const exportTranscript = () => {
+    const lines = [`${titleName} · ${channelName} · ${formatDate(detail.started_at)}`, detail.summary ? `Summary: ${detail.summary}` : "", ""];
+    transcript.forEach((row) => lines.push(`[${row.time}] ${row.speaker}: ${row.text}`));
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `transcript-${detail.started_at.slice(0, 10)}-${titleName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportButton = transcript.length > 0 && <button type="button" className={embedded ? "button-secondary button-sm" : "button-secondary"} aria-label={embedded ? "Export transcript" : undefined} title="Export transcript" onClick={exportTranscript}>{icon("M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2")}{!embedded && <> Export transcript</>}</button>;
   const deleteButton = canDelete && <button type="button" className={embedded ? "button-danger button-sm" : "button-danger"} aria-label={embedded ? "Delete conversation" : undefined} title={embedded ? "Delete conversation" : undefined} onClick={() => {
     setDeleteError("");
     setDeleteDialogOpen(true);
@@ -542,7 +554,6 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
     </section>
     <section className="panel"><h2>After-conversation actions</h2>{(detail.action_runs ?? []).length ? detail.action_runs?.map((run) => <article className="list-row stack" key={run.id}><strong>{run.action_key} · {run.action_kind}</strong><span>Status: {run.status} · attempts: {run.attempts} · fires: {run.fire_count}</span><span>Events: {run.fired_events.join(", ") || "—"}</span>{run.pending_events.length > 0 && <span>Pending: {run.pending_events.join(", ")}</span>}{run.last_error && <p role="alert">{run.last_error}</p>}<pre>{JSON.stringify(run.output, null, 2)}</pre></article>) : <p className="muted">No after-conversation actions have run.</p>}</section>
     <section className="panel"><h2>Tasks</h2>{detail.tasks.length ? detail.tasks.map((task) => <div className="list-row" key={task.id}><span>{task.kind} · {task.source} · {compactPayload(task.payload)}</span><label className="sr-only" htmlFor={`conversation-task-${task.id}`}>Status for {task.kind}</label><select id={`conversation-task-${task.id}`} value={task.status} onChange={(event) => patchTask.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></div>) : <p className="muted">No tasks.</p>}</section>
-    <MetricsCard metrics={detail.metrics} estimatedCost={detail.estimated_cost} />
     {deleteDialogOpen && <ConfirmDialog
       title="Delete 1 conversation?"
       confirmLabel="Delete"
@@ -560,12 +571,13 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
     ? <div className="conversation-detail">
       <header className="conversation-detail-header">
         <div className="conversation-detail-title"><h2>{titleName}</h2>{badges}</div>
-        {deleteButton}
+        <div className="button-row">{exportButton}{deleteButton}</div>
       </header>
       <div className="conversation-detail-scroll">{content}</div>
     </div>
     : <main className="page" id="main-content">
       <PageHeader title={titleName} lede={badges} actions={<div className="button-row">
+        {exportButton}
         {deleteButton}
         <Link className="button" to="/inbox">Back to inbox</Link>
       </div>} />
@@ -656,23 +668,6 @@ function compactPayload(payload: Record<string, unknown>) {
   const summary = payload.reason ?? payload.summary ?? payload.details;
   return summary ? String(summary) : JSON.stringify(payload);
 }
-
-function MetricsCard({ metrics, estimatedCost }: { metrics: Record<string, unknown>; estimatedCost: Record<string, unknown> | null }) {
-  const latency = asRecord(metrics.turn_latency_summary);
-  const endLatency = asRecord(metrics.turn_end_latency_summary);
-  const cost = estimatedCost ?? {};
-  const components = asRecord(cost.components);
-  const money = (value: unknown) => typeof value === "number" ? `${String(cost.currency ?? "")} ${value.toFixed(3)}`.trim() : "—";
-  const seconds = (value: unknown) => typeof value === "number" ? `${value.toFixed(2)}s` : "—";
-  return <section className="panel"><h2>Call metrics</h2><div className="card-grid">
-    <div><strong>Duration</strong><p>{typeof metrics.call_duration_seconds === "number" ? `${Math.round(metrics.call_duration_seconds)} seconds` : "—"}</p></div>
-    <div><strong>Turn latency p50 / p95</strong><p>{seconds(latency.p50_seconds)} / {seconds(latency.p95_seconds)}</p></div>
-    <div><strong>Turn-end latency p50 / p95</strong><p>{seconds(endLatency.p50_seconds)} / {seconds(endLatency.p95_seconds)}</p></div>
-    <div><strong>Estimated total cost</strong><p>{money(cost.total)}</p></div>
-    <div><strong>Cost components</strong><ul>{Object.entries(components).map(([name, value]) => <li key={name}>{name}: {money(value)}</li>)}{!Object.keys(components).length && <li>—</li>}</ul></div>
-  </div></section>;
-}
-
 
 function useRowSelection(rowIds: string[]) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
