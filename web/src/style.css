@@ -306,7 +306,6 @@ code { color: var(--accent-text); font-size: 0.9em; background: var(--surface-se
 .custom-template-preview h3 { margin: 0 0 var(--space-2); }
 .custom-template-preview ul { margin: var(--space-2) 0 0; padding-left: 1.2em; }
 @media (max-width: 760px) { .field-grid { grid-template-columns: 1fr; } }
-||||||| e83b15d
 .services-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
 .services-card-header h2 { margin-bottom: var(--space-1); }
 .services-card-header p { margin: 0; }
