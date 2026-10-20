@@ -73,9 +73,9 @@ export function TestCallBar() {
             <PhoneIcon /> Test call
           </button>
         </>}
-        {state.phase === "connecting" && <button type="button" className="button-sm" onClick={call.hangUp}>Cancel</button>}
+        {state.phase === "connecting" && <button type="button" className={`button-sm ${styles.pillControl}`} onClick={call.hangUp}>Cancel</button>}
         {state.phase === "in_call" && <>
-          <button type="button" className="button-sm" aria-pressed={state.muted} onClick={call.toggleMute}>{state.muted ? "Unmute" : "Mute"}</button>
+          <button type="button" className={`button-sm ${styles.pillControl}`} aria-pressed={state.muted} onClick={call.toggleMute}>{state.muted ? "Unmute" : "Mute"}</button>
           <button type="button" className="button-danger button-sm" onClick={call.hangUp}>Hang up</button>
         </>}
         {(state.phase === "ended" || state.phase === "error") && <>
@@ -83,8 +83,8 @@ export function TestCallBar() {
             ? <Link className={styles.link} to={`/conversations/${state.conversationId}`}>View conversation</Link>
             : state.phase === "ended" && <Link className={styles.link} to="/inbox?channel=web">{state.conversationId === undefined ? "Finding conversation…" : "Open inbox"}</Link>}
           {state.phase === "error" && state.pageUrl && <a className={styles.link} href={state.pageUrl} target="_blank" rel="noopener">Open in new tab</a>}
-          <button type="button" className="button-primary button-sm" onClick={() => call.startCall(state.assistantId)}>{state.phase === "error" ? "Try again" : "Call again"}</button>
-          <button type="button" className="button-ghost button-sm" onClick={call.dismiss}>Dismiss</button>
+          <button type="button" className={`button-primary button-sm ${styles.pillControl}`} onClick={() => call.startCall(state.assistantId)}>{state.phase === "error" ? "Try again" : "Call again"}</button>
+          <button type="button" className={`button-ghost button-sm ${styles.pillControl}`} onClick={call.dismiss}>Dismiss</button>
         </>}
       </div>
       {toggle}

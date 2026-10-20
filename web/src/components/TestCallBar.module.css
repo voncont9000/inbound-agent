@@ -121,12 +121,34 @@
 
 .controls[hidden] { display: none; }
 
-.select { width: 12rem; min-width: 0; max-width: 14rem; padding-block: 0.4rem; color: var(--on-cta); background: color-mix(in srgb, var(--surface) 16%, var(--ink)); border-color: transparent; font-size: 14px; }
+.bar .pillControl {
+  background: transparent;
+  border: 1px solid rgb(255 255 255 / 24%);
+  color: var(--on-cta);
+}
 
-.link { font-weight: 400; font-size: 14px; color: var(--on-cta); }
+.bar .pillControl:hover {
+  background: rgb(255 255 255 / 10%);
+  border-color: rgb(255 255 255 / 24%);
+  color: var(--on-cta);
+}
 
-.toggle {
-  border: 0;
+.bar .pillControl:focus-visible,
+.bar .link:focus-visible,
+.bar .toggle:focus-visible,
+.bar .select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.bar .select { width: 12rem; min-width: 0; max-width: 14rem; padding-block: 0.4rem; color: var(--on-cta); background: color-mix(in srgb, var(--surface) 16%, var(--ink)); border-color: rgb(255 255 255 / 24%); font-size: 14px; }
+.bar .select:hover { border-color: rgb(255 255 255 / 24%); background: rgb(255 255 255 / 10%); color: var(--on-cta); }
+
+.bar .link { display: inline-flex; align-items: center; min-height: 38px; box-sizing: border-box; padding: 0 var(--space-3); border: 1px solid rgb(255 255 255 / 24%); border-radius: var(--radius-button); font-weight: 400; font-size: 14px; color: var(--on-cta); text-decoration: none; }
+.bar .link:hover { background: rgb(255 255 255 / 10%); color: var(--on-cta); }
+
+.bar .toggle {
+  border: 1px solid rgb(255 255 255 / 24%);
   background: transparent;
   padding: 0.4rem;
   color: var(--on-cta);
@@ -134,7 +156,7 @@
   flex-shrink: 0;
 }
 
-.toggle:hover { background: color-mix(in srgb, var(--surface) 16%, var(--ink)); color: var(--on-cta); }
+.bar .toggle:hover { background: rgb(255 255 255 / 10%); border-color: rgb(255 255 255 / 24%); color: var(--on-cta); }
 
 @media (max-width: 900px) {
   .bar { left: 50%; }
