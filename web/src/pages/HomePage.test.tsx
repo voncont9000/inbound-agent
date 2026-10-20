@@ -50,7 +50,7 @@ describe("home dashboard", () => {
     renderApp("/", { loggedIn: true });
     await screen.findByRole("img", { name: /in 7 days/ });
 
-    await user.selectOptions(screen.getByLabelText("Time range"), "today");
+    await user.click(screen.getByRole("button", { name: "Today" }));
     expect(await screen.findByRole("img", { name: /in 24 hours/ })).toBeInTheDocument();
     expect(screen.getByTestId("current-location")).toHaveTextContent("/?range=today");
 
@@ -58,9 +58,24 @@ describe("home dashboard", () => {
     await waitFor(() => expect(requests.at(-1)?.get("assistant_id")).toBe(assistantId));
     expect(requests.at(-1)?.get("range")).toBe("today");
 
-    await user.selectOptions(screen.getByLabelText("Time range"), "30d");
+    await user.click(screen.getByRole("button", { name: "30 days" }));
     expect(await screen.findByRole("img", { name: /in 30 days/ })).toBeInTheDocument();
     expect(screen.getByTestId("current-location")).toHaveTextContent(`/?range=30d&assistant=${assistantId}`);
+  });
+
+  it("shows 90 days using a supported custom dashboard range", async () => {
+    const requests = captureDashboardRequests();
+    const user = userEvent.setup();
+    renderApp("/", { loggedIn: true });
+    await screen.findByRole("img", { name: /in 7 days/ });
+    await user.click(screen.getByRole("button", { name: "90 days" }));
+    expect(await screen.findByRole("img", { name: /in 90 days/ })).toBeInTheDocument();
+    expect(screen.getByTestId("current-location")).toHaveTextContent("/?range=90d");
+    const request = requests.at(-1)!;
+    expect(request.get("range")).toBe("custom");
+    const start = new Date(`${request.get("start")}T00:00:00Z`);
+    const end = new Date(`${request.get("end")}T00:00:00Z`);
+    expect((end.getTime() - start.getTime()) / 86_400_000 + 1).toBe(90);
   });
 
   it("sends custom date ranges and validates their order", async () => {

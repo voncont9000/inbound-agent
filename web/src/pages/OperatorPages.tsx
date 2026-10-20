@@ -51,6 +51,46 @@ function conversationQuery(filters: { channel: string; status: string; reviewOnl
   };
 }
 
+type ConversationSummary = Schemas["ConversationSummary"];
+
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function groupConversationDays(rows: ConversationSummary[], now = new Date()) {
+  const todayKey = localDateKey(now);
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = localDateKey(yesterday);
+  const groups = new Map<string, { key: string; label: string; items: ConversationSummary[] }>();
+  for (const row of rows) {
+    const date = new Date(row.started_at);
+    const key = Number.isNaN(date.getTime()) ? "unknown" : localDateKey(date);
+    const label = key === todayKey
+      ? "Today"
+      : key === yesterdayKey
+        ? "Yesterday"
+        : key === "unknown"
+          ? "Unknown date"
+          : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(date);
+    const group = groups.get(key) ?? { key, label, items: [] };
+    group.items.push(row);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
+export function formatConversationDuration(channel: string, startedAt: string, endedAt: string | null) {
+  if (!["phone", "web"].includes(channel) || !endedAt) return null;
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  const elapsed = (end - start) / 1000;
+  if (elapsed < 1) return null;
+  const seconds = Math.floor(elapsed);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 function requestErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) return errorMessage(error.body, error.message);
   return error instanceof Error ? error.message : fallback;
@@ -66,15 +106,38 @@ export function InboxPage() {
   const role = memberships.find(({ id }) => id === selectedTenant)?.role ?? tenant?.role;
   const canDelete = Boolean(user) && role === "owner";
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; bulk: boolean } | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [deleteStatus, setDeleteStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
+  const filterWrapRef = useRef<HTMLDivElement | null>(null);
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
   const channel = searchParams.get("channel") ?? "all";
   const status = searchParams.get("status") ?? "all";
   const reviewOnly = searchParams.get("has_review") === "true";
+  const selectedConversationId = searchParams.get("id") ?? "";
   const filters = { channel, status, reviewOnly };
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !filterWrapRef.current?.contains(event.target)) setFiltersOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setFiltersOpen(false);
+      filterButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [filtersOpen]);
   useEffect(() => {
     setSelectedIds([]);
   }, [channel, status, reviewOnly]);
@@ -84,7 +147,15 @@ export function InboxPage() {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
   });
-  const rows = conversations.data?.pages.flatMap(({ items }) => items) ?? [];
+  const pages = conversations.data?.pages;
+  const rows = useMemo(() => pages?.flatMap(({ items }) => items) ?? [], [pages]);
+  const visibleRows = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) => [row.summary, row.contact_name, row.external_ref]
+      .some((value) => value?.toLocaleLowerCase().includes(term)));
+  }, [rows, search]);
+  const groups = useMemo(() => groupConversationDays(visibleRows), [visibleRows]);
   const selectedVisibleCount = rows.filter(({ id }) => selectedIds.includes(id)).length;
   const allVisibleSelected = rows.length > 0 && selectedVisibleCount === rows.length;
   useEffect(() => {
@@ -105,13 +176,20 @@ export function InboxPage() {
       }));
       return { deleted: 1, skipped_in_progress: 0 };
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, request) => {
       setPendingDelete(null);
       setSelectedIds([]);
       const skipped = result.skipped_in_progress ?? 0;
       setDeleteStatus(skipped
         ? `${skipped} conversation${skipped === 1 ? "" : "s"} skipped because they are still in progress.`
         : "");
+      if (request.ids.includes(selectedConversationId)) {
+        setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          next.delete("id");
+          return next;
+        });
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["conversations"] }),
         queryClient.invalidateQueries({ queryKey: ["conversation"] }),
@@ -125,6 +203,20 @@ export function InboxPage() {
       requestErrorMessage(error, "Unable to delete conversation."),
     ),
   });
+  const openConversation = (id: string) => {
+    const isMobile = typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 960px)").matches;
+    if (isMobile) {
+      navigate(`/conversations/${id}`);
+      return;
+    }
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("id", id);
+      return next;
+    });
+  };
   function updateParam(key: string, value: string) {
     setSelectedIds([]);
     setDeleteStatus("");
@@ -133,12 +225,23 @@ export function InboxPage() {
     else next.set(key, value);
     setSearchParams(next);
   }
-  return <main className="page" id="main-content">
+  return <main className="page inbox-page" id="main-content">
     <PageHeader title="Inbox" lede="Every conversation your assistants handled, across phone, web, email and WhatsApp." />
-    <div className="toolbar">
-      <div className="field"><label htmlFor="filter-channel">Channel</label><select id="filter-channel" value={channel} onChange={(event) => updateParam("channel", event.target.value)}><option value="all">All channels</option>{channels.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
-      <div className="field"><label htmlFor="filter-status">Status</label><select id="filter-status" value={status} onChange={(event) => updateParam("status", event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
-      <label className="check-row"><input type="checkbox" checked={reviewOnly} onChange={(event) => updateParam("has_review", event.target.checked ? "true" : "false")} />Needs review only</label>
+    <div className="inbox-toolbar">
+      <div className="inbox-search-field">
+        <label className="sr-only" htmlFor="inbox-search">Search conversations</label>
+        <input id="inbox-search" type="search" placeholder="Search conversations" value={search} onChange={(event) => setSearch(event.target.value)} />
+      </div>
+      <div className="inbox-filter-wrap" ref={filterWrapRef}>
+        <button ref={filterButtonRef} type="button" className="button-secondary inbox-filter-button" aria-expanded={filtersOpen} aria-controls="inbox-filter-popover" onClick={() => setFiltersOpen((open) => !open)}>
+          {icon("M4 5h16M7 12h10m-7 7h4")} Filters
+        </button>
+        {filtersOpen && <div className="inbox-filter-popover" id="inbox-filter-popover">
+          <div className="field"><label htmlFor="filter-channel">Channel</label><select id="filter-channel" value={channel} onChange={(event) => updateParam("channel", event.target.value)}><option value="all">All channels</option>{channels.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+          <div className="field"><label htmlFor="filter-status">Status</label><select id="filter-status" value={status} onChange={(event) => updateParam("status", event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+          <label className="check-row"><input type="checkbox" checked={reviewOnly} onChange={(event) => updateParam("has_review", event.target.checked ? "true" : "false")} />Needs review only</label>
+        </div>}
+      </div>
       {canDelete && selectedIds.length > 0 && <button
         type="button"
         className="button-danger"
@@ -146,53 +249,101 @@ export function InboxPage() {
           setDeleteError("");
           setPendingDelete({ ids: selectedIds, bulk: true });
         }}
-      >Delete selected ({selectedIds.length})</button>}
+      ><DeleteIcon /> Delete selected ({selectedIds.length})</button>}
     </div>
     {deleteStatus && <p className="muted" role="status">{deleteStatus}</p>}
-    {conversations.isLoading && <LoadingState />}
-    {conversations.error && <ErrorState message="Conversations could not be loaded." />}
-    {!conversations.isLoading && !rows.length && <EmptyState>No conversations match these filters.</EmptyState>}
-    {rows.length > 0 && <div className="table-wrap"><table><thead><tr>
-      {canDelete && <th><input
-        ref={selectAllRef}
-        type="checkbox"
-        aria-label="Select all conversations"
-        checked={allVisibleSelected}
-        onChange={(event) => setSelectedIds((current) => event.target.checked
-          ? [...new Set([...current, ...rows.map(({ id }) => id)])]
-          : current.filter((id) => !rows.some((row) => row.id === id)))}
-      /></th>}
-      <th>Channel</th><th>Status</th><th>Contact</th><th>Summary</th><th>Started</th><th>Review</th>
-      {canDelete && <th>Actions</th>}
-    </tr></thead><tbody>
-      {rows.map((conversation) => <tr key={conversation.id}>
-        {canDelete && <td><input
-          type="checkbox"
-          aria-label={`Select conversation ${conversation.summary ?? conversation.external_ref}`}
-          checked={selectedIds.includes(conversation.id)}
-          onChange={(event) => setSelectedIds((current) => event.target.checked
-            ? [...current, conversation.id]
-            : current.filter((id) => id !== conversation.id))}
-        /></td>}
-        <td><Badge>{channelIcon[conversation.channel]} {conversation.channel}</Badge></td>
-        <td><Badge tone={statusTone(conversation.status)}>{conversation.status}</Badge></td>
-        <td>{conversation.person_id ? <Link to={`/contacts/${conversation.person_id}`}>{conversation.contact_name ?? conversation.external_ref}</Link> : conversation.contact_name ?? conversation.external_ref}</td>
-        <td><Link to={`/conversations/${conversation.id}`}>{conversation.summary ?? "No summary"}</Link></td>
-        <td className="cell-muted">{formatDate(conversation.started_at)}</td>
-        <td><div className="button-row">{conversation.test_call && <Badge tone="neutral">Test call</Badge>}{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</div></td>
-        {canDelete && <td><button
-          type="button"
-          className="button-danger button-sm"
-          aria-label="Delete conversation"
-          title="Delete conversation"
-          onClick={() => {
-            setDeleteError("");
-            setPendingDelete({ ids: [conversation.id], bulk: false });
-          }}
-        ><DeleteIcon /></button></td>}
-      </tr>)}
-    </tbody></table></div>}
-    {conversations.hasNextPage && <button type="button" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button>}
+    <div className={`inbox-split${selectedIds.length ? " inbox-has-selection" : ""}`}>
+      <section className="inbox-list-panel" aria-label="Conversation list">
+        <div className="inbox-list-header">
+          {canDelete
+            ? <label className="inbox-select-all"><input
+              ref={selectAllRef}
+              type="checkbox"
+              aria-label="Select all conversations"
+              checked={allVisibleSelected}
+              onChange={(event) => setSelectedIds((current) => event.target.checked
+                ? [...new Set([...current, ...rows.map(({ id }) => id)])]
+                : current.filter((id) => !rows.some((row) => row.id === id)))}
+            />Select all loaded</label>
+            : <span className="inbox-list-heading">Conversations</span>}
+        </div>
+        <div className="inbox-list-scroll">
+          {conversations.isLoading && <LoadingState />}
+          {conversations.error && <ErrorState message="Conversations could not be loaded." />}
+          {!conversations.isLoading && !visibleRows.length && <EmptyState>No conversations match these filters.</EmptyState>}
+          {groups.map((group) => <section className="inbox-day-group" key={group.key}>
+            <h2 className="inbox-day-heading"><span>{group.label}</span><span>{group.items.length}</span></h2>
+            {group.items.map((conversation) => {
+              const contactName = conversation.contact_name ?? conversation.external_ref;
+              const duration = formatConversationDuration(conversation.channel, conversation.started_at, conversation.ended_at);
+              const startedAt = new Date(conversation.started_at);
+              const time = Number.isNaN(startedAt.getTime())
+                ? ""
+                : new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(startedAt);
+              return <article className={`inbox-row${canDelete ? " inbox-row-owner" : ""}${conversation.id === selectedConversationId ? " inbox-row-selected" : ""}`} key={conversation.id} onClick={(event) => {
+                if (event.target instanceof HTMLElement && event.target.closest("a, input, button")) return;
+                openConversation(conversation.id);
+              }}>
+                {canDelete && <input
+                  className="inbox-row-checkbox"
+                  type="checkbox"
+                  aria-label={`Select conversation ${conversation.summary ?? conversation.external_ref}`}
+                  checked={selectedIds.includes(conversation.id)}
+                  onChange={(event) => setSelectedIds((current) => event.target.checked
+                    ? [...current, conversation.id]
+                    : current.filter((id) => id !== conversation.id))}
+                />}
+                <div className="inbox-row-content">
+                  <div className="inbox-row-title">
+                    <Link
+                      to={`/conversations/${conversation.id}`}
+                      aria-current={conversation.id === selectedConversationId ? "page" : undefined}
+                      onClick={(event) => {
+                        if (typeof window === "undefined" || typeof window.matchMedia !== "function" ||
+                          !window.matchMedia("(max-width: 960px)").matches) {
+                          event.preventDefault();
+                          openConversation(conversation.id);
+                        }
+                      }}
+                    >{conversation.summary ?? "No summary"}</Link>
+                    <time dateTime={conversation.started_at}>{time}</time>
+                  </div>
+                  <div className="inbox-row-meta">
+                    <span className="inbox-channel">{channelIcon[conversation.channel]}<span className="sr-only">{conversation.channel}</span></span>
+                    <span className="inbox-contact">{contactName}</span>
+                    {duration && <span className="inbox-duration">{duration}</span>}
+                  </div>
+                  {(conversation.test_call || conversation.needs_review || ["active", "failed"].includes(conversation.status)) && <div className="inbox-row-badges">
+                    {conversation.test_call && <Badge tone="neutral">Test call</Badge>}
+                    {conversation.needs_review && <Badge tone="warning">Needs review</Badge>}
+                    {["active", "failed"].includes(conversation.status) && <Badge tone={statusTone(conversation.status)}>{conversation.status === "active" ? "Active" : "Failed"}</Badge>}
+                  </div>}
+                </div>
+              </article>;
+            })}
+          </section>)}
+        </div>
+        <div className="inbox-list-footer">
+          <span>{visibleRows.length} results</span>
+          {conversations.hasNextPage && <button type="button" className="button-ghost button-sm" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button>}
+        </div>
+      </section>
+      <section className="inbox-detail-panel" aria-label="Selected conversation">
+        {selectedConversationId
+          ? <ConversationDetail
+            id={selectedConversationId}
+            embedded
+            onDeleted={() => {
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current);
+                next.delete("id");
+                return next;
+              });
+            }}
+          />
+          : <EmptyState>Select a conversation to view its details.</EmptyState>}
+      </section>
+    </div>
     {pendingDelete && <ConfirmDialog
       title={`Delete ${pendingDelete.ids.length} conversation${pendingDelete.ids.length === 1 ? "" : "s"}?`}
       confirmLabel="Delete"
@@ -226,6 +377,14 @@ function statusTone(status: string): "neutral" | "success" | "warning" | "danger
 
 export function ConversationPage() {
   const { id = "" } = useParams();
+  return <ConversationDetail id={id} />;
+}
+
+function ConversationDetail({ id, embedded = false, onDeleted }: {
+  id: string;
+  embedded?: boolean;
+  onDeleted?: () => void;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { tenant, user, memberships, selectedTenant } = useAuth();
@@ -284,28 +443,31 @@ export function ConversationPage() {
         queryClient.invalidateQueries({ queryKey: ["contacts"] }),
         queryClient.invalidateQueries({ queryKey: ["tasks"] }),
       ]);
-      navigate("/inbox");
+      if (onDeleted) onDeleted();
+      else navigate("/inbox");
     },
     onError: (error) => setDeleteError(
       requestErrorMessage(error, "Unable to delete conversation."),
     ),
   });
-  if (detailQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;
-  if (detailQuery.error || !detail) return <main className="page" id="main-content"><ErrorState message="Conversation could not be loaded." /></main>;
+  if (detailQuery.isLoading) return embedded
+    ? <div className="conversation-detail-state"><LoadingState /></div>
+    : <main className="page" id="main-content"><LoadingState /></main>;
+  if (detailQuery.error || !detail) return embedded
+    ? <div className="conversation-detail-state"><ErrorState message="Conversation could not be loaded." /></div>
+    : <main className="page" id="main-content"><ErrorState message="Conversation could not be loaded." /></main>;
   const contact = detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{detail.external_ref}</Link> : detail.external_ref;
   const emailTriage = asRecord(detail.metrics.email_triage);
   const transcript = transcriptRows(detail.messages, detail.channel, detail.started_at);
   const channelName = detail.channel === "whatsapp" ? "WhatsApp" : detail.channel === "gmail" ? "Email" : `${detail.channel.charAt(0).toUpperCase()}${detail.channel.slice(1)}`;
-  return <main className="page" id="main-content">
-    <PageHeader title={<>{detail.summary ?? "Conversation details"} <Badge tone="neutral">{channelIcon[detail.channel]} {channelName}</Badge> {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<div className="button-row">
-      {canDelete && <button type="button" className="button-danger" onClick={() => {
-        setDeleteError("");
-        setDeleteDialogOpen(true);
-      }}><DeleteIcon /> Delete conversation</button>}
-      <Link className="button" to="/inbox">Back to inbox</Link>
-    </div>} />
+  const badges = <span className="conversation-header-badges"><Badge tone="neutral">{channelIcon[detail.channel]} {channelName}</Badge>{detail.test_call && <Badge tone="neutral">Test call</Badge>}</span>;
+  const deleteButton = canDelete && <button type="button" className={embedded ? "button-danger button-sm" : "button-danger"} aria-label={embedded ? "Delete conversation" : undefined} title={embedded ? "Delete conversation" : undefined} onClick={() => {
+    setDeleteError("");
+    setDeleteDialogOpen(true);
+  }}>{embedded ? <DeleteIcon /> : <><DeleteIcon /> Delete conversation</>}</button>;
+  const content = <>
     {deleteError && <p role="alert">{deleteError}</p>}
-    <div className="panel card-grid"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
+    <div className="panel card-grid conversation-summary-card"><div><strong>Status</strong><p>{detail.status}</p></div><div><strong>Contact</strong><p>{contact}</p></div><div><strong>Started</strong><p>{formatDate(detail.started_at)}</p></div><div><strong>Ended</strong><p>{formatDate(detail.ended_at)}</p></div><div><strong>End reason</strong><p>{detail.end_reason ?? "—"}</p></div></div>
     {booking && <section className="panel stack">
       <h2>Appointment booking</h2>
       <p><strong>{String(booking.label ?? booking.appointment_type ?? "Appointment")}</strong></p>
@@ -382,7 +544,22 @@ export function ConversationPage() {
     >
       <p>{conversationDeleteText(1)}</p>
     </ConfirmDialog>}
-  </main>;
+  </>;
+  return embedded
+    ? <div className="conversation-detail">
+      <header className="conversation-detail-header">
+        <div className="conversation-detail-title"><h2>{detail.summary ?? "Conversation details"}</h2>{badges}</div>
+        {deleteButton}
+      </header>
+      <div className="conversation-detail-scroll">{content}</div>
+    </div>
+    : <main className="page" id="main-content">
+      <PageHeader title={detail.summary ?? "Conversation details"} lede={badges} actions={<div className="button-row">
+        {deleteButton}
+        <Link className="button" to="/inbox">Back to inbox</Link>
+      </div>} />
+      {content}
+    </main>;
 }
 
 function ReviewForm({ field, candidates, live, post, merged, onSubmit, pending }: {

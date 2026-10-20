@@ -1,10 +1,13 @@
+import { http, HttpResponse } from "msw";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { settingsTabs } from "../../lib/settingsTabs";
+import { server } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
 
 const assistantId = "20000000-0000-4000-8000-000000000001";
+const otherAssistantId = "20000000-0000-4000-8000-000000000002";
 
 describe("assistant settings tabs", () => {
   it.each([
@@ -37,6 +40,57 @@ describe("assistant settings tabs", () => {
     expect(navigation.parentElement).toContainElement(helpLink);
     expect(helpLink).toHaveTextContent("? Help");
     expect(helpLink).toHaveAttribute("title", "Help: Set the assistant name, language and voice");
+  });
+
+  it("switches assistants while preserving the selected settings tab", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/api/assistants", () => HttpResponse.json({ items: [
+        { id: assistantId, name: "Brightside reception" },
+        { id: otherAssistantId, name: "Harbor assistant" },
+      ] })),
+      http.get("*/api/assistants/:id/channels", ({ params }) => HttpResponse.json({
+        items: params.id === assistantId
+          ? [{ id: "phone-1", kind: "phone", external_id: "+44 20 7946 0958", google_features: [] }]
+          : [],
+      })),
+    );
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const switcher = screen.getByRole("button", { name: "Switch assistant" });
+    await waitFor(() => expect(switcher).toHaveTextContent("+44 20 7946 0958"));
+    await user.click(switcher);
+    await user.type(screen.getByLabelText("Search assistants"), "Harbor");
+    await user.click(screen.getByRole("link", { name: /Harbor assistant/ }));
+    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(
+      `/assistants/${otherAssistantId}/settings/abilities`,
+    ));
+  });
+
+  it("closes the assistant switcher on Escape and restores focus", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const trigger = screen.getByRole("button", { name: "Switch assistant" });
+
+    await user.click(trigger);
+    expect(await screen.findByRole("searchbox", { name: "Search assistants" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("searchbox", { name: "Search assistants" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes the assistant switcher when clicking outside", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Switch assistant" }));
+    expect(await screen.findByRole("searchbox", { name: "Search assistants" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("heading", { name: "Brightside reception" }));
+
+    expect(screen.queryByRole("searchbox", { name: "Search assistants" })).not.toBeInTheDocument();
   });
 
   it("puts the knowledge page content on Knowledge and the rule editor on Rules", async () => {
@@ -73,10 +127,12 @@ describe("assistant settings tabs", () => {
     await screen.findByRole("heading", { name: "Brightside reception" });
     expect(screen.getByText("All changes saved")).toBeInTheDocument();
     expect(await screen.findByLabelText("Language")).toHaveValue("en-GB");
+    expect(screen.getByLabelText("Language").closest(".field-row")).toBeInTheDocument();
     expect(await screen.findByRole("radio", { name: /Beatrice/i })).toBeChecked();
     await user.type(screen.getByLabelText("Business name"), " Ltd");
     await user.click(screen.getByRole("link", { name: "Abilities" }));
     expect(screen.getByRole("switch", { name: "Calendar booking" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: /Call forwarding/ }));
     expect(screen.getByRole("switch", { name: "Call forwarding" })).not.toBeChecked();
     expect(screen.queryByRole("button", { name: "Add appointment type" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "General" }));

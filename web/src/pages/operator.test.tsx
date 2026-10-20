@@ -6,6 +6,7 @@ import type { Schemas } from "../api/client";
 import { server } from "../mocks/server";
 import { mockDb } from "../mocks/db";
 import { renderApp } from "../test/renderApp";
+import { formatConversationDuration, groupConversationDays } from "./OperatorPages";
 
 const assistantId = "20000000-0000-4000-8000-000000000001";
 const conversationId = "50000000-0000-4000-8000-000000000001";
@@ -25,6 +26,7 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     expect(screen.queryByLabelText("key")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Call forwarding/ }));
     await user.click(screen.getByRole("switch", { name: "Call forwarding" }));
     await user.click(screen.getByRole("button", { name: "Add transfer target" }));
     await user.type(screen.getByLabelText("Name"), "Duty solicitor");
@@ -140,6 +142,7 @@ describe("operator workflows", () => {
     await user.clear(screen.getByLabelText("Phrases (comma or newline separated)"));
     await user.type(screen.getByLabelText("Phrases (comma or newline separated)"), "gas leak, flooding");
     await user.click(screen.getByRole("link", { name: "Abilities" }));
+    await user.click(screen.getByRole("button", { name: /Readback/ }));
     if (!(screen.getByRole("switch", { name: "Readback" }) as HTMLInputElement).checked) await user.click(screen.getByRole("switch", { name: "Readback" }));
     await user.click(screen.getByRole("radio", { name: /Read email addresses back letter by letter/ }));
     await user.click(screen.getByRole("radio", { name: /Read back every field marked critical/ }));
@@ -177,7 +180,7 @@ describe("operator workflows", () => {
       detail: [{ loc: ["body", "config", "services", "boiler_repair", "fields", 0, "label"], msg: "Label rejected by server.", type: "value_error" }],
     }, { status: 422 })));
     await user.click(screen.getByRole("link", { name: "General" }));
-    await user.type(screen.getByLabelText("Greeting"), " Welcome.");
+    await user.type(screen.getByRole("textbox", { name: "Greeting" }), " Welcome.");
     await user.click(screen.getByRole("link", { name: "Knowledge" }));
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`));
@@ -418,6 +421,7 @@ describe("operator workflows", () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
     await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
     await user.selectOptions(screen.getByLabelText("Add action"), "email_customer");
     await user.click(screen.getByRole("button", { name: "Send test" }));
@@ -429,6 +433,7 @@ describe("operator workflows", () => {
     const user = userEvent.setup();
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
     await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
     await user.selectOptions(screen.getByLabelText("Add action"), "sheets_row");
     expect(await screen.findByRole("button", { name: "Connect Google Sheets" })).toBeInTheDocument();
@@ -543,23 +548,64 @@ describe("operator workflows", () => {
     server.events.on("request:start", listener);
     renderApp("/inbox", { loggedIn: true });
     await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
     await user.selectOptions(screen.getByLabelText("Channel"), "phone");
     await user.click(screen.getByLabelText("Needs review only"));
     await waitFor(() => expect(requested.some((url) => url.searchParams.get("channel") === "phone" && url.searchParams.get("has_review") === "true")).toBe(true));
     await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent("/inbox?channel=phone&has_review=true"));
-    await waitFor(() => expect(within(screen.getByRole("table")).getAllByRole("row").slice(1)).toHaveLength(1));
+    const list = screen.getByRole("region", { name: "Conversation list" });
+    await waitFor(() => expect(within(list).getAllByRole("article")).toHaveLength(1));
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
-    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    const rows = within(list).getAllByRole("article");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent("phone");
     expect(rows[0]).toHaveTextContent("Jamie Morgan");
     server.events.removeListener("request:start", listener);
   });
 
+  it("closes inbox filters on Escape and returns focus to the Filters button", async () => {
+    const user = userEvent.setup();
+    renderApp("/inbox", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Inbox" });
+    const trigger = screen.getByRole("button", { name: /Filters/ });
+
+    await user.click(trigger);
+    expect(await screen.findByLabelText("Channel")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes inbox filters on outside click without moving focus from the clicked control", async () => {
+    const user = userEvent.setup();
+    renderApp("/inbox", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
+    expect(await screen.findByLabelText("Channel")).toBeInTheDocument();
+
+    const search = screen.getByRole("searchbox", { name: "Search conversations" });
+    await user.click(search);
+
+    expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
+    expect(search).toHaveFocus();
+  });
+
   it("marks test calls in the inbox", async () => {
     renderApp("/inbox", { loggedIn: true });
     await screen.findByRole("heading", { name: "Inbox" });
     expect(await screen.findAllByText("Test call")).not.toHaveLength(0);
+  });
+
+  it("searches the loaded inbox rows by contact", async () => {
+    const user = userEvent.setup();
+    renderApp("/inbox", { loggedIn: true });
+    await screen.findByRole("heading", { name: "Inbox" });
+    await user.type(screen.getByLabelText("Search conversations"), "Boiler not firing");
+    const list = screen.getByRole("region", { name: "Conversation list" });
+    await waitFor(() => expect(within(list).getAllByRole("article")).toHaveLength(1));
+    expect(within(list).getByText("Boiler not firing, no hot water since this morning")).toBeInTheDocument();
+    expect(within(list).getByText("1 results")).toBeInTheDocument();
   });
 
   it("marks Gmail assistant messages as drafts", async () => {
@@ -790,8 +836,8 @@ describe("operator workflows", () => {
     renderApp("/inbox", { loggedIn: true });
     const firstLink = await screen.findByRole("link", { name: first.summary ?? "No summary" });
     const secondLink = screen.getByRole("link", { name: second.summary ?? "No summary" });
-    await user.click(within(firstLink.closest("tr") as HTMLElement).getByRole("checkbox"));
-    await user.click(within(secondLink.closest("tr") as HTMLElement).getByRole("checkbox"));
+    await user.click(within(firstLink.closest(".inbox-row") as HTMLElement).getByRole("checkbox"));
+    await user.click(within(secondLink.closest(".inbox-row") as HTMLElement).getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "Delete selected (2)" }));
 
     const dialog = screen.getByRole("dialog");
@@ -809,7 +855,7 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", listener);
   });
 
-  it("deletes a conversation from its inbox row", async () => {
+  it("deletes a conversation from the selected detail header", async () => {
     const user = userEvent.setup();
     const conversation = mockDb.tenants[0].conversations[0];
     let deleteUrl = "";
@@ -821,9 +867,9 @@ describe("operator workflows", () => {
     server.events.on("request:start", listener);
     renderApp("/inbox", { loggedIn: true });
     const link = await screen.findByRole("link", { name: conversation.summary ?? "No summary" });
-    await user.click(within(link.closest("tr") as HTMLElement).getByRole("button", {
-      name: "Delete conversation",
-    }));
+    await user.click(link);
+    await screen.findByRole("region", { name: "Selected conversation" });
+    await user.click(screen.getByRole("button", { name: "Delete conversation" }));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteUrl).toContain(`/api/conversations/${conversation.id}`));
@@ -883,6 +929,7 @@ describe("operator workflows", () => {
     await user.type(screen.getByLabelText("Email address"), "demo@example.com");
     await user.type(screen.getByLabelText("Password"), "correct-horse-battery");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await user.click(await screen.findByRole("button", { name: /Filters/ }));
     await waitFor(() => expect(screen.getByLabelText("Channel")).toHaveValue("phone"));
     expect(screen.getByTestId("current-location")).toHaveTextContent("/inbox?channel=phone");
   });
@@ -894,5 +941,29 @@ describe("operator workflows", () => {
     await user.type(screen.getByLabelText("Password"), "wrong");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid email or password");
+  });
+});
+
+describe("conversation list formatting", () => {
+  it("groups loaded conversations by local day", () => {
+    const base = mockDb.tenants[0].conversations[0];
+    const groups = groupConversationDays([
+      { ...base, id: "today", started_at: "2026-03-10T12:00:00Z" },
+      { ...base, id: "yesterday", started_at: "2026-03-09T12:00:00Z" },
+      { ...base, id: "older", started_at: "2026-03-08T12:00:00Z" },
+    ], new Date("2026-03-10T12:00:00Z"));
+    expect(groups.map(({ label, items }) => [label, items.length])).toEqual([
+      ["Today", 1],
+      ["Yesterday", 1],
+      ["8 March 2026", 1],
+    ]);
+  });
+
+  it("formats completed phone and web durations as minutes and seconds", () => {
+    expect(formatConversationDuration("phone", "2026-03-10T10:00:00Z", "2026-03-10T10:01:05Z")).toBe("1:05");
+    expect(formatConversationDuration("web", "2026-03-10T10:00:00Z", "2026-03-10T10:00:08Z")).toBe("0:08");
+    expect(formatConversationDuration("phone", "2026-03-10T10:00:00Z", "2026-03-10T10:00:00.900Z")).toBeNull();
+    expect(formatConversationDuration("whatsapp", "2026-03-10T10:00:00Z", "2026-03-10T10:01:05Z")).toBeNull();
+    expect(formatConversationDuration("phone", "2026-03-10T10:00:00Z", null)).toBeNull();
   });
 });

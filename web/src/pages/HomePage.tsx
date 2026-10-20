@@ -6,12 +6,13 @@ import { channelLabels } from "../lib/dashboard";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 import styles from "../components/Dashboard.module.css";
 
-type RangePreset = "today" | "7d" | "30d" | "custom";
+type RangePreset = "today" | "7d" | "30d" | "90d" | "custom";
 const rangeOptions: { value: RangePreset; label: string }[] = [
   { value: "today", label: "Today" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "custom", label: "Custom range" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+  { value: "90d", label: "90 days" },
+  { value: "custom", label: "Custom" },
 ];
 
 const localDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -66,9 +67,10 @@ export function HomePage() {
   const timezone = browserTimezone();
   const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
   const query = {
-    range,
+    range: range === "90d" ? "custom" : range,
     timezone,
     assistant_id: assistantId || undefined,
+    ...(range === "90d" ? { start: daysAgo(89), end: daysAgo(0) } : {}),
     ...(range === "custom" ? { start, end } : {}),
   };
   const summary = useQuery({
@@ -91,12 +93,19 @@ export function HomePage() {
   return <main className="page" id="main-content">
     <PageHeader title="Home" lede="How your assistants are handling inbound conversations." />
     <div className="toolbar">
-      <div className="field"><label htmlFor="dashboard-range">Time range</label>
-        <select id="dashboard-range" value={range} onChange={(event) => update(event.target.value === "custom"
-          ? { range: "custom", start, end }
-          : { range: event.target.value === "7d" ? null : event.target.value, start: null, end: null })}>
-          {rangeOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-        </select>
+      <div className="range-control">
+        <span className="range-control-label">Time range</span>
+        <div className="range-segments" role="group" aria-label="Time range">
+          {rangeOptions.map(({ value, label }) => <button
+            type="button"
+            key={value}
+            aria-pressed={range === value}
+            className={range === value ? "range-segment range-segment-active" : "range-segment"}
+            onClick={() => update(value === "custom"
+              ? { range: "custom", start, end }
+              : { range: value === "7d" ? null : value, start: null, end: null })}
+          >{label}</button>)}
+        </div>
       </div>
       {range === "custom" && <>
         <div className="field"><label htmlFor="dashboard-start">From</label><input id="dashboard-start" type="date" value={start} max={end} onChange={(event) => update({ start: event.target.value })} /></div>

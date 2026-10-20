@@ -53,20 +53,47 @@ function confirmRemoval(message: string) {
 export function AbilitiesTab(props: SettingsTabProps) {
   const { config, update } = props;
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [openAbility, setOpenAbility] = useState("booking");
   const postActionsOn = actionsOpen || Boolean(config.post_actions?.length);
+  const abilities = [
+    { id: "booking", title: "Calendar booking", enabled: Boolean(config.booking), path: "M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2z" },
+    { id: "forwarding", title: "Call forwarding", enabled: config.live_actions.includes("transfer_call"), path: "M5 12h14m-6-6 6 6-6 6M4 5v14" },
+    { id: "post-actions", title: "After-conversation actions", enabled: postActionsOn, path: "M4 5h16M4 12h16M4 19h10m2-2 2 2 4-4" },
+    { id: "readback", title: "Readback", enabled: config.readback !== "off", path: "M4 7h16M4 12h10m-10 5h8m4-2 2 2 4-4" },
+  ];
   return <>
-    <p className="help">Turn on what this assistant may do. Everything stays off until you switch it on, and the assistant never offers an ability that is off. Each ability keeps all of its options in its own card.</p>
-    <BookingCard {...props} />
-    <ForwardingCard {...props} />
-    <AbilityCard id="post-actions" title="After-conversation actions" description="Send emails, notify your team, add a spreadsheet row or call a webhook when a conversation ends." enabled={postActionsOn} onToggle={(enabled) => {
+    <p className="help abilities-intro">Turn on what this assistant may do. Everything stays off until you switch it on, and the assistant never offers an ability that is off. Each ability keeps all of its options in its own card.</p>
+    <div className="abilities-grid">
+      {abilities.map(({ id, title, enabled, path }) => <button
+        type="button"
+        key={id}
+        className={`ability-tile${openAbility === id ? " ability-tile-open" : ""}`}
+        aria-label={`${title}, ${enabled ? "enabled" : "disabled"}`}
+        aria-pressed={openAbility === id}
+        aria-expanded={openAbility === id}
+        aria-controls={`ability-panel-${id}`}
+        onClick={() => setOpenAbility((current) => current === id ? "" : id)}
+      >
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>
+        <span>{title}</span>
+        <span className={`ability-tile-state${enabled ? " ability-tile-enabled" : ""}`} aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={enabled ? "m5 12 4 4L19 6" : "M12 5v14M5 12h14"} /></svg>
+        </span>
+      </button>)}
+    </div>
+    <div className="abilities-expanded">
+      <div id="ability-panel-booking" hidden={openAbility !== "booking"}><BookingCard {...props} /></div>
+      <div id="ability-panel-forwarding" hidden={openAbility !== "forwarding"}><ForwardingCard {...props} /></div>
+      <div id="ability-panel-post-actions" hidden={openAbility !== "post-actions"}><AbilityCard id="post-actions" title="After-conversation actions" description="Send emails, notify your team, add a spreadsheet row or call a webhook when a conversation ends." enabled={postActionsOn} onToggle={(enabled) => {
       if (enabled) { setActionsOpen(true); return; }
       if (config.post_actions?.length && !confirmRemoval("Remove all after-conversation actions?")) return;
       setActionsOpen(false);
       update((draft) => { draft.post_actions = []; });
     }}>
       <PostActionsEditor assistantId={props.assistantId} config={config} update={update} />
-    </AbilityCard>
-    <ReadbackCard {...props} />
+      </AbilityCard></div>
+      <div id="ability-panel-readback" hidden={openAbility !== "readback"}><ReadbackCard {...props} /></div>
+    </div>
   </>;
 }
 
@@ -96,17 +123,17 @@ function BookingCard({ assistantId, config, saved, update, errors }: SettingsTab
         const base = `booking.appointment_types.${index}`;
         return <div className="inline-editor stack" key={`appointment-${index}`}>
           <div className="form-grid">
-            <Field path={`${base}.label`} label="Appointment label" error={errors[`${base}.key`] ?? errors[`${base}.label`]}>{(fieldId, describedBy) => <input id={fieldId} value={appointment.label} {...invalidProps(errors, `${base}.label`)} aria-describedby={describedBy} onChange={(event) => update((draft) => {
+            <Field path={`${base}.label`} label="Appointment label" layout="row" error={errors[`${base}.key`] ?? errors[`${base}.label`]}>{(fieldId, describedBy) => <input id={fieldId} value={appointment.label} {...invalidProps(errors, `${base}.label`)} aria-describedby={describedBy} onChange={(event) => update((draft) => {
               if (!draft.booking) return;
               const item = draft.booking.appointment_types[index];
               item.label = event.target.value;
               item.key = followLabel({ key: item.key, label: item.label, taken: draft.booking.appointment_types.map(({ key }) => key), saved: savedKeys, fallback: "appointment" });
             })} />}</Field>
-            <Field path={`${base}.duration_minutes`} label="Duration (minutes)" error={errors[`${base}.duration_minutes`]}>{(fieldId, describedBy) => <input id={fieldId} type="number" min="1" max="480" value={appointment.duration_minutes} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].duration_minutes = Number(event.target.value); })} />}</Field>
+            <Field path={`${base}.duration_minutes`} label="Duration (minutes)" layout="row" error={errors[`${base}.duration_minutes`]}>{(fieldId, describedBy) => <input id={fieldId} type="number" min="1" max="480" value={appointment.duration_minutes} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].duration_minutes = Number(event.target.value); })} />}</Field>
           </div>
           <Field path={`${base}.when_to_use`} label="When to use this appointment type" error={errors[`${base}.when_to_use`]}>{(fieldId, describedBy) => <textarea id={fieldId} {...invalidProps(errors, `${base}.when_to_use`)} aria-describedby={describedBy} value={appointment.when_to_use} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].when_to_use = event.target.value; })} />}</Field>
           <MoreOptions forceOpen={hasErrorUnder(errors, [`${base}.location_or_link`])}>
-            <Field path={`${base}.location_or_link`} label="Location or meeting link">{(fieldId) => <input id={fieldId} value={appointment.location_or_link ?? ""} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].location_or_link = event.target.value || null; })} />}</Field>
+            <Field path={`${base}.location_or_link`} label="Location or meeting link" layout="row">{(fieldId) => <input id={fieldId} value={appointment.location_or_link ?? ""} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.appointment_types[index].location_or_link = event.target.value || null; })} />}</Field>
           </MoreOptions>
           <button type="button" disabled={booking.appointment_types.length === 1} onClick={() => update((draft) => { if (draft.booking) draft.booking.appointment_types.splice(index, 1); })}>Remove appointment type</button>
         </div>;
@@ -117,11 +144,11 @@ function BookingCard({ assistantId, config, saved, update, errors }: SettingsTab
       })}>Add appointment type</button>
       <MoreOptions label="Booking timing and messages" forceOpen={hasErrorUnder(errors, BOOKING_TIMING_PATHS)}>
           <div className="form-grid">
-            <Field path="booking.calendar_id" label="Calendar ID" help="Use primary for the connected Google account's primary calendar.">{(fieldId, describedBy) => <input id={fieldId} value={booking.calendar_id} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.calendar_id = event.target.value; })} />}</Field>
-            <Field path="booking.check_message" label="Availability holding message">{(fieldId) => <input id={fieldId} value={booking.check_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.check_message = event.target.value; })} />}</Field>
-            <Field path="booking.book_message" label="Booking holding message">{(fieldId) => <input id={fieldId} value={booking.book_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.book_message = event.target.value; })} />}</Field>
-            {bookingNumbers.map(([key, label, min, max]) => <Field key={key} path={`booking.${key}`} label={label} error={errors[`booking.${key}`]}>{(fieldId, describedBy) => <input id={fieldId} type="number" min={min} max={max} value={booking[key]} {...invalidProps(errors, `booking.${key}`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking[key] = Number(event.target.value); })} />}</Field>)}
-            <Field path="booking.send_updates" label="Calendar attendee updates">{(fieldId) => <select id={fieldId} value={booking.send_updates} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.send_updates = event.target.value as BookingConfig["send_updates"]; })}>
+            <Field path="booking.calendar_id" label="Calendar ID" layout="row" help="Use primary for the connected Google account's primary calendar.">{(fieldId, describedBy) => <input id={fieldId} value={booking.calendar_id} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.calendar_id = event.target.value; })} />}</Field>
+            <Field path="booking.check_message" label="Availability holding message" layout="row">{(fieldId) => <input id={fieldId} value={booking.check_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.check_message = event.target.value; })} />}</Field>
+            <Field path="booking.book_message" label="Booking holding message" layout="row">{(fieldId) => <input id={fieldId} value={booking.book_message} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.book_message = event.target.value; })} />}</Field>
+            {bookingNumbers.map(([key, label, min, max]) => <Field key={key} path={`booking.${key}`} label={label} layout="row" error={errors[`booking.${key}`]}>{(fieldId, describedBy) => <input id={fieldId} type="number" min={min} max={max} value={booking[key]} {...invalidProps(errors, `booking.${key}`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { if (draft.booking) draft.booking[key] = Number(event.target.value); })} />}</Field>)}
+            <Field path="booking.send_updates" label="Calendar attendee updates" layout="row">{(fieldId) => <select id={fieldId} value={booking.send_updates} onChange={(event) => update((draft) => { if (draft.booking) draft.booking.send_updates = event.target.value as BookingConfig["send_updates"]; })}>
               <option value="all">All attendees</option><option value="externalOnly">External attendees</option><option value="none">No updates</option>
             </select>}</Field>
           </div>
@@ -142,12 +169,12 @@ function ForwardingCard({ config, saved, update, errors }: SettingsTabProps) {
       const base = `transfer_targets.${index}`;
       return <div className="inline-editor stack" key={`transfer-${index}`}>
         <div className="form-grid">
-          <Field path={`${base}.label`} label="Name" error={errors[`${base}.label`] ?? errors[`${base}.key`]}>{(fieldId, describedBy) => <input id={fieldId} value={target.label} aria-describedby={describedBy} onChange={(event) => update((draft) => {
+          <Field path={`${base}.label`} label="Name" layout="row" error={errors[`${base}.label`] ?? errors[`${base}.key`]}>{(fieldId, describedBy) => <input id={fieldId} value={target.label} aria-describedby={describedBy} onChange={(event) => update((draft) => {
             const item = draft.transfer_targets![index];
             item.label = event.target.value;
             item.key = followLabel({ key: item.key, label: item.label, taken: draft.transfer_targets!.map(({ key }) => key), saved: savedKeys, fallback: "target" });
           })} />}</Field>
-          <Field path={`${base}.phone`} label="Phone number" error={errors[`${base}.phone`]}>{(fieldId, describedBy) => <input id={fieldId} type="tel" value={target.phone} {...invalidProps(errors, `${base}.phone`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.transfer_targets![index].phone = event.target.value; })} />}</Field>
+          <Field path={`${base}.phone`} label="Phone number" layout="row" error={errors[`${base}.phone`]}>{(fieldId, describedBy) => <input id={fieldId} type="tel" value={target.phone} {...invalidProps(errors, `${base}.phone`)} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.transfer_targets![index].phone = event.target.value; })} />}</Field>
         </div>
         <Field path={`${base}.when_to_use`} label="When to use" error={errors[`${base}.when_to_use`]}>{(fieldId, describedBy) => <textarea id={fieldId} value={target.when_to_use} aria-describedby={describedBy} onChange={(event) => update((draft) => { draft.transfer_targets![index].when_to_use = event.target.value; })} />}</Field>
         <MoreOptions>
