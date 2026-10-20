@@ -54,10 +54,12 @@ describe("global test-call bar", () => {
     await screen.findByRole("heading", { name: "Inbox" });
 
     const region = bar();
-    await within(region).findByLabelText("Assistant to test");
-    expect(within(region).getByText(/Try/)).toHaveTextContent("Brightside reception");
-    await user.selectOptions(within(region).getByLabelText("Assistant to test"), assistantId);
-    await user.click(within(region).getByRole("button", { name: "Start test call" }));
+    const assistantSelect = await within(region).findByLabelText("Assistant to test");
+    await user.selectOptions(assistantSelect, assistantId);
+    expect(assistantSelect).toHaveValue(assistantId);
+    const startCall = within(region).getByRole("button", { name: "Start test call" });
+    expect(startCall).toHaveAttribute("title", "Use headphones");
+    await user.click(startCall);
 
     expect(await within(region).findByText(/Connecting to/)).toBeInTheDocument();
     await waitFor(() => expect(calls).toHaveLength(1));
@@ -65,6 +67,7 @@ describe("global test-call bar", () => {
 
     act(() => calls[0].events.onConnected());
     expect(within(region).getByText(/In call with/)).toBeInTheDocument();
+    expect(within(region).getByText("Use headphones")).toBeInTheDocument();
     act(() => { vi.advanceTimersByTime(65_000); });
     expect(within(region).getByText("1:05")).toBeInTheDocument();
 
@@ -123,8 +126,9 @@ describe("global test-call bar", () => {
     withTwoAssistants();
     renderApp("/inbox", { loggedIn: true, createWebCallSession: fakeFactory().factory });
     await screen.findByRole("heading", { name: "Inbox" });
-    await user.selectOptions(await within(bar()).findByLabelText("Assistant to test"), secondAssistantId);
-    expect(within(bar()).getByText(/Try/)).toHaveTextContent("Second assistant");
+    const assistantSelect = await within(bar()).findByLabelText("Assistant to test");
+    await user.selectOptions(assistantSelect, secondAssistantId);
+    expect(assistantSelect).toHaveValue(secondAssistantId);
     const toggle = within(bar()).getByRole("button", { name: "Collapse test call bar" });
     toggle.focus();
     await user.keyboard("{Enter}");
@@ -144,7 +148,8 @@ describe("global test-call bar", () => {
     await user.click(within(bar()).getByRole("button", { name: "Start test call" }));
     await waitFor(() => expect(calls).toHaveLength(1));
     act(() => calls[0].events.onConnected());
-    expect(within(bar()).getByText(/In call with/)).toHaveTextContent("Brightside reception");
+    expect(within(bar()).getByText(/In call with/)).toBeInTheDocument();
+    expect(within(bar()).getByText("Brightside reception")).toBeInTheDocument();
     expect(within(bar()).getByRole("button", { name: "Hang up" })).toBeInTheDocument();
   });
 

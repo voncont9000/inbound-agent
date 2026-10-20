@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, unwrap, unwrapNoContent, type Schemas } from "../api/client";
@@ -6,7 +6,7 @@ import { ApiError, errorMessage } from "../api/errors";
 import { useAuth } from "../auth/AuthProvider";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CallRecordingPlayer } from "../components/CallRecordingPlayer";
-import { Badge, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
+import { Badge, DeleteIcon, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 import { formatDate } from "../lib/date";
 import { transcriptRows } from "../lib/transcript";
 
@@ -134,7 +134,7 @@ export function InboxPage() {
     setSearchParams(next);
   }
   return <main className="page" id="main-content">
-    <PageHeader eyebrow="Operator" title="Inbox" lede="Every conversation your assistants handled, across phone, web, email and WhatsApp." />
+    <PageHeader title="Inbox" lede="Every conversation your assistants handled, across phone, web, email and WhatsApp." />
     <div className="toolbar">
       <div className="field"><label htmlFor="filter-channel">Channel</label><select id="filter-channel" value={channel} onChange={(event) => updateParam("channel", event.target.value)}><option value="all">All channels</option>{channels.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
       <div className="field"><label htmlFor="filter-status">Status</label><select id="filter-status" value={status} onChange={(event) => updateParam("status", event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
@@ -182,14 +182,14 @@ export function InboxPage() {
         <td><div className="button-row">{conversation.test_call && <Badge tone="neutral">Test call</Badge>}{conversation.needs_review ? <Badge tone="warning">Needs review</Badge> : "—"}</div></td>
         {canDelete && <td><button
           type="button"
-          className="button-ghost button-sm"
+          className="button-danger button-sm"
           aria-label="Delete conversation"
           title="Delete conversation"
           onClick={() => {
             setDeleteError("");
             setPendingDelete({ ids: [conversation.id], bulk: false });
           }}
-        ><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2m3 0-.8 14H5.8L5 6m4 4v6m6-6v6" /></svg></button></td>}
+        ><DeleteIcon /></button></td>}
       </tr>)}
     </tbody></table></div>}
     {conversations.hasNextPage && <button type="button" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button>}
@@ -209,7 +209,13 @@ export function InboxPage() {
   </main>;
 }
 
-const channelIcon: Record<string, string> = { phone: "☎", web: "◎", gmail: "✉", whatsapp: "◉" };
+const icon = (path: string) => <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
+const channelIcon: Record<string, ReactNode> = {
+  phone: icon("M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"),
+  web: icon("M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10"),
+  gmail: icon("M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2m18 2-10 7L2 7"),
+  whatsapp: icon("M21 11.5a8.4 8.4 0 0 1-12.1 7.7L3 21l1.8-5.7A8.4 8.4 0 1 1 21 11.5ZM8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"),
+};
 
 function statusTone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
   if (["completed", "done", "answered"].includes(status)) return "success";
@@ -289,12 +295,13 @@ export function ConversationPage() {
   const contact = detail.person_id ? <Link to={`/contacts/${detail.person_id}`}>{detail.external_ref}</Link> : detail.external_ref;
   const emailTriage = asRecord(detail.metrics.email_triage);
   const transcript = transcriptRows(detail.messages, detail.channel, detail.started_at);
+  const channelName = detail.channel === "whatsapp" ? "WhatsApp" : detail.channel === "gmail" ? "Email" : `${detail.channel.charAt(0).toUpperCase()}${detail.channel.slice(1)}`;
   return <main className="page" id="main-content">
-    <PageHeader eyebrow={`Conversation · ${detail.channel}`} title={<>{detail.summary ?? "Conversation details"} {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<div className="button-row">
-      {canDelete && <button type="button" className="button-ghost" onClick={() => {
+    <PageHeader title={<>{detail.summary ?? "Conversation details"} <Badge tone="neutral">{channelIcon[detail.channel]} {channelName}</Badge> {detail.test_call && <Badge tone="neutral">Test call</Badge>}</>} actions={<div className="button-row">
+      {canDelete && <button type="button" className="button-danger" onClick={() => {
         setDeleteError("");
         setDeleteDialogOpen(true);
-      }}>Delete conversation</button>}
+      }}><DeleteIcon /> Delete conversation</button>}
       <Link className="button" to="/inbox">Back to inbox</Link>
     </div>} />
     {deleteError && <p role="alert">{deleteError}</p>}
@@ -487,7 +494,7 @@ export function ContactsPage() {
   });
   const [filter, setFilter] = useState("");
   const rows = (contacts.data?.pages.flatMap(({ items }) => items) ?? []).filter(({ display_name }) => display_name.toLowerCase().includes(filter.toLowerCase()));
-  return <main className="page" id="main-content"><PageHeader eyebrow="People" title="Contacts" lede="Callers and senders your assistants have identified." />
+  return <main className="page" id="main-content"><PageHeader title="Contacts" lede="Callers and senders your assistants have identified." />
     <div className="field"><label htmlFor="contact-filter">Filter by name</label><input id="contact-filter" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
     {contacts.isLoading && <LoadingState />}{contacts.error && <ErrorState message="Contacts could not be loaded." />}
     {!rows.length && !contacts.isLoading && <EmptyState>No contacts found.</EmptyState>}
@@ -535,7 +542,7 @@ export function ContactPage() {
   if (detailQuery.isLoading) return <main className="page" id="main-content"><LoadingState /></main>;
   if (detailQuery.error || !detail) return <main className="page" id="main-content"><ErrorState message="Contact could not be loaded." /></main>;
   const mergeChoices = (contactsQuery.data?.items ?? []).filter((contact) => contact.id !== id && !contact.merged_into_id);
-  return <main className="page" id="main-content"><PageHeader eyebrow="Contact" title={detail.display_name} actions={<Link className="button" to="/contacts">All contacts</Link>} />
+  return <main className="page" id="main-content"><PageHeader title={detail.display_name} actions={<Link className="button" to="/contacts">All contacts</Link>} />
     <div className="toolbar"><div className="field"><label htmlFor="merge-contact">Merge another contact into this one</label><select id="merge-contact" value={otherId} onChange={(event) => setOtherId(event.target.value)}><option value="">Choose a contact</option>{mergeChoices.map((contact) => <option key={contact.id} value={contact.id}>{contact.display_name}</option>)}</select></div><button type="button" disabled={!otherId} onClick={() => setDialog("merge")}>Merge contact</button></div>
     <section className="panel"><h2>Identities</h2>{detail.identities.map((identity) => <div className="list-row" key={identity.id}><label className="check-row"><input type="checkbox" checked={selectedIdentities.includes(identity.id)} onChange={(event) => setSelectedIdentities((current) => event.target.checked ? [...current, identity.id] : current.filter((item) => item !== identity.id))} />{identity.type}: {identity.value_normalized}</label><span>{identity.verified ? "Verified" : "Unverified"} · {identity.source} · {identity.confidence.toFixed(2)}</span></div>)}{!detail.identities.length && <p className="muted">No identities yet.</p>}<button type="button" disabled={!selectedIdentities.length} onClick={() => setDialog("split")}>Split selected identities</button></section>
     <section className="panel"><h2>Active facts</h2>{detail.active_facts.map((fact) => <div className="list-row" key={fact.id}><span><strong>{fact.predicate}</strong>: {displayValue(fact.value)}<br /><span className="muted">{fact.evidence} · confidence {fact.confidence.toFixed(2)} · since {formatDate(fact.valid_from)}</span></span></div>)}{!detail.active_facts.length && <p className="muted">No facts yet.</p>}</section>
@@ -567,7 +574,7 @@ export function TasksPage() {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["tasks"] }); },
   });
   const rows = tasks.data?.items ?? [];
-  return <main className="page" id="main-content"><PageHeader eyebrow="Follow-up" title="Tasks" lede="Callbacks, bookings and other follow-ups created from conversations." />
+  return <main className="page" id="main-content"><PageHeader title="Tasks" lede="Callbacks, bookings and other follow-ups created from conversations." />
     <div className="toolbar"><div className="field"><label htmlFor="task-status-filter">Status</label><select id="task-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{["open", "done", "dismissed"].map((status) => <option key={status}>{status}</option>)}</select></div><div className="field"><label htmlFor="task-kind-filter">Kind</label><input id="task-kind-filter" value={kindFilter === "all" ? "" : kindFilter} onChange={(event) => setKindFilter(event.target.value || "all")} placeholder="All kinds" /></div><div className="field"><label htmlFor="task-assistant-filter">Assistant</label><select id="task-assistant-filter" value={assistantFilter} onChange={(event) => setAssistantFilter(event.target.value)}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div></div>
     {tasks.isLoading && <LoadingState />}{tasks.error && <ErrorState message="Tasks could not be loaded." />}{!rows.length && !tasks.isLoading && !tasks.error && <EmptyState>No tasks match these filters.</EmptyState>}
     <div className="table-wrap"><table><thead><tr><th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id}><td className="cell-primary">{task.kind}</td><td><Badge tone={statusTone(task.status)}>{task.status}</Badge></td><td>{task.source}</td><td className="cell-muted">{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
@@ -591,7 +598,7 @@ export function KnowledgeGapsPage() {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["knowledge-gaps"] }); },
   });
   const rows = gaps.data?.items ?? [];
-  return <main className="page" id="main-content"><PageHeader eyebrow="Knowledge" title="Knowledge gaps" lede="Questions your assistants could not answer. Add the answer to your knowledge to close the gap." />
+  return <main className="page" id="main-content"><PageHeader title="Knowledge gaps" lede="Questions your assistants could not answer. Add the answer to your knowledge to close the gap." />
     <div className="toolbar"><div className="field"><label htmlFor="gap-filter">Status</label><select id="gap-filter" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All statuses</option><option value="open">Open</option><option value="answered">Answered</option><option value="dismissed">Dismissed</option></select></div><div className="field"><label htmlFor="gap-assistant-filter">Assistant</label><select id="gap-assistant-filter" value={assistantFilter} onChange={(event) => setAssistantFilter(event.target.value)}><option value="all">All assistants</option>{assistants.data?.items.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></div></div>
     {gaps.isLoading && <LoadingState />}{gaps.error && <ErrorState message="Knowledge gaps could not be loaded." />}{!rows.length && !gaps.isLoading && !gaps.error && <EmptyState>No knowledge gaps match this status.</EmptyState>}
     <div className="card-grid">{rows.map((gap) => <article className="panel stack" key={gap.id}><div className="button-row"><Badge tone={gap.status === "open" ? "warning" : "success"}>{gap.status}</Badge><span className="muted">{formatDate(gap.created_at)}</span></div><h2>{gap.question}</h2><p>{gap.evidence}</p><Link to={`/conversations/${gap.conversation_id}`}>View conversation</Link><div className="button-row">{gap.status !== "answered" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "answered" })}>Mark answered</button>}{gap.status !== "dismissed" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "dismissed" })}>Dismiss</button>}{gap.status !== "open" && <button type="button" onClick={() => update.mutate({ id: gap.id, status: "open" })}>Reopen</button>}</div></article>)}</div>

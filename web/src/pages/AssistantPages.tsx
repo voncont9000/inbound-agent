@@ -9,7 +9,7 @@ import { SettingsTabContent } from "../components/settings/SettingsTabContent";
 import type { AssistantConfig } from "../lib/config";
 import { validateAssistantConfig } from "../lib/config";
 import { isSettingsTab, settingsTabPath, settingsTabs, tabForPath, type SettingsTabId } from "../lib/settingsTabs";
-import { Badge, EmptyState, ErrorState, ErrorSummary, LoadingState, PageHeader } from "../components/States";
+import { Badge, DeleteIcon, EmptyState, ErrorState, ErrorSummary, LoadingState, PageHeader } from "../components/States";
 import { HelpLink } from "../help/HelpLink";
 import { settingsTabHelp } from "../help/settingsTabHelp";
 
@@ -89,7 +89,7 @@ export function AssistantsPage() {
   });
   const selected = templatesQuery.data?.find(({ name }) => name === selectedTemplate);
   return <main className="page" id="main-content">
-    <PageHeader eyebrow="Configuration" title="Assistants" lede="Each assistant answers for one business, with its own voice, rules and knowledge." />
+    <PageHeader title="Assistants" lede="Each assistant answers for one business, with its own voice, rules and knowledge." />
     <div className="button-row"><button className="button-primary" type="button" onClick={() => setShowCreate((value) => !value)}>Create from template</button>
       <Link className="button-primary" to="/assistants/new">Set up from website</Link>
     </div>
@@ -124,10 +124,10 @@ export function AssistantsPage() {
       <p className="muted">{Object.values(assistant.config.services).map((service) => service.label).join(" · ")}</p>
       <div className="button-row">
         <Link to={settingsTabPath(assistant.id)}>Manage assistant</Link>
-        {canDelete && <button type="button" className="button-ghost" onClick={() => {
+        {canDelete && <button type="button" className="button-danger" onClick={() => {
           setDeleteError("");
           setDeleteTarget(assistant);
-        }}>Delete</button>}
+        }}><DeleteIcon /> Delete</button>}
       </div>
     </article>)}</div>
     {deleteTarget && <ConfirmDialog
@@ -235,7 +235,7 @@ export function AssistantSettingsPage() {
   const otherTabsWithErrors = settingsTabs.filter(({ id: tabId }) => tabId !== activeTab && errorCount(tabId) > 0);
   return <main className="page" id="main-content">
     <div className="settings-header">
-      <div className="page-header-text"><p className="eyebrow">Assistant settings</p><h1>{baseline.name}</h1></div>
+      <div className="page-header-text"><h1>{baseline.name}</h1></div>
     </div>
     <div className="save-bar" role="region" aria-label="Save changes">
       <span className={isDirty ? "dirty-indicator" : "muted"}>{isDirty ? "Unsaved changes" : "All changes saved"}</span>

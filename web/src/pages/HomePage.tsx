@@ -89,7 +89,7 @@ export function HomePage() {
 
   const data = summary.data;
   return <main className="page" id="main-content">
-    <PageHeader eyebrow="Overview" title="Home" lede="How your assistants are handling inbound conversations." />
+    <PageHeader title="Home" lede="How your assistants are handling inbound conversations." />
     <div className="toolbar">
       <div className="field"><label htmlFor="dashboard-range">Time range</label>
         <select id="dashboard-range" value={range} onChange={(event) => update(event.target.value === "custom"

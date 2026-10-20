@@ -12,8 +12,10 @@ import { HomePage } from "./pages/HomePage";
 import { AssistantsPage, AssistantSettingsPage, AssistantSettingsRedirect } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
 import { HelpArticlePage, HelpHomePage } from "./help/HelpPages";
+import wordmark from "./assets/brand/yelvo-wordmark.svg";
+import mark from "./assets/brand/yelvo-mark.svg";
 
-const icon = (path: string) => <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
+const icon = (path: string) => <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
 
 const NAV = [
   { to: "/", label: "Home", end: true, icon: icon("M3 11.5 12 4l9 7.5M5 10v10h5v-6h4v6h5V10") },
@@ -25,10 +27,9 @@ const NAV = [
   { to: "/help", label: "Help", icon: icon("M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0") },
 ];
 
-function Brand() {
-  return <Link className={shell.brand} to="/">
-    <span className={shell.brandMark} aria-hidden="true">{icon("M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z")}</span>
-    <span>Inbound operator</span>
+function Brand({ compact = false }: { compact?: boolean }) {
+  return <Link className={shell.brand} to="/" aria-label="Yelvo home">
+    <img src={compact ? mark : wordmark} alt="Yelvo" />
   </Link>;
 }
 
@@ -36,8 +37,6 @@ function AppShell() {
   const { user, tenant, memberships, selectedTenant, setSelectedTenant, logout } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const assistantArea = location.pathname.startsWith("/assistants/") && location.pathname !== "/assistants/new";
-  const assistantId = location.pathname.split("/")[2];
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
   const initials = (user?.display_name ?? "?").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const navigation = <nav className={shell.navigation} aria-label="Main navigation">
@@ -60,7 +59,7 @@ function AppShell() {
             <button type="button" className={shell.menuButton} aria-expanded={menuOpen} aria-controls="mobile-navigation" onClick={() => setMenuOpen((open) => !open)}>
               {icon(menuOpen ? "M18 6 6 18M6 6l12 12" : "M4 7h16M4 12h16M4 17h16")}<span className="sr-only">{menuOpen ? "Close menu" : "Open menu"}</span>
             </button>
-            <div className={shell.mobileBrand}><Brand /></div>
+            <div className={shell.mobileBrand}><Brand compact /></div>
           </div>
           <div className={shell.topbarRight}>
             {memberships.length > 1
@@ -75,9 +74,6 @@ function AppShell() {
           </div>
         </header>
         <div id="mobile-navigation" className={shell.mobileNav} hidden={!menuOpen}>{navigation}</div>
-        {assistantArea && <nav className="subnav page" aria-label="Assistant sections" style={{ paddingBlock: 0 }}>
-          <NavLink to={`/assistants/${assistantId}/settings`}>Settings</NavLink>
-        </nav>}
         <div className={shell.content}><Outlet /></div>
         <TestCallBar />
       </div>

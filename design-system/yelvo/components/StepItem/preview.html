@@ -1,0 +1,14 @@
+<!-- @dsCard group="Content" height=250 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>StepItem preview</title></head>
+<body>
+<div id="root" class=""></div>
+<script>
+  var D = window.Yelvo, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'dt-stack', style:{gap:'32px'}},
+    h(D.StepItem,{number:1,title:'Create your assistant'},'Pick a voice, a language and a welcome message.'),
+    h(D.StepItem,{number:2,title:'Define in-call behaviour'},'Set how calls are handled and where transcripts go.')));
+</script>
+</body>
+</html>
