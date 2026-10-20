@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { ConversationsChart } from "../components/ConversationsChart";
 import { channelLabels } from "../lib/dashboard";
@@ -92,6 +92,11 @@ export function HomePage() {
   const data = summary.data;
   return <main className="page" id="main-content">
     <PageHeader title="Home" lede="How your assistants are handling inbound conversations." />
+    {assistants.data && assistants.data.items.length === 0 && <section className="panel first-run" aria-labelledby="first-run-heading">
+      <h2 id="first-run-heading">Create your first assistant</h2>
+      <p className="muted">Nothing is answering yet. Set up an assistant from your website or a template; it takes a couple of minutes.</p>
+      <div className="button-row"><Link className="button-primary" to="/assistants/new">Set up from website</Link><Link className="button-secondary" to="/assistants">Create from template</Link></div>
+    </section>}
     <div className="toolbar">
       <div className="range-control">
         <span className="range-control-label">Time range</span>

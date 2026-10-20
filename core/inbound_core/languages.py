@@ -102,8 +102,15 @@ def normalize_locale(value: object) -> Locale:
 
 def spoken_language_instruction(locale: Locale) -> str:
     if locale == "multi":
-        return "Reply in the language the caller speaks; if unsure, use English."
-    return f"Speak {LOCALES[locale].prompt_name}."
+        return (
+            "Speak the language the caller uses, and switch with them if they change language; "
+            "if unsure, use English."
+        )
+    return (
+        f"Speak {LOCALES[locale].prompt_name}, even if the instructions, greeting or knowledge "
+        "below are written in another language. If the caller clearly switches to another "
+        "language, follow them."
+    )
 
 
 def written_language_instruction(locale: Locale) -> str:

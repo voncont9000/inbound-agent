@@ -298,6 +298,9 @@ code { color: var(--accent-text); font-size: 0.9em; background: var(--surface-se
 .select-cell input { margin: 0; display: block; }
 .toolbar > .button-danger { margin-left: auto; margin-bottom: 0.15rem; }
 .template-summary { margin: 0; }
+.first-run { display: grid; gap: var(--space-3); border-left: 4px solid var(--accent); }
+.first-run h2 { margin: 0; }
+.first-run p { margin: 0; }
 .services-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
 .services-card-header h2 { margin-bottom: var(--space-1); }
 .services-card-header p { margin: 0; }
