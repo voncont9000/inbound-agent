@@ -251,6 +251,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistants/{assistant_id}/services-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Services
+         * @description Suggest services and intake fields from the assistant's prompt and knowledge.
+         */
+        post: operations["draft_services_assistants__assistant_id__services_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants/{assistant_id}/test-calls": {
         parameters: {
             query?: never;
@@ -2539,7 +2559,7 @@ export interface components {
             consent_message: string;
             /**
              * Enabled
-             * @default false
+             * @default true
              */
             enabled: boolean;
             /**
@@ -2606,6 +2626,15 @@ export interface components {
             fields: components["schemas"]["FieldSpec"][];
             /** Label */
             label: string;
+        };
+        /** ServicesDraftResponse */
+        ServicesDraftResponse: {
+            /** Services */
+            services: {
+                [key: string]: unknown;
+            };
+            /** Warnings */
+            warnings: string[];
         };
         /** SetupDraft */
         SetupDraft: {
@@ -3631,6 +3660,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebhookSecretCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_services_assistants__assistant_id__services_draft_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicesDraftResponse"];
                 };
             };
             /** @description Validation Error */
