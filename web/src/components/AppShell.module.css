@@ -5,8 +5,9 @@
 }
 
 .sidebar {
-  background: var(--sidebar);
-  color: var(--sidebar-ink);
+  background: var(--surface);
+  color: var(--ink);
+  border-right: 1px solid var(--border);
   padding: 1.25rem 0.9rem;
   display: flex;
   flex-direction: column;
@@ -19,23 +20,15 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  color: inherit;
+  justify-content: flex-start;
+  min-height: 40px;
   text-decoration: none;
-  font-weight: 800;
-  letter-spacing: -0.01em;
   padding: 0.25rem 0.5rem;
 }
 
-.brandMark {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 9px;
-  background: var(--accent);
-  color: #fff;
-}
+.brand img { display: block; width: 128px; max-width: 100%; height: auto; }
+.mobileBrand .brand { padding: 0; }
+.mobileBrand .brand img { width: 32px; height: 32px; }
 
 .navigation {
   display: flex;
@@ -47,21 +40,21 @@
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  color: inherit;
+  color: var(--ink);
   text-decoration: none;
   padding: 0.6rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-weight: 500;
-  font-size: var(--text-sm);
-  opacity: 0.85;
+  border-radius: var(--radius-button);
+  font-weight: 400;
+  font-size: 14px;
+  opacity: 1;
 }
 
-.navigation a:hover { background: rgb(255 255 255 / 8%); opacity: 1; }
+.navigation a:hover { background: var(--surface-secondary); }
 
 .navigation a[aria-current="page"] {
-  background: rgb(255 255 255 / 12%);
-  color: #fff;
-  font-weight: 650;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 500;
   opacity: 1;
 }
 
@@ -70,12 +63,12 @@
   display: grid;
   gap: 0.15rem;
   padding: 0.75rem;
-  border-radius: var(--radius-sm);
-  background: rgb(255 255 255 / 6%);
+  border-radius: var(--radius-button);
+  background: var(--surface-secondary);
 }
 
-.workspaceLabel { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; font-weight: 700; }
-.workspaceName { font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspaceLabel { font-size: 14px; font-weight: 500; color: var(--body); }
+.workspaceName { font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .mainArea {
   display: flex;
@@ -84,7 +77,7 @@
   min-width: 0;
 }
 
-.content { flex: 1; min-width: 0; }
+.content { flex: 1; min-width: 0; padding-bottom: 128px; }
 
 .topbar {
   display: flex;
@@ -93,7 +86,7 @@
   gap: 1rem;
   padding: 0.6rem clamp(1rem, 3vw, 2.5rem);
   background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -104,9 +97,9 @@
 
 .menuButton, .mobileBrand { display: none; }
 
-.workspaceSelect select { width: auto; max-width: 16rem; padding-block: 0.4rem; font-size: var(--text-sm); font-weight: 600; }
+.workspaceSelect select { width: auto; max-width: 16rem; font-size: 14px; font-weight: 400; }
 
-.user { display: inline-flex; align-items: center; gap: 0.5rem; font-size: var(--text-sm); font-weight: 600; min-width: 0; }
+.user { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 14px; font-weight: 500; min-width: 0; }
 .userName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .avatar {
@@ -116,9 +109,9 @@
   display: grid;
   place-items: center;
   background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: var(--text-xs);
-  font-weight: 800;
+  color: var(--on-accent-soft);
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -131,7 +124,7 @@
   .mobileBrand { display: block; }
   .mobileBrand .brand { padding: 0; color: var(--ink); }
   .userName { display: none; }
-  .mobileNav { display: block; position: sticky; top: var(--topbar-h); z-index: 15; background: var(--sidebar); color: var(--sidebar-ink); padding: 0.75rem; border-bottom: 1px solid var(--line); }
+  .mobileNav { display: block; position: sticky; top: var(--topbar-h); z-index: 15; background: var(--surface); color: var(--ink); padding: 0.75rem; border-bottom: 1px solid var(--border); }
   .mobileNav[hidden] { display: none; }
   .mobileNav .navigation { flex-direction: row; flex-wrap: wrap; gap: 0.25rem; }
   .mobileNav .navigation a { padding: 0.5rem 0.75rem; }

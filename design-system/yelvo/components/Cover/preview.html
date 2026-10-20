@@ -1,0 +1,45 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Yelvo cover</title>
+<style>
+  html, body { margin: 0; padding: 0; background: var(--surface); }
+  .cover { position: relative; width: 960px; height: 288px; overflow: hidden; background: var(--surface); }
+  .cover svg { position: absolute; inset: 0; }
+  .yel { fill: var(--accent); }
+  .but { fill: var(--accent-soft); }
+  .ink { fill: var(--cta); }
+  .bar { fill: var(--on-accent); }
+  .r-xl { rx: var(--radius-xl); }
+  .r-lg { rx: var(--radius-lg); }
+  .txt { position: absolute; left: 40px; bottom: 40px; max-width: 440px; }
+  .name { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 120px; line-height: .92; letter-spacing: -0.04em; color: var(--ink); }
+  .tag { margin: 16px 0 0; font-family: var(--font-sans); font-size: 14px; line-height: 1.4; color: var(--body); }
+</style></head>
+<body>
+<div class="cover">
+  <svg width="960" height="288" viewBox="0 0 960 288" aria-hidden="true">
+    <!--
+      blocks: accent 488x232 radius-xl; accent-soft 224x88 radius-lg; cta 248x88 radius-lg
+      arrangement: one large yellow slab bleeding off the top and right edge, two bands beneath it bleeding off the bottom
+      pattern: literal motif row, sound bars; the logo's speaking dot is three rounded bars, so a run of pills at full radius reads as a voice
+      steps and radii: bar width space-6 (24px), pitch space-12 (48px), gaps space-4 (16px), radius-full on bars, radius-xl and radius-lg on blocks
+    -->
+    <rect class="yel r-xl" x="496" y="-24" width="488" height="232"/>
+    <rect class="but r-lg" x="496" y="224" width="224" height="88"/>
+    <rect class="ink r-lg" x="736" y="224" width="248" height="88"/>
+    <rect class="bar" x="556" y="84" width="24" height="40" rx="12"/>
+    <rect class="bar" x="604" y="60" width="24" height="88" rx="12"/>
+    <rect class="bar" x="652" y="36" width="24" height="136" rx="12"/>
+    <rect class="bar" x="700" y="72" width="24" height="64" rx="12"/>
+    <rect class="bar" x="748" y="48" width="24" height="112" rx="12"/>
+    <rect class="bar" x="796" y="80" width="24" height="48" rx="12"/>
+    <rect class="bar" x="844" y="56" width="24" height="96" rx="12"/>
+  </svg>
+  <div class="txt">
+    <h1 class="name">Yelvo</h1>
+    <p class="tag">Ink, one bold yellow, and a voice. The system for a smart voice agent.</p>
+  </div>
+</div>
+</body>
+</html>

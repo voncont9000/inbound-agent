@@ -3,7 +3,7 @@ import { channelLabels, type DashboardChannel as Channel } from "../lib/dashboar
 import styles from "./Dashboard.module.css";
 
 type Point = Schemas["DashboardSeriesPoint"];
-const colors: Record<Channel, string> = { phone: "#1d6d5b", whatsapp: "#55b38a", gmail: "#c98a2b", web: "#7a8fa6" };
+const colors: Record<Channel, string> = { phone: "var(--ink)", whatsapp: "var(--accent)", gmail: "var(--border-control)", web: "var(--body)" };
 const width = 720;
 const height = 240;
 const pad = { top: 12, right: 8, bottom: 28, left: 36 };

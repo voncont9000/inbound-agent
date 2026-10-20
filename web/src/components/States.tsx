@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-const glyph = (path: string) => <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
+const glyph = (path: string) => <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>;
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return <div role="status" className="state state-inline"><span className="spinner" aria-hidden="true" />{label}</div>;
@@ -24,7 +24,10 @@ export function EmptyState({ title, children, action }: { title?: string; childr
 }
 
 export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "success" | "warning" | "danger" | "info" }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>;
+  return <span className={`badge badge-${tone}`}>
+    {(tone === "success" || tone === "danger") && glyph(tone === "success" ? "m5 12 4 4L19 6" : "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0")}
+    {children}
+  </span>;
 }
 
 export function PageHeader({ eyebrow, title, lede, actions }: { eyebrow?: string; title: ReactNode; lede?: ReactNode; actions?: ReactNode }) {

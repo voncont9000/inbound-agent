@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/errors";
 import { useAuth } from "../auth/AuthProvider";
+import wordmark from "../assets/brand/yelvo-wordmark.svg";
 
 function safeNext(value: string | null): string {
   return value?.startsWith("/") && !value.startsWith("//") ? value : "/inbox";
@@ -31,7 +32,7 @@ export function LoginPage() {
   }
 
   return <div className="auth-shell"><main id="main-content" className="auth-card">
-    <p className="auth-brand"><span className="eyebrow">Inbound operator</span></p>
+    <p className="auth-brand"><img src={wordmark} alt="Yelvo" /></p>
     <h1>Sign in</h1>
     <p className="intro">Use your account to review conversations and manage your assistants.</p>
     <form className="stack" onSubmit={submit}>
@@ -69,7 +70,7 @@ export function SignupPage() {
     }
   }
   return <div className="auth-shell"><main id="main-content" className="auth-card">
-    <p className="auth-brand"><span className="eyebrow">Inbound operator</span></p>
+    <p className="auth-brand"><img src={wordmark} alt="Yelvo" /></p>
     <h1>Create your account</h1>
     <form className="stack" onSubmit={submit}>
       {error && <p role="alert" className="state-error">{error}</p>}

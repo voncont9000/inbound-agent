@@ -1,0 +1,15 @@
+<!-- @dsCard group="Content" height=280 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Accordion preview</title></head>
+<body>
+<div id="root" class=""></div>
+<script>
+  var D = window.Yelvo, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(D.Accordion,{defaultOpen:0, items:[
+    {question:'Where is the data stored?', answer:'On servers in the EU. Every call is processed under GDPR.'},
+    {question:'Do I need to write code?', answer:'No. Setup takes about thirty seconds in the dashboard.'},
+    {question:'Can it book appointments?', answer:'Yes, it connects to your calendar and books during the call.'}]}));
+</script>
+</body>
+</html>

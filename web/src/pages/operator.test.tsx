@@ -492,7 +492,7 @@ describe("operator workflows", () => {
     server.events.on("request:start", listener);
     renderApp(`/conversations/${conversationId}`, { loggedIn: true });
     await screen.findByRole("heading", { name: /Boiler not firing, no hot water/ });
-    expect(screen.getByText("Test call")).toBeInTheDocument();
+    expect(screen.getByText("Test call", { selector: ".badge" })).toBeInTheDocument();
     expect(screen.getByText(/staff-alert · notify_staff/)).toBeInTheDocument();
     const intakeTable = screen.getByRole("table", { name: "Intake comparison by field" });
     expect(within(intakeTable).getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Field", "Live", "Post-call", "Merged"]);
