@@ -237,7 +237,7 @@ def _booking_handler(
 
 
 def test_smart_turn_stop_secs_parses_default_and_override() -> None:
-    assert BOT_MODULE.smart_turn_stop_secs({}) == 0.7
+    assert BOT_MODULE.smart_turn_stop_secs({}) == 1.5
     assert BOT_MODULE.smart_turn_stop_secs({"SMART_TURN_STOP_SECS": "1.5"}) == 1.5
     with pytest.raises(ValueError, match="SMART_TURN_STOP_SECS"):
         BOT_MODULE.smart_turn_stop_secs({"SMART_TURN_STOP_SECS": "0"})

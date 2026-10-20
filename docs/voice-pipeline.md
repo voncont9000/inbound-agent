@@ -285,7 +285,7 @@ of `idle`. Caller speech resets the timer, and neither idle message is queued wh
 is speaking.
 
 `SMART_TURN_STOP_SECS` controls Pipecat's silence fallback when Smart Turn marks an
-utterance incomplete; it defaults to `0.7` seconds.
+utterance incomplete; it defaults to `1.5` seconds.
 The matrix runner accepts `--smart-turn-stop-secs`, sets it for each runner, and records the
 value in JSON results and summary rows. Its summary reports caller-stop→turn-end,
 turn-end→LLM-first-token, LLM-first-token→TTS-first-audio medians, and LLM TTFB.

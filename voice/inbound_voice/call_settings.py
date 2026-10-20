@@ -14,7 +14,7 @@ from pipecat.turns.user_mute import (
 
 IDLE_PROMPT_DEFAULT_SECONDS = 8.0
 NUMBER_HOLD_DEFAULT_SECS = 2.0
-SMART_TURN_STOP_DEFAULT_SECS = 0.7
+SMART_TURN_STOP_DEFAULT_SECS = 1.5
 
 
 class TransferUserMuteStrategy(BaseUserMuteStrategy):
