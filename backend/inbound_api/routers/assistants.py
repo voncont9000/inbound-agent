@@ -1,3 +1,4 @@
+import json
 from typing import Any
 from urllib.parse import urljoin
 from uuid import UUID
@@ -10,6 +11,7 @@ from inbound_core.custom_templates import (
     build_custom_template_prompt,
     parse_custom_template,
 )
+from inbound_core.languages import LOCALES
 from inbound_core.setup_draft import build_services_draft_prompt, parse_services_draft
 from inbound_core.templates import find_template
 from inbound_core.templates import list_templates as load_templates
@@ -28,6 +30,7 @@ from inbound_api.models import (
 )
 from inbound_api.schemas import (
     AssistantCreate,
+    AssistantLines,
     AssistantListResponse,
     AssistantResponse,
     AssistantUpdate,
@@ -42,6 +45,8 @@ from inbound_api.schemas import (
     ServicesDraftResponse,
     TemplateResponse,
     TestCallResponse,
+    TranslateLinesRequest,
+    TranslateLinesResponse,
 )
 from inbound_api.services.audit import write_audit
 from inbound_api.services.channel_connections import (
@@ -65,6 +70,49 @@ _tenant_session_dependency = Depends(get_tenant_session)
 
 def _template_exists(name: str) -> bool:
     return find_template(get_settings().templates_dir, name) is not None
+
+
+def _nonempty_lines(lines: AssistantLines) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    for name, value in lines.model_dump(exclude_none=True).items():
+        if isinstance(value, str):
+            if value.strip():
+                values[name] = value
+        else:
+            nested = {key: text for key, text in value.items() if text.strip()}
+            if nested:
+                values[name] = nested
+    return values
+
+
+def _translation_response_schema(lines: dict[str, Any]) -> dict[str, Any]:
+    properties: dict[str, Any] = {}
+    for name, value in lines.items():
+        if isinstance(value, str):
+            properties[name] = {"type": "STRING"}
+        else:
+            nested_properties = {key: {"type": "STRING"} for key in value}
+            properties[name] = {
+                "type": "OBJECT",
+                "properties": nested_properties,
+                "required": list(nested_properties),
+            }
+    return {
+        "type": "OBJECT",
+        "properties": properties,
+        "required": list(properties),
+    }
+
+
+def _all_requested_lines_returned(requested: dict[str, Any], result: dict[str, Any]) -> bool:
+    for name, value in requested.items():
+        translated = result.get(name)
+        if isinstance(value, dict):
+            if not isinstance(translated, dict) or not all(key in translated for key in value):
+                return False
+        elif not isinstance(translated, str):
+            return False
+    return True
 
 
 @router.get("/templates", response_model=list[TemplateResponse])
@@ -216,6 +264,57 @@ async def draft_services(
         services={key: service.model_dump(mode="json") for key, service in services.items()},
         warnings=warnings,
     )
+
+
+@router.post(
+    "/assistants/{assistant_id}/translate-lines",
+    response_model=TranslateLinesResponse,
+    response_model_exclude_none=True,
+)
+async def translate_lines(
+    assistant_id: UUID,
+    payload: TranslateLinesRequest,
+    _: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> TranslateLinesResponse:
+    if await session.get(Assistant, assistant_id) is None:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    lines = _nonempty_lines(payload.lines)
+    if not lines:
+        return TranslateLinesResponse()
+    settings = get_settings()
+    api_key = (settings.google_api_key or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Translation is not configured.")
+    prompt = (
+        f"Translate only the supplied assistant lines into {LOCALES[payload.locale].prompt_name}. "
+        "Keep every person name, business name, brand name, and placeholder such as "
+        "{{business_name}} exactly unchanged. Preserve the keys and nesting. Do not add, remove, "
+        "explain, or rewrite anything beyond translation. Return only the translated JSON.\n\n"
+        f"{json.dumps(lines, ensure_ascii=False)}"
+    )
+    client = make_genai_client(api_key)
+    try:
+        response = await client.aio.models.generate_content(
+            model=settings.setup_draft_model,
+            contents=prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": _translation_response_schema(lines),
+            },
+        )
+    finally:
+        await client.aio.aclose()
+    try:
+        translated = TranslateLinesResponse.model_validate_json(response.text or "{}")
+    except ValueError as error:
+        raise HTTPException(
+            status_code=502, detail="Could not translate assistant lines."
+        ) from error
+    result = translated.model_dump(exclude_none=True)
+    if not _all_requested_lines_returned(lines, result):
+        raise HTTPException(status_code=502, detail="Translation omitted one or more lines.")
+    return translated
 
 
 @router.get("/assistants/{assistant_id}", response_model=AssistantResponse)

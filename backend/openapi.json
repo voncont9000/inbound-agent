@@ -595,6 +595,56 @@
         "title": "AssistantCreate",
         "type": "object"
       },
+      "AssistantLines": {
+        "additionalProperties": false,
+        "properties": {
+          "call_settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranslateCallSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "greeting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Greeting"
+          },
+          "transfer_failed_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Failed Message"
+          },
+          "transfer_handoff_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Handoff Message"
+          }
+        },
+        "title": "AssistantLines",
+        "type": "object"
+      },
       "AssistantListResponse": {
         "properties": {
           "items": {
@@ -4865,6 +4915,124 @@
         "title": "TransferTarget",
         "type": "object"
       },
+      "TranslateCallSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_call_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Call Message"
+          },
+          "silence_goodbye_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Silence Goodbye Message"
+          },
+          "still_there_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Still There Prompt"
+          }
+        },
+        "title": "TranslateCallSettings",
+        "type": "object"
+      },
+      "TranslateLinesRequest": {
+        "properties": {
+          "lines": {
+            "$ref": "#/components/schemas/AssistantLines"
+          },
+          "locale": {
+            "enum": [
+              "en-GB",
+              "en-US",
+              "de-DE",
+              "es-ES",
+              "es-MX",
+              "fr-FR",
+              "it-IT",
+              "pt-BR",
+              "multi"
+            ],
+            "title": "Locale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locale",
+          "lines"
+        ],
+        "title": "TranslateLinesRequest",
+        "type": "object"
+      },
+      "TranslateLinesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "call_settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranslateCallSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "greeting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Greeting"
+          },
+          "transfer_failed_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Failed Message"
+          },
+          "transfer_handoff_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Handoff Message"
+          }
+        },
+        "title": "TranslateLinesResponse",
+        "type": "object"
+      },
       "UserResponse": {
         "properties": {
           "display_name": {
@@ -6652,6 +6820,75 @@
           }
         },
         "summary": "Create Test Call",
+        "tags": [
+          "assistants"
+        ]
+      }
+    },
+    "/assistants/{assistant_id}/translate-lines": {
+      "post": {
+        "operationId": "translate_lines_assistants__assistant_id__translate_lines_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslateLinesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranslateLinesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Translate Lines",
         "tags": [
           "assistants"
         ]

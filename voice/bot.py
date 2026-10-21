@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import aiohttp
+from inbound_core.languages import DEFAULT_RECORDING_NOTICE, LOCALES, Locale
 from loguru import logger
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
@@ -99,6 +100,13 @@ from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
 from inbound_voice.transfer import CallTransfer, SimulatedCallTransfer, TransferStart
 from inbound_voice.turns import incomplete_phone_number
+
+
+def recording_consent_message(locale: Locale, configured_message: str) -> str:
+    if configured_message == DEFAULT_RECORDING_NOTICE:
+        return LOCALES[locale].recording_notice
+    return configured_message
+
 
 SMART_TURN_STOP_DEFAULT_SECS = _SMART_TURN_STOP_DEFAULT_SECS
 
@@ -974,7 +982,13 @@ async def run_bot(
             max_call_observer.start()
             await task.queue_frame(LLMRunFrame())
             if assistant.recording.enabled:
-                await task.queue_frame(TTSSpeakFrame(assistant.recording.consent_message))
+                await task.queue_frame(
+                    TTSSpeakFrame(
+                        recording_consent_message(
+                            assistant.language, assistant.recording.consent_message
+                        )
+                    )
+                )
 
         @transport.event_handler("on_client_disconnected")
         async def on_client_disconnected(_transport: object, _client: object) -> None:

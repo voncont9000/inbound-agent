@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { api, unwrap } from "../../api/client";
+import { api, unwrap, type Schemas } from "../../api/client";
 import { errorMessage } from "../../api/errors";
 import type { AssistantConfig } from "../../lib/config";
 import { Field, type SettingsTabProps } from "./fields";
@@ -9,7 +9,7 @@ import { VoicePicker } from "../VoicePicker";
 import { ServicesEditor } from "./ServicesEditor";
 
 export function GeneralTab(props: SettingsTabProps & { assistantName: string; setAssistantName: (name: string) => void }) {
-  const { assistantId, config, update, errors, clearFieldError, assistantName, setAssistantName } = props;
+  const { assistantId, config, saved, update, errors, clearFieldError, assistantName, setAssistantName } = props;
   const [servicesOpen, setServicesOpen] = useState(Object.keys(errors).some((path) => path.startsWith("services.")));
   const [suggestNote, setSuggestNote] = useState("");
   const serviceCount = Object.keys(config.services).length;
@@ -27,6 +27,45 @@ export function GeneralTab(props: SettingsTabProps & { assistantName: string; se
     },
     onError: (error) => setSuggestNote(errorMessage(error, "Suggestions are unavailable right now.")),
   });
+  const translateLines = useMutation({
+    mutationFn: (body: Schemas["TranslateLinesRequest"]) => unwrap(
+      api.POST("/assistants/{assistant_id}/translate-lines", {
+        params: { path: { assistant_id: assistantId } },
+        body,
+      }),
+    ),
+    onSuccess: (translated, request) => update((draft) => {
+      if (translated.greeting != null && draft.greeting === request.lines.greeting) {
+        draft.greeting = translated.greeting;
+      }
+      if (draft.call_settings) {
+        for (const key of [
+          "max_call_message",
+          "still_there_prompt",
+          "silence_goodbye_message",
+        ] as const) {
+          const value = translated.call_settings?.[key];
+          const original = request.lines.call_settings?.[key];
+          if (value != null && original != null && draft.call_settings[key] === original) {
+            draft.call_settings[key] = value;
+          }
+        }
+      }
+      if (
+        translated.transfer_handoff_message != null &&
+        draft.transfer_handoff_message === request.lines.transfer_handoff_message
+      ) {
+        draft.transfer_handoff_message = translated.transfer_handoff_message;
+      }
+      if (
+        translated.transfer_failed_message != null &&
+        draft.transfer_failed_message === request.lines.transfer_failed_message
+      ) {
+        draft.transfer_failed_message = translated.transfer_failed_message;
+      }
+    }),
+  });
+  const showTranslationNotice = config.language !== saved.language && config.language !== "multi";
   const showServices = servicesOpen || Object.keys(errors).some((path) => path.startsWith("services."));
   return <>
   <section className="panel stack" aria-labelledby="basics-heading"><h2 id="basics-heading">Basics</h2>
@@ -39,6 +78,35 @@ export function GeneralTab(props: SettingsTabProps & { assistantName: string; se
           draft.language = language;
           draft.voice_id = voiceId;
         })}
+        languageNotice={(languageLabel) => showTranslationNotice && (
+          <div className="language-translation-notice">
+            <p className="help" role="note">
+              Your greeting and call messages may still be in another language.{" "}
+              <button
+                type="button"
+                className="button-link"
+                disabled={translateLines.isPending}
+                onClick={() => translateLines.mutate({
+                  locale: config.language,
+                  lines: {
+                    greeting: config.greeting,
+                    call_settings: {
+                      max_call_message: config.call_settings?.max_call_message ?? "",
+                      still_there_prompt: config.call_settings?.still_there_prompt ?? "",
+                      silence_goodbye_message: config.call_settings?.silence_goodbye_message ?? "",
+                    },
+                    transfer_handoff_message: config.transfer_handoff_message,
+                    transfer_failed_message: config.transfer_failed_message,
+                  },
+                })}
+              >
+                {translateLines.isPending ? "Translating…" : `Translate them to ${languageLabel}`}
+              </button>
+            </p>
+            {translateLines.isPending && <p className="help" role="status">Translating greeting and call messages…</p>}
+            {translateLines.error && <p role="alert">{errorMessage(translateLines.error, "Could not translate the greeting and call messages.")}</p>}
+          </div>
+        )}
       />
   </section>
   <section className="panel stack" aria-labelledby="greeting-heading"><h2 id="greeting-heading">Greeting</h2>

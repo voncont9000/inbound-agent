@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import type { Schemas } from "../../api/client";
 import { settingsTabs } from "../../lib/settingsTabs";
 import { server } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
@@ -151,6 +152,68 @@ describe("assistant settings tabs", () => {
     expect(screen.queryByRole("button", { name: "Add appointment type" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "General" }));
     expect(screen.getByLabelText("Business name")).toHaveValue("Brightside Plumbing & Heating Ltd");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  });
+
+  it("shows the translation notice only for a changed single language and applies the draft translation", async () => {
+    const user = userEvent.setup();
+    let requestBody: Schemas["TranslateLinesRequest"] | undefined;
+    server.use(
+      http.post<{ id: string }, Schemas["TranslateLinesRequest"], Schemas["TranslateLinesResponse"]>(
+        "*/api/assistants/:id/translate-lines",
+        async ({ request }) => {
+          requestBody = await request.json() as Schemas["TranslateLinesRequest"];
+          return HttpResponse.json<Schemas["TranslateLinesResponse"]>({
+            greeting: "Ciao, parli con l’assistente AI di Brightside Plumbing & Heating.",
+            call_settings: {
+              max_call_message: "Abbiamo raggiunto il limite di durata della chiamata.",
+              still_there_prompt: "È ancora in linea?",
+              silence_goodbye_message: "Terminerò la chiamata. Grazie per aver chiamato.",
+            },
+            transfer_handoff_message: "Ora la trasferisco, resti in linea.",
+            transfer_failed_message: "Mi dispiace, nessuno è disponibile al momento.",
+          });
+        },
+      ),
+    );
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const language = await screen.findByLabelText("Language");
+    expect(screen.queryByRole("button", { name: /Translate them to/ })).not.toBeInTheDocument();
+
+    await user.selectOptions(language, "multi");
+    await waitFor(() => expect(language).toHaveValue("multi"));
+    expect(screen.queryByRole("button", { name: /Translate them to/ })).not.toBeInTheDocument();
+
+    await user.selectOptions(language, "it-IT");
+    const translate = await screen.findByRole("button", { name: "Translate them to Italian" });
+    await user.click(translate);
+
+    expect(await screen.findByRole("textbox", { name: "Greeting" })).toHaveValue(
+      "Ciao, parli con l’assistente AI di Brightside Plumbing & Heating.",
+    );
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await waitFor(() => expect(requestBody).toMatchObject({
+      locale: "it-IT",
+      lines: {
+        greeting: expect.any(String),
+        call_settings: {
+          max_call_message: expect.any(String),
+          still_there_prompt: expect.any(String),
+          silence_goodbye_message: expect.any(String),
+        },
+        transfer_handoff_message: expect.any(String),
+        transfer_failed_message: expect.any(String),
+      },
+    }));
+    await user.click(screen.getByRole("link", { name: "Advanced" }));
+    expect(await screen.findByLabelText("Maximum-call message")).toHaveValue(
+      "Abbiamo raggiunto il limite di durata della chiamata.",
+    );
+    expect(screen.getByLabelText("Still-there prompt")).toHaveValue("È ancora in linea?");
+    expect(screen.getByLabelText("Silence goodbye message")).toHaveValue(
+      "Terminerò la chiamata. Grazie per aver chiamato.",
+    );
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   });
 });

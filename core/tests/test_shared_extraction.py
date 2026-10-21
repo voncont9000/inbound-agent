@@ -491,7 +491,10 @@ def test_business_context_has_written_language_instruction(channel: str) -> None
     config = _config().model_copy(update={"language": "de-DE"})
     prompt = render_business_context(config, channel=channel)
 
-    assert "Write in German." in prompt
+    assert (
+        "Write in German. If the customer writes in another language, reply in their language."
+        in prompt
+    )
 
 
 def test_multilingual_business_context_has_written_language_instruction() -> None:

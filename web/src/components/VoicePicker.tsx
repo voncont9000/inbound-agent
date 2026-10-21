@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "./States";
@@ -31,10 +31,12 @@ export function VoicePicker({
   language,
   voiceId,
   onChange,
+  languageNotice,
 }: {
   language: Locale;
   voiceId: string | null;
   onChange: (next: { language: Locale; voiceId: string | null }) => void;
+  languageNotice?: (languageLabel: string) => ReactNode;
 }) {
   const queryClient = useQueryClient();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -174,6 +176,9 @@ export function VoicePicker({
           <option key={locale.code} value={locale.code}>{locale.label}</option>
         ))}
       </select>}</Field>
+      {languageNotice?.(
+        catalogue.locales.find(({ code }) => code === language)?.label ?? language,
+      )}
       {multilingualUnavailable && (
         <p className="help" role="note">
           Multilingual isn't available with the current voice service, so the

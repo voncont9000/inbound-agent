@@ -15,7 +15,12 @@ from pydantic import (
     model_validator,
 )
 
-from inbound_core.languages import DEFAULT_LOCALE, Locale, normalize_locale
+from inbound_core.languages import (
+    DEFAULT_LOCALE,
+    DEFAULT_RECORDING_NOTICE,
+    Locale,
+    normalize_locale,
+)
 from inbound_core.phone import normalise_phone
 
 
@@ -331,7 +336,7 @@ class RecordingSettings(BaseModel):
 
     enabled: bool = True
     consent_message: str = Field(
-        default="This call may be recorded for quality and training purposes.",
+        default=DEFAULT_RECORDING_NOTICE,
         min_length=1,
     )
     retention_days: int = Field(default=30, ge=1, le=365)

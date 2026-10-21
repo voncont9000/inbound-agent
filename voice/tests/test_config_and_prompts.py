@@ -41,7 +41,7 @@ def test_assistant_config_inherits_template_and_renders_prompt() -> None:
     assert "termination_date" in prompt
     assert assistant.live_actions == []
     assert "confirm_critical_fields" not in prompt
-    assert "Speak British English, even if the instructions" in prompt
+    assert "Start in British English, even if the instructions" in prompt
     assert "acknowledge them briefly and continue" in prompt
     assert "Never ask the same question twice in a row" in " ".join(prompt.split())
     assert "return to it once before the end" in prompt

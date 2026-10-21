@@ -289,6 +289,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistants/{assistant_id}/translate-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Translate Lines */
+        post: operations["translate_lines_assistants__assistant_id__translate_lines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants/{assistant_id}/versions": {
         parameters: {
             query?: never;
@@ -1206,6 +1223,16 @@ export interface components {
             name: string;
             /** Template */
             template?: string | null;
+        };
+        /** AssistantLines */
+        AssistantLines: {
+            call_settings?: components["schemas"]["TranslateCallSettings"] | null;
+            /** Greeting */
+            greeting?: string | null;
+            /** Transfer Failed Message */
+            transfer_failed_message?: string | null;
+            /** Transfer Handoff Message */
+            transfer_handoff_message?: string | null;
         };
         /** AssistantListResponse */
         AssistantListResponse: {
@@ -2955,6 +2982,34 @@ export interface components {
             /** When To Use */
             when_to_use: string;
         };
+        /** TranslateCallSettings */
+        TranslateCallSettings: {
+            /** Max Call Message */
+            max_call_message?: string | null;
+            /** Silence Goodbye Message */
+            silence_goodbye_message?: string | null;
+            /** Still There Prompt */
+            still_there_prompt?: string | null;
+        };
+        /** TranslateLinesRequest */
+        TranslateLinesRequest: {
+            lines: components["schemas"]["AssistantLines"];
+            /**
+             * Locale
+             * @enum {string}
+             */
+            locale: "en-GB" | "en-US" | "de-DE" | "es-ES" | "es-MX" | "fr-FR" | "it-IT" | "pt-BR" | "multi";
+        };
+        /** TranslateLinesResponse */
+        TranslateLinesResponse: {
+            call_settings?: components["schemas"]["TranslateCallSettings"] | null;
+            /** Greeting */
+            greeting?: string | null;
+            /** Transfer Failed Message */
+            transfer_failed_message?: string | null;
+            /** Transfer Handoff Message */
+            transfer_handoff_message?: string | null;
+        };
         /** UserResponse */
         UserResponse: {
             /** Display Name */
@@ -3907,6 +3962,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TestCallResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    translate_lines_assistants__assistant_id__translate_lines_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslateLinesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslateLinesResponse"];
                 };
             };
             /** @description Validation Error */
