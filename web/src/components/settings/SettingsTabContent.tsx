@@ -13,7 +13,7 @@ export function SettingsTabContent({ tab, assistantName, setAssistantName, ...pr
   setAssistantName: (name: string) => void;
 }) {
   switch (tab) {
-    case "general": return <GeneralTab {...props} assistantName={assistantName} setAssistantName={setAssistantName} />;
+    case "general": return <GeneralTab key={props.assistantId} {...props} assistantName={assistantName} setAssistantName={setAssistantName} />;
     case "rules": return <RulesTab {...props} />;
     case "knowledge": return <KnowledgeTab {...props} />;
     case "abilities": return <AbilitiesTab {...props} />;

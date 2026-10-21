@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Schemas } from "../../api/client";
 import { settingsTabs } from "../../lib/settingsTabs";
+import { mockDb } from "../../mocks/db";
 import { server } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
 
@@ -158,20 +159,27 @@ describe("assistant settings tabs", () => {
   it("shows the translation notice only for a changed single language and applies the draft translation", async () => {
     const user = userEvent.setup();
     let requestBody: Schemas["TranslateLinesRequest"] | undefined;
+    const requestLocales: Schemas["TranslateLinesRequest"]["locale"][] = [];
+    mockDb.tenants[0].assistants[0].config.language = "it-IT";
     server.use(
       http.post<{ id: string }, Schemas["TranslateLinesRequest"], Schemas["TranslateLinesResponse"]>(
         "*/api/assistants/:id/translate-lines",
         async ({ request }) => {
-          requestBody = await request.json() as Schemas["TranslateLinesRequest"];
+          const body = await request.json() as Schemas["TranslateLinesRequest"];
+          requestBody = body;
+          requestLocales.push(body.locale);
+          const italian = body.locale === "it-IT";
           return HttpResponse.json<Schemas["TranslateLinesResponse"]>({
-            greeting: "Ciao, parli con l’assistente AI di Brightside Plumbing & Heating.",
+            greeting: italian
+              ? "Ciao, parli con l’assistente AI di Brightside Plumbing & Heating."
+              : "Hello, you are speaking with the AI assistant for Brightside Plumbing & Heating.",
             call_settings: {
-              max_call_message: "Abbiamo raggiunto il limite di durata della chiamata.",
-              still_there_prompt: "È ancora in linea?",
-              silence_goodbye_message: "Terminerò la chiamata. Grazie per aver chiamato.",
+              max_call_message: italian ? "Abbiamo raggiunto il limite di durata della chiamata." : "We have reached the maximum call duration.",
+              still_there_prompt: italian ? "È ancora in linea?" : "Are you still there?",
+              silence_goodbye_message: italian ? "Terminerò la chiamata. Grazie per aver chiamato." : "I’ll end the call now. Thank you for calling.",
             },
-            transfer_handoff_message: "Ora la trasferisco, resti in linea.",
-            transfer_failed_message: "Mi dispiace, nessuno è disponibile al momento.",
+            transfer_handoff_message: italian ? "Ora la trasferisco, resti in linea." : "I’ll transfer you now; please hold.",
+            transfer_failed_message: italian ? "Mi dispiace, nessuno è disponibile al momento." : "I’m sorry, nobody is available right now.",
           });
         },
       ),
@@ -185,14 +193,27 @@ describe("assistant settings tabs", () => {
     await waitFor(() => expect(language).toHaveValue("multi"));
     expect(screen.queryByRole("button", { name: /Translate them to/ })).not.toBeInTheDocument();
 
-    await user.selectOptions(language, "it-IT");
-    const translate = await screen.findByRole("button", { name: "Translate them to Italian" });
-    await user.click(translate);
+    await user.selectOptions(language, "en-GB");
+    const translateToEnglish = await screen.findByRole("button", { name: "Translate them to English (UK)" });
+    await user.click(translateToEnglish);
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Greeting" })).toHaveValue(
+        "Hello, you are speaking with the AI assistant for Brightside Plumbing & Heating.",
+      );
+      expect(screen.queryByRole("button", { name: /Translate them to/ })).not.toBeInTheDocument();
+    });
 
-    expect(await screen.findByRole("textbox", { name: "Greeting" })).toHaveValue(
+    await user.selectOptions(language, "it-IT");
+    const translateToItalian = await screen.findByRole("button", { name: "Translate them to Italian" });
+    await user.click(translateToItalian);
+
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Greeting" })).toHaveValue(
       "Ciao, parli con l’assistente AI di Brightside Plumbing & Heating.",
-    );
+    ));
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await waitFor(() => expect(
+      screen.queryByRole("button", { name: /Translate them to/ }),
+    ).not.toBeInTheDocument());
     await waitFor(() => expect(requestBody).toMatchObject({
       locale: "it-IT",
       lines: {
@@ -206,6 +227,7 @@ describe("assistant settings tabs", () => {
         transfer_failed_message: expect.any(String),
       },
     }));
+    expect(requestLocales).toEqual(["en-GB", "it-IT"]);
     await user.click(screen.getByRole("link", { name: "Advanced" }));
     expect(await screen.findByLabelText("Maximum-call message")).toHaveValue(
       "Abbiamo raggiunto il limite di durata della chiamata.",
@@ -215,5 +237,33 @@ describe("assistant settings tabs", () => {
       "Terminerò la chiamata. Grazie per aver chiamato.",
     );
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  });
+
+  it("hides the translation notice when switching back to the saved language without translating", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const language = await screen.findByLabelText("Language");
+
+    await user.selectOptions(language, "it-IT");
+    expect(await screen.findByRole("button", { name: "Translate them to Italian" })).toBeInTheDocument();
+
+    await user.selectOptions(language, "en-GB");
+    await waitFor(() => expect(language).toHaveValue("en-GB"));
+
+    expect(screen.queryByRole("button", { name: /Translate them to/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps the translation notice after saving a language change without translating", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+
+    await user.selectOptions(await screen.findByLabelText("Language"), "it-IT");
+    expect(await screen.findByRole("button", { name: "Translate them to Italian" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByText("Changes saved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Translate them to Italian" })).toBeInTheDocument();
   });
 });
