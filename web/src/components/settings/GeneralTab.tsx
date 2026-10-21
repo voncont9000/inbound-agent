@@ -12,6 +12,7 @@ export function GeneralTab(props: SettingsTabProps & { assistantName: string; se
   const { assistantId, config, saved, update, errors, clearFieldError, assistantName, setAssistantName } = props;
   const [servicesOpen, setServicesOpen] = useState(Object.keys(errors).some((path) => path.startsWith("services.")));
   const [suggestNote, setSuggestNote] = useState("");
+  const [linesLanguage, setLinesLanguage] = useState(saved.language);
   const serviceCount = Object.keys(config.services).length;
   const fieldCount = Object.values(config.services).reduce((total, service) => total + service.fields.length, 0);
   const suggest = useMutation({
@@ -34,38 +35,41 @@ export function GeneralTab(props: SettingsTabProps & { assistantName: string; se
         body,
       }),
     ),
-    onSuccess: (translated, request) => update((draft) => {
-      if (translated.greeting != null && draft.greeting === request.lines.greeting) {
-        draft.greeting = translated.greeting;
-      }
-      if (draft.call_settings) {
-        for (const key of [
-          "max_call_message",
-          "still_there_prompt",
-          "silence_goodbye_message",
-        ] as const) {
-          const value = translated.call_settings?.[key];
-          const original = request.lines.call_settings?.[key];
-          if (value != null && original != null && draft.call_settings[key] === original) {
-            draft.call_settings[key] = value;
+    onSuccess: (translated, request) => {
+      setLinesLanguage(request.locale);
+      update((draft) => {
+        if (translated.greeting != null && draft.greeting === request.lines.greeting) {
+          draft.greeting = translated.greeting;
+        }
+        if (draft.call_settings) {
+          for (const key of [
+            "max_call_message",
+            "still_there_prompt",
+            "silence_goodbye_message",
+          ] as const) {
+            const value = translated.call_settings?.[key];
+            const original = request.lines.call_settings?.[key];
+            if (value != null && original != null && draft.call_settings[key] === original) {
+              draft.call_settings[key] = value;
+            }
           }
         }
-      }
-      if (
-        translated.transfer_handoff_message != null &&
-        draft.transfer_handoff_message === request.lines.transfer_handoff_message
-      ) {
-        draft.transfer_handoff_message = translated.transfer_handoff_message;
-      }
-      if (
-        translated.transfer_failed_message != null &&
-        draft.transfer_failed_message === request.lines.transfer_failed_message
-      ) {
-        draft.transfer_failed_message = translated.transfer_failed_message;
-      }
-    }),
+        if (
+          translated.transfer_handoff_message != null &&
+          draft.transfer_handoff_message === request.lines.transfer_handoff_message
+        ) {
+          draft.transfer_handoff_message = translated.transfer_handoff_message;
+        }
+        if (
+          translated.transfer_failed_message != null &&
+          draft.transfer_failed_message === request.lines.transfer_failed_message
+        ) {
+          draft.transfer_failed_message = translated.transfer_failed_message;
+        }
+      });
+    },
   });
-  const showTranslationNotice = config.language !== saved.language && config.language !== "multi";
+  const showTranslationNotice = config.language !== linesLanguage && config.language !== "multi";
   const showServices = servicesOpen || Object.keys(errors).some((path) => path.startsWith("services."));
   return <>
   <section className="panel stack" aria-labelledby="basics-heading"><h2 id="basics-heading">Basics</h2>
