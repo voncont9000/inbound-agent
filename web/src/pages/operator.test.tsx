@@ -89,99 +89,6 @@ describe("operator workflows", () => {
     server.events.removeListener("request:start", listener);
   }, 15000);
 
-  it("removes a Gmail channel after confirming the shared Google connection warning", async () => {
-    const user = userEvent.setup();
-    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
-    const panel = await screen.findByRole("region", { name: "Channels" });
-    await within(panel).findByText("assistant@example.test");
-
-    await user.click(within(panel).getByRole("button", { name: "Remove" }));
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent("Google Calendar and Sheets");
-    expect(dialog).toHaveTextContent("same Google connection");
-    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
-
-    await waitFor(() => expect(mockDb.channels[assistantId]).toEqual([]));
-    await waitFor(() => expect(within(panel).queryByText("assistant@example.test")).not.toBeInTheDocument());
-  });
-
-  it("adds a phone number from the channel picker", async () => {
-    const user = userEvent.setup();
-    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
-    const panel = await screen.findByRole("region", { name: "Channels" });
-    await within(panel).findByText("assistant@example.test");
-
-    await user.click(screen.getByRole("button", { name: "Add a channel" }));
-    await user.click(screen.getByRole("button", { name: /Phone number/ }));
-    await user.type(screen.getByLabelText("Phone number"), "+447700900123");
-    await user.click(screen.getByRole("button", { name: "Add channel" }));
-
-    expect(await within(panel).findByText("+447700900123")).toBeInTheDocument();
-    expect(mockDb.channels[assistantId]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "phone", external_id: "+447700900123" }),
-    ]));
-  });
-
-  it("cancels the channel picker and an add form on Escape", async () => {
-    const user = userEvent.setup();
-    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
-    await screen.findByRole("heading", { name: "Channels" });
-
-    const addButton = screen.getByRole("button", { name: "Add a channel" });
-    await user.click(addButton);
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("button", { name: /Phone number/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add a channel" })).toHaveFocus();
-
-    await user.click(screen.getByRole("button", { name: "Add a channel" }));
-    await user.click(screen.getByRole("button", { name: /WhatsApp/ }));
-    await user.keyboard("{Escape}");
-    expect(screen.queryByLabelText("WhatsApp phone_number_id")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add a channel" })).toHaveFocus();
-  });
-
-  it("hides the Gmail picker card when a Gmail channel is connected", async () => {
-    const user = userEvent.setup();
-    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
-    const panel = await screen.findByRole("region", { name: "Channels" });
-    await within(panel).findByText("assistant@example.test");
-    await user.click(screen.getByRole("button", { name: "Add a channel" }));
-
-    expect(within(panel).queryByRole("button", { name: /Gmail inbox/ })).not.toBeInTheDocument();
-  });
-
-  it("saves a Gmail include filter with the expected PATCH body", async () => {
-    const user = userEvent.setup();
-    let capturedBody: Schemas["ChannelConnectionUpdate"] | undefined;
-    server.use(http.patch<{ id: string; channel_id: string }, Schemas["ChannelConnectionUpdate"]>(
-      "*/api/assistants/:id/channels/:channel_id",
-      async ({ request }) => {
-        const body = await request.json() as Schemas["ChannelConnectionUpdate"];
-        capturedBody = body;
-        const gmail = (mockDb.channels[assistantId] ?? []).find(({ kind }) => kind === "gmail")!;
-        const updated = {
-          ...gmail,
-          settings: { ...gmail.settings, include_rules: body.include_rules ?? [] },
-        };
-        mockDb.channels[assistantId] = mockDb.channels[assistantId].map((channel) => channel.id === updated.id ? updated : channel);
-        return HttpResponse.json<Schemas["ChannelConnectionResponse"]>(updated);
-      },
-    ));
-    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
-    const panel = await screen.findByRole("region", { name: "Channels" });
-    await within(panel).findByText("assistant@example.test");
-
-    await user.click(within(panel).getByRole("button", { name: /Email filters/ }));
-    await user.click(within(panel).getByRole("button", { name: "Add filter" }));
-    await user.type(within(panel).getByLabelText("Contains filter 1"), "@vinci-labs.tech");
-    await user.click(within(panel).getByRole("button", { name: "Save filters" }));
-
-    await waitFor(() => expect(capturedBody).toEqual({
-      include_rules: [{ field: "to", contains: "@vinci-labs.tech" }],
-    }));
-    expect(await within(panel).findByText("Filters saved.")).toBeInTheDocument();
-  });
-
   it("shows transfer metrics and failed transfer task on conversation details", async () => {
     const transferConversation = mockDb.tenants[1].conversations[0];
     server.use(
@@ -738,11 +645,12 @@ describe("operator workflows", () => {
 
     await screen.findByRole("heading", { name: "Second assistant" });
     const tenant = mockDb.tenants[0];
-    expect(tenant.assistants).toHaveLength(2);
+    expect(tenant.assistants).toHaveLength(3);
     expect(tenant.assistants[0].id).toBe(existingAssistantId);
-    expect(tenant.assistants[1].name).toBe("Second assistant");
+    const createdAssistant = tenant.assistants.find(({ name }) => name === "Second assistant");
+    expect(createdAssistant).toBeDefined();
     expect(tenant.assistantData[existingAssistantId].versions).toHaveLength(3);
-    expect(tenant.assistantData[tenant.assistants[1].id].versions).toHaveLength(1);
+    expect(tenant.assistantData[createdAssistant!.id].versions).toHaveLength(1);
     await user.click(screen.getByRole("link", { name: "Assistants" }));
     expect(await screen.findByRole("heading", { name: "Brightside reception" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Second assistant" })).toBeInTheDocument();
@@ -955,8 +863,9 @@ describe("operator workflows", () => {
     await screen.findByRole("heading", { name: "Tasks" });
     await user.selectOptions(screen.getByLabelText("Status"), "open");
     await user.type(screen.getByLabelText("Kind"), "callback");
-    await screen.findByRole("option", { name: "Brightside reception" });
-    await user.selectOptions(screen.getByLabelText("Assistant"), assistantId);
+    const assistantFilter = screen.getByLabelText("Assistant");
+    await within(assistantFilter).findByRole("option", { name: "Brightside reception" });
+    await user.selectOptions(assistantFilter, assistantId);
     await waitFor(() =>
       expect(
         requested.some(
@@ -980,8 +889,9 @@ describe("operator workflows", () => {
     renderApp("/knowledge-gaps", { loggedIn: true });
     await screen.findByRole("heading", { name: "Knowledge gaps" });
     await user.selectOptions(screen.getByLabelText("Status"), "answered");
-    await screen.findByRole("option", { name: "Brightside reception" });
-    await user.selectOptions(screen.getByLabelText("Assistant"), assistantId);
+    const assistantFilter = screen.getByLabelText("Assistant");
+    await within(assistantFilter).findByRole("option", { name: "Brightside reception" });
+    await user.selectOptions(assistantFilter, assistantId);
     await waitFor(() =>
       expect(
         requested.some(

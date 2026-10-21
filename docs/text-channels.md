@@ -102,6 +102,10 @@ tools.
 
 ## Gmail (draft only)
 
+Workspace owners add, reassign, remove, and configure Gmail connections from the **Channels**
+page in the web app. Each connection belongs to one assistant; Gmail include rules are edited
+from that channel's row menu.
+
 Gmail uses Gmail History API plus Pub/Sub push notifications and periodic reconciliation.
 The worker parses full Gmail messages, skips automated/newsletter mail, and treats same-domain
 senders as internal only when the mailbox domain is not a public mail domain, resolves contacts

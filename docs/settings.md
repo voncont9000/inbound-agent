@@ -15,7 +15,7 @@ documented in [templates.md](templates.md).
 | Rules | Rule presets, custom rules, pronunciation, sentence urgency rules, keyword and date urgency rules |
 | Knowledge | Office hours, FAQs, knowledge sources and digest |
 | Abilities | Calendar booking (appointment types, booking timing and holding messages), call forwarding (transfer targets, forwarding messages), after-conversation actions, readback (mode and live confirmation) |
-| Channels | Channel connections, add a channel manually, email triage |
+| Channels | Read-only channel list and a link to workspace channel management; email triage |
 | Advanced | Live actions that no ability card owns (`flag_urgent`, `request_callback`, `log_complaint`, `end_call`), review threshold, call settings and recording |
 
 ## Speech speed
@@ -53,7 +53,7 @@ browser (`web/src/lib/voices.ts`); the `/voices` API is unchanged.
 | Forwarding handoff / no-answer messages | Advanced: "Call forwarding messages" | Abilities › Call forwarding › "Forwarding messages" (collapsed) | All forwarding settings in one card. |
 | Keyword and date urgency rules | Advanced: "Urgency rules" | Rules: one "Urgency" section; structured rules are under "More rule types: keywords and date deadlines" | All `urgency_rules` in one section. Sentence rules appear first; date rules still reference intake field keys. |
 | Sentence urgency rules | Rules: "Urgent if…" | Rules: "Urgency" | Sentence rules are the primary option; keyword and date rules are progressively disclosed. |
-| Add a channel manually | Advanced: "Add a channel manually" | Channels, below the channel connections | Channel setup in one tab; its duplicate list of connected channels was removed. |
+| Channel connections | Workspace **Channels** page | Assistant settings → Channels | The settings tab shows this assistant's connections and links to workspace management for add, reassign, remove, and Gmail filters. |
 | Office hours, FAQs, knowledge sources | Knowledge | Unchanged | Facts the assistant looks up, not prompt instructions. |
 | Rule presets, custom rules, pronunciation | Rules | Unchanged | — |
 | Email triage | Channels | Unchanged | — |

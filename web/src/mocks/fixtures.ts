@@ -5,7 +5,7 @@ import templateSampleData from "./template_samples.json";
 
 const ids = {
   tenants: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"],
-  assistants: ["20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002"],
+  assistants: ["20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002", "20000000-0000-4000-8000-000000000003"],
   people: Array.from({ length: 8 }, (_, index) =>
     `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
   ),
@@ -534,6 +534,10 @@ function makeTenant(index: number): TenantFixture {
     template: index === 0 ? "home_services" : "uk_law_firm", config, version: 3, created_at: date(1), updated_at: date(10),
     conversation_count: 0,
   };
+  const workspaceAssistant: Schemas["AssistantResponse"] | null = index === 0 ? {
+    id: ids.assistants[2], name: "Harbor assistant", template: "home_services", config: plumbingConfig,
+    version: 1, created_at: date(2), updated_at: date(2), conversation_count: 0,
+  } : null;
   const conversations = Array.from({ length: 6 }, (_, item) => makeConversation(index, item));
   if (index === 0) conversations.push(makeGmailDraftConversation());
   assistant.conversation_count = conversations.filter(
@@ -542,7 +546,7 @@ function makeTenant(index: number): TenantFixture {
   const contacts = makeContacts(index);
   const taskList = conversations.flatMap(({ tasks }) => tasks);
   return {
-    tenant, assistants: [assistant],
+    tenant, assistants: workspaceAssistant ? [assistant, workspaceAssistant] : [assistant],
     assistantData: {
       [assistant.id]: {
         versions: [1, 2, 3].map((version) => ({
@@ -556,6 +560,20 @@ function makeTenant(index: number): TenantFixture {
         ],
         digest: { id: `${assistant.id}-digest`, assistant_id: assistant.id, content: index === 0 ? "Brightside provides plumbing and heating support. The team confirms availability and pricing." : "Demo & Co provides general information and arranges solicitor callbacks.", edited_by: fakeUser.id, created_at: date(5) },
       },
+      ...(workspaceAssistant ? {
+        [workspaceAssistant.id]: {
+          versions: [{
+            id: `${workspaceAssistant.id}-version-1`, version: 1, created_by: fakeUser.id,
+            config: plumbingConfig, created_at: date(2),
+          }],
+          sources: [],
+          digest: {
+            id: `${workspaceAssistant.id}-digest`, assistant_id: workspaceAssistant.id,
+            content: "Harbor provides home services and answers general enquiries.",
+            edited_by: fakeUser.id, created_at: date(2),
+          },
+        },
+      } : {}),
     },
     conversations, contacts,
     gaps: [0, 1, 2].map((n) => ({

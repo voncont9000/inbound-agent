@@ -8,6 +8,7 @@ import type { WebCallSessionFactory } from "./call/webCall";
 import { TestCallBar } from "./components/TestCallBar";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { AssistantSetupPage } from "./pages/AssistantSetupPage";
+import { ChannelsPage } from "./pages/ChannelsPage";
 import { HomePage } from "./pages/HomePage";
 import { AssistantsPage, AssistantSettingsPage, AssistantSettingsRedirect } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
@@ -24,6 +25,7 @@ const NAV = [
   { to: "/tasks", label: "Tasks", icon: icon("M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11") },
   { to: "/knowledge-gaps", label: "Knowledge gaps", icon: icon("M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20") },
   { to: "/assistants", label: "Assistants", icon: icon("M12 2a3 3 0 0 1 3 3v1h2a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h2V5a3 3 0 0 1 3-3M9 13h.01M15 13h.01M9 17h6") },
+  { to: "/channels", label: "Channels", icon: icon("M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4") },
   { to: "/help", label: "Help", icon: icon("M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0") },
 ];
 
@@ -94,6 +96,7 @@ export default function App({ createWebCallSession }: { createWebCallSession?: W
               <Route path="/" element={<HomePage />} />
               <Route path="/assistants/new" element={<AssistantSetupPage />} />
               <Route path="/assistants" element={<AssistantsPage />} />
+              <Route path="/channels" element={<ChannelsPage />} />
               <Route path="/assistants/:id/settings" element={<AssistantSettingsRedirect />} />
               <Route path="/assistants/:id/settings/:tab" element={<AssistantSettingsPage />} />
               <Route path="/assistants/:id/knowledge" element={<AssistantSettingsRedirect tab="knowledge" />} />

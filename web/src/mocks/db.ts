@@ -21,6 +21,7 @@ function browserSession(): boolean {
 function createDb(): MockDatabase {
   const tenants = cloneFixtures();
   const assistantId = tenants[0].assistants[0].id;
+  const secondAssistantId = tenants[0].assistants[1].id;
   return {
     tenants,
     loggedIn: browserSession(),
@@ -38,6 +39,16 @@ function createDb(): MockDatabase {
         status: "active",
         settings: { include_rules: [] },
         created_at: "2026-02-01T10:30:00Z",
+        google_features: [],
+      }],
+      [secondAssistantId]: [{
+        id: "40000000-0000-4000-8000-000000000002",
+        assistant_id: secondAssistantId,
+        kind: "phone",
+        external_id: "+442079460001",
+        status: "active",
+        settings: {},
+        created_at: "2026-02-02T10:30:00Z",
         google_features: [],
       }],
     },

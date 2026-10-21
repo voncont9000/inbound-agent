@@ -153,17 +153,13 @@ describe("global test-call bar", () => {
     expect(within(bar()).getByRole("button", { name: "Hang up" })).toBeInTheDocument();
   });
 
-  it("connects a WhatsApp channel using its phone number ID", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it("links channel management from assistant settings", async () => {
     renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    const channels = await screen.findByRole("region", { name: "Channels" });
-    await within(channels).findByText("assistant@example.test");
-    await user.click(within(channels).getByRole("button", { name: "Add a channel" }));
-    await user.click(within(channels).getByRole("button", { name: /WhatsApp/ }));
-    await user.type(within(channels).getByLabelText("WhatsApp phone_number_id"), "123456789");
-    await user.click(within(channels).getByRole("button", { name: "Add channel" }));
-    expect(await within(channels).findByText("123456789")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Manage channels" })).toHaveAttribute(
+      "href",
+      `/channels?assistant=${assistantId}`,
+    );
   });
 });
 

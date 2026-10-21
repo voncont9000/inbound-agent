@@ -212,6 +212,11 @@ class EmailIncludeRule(BaseModel):
 
 class ChannelConnectionUpdate(BaseModel):
     include_rules: list[EmailIncludeRule] | None = Field(default=None, max_length=20)
+    assistant_id: UUID | None = None
+
+
+class WorkspaceChannelCreate(ChannelConnectionCreate):
+    assistant_id: UUID
 
 
 class GmailOAuthStartRequest(BaseModel):

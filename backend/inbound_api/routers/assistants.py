@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urljoin
 from uuid import UUID
@@ -15,11 +14,9 @@ from inbound_core.setup_draft import build_services_draft_prompt, parse_services
 from inbound_core.templates import find_template
 from inbound_core.templates import list_templates as load_templates
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
-from inbound_api.channels.gmail_client import FakeGmailClient
 from inbound_api.jobs import enqueue
 from inbound_api.models import (
     Assistant,
@@ -47,13 +44,16 @@ from inbound_api.schemas import (
     TestCallResponse,
 )
 from inbound_api.services.audit import write_audit
+from inbound_api.services.channel_connections import (
+    create_channel_connection,
+    delete_channel_connection,
+    update_channel_connection,
+)
 from inbound_api.services.conversation_delete import (
     delete_conversations as delete_conversations_service,
 )
 from inbound_api.services.diff import config_diff
-from inbound_api.services.gmail_queue import enqueue_gmail_sync
 from inbound_api.services.knowledge_import import make_genai_client
-from inbound_api.services.phone import normalise_phone
 from inbound_api.settings import get_settings
 from inbound_api.web_call_tokens import issue
 
@@ -386,46 +386,7 @@ async def create_channel(
     ctx: TenantContext = _owner,
     session: AsyncSession = _tenant_session_dependency,
 ) -> ChannelConnectionResponse:
-    if await session.get(Assistant, assistant_id) is None:
-        raise HTTPException(status_code=404, detail="Assistant not found")
-    if payload.kind == "gmail" and get_settings().gmail_mode == "off":
-        raise HTTPException(status_code=409, detail="Gmail is not enabled")
-    if payload.kind == "gmail" and get_settings().gmail_mode == "google":
-        raise HTTPException(status_code=422, detail="Connect Gmail with Google")
-    external_id = payload.external_id.strip()
-    if payload.kind == "phone":
-        try:
-            external_id = normalise_phone(external_id)
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail=str(error)) from error
-    elif payload.kind == "gmail":
-        external_id = external_id.lower()
-    if not external_id:
-        raise HTTPException(status_code=422, detail="Channel external_id is required")
-    connection = ChannelConnection(
-        tenant_id=ctx.tenant_id,
-        assistant_id=assistant_id,
-        kind=payload.kind,
-        external_id=external_id,
-        status="active",
-        settings=payload.settings,
-    )
-    try:
-        async with session.begin_nested():
-            session.add(connection)
-            await session.flush()
-    except IntegrityError:
-        raise HTTPException(status_code=409, detail="This channel is already connected") from None
-    if payload.kind == "gmail":
-        client = FakeGmailClient(external_id, get_settings().gmail_fake_dir)
-        history_id = await client.watch("fake")
-        connection.settings = {
-            **connection.settings,
-            "history_id": history_id,
-            "watch_renewed_at": datetime.now(UTC).isoformat(),
-        }
-        await enqueue_gmail_sync(session, connection.id)
-    await write_audit(session, ctx, "channel.created", "channel_connection", connection.id)
+    connection = await create_channel_connection(session, ctx, assistant_id, payload)
     return ChannelConnectionResponse.model_validate(connection)
 
 
@@ -446,8 +407,7 @@ async def delete_channel(
     )
     if connection is None:
         raise HTTPException(status_code=404, detail="Channel connection not found")
-    await write_audit(session, ctx, "channel.deleted", "channel_connection", channel_id)
-    await session.delete(connection)
+    await delete_channel_connection(session, ctx, connection)
 
 
 @router.patch(
@@ -471,14 +431,5 @@ async def update_channel(
     )
     if connection is None:
         raise HTTPException(status_code=404, detail="Channel connection not found")
-    if "include_rules" in payload.model_fields_set:
-        if connection.kind != "gmail":
-            raise HTTPException(
-                status_code=422, detail="Include rules are only supported for Gmail"
-            )
-        connection.settings = {
-            **connection.settings,
-            "include_rules": [rule.model_dump() for rule in payload.include_rules or []],
-        }
-        await write_audit(session, ctx, "channel.updated", "channel_connection", channel_id)
+    await update_channel_connection(session, ctx, connection, payload)
     return ChannelConnectionResponse.model_validate(connection)

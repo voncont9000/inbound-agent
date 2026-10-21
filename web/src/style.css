@@ -625,3 +625,64 @@ code { color: var(--accent-text); font-size: 0.9em; background: var(--surface-se
 @media (max-width: 639px) {
   .abilities-grid { grid-template-columns: 1fr; }
 }
+
+.channel-connected-notice { margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid var(--success); border-radius: var(--radius-lg); color: var(--success); background: var(--surface-raised); }
+.channel-add-area { margin-bottom: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); }
+.channel-add-area .post-action-picker { padding: 0; }
+.channel-add-area .post-action-picker h3 { margin: 0 0 var(--space-3); }
+.channel-add-area .post-action-picker-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.channel-add-area .post-action-picker-cancel { width: auto; margin-top: var(--space-3); }
+.workspace-channel-form { max-width: 560px; }
+.channel-workspace-controls { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); margin-bottom: var(--space-4); }
+.channel-search-field { flex: 1 1 260px; min-width: min(100%, 220px); }
+.channel-search-field input { width: 100%; }
+.channel-assistant-filter { min-height: 38px; display: inline-flex; align-items: center; gap: var(--space-2); width: auto; padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-full); color: var(--ink); background: var(--surface-raised); font: inherit; cursor: pointer; }
+.channel-assistant-filter:hover { background: var(--surface-secondary); }
+.channel-table-wrap { width: 100%; overflow: visible; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-card); }
+.channel-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.channel-table th { padding: var(--space-3) var(--space-4); color: var(--body); font-size: 12px; font-weight: 500; text-align: left; background: var(--surface-secondary); }
+.channel-table th:nth-child(1) { width: 20%; }
+.channel-table th:nth-child(2) { width: 28%; }
+.channel-table th:nth-child(3) { width: 25%; }
+.channel-table th:nth-child(4) { width: 15%; }
+.channel-table th:nth-child(5) { width: 12%; }
+.channel-table td { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); vertical-align: middle; }
+.channel-table-name { display: flex; min-width: 0; align-items: center; gap: var(--space-2); font-weight: 500; }
+.channel-table-name svg { flex: 0 0 auto; }
+.channel-table-id { display: block; overflow-wrap: anywhere; color: var(--body); }
+.channel-table select { width: 100%; min-width: 0; }
+.channel-menu-wrap { position: relative; display: flex; justify-content: flex-end; }
+.channel-menu-trigger { width: 36px; min-width: 36px; padding: 0; font-size: 22px; line-height: 1; }
+.channel-row-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; display: grid; min-width: 160px; padding: var(--space-1); border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--surface-raised); box-shadow: var(--shadow-pop); }
+.channel-row-menu button { min-height: 38px; padding: 0 var(--space-3); border: 0; border-radius: calc(var(--radius-button) - 2px); color: var(--ink); background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.channel-row-menu button:hover, .channel-row-menu button:focus-visible { background: var(--surface-secondary); }
+.channel-details-row td { padding: 0; }
+.channel-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.channel-settings-heading h2 { margin: 0; }
+.channel-settings-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.channel-settings-list li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-3); min-width: 0; }
+.channel-settings-list li > svg { color: var(--ink); }
+.channel-settings-list li > strong { font-weight: 500; }
+.channel-settings-id { min-width: 0; overflow-wrap: anywhere; color: var(--body); }
+@media (max-width: 760px) {
+  .channel-settings-list li { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .channel-settings-id { grid-column: 2; }
+  .channel-settings-list li > .badge { grid-column: 3; grid-row: 1 / span 2; }
+}
+@media (max-width: 600px) {
+  .channel-workspace-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .channel-search-field { min-width: 0; }
+  .channel-table-wrap { overflow: visible; border: 0; background: transparent; box-shadow: none; }
+  .channel-table, .channel-table tbody, .channel-table tr, .channel-table td { display: block; width: 100%; }
+  .channel-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .channel-table { table-layout: auto; }
+  .channel-table .channel-table-row { position: relative; display: grid; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-card); }
+  .channel-table .channel-table-row td { display: grid; grid-template-columns: minmax(100px, 0.55fr) minmax(0, 1fr); align-items: center; gap: var(--space-2); padding: 0; border: 0; }
+  .channel-table .channel-table-row td::before { content: attr(data-label); color: var(--body); font-size: 12px; font-weight: 500; }
+  .channel-table .channel-table-row td[data-label="Status"] .badge { justify-self: start; }
+  .channel-table .channel-table-row td[data-label="Actions"] { position: absolute; top: var(--space-3); right: var(--space-3); display: block; width: auto; }
+  .channel-table .channel-table-row td[data-label="Actions"]::before { content: none; }
+  .channel-table .channel-details-row { display: block; margin: calc(-1 * var(--space-3)) 0 var(--space-3); }
+  .channel-table .channel-details-row td { display: block; padding: 0; border: 0; }
+  .channel-settings-heading { align-items: flex-start; }
+}

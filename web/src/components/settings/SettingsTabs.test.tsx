@@ -23,7 +23,8 @@ describe("assistant settings tabs", () => {
   it.each(settingsTabs.map(({ id, label }) => [id, label]))("shows the %s tab with global test call and Save controls", async (tab, label) => {
     renderApp(`/assistants/${assistantId}/settings/${tab}`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
-    expect(screen.getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
+    const settingsNavigation = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(within(settingsNavigation).getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
     const testCallBar = screen.getByRole("region", { name: "Test call" });
     expect(within(testCallBar).getByRole("button", { name: "Start test call" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Test call" })).not.toBeInTheDocument();
@@ -51,7 +52,10 @@ describe("assistant settings tabs", () => {
       ] })),
       http.get("*/api/assistants/:id/channels", ({ params }) => HttpResponse.json({
         items: params.id === assistantId
-          ? [{ id: "phone-1", kind: "phone", external_id: "+44 20 7946 0958", google_features: [] }]
+          ? [{
+            id: "phone-1", assistant_id: assistantId, kind: "phone", external_id: "+44 20 7946 0958",
+            status: "active", settings: {}, created_at: "2026-06-01T00:00:00Z", google_features: [],
+          }]
           : [],
       })),
     );
@@ -65,6 +69,16 @@ describe("assistant settings tabs", () => {
     await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(
       `/assistants/${otherAssistantId}/settings/abilities`,
     ));
+  });
+
+  it("links the assistant channel summary to workspace channel management", async () => {
+    renderApp(`/assistants/${assistantId}/settings/channels`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+
+    expect(await screen.findByRole("link", { name: "Manage channels" })).toHaveAttribute(
+      "href",
+      `/channels?assistant=${assistantId}`,
+    );
   });
 
   it("closes the assistant switcher on Escape and restores focus", async () => {
