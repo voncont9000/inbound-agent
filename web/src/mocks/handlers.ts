@@ -353,6 +353,19 @@ export const handlers = [
     },
     warnings: [],
   })),
+  http.post<{ id: string }, Schemas["TranslateLinesRequest"], Schemas["TranslateLinesResponse"]>(
+    "*/api/assistants/:id/translate-lines",
+    () => HttpResponse.json<Schemas["TranslateLinesResponse"]>({
+      greeting: "Ciao, parli con l’assistente AI di Brightside Plumbing & Heating.",
+      call_settings: {
+        max_call_message: "Abbiamo raggiunto il limite di durata della chiamata.",
+        still_there_prompt: "È ancora in linea?",
+        silence_goodbye_message: "Terminerò la chiamata. Grazie per aver chiamato.",
+      },
+      transfer_handoff_message: "Ora la trasferisco, resti in linea.",
+      transfer_failed_message: "Mi dispiace, nessuno è disponibile al momento.",
+    }),
+  ),
   http.get<never, never, Schemas["ChannelConnectionsResponse"]>("*/api/channels", ({ request }) => {
     const tenant = selectedTenant(request);
     const ids = new Set(tenant.assistants.map(({ id }) => id));

@@ -61,8 +61,10 @@ isolated in `inbound_voice/providers.py`.
 
 Assistant `language` uses one of the shared locale codes `en-GB`, `en-US`, `de-DE`, `es-ES`,
 `es-MX`, `fr-FR`, `it-IT`, `pt-BR`, or `multi`. Existing human-readable values are normalized
-on load, and unknown stored values use the `en-GB` default. The phone prompt speaks the
-configured language; text-channel prompts use a separate written-language instruction.
+on load, and unknown stored values use the `en-GB` default. A phone call starts in the configured
+language and then responds in the caller's language if they speak another one, even if they never
+spoke the configured language. Text-channel prompts use a separate written-language instruction.
+The recording consent notice follows the configured locale; `multi` uses the English notice.
 
 AssemblyAI configuration remains unchanged and uses its multilingual model. Soniox receives
 one base-language hint for a single locale; `multi` enables language identification with

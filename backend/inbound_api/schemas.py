@@ -138,6 +138,32 @@ class ServicesDraftResponse(BaseModel):
     warnings: list[str]
 
 
+class TranslateCallSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    max_call_message: str | None = None
+    still_there_prompt: str | None = None
+    silence_goodbye_message: str | None = None
+
+
+class AssistantLines(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    greeting: str | None = None
+    call_settings: TranslateCallSettings | None = None
+    transfer_handoff_message: str | None = None
+    transfer_failed_message: str | None = None
+
+
+class TranslateLinesRequest(BaseModel):
+    locale: Locale
+    lines: AssistantLines
+
+
+class TranslateLinesResponse(AssistantLines):
+    pass
+
+
 class BulkDeleteRequest(BaseModel):
     ids: list[UUID] = Field(min_length=1, max_length=100)
 

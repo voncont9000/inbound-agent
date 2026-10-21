@@ -22,20 +22,76 @@ class LocaleInfo:
     speechify_language: str | None
     speechify_model: str
     accent: str
+    recording_notice: str
+
+
+DEFAULT_RECORDING_NOTICE = "This call may be recorded for quality and training purposes."
 
 
 LOCALES: dict[Locale, LocaleInfo] = {
-    "en-GB": LocaleInfo("English (UK)", "British English", "en", "en-GB", "simba-3.2", "British"),
-    "en-US": LocaleInfo("English (US)", "American English", "en", "en-US", "simba-3.2", "American"),
-    "de-DE": LocaleInfo("German (Germany)", "German", "de", "de-DE", "simba-3.0", "German"),
+    "en-GB": LocaleInfo(
+        "English (UK)",
+        "British English",
+        "en",
+        "en-GB",
+        "simba-3.2",
+        "British",
+        DEFAULT_RECORDING_NOTICE,
+    ),
+    "en-US": LocaleInfo(
+        "English (US)",
+        "American English",
+        "en",
+        "en-US",
+        "simba-3.2",
+        "American",
+        DEFAULT_RECORDING_NOTICE,
+    ),
+    "de-DE": LocaleInfo(
+        "German (Germany)",
+        "German",
+        "de",
+        "de-DE",
+        "simba-3.0",
+        "German",
+        "Dieser Anruf kann zu Qualitäts- und Schulungszwecken aufgezeichnet werden.",
+    ),
     "es-ES": LocaleInfo(
-        "Spanish (Spain)", "Spanish (Spain)", "es", "es-ES", "simba-3.0", "Spanish"
+        "Spanish (Spain)",
+        "Spanish (Spain)",
+        "es",
+        "es-ES",
+        "simba-3.0",
+        "Spanish",
+        "Esta llamada puede grabarse con fines de calidad y formación.",
     ),
     "es-MX": LocaleInfo(
-        "Spanish (Mexico)", "Mexican Spanish", "es", "es-MX", "simba-3.0", "Mexican Spanish"
+        "Spanish (Mexico)",
+        "Mexican Spanish",
+        "es",
+        "es-MX",
+        "simba-3.0",
+        "Mexican Spanish",
+        "Esta llamada puede grabarse con fines de calidad y capacitación.",
     ),
-    "fr-FR": LocaleInfo("French (France)", "French", "fr", "fr-FR", "simba-3.0", "French"),
-    "it-IT": LocaleInfo("Italian (Italy)", "Italian", "it", "it-IT", "simba-3.0", "Italian"),
+    "fr-FR": LocaleInfo(
+        "French (France)",
+        "French",
+        "fr",
+        "fr-FR",
+        "simba-3.0",
+        "French",
+        "Cet appel peut être enregistré à des fins de qualité et de formation.",
+    ),
+    "it-IT": LocaleInfo(
+        "Italian (Italy)",
+        "Italian",
+        "it",
+        "it-IT",
+        "simba-3.0",
+        "Italian",
+        "Questa chiamata può essere registrata per finalità di qualità e formazione.",
+    ),
     "pt-BR": LocaleInfo(
         "Portuguese (Brazil)",
         "Brazilian Portuguese",
@@ -43,9 +99,16 @@ LOCALES: dict[Locale, LocaleInfo] = {
         "pt-BR",
         "simba-3.0",
         "Brazilian Portuguese",
+        "Esta chamada pode ser gravada para fins de qualidade e treinamento.",
     ),
     "multi": LocaleInfo(
-        "Multilingual", "multiple languages", "multi", None, "simba-3.0", "Multilingual"
+        "Multilingual",
+        "multiple languages",
+        "multi",
+        None,
+        "simba-3.0",
+        "Multilingual",
+        DEFAULT_RECORDING_NOTICE,
     ),
 }
 
@@ -106,17 +169,20 @@ def spoken_language_instruction(locale: Locale) -> str:
             "Speak the language the caller uses, and switch with them if they change language; "
             "if unsure, use English."
         )
+    name = LOCALES[locale].prompt_name
     return (
-        f"Speak {LOCALES[locale].prompt_name}, even if the instructions, greeting or knowledge "
-        "below are written in another language. If the caller clearly switches to another "
-        "language, follow them."
+        f"Start in {name}, even if the instructions, greeting or knowledge below are written in "
+        "another language. Always reply in the language the caller is speaking: if they speak "
+        f"another language, reply in that language from your next reply on, even if they never "
+        f"spoke {name}. If you are unsure which language they speak, use {name}."
     )
 
 
 def written_language_instruction(locale: Locale) -> str:
     if locale == "multi":
         return "Reply in the language the customer writes in."
-    return f"Write in {LOCALES[locale].prompt_name}."
+    name = LOCALES[locale].prompt_name
+    return f"Write in {name}. If the customer writes in another language, reply in their language."
 
 
 def caller_language_name(locale: Locale) -> str:

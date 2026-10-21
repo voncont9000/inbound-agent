@@ -12,7 +12,15 @@ from inbound_core.config import (
     assistant_config_json_schema,
     load_assistant_config,
 )
-from inbound_core.languages import DEFAULT_LOCALE, Locale, normalize_locale
+from inbound_core.languages import (
+    DEFAULT_LOCALE,
+    DEFAULT_RECORDING_NOTICE,
+    LOCALES,
+    Locale,
+    normalize_locale,
+    spoken_language_instruction,
+    written_language_instruction,
+)
 
 
 def _sheets_action(spreadsheet_id: str) -> SheetsRowAction:
@@ -96,6 +104,30 @@ def test_assistant_config_strips_template_metadata() -> None:
     )
 
     assert config.business_name == "Demo & Co Solicitors"
+
+
+def test_single_locale_language_instructions_follow_the_customer() -> None:
+    assert spoken_language_instruction("it-IT") == (
+        "Start in Italian, even if the instructions, greeting or knowledge below are written in "
+        "another language. Always reply in the language the caller is speaking: if they speak "
+        "another language, reply in that language from your next reply on, even if they never "
+        "spoke Italian. If you are unsure which language they speak, use Italian."
+    )
+    assert written_language_instruction("de-DE") == (
+        "Write in German. If the customer writes in another language, reply in their language."
+    )
+
+
+def test_multilingual_spoken_instruction_and_recording_notices() -> None:
+    assert spoken_language_instruction("multi") == (
+        "Speak the language the caller uses, and switch with them if they change language; "
+        "if unsure, use English."
+    )
+    assert LOCALES["it-IT"].recording_notice == (
+        "Questa chiamata può essere registrata per finalità di qualità e formazione."
+    )
+    assert LOCALES["multi"].recording_notice == DEFAULT_RECORDING_NOTICE
+    assert all(locale.recording_notice for locale in LOCALES.values())
 
 
 def test_digest_path_is_loaded_relative_to_supplied_root(tmp_path: Path) -> None:

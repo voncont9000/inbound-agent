@@ -213,7 +213,10 @@ appointment types.
 - FR-S8 **implemented**: `language` is a shared locale code (`en-GB`, `en-US`, `de-DE`, `es-ES`,
   `es-MX`, `fr-FR`, `it-IT`, `pt-BR`, or `multi`). Legacy values are normalized and unknown
   values default to `en-GB`. Speech prompts, STT settings, and TTS settings derive from this
-  configuration; text channels use the corresponding written-language instruction.
+  configuration. Phone prompts start in the configured language and then follow the caller's
+  language; text channels reply in the customer's language when it differs. Recording consent
+  uses a locale-specific notice, with English for `multi`. General settings can translate the
+  greeting and fixed call messages in the unsaved draft when the language changes.
 - FR-S9 **implemented for Speechify**: the authenticated picker filters the shared voice
   catalogue by locale and shows name, accent, gender, and preview. It lists up to six recommended
   voices (current voice and default first), with search, gender and accent filters, and a

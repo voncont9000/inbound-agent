@@ -34,9 +34,10 @@ Assistant language is stored as a locale code: `en-GB`, `en-US`, `de-DE`, `es-ES
 `fr-FR`, `it-IT`, `pt-BR`, or `multi`. The default is `en-GB`. Legacy human-readable values
 are normalized when configurations load; unknown values also fall back to `en-GB`.
 WhatsApp and Gmail use a written-language instruction derived from the same assistant locale.
-`multi` asks text agents to reply in the language the customer writes in. Phone prompts use a
-separate spoken-language instruction and do not leak voice-specific instructions into text
-responses.
+For a single locale, text agents write in that language unless the customer writes in another
+language, in which case they reply in the customer's language. `multi` always asks text agents to
+reply in the language the customer writes in. Phone prompts use a separate spoken-language
+instruction and do not leak voice-specific instructions into text responses.
 
 ## Configuration
 

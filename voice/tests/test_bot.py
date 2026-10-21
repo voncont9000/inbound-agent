@@ -368,6 +368,15 @@ def test_greeting_response_frames_precede_queued_recording_consent() -> None:
     asyncio.run(run())
 
 
+def test_italian_recording_consent_uses_the_assistant_locale() -> None:
+    assert (
+        BOT_MODULE.recording_consent_message(
+            "it-IT", "This call may be recorded for quality and training purposes."
+        )
+        == "Questa chiamata può essere registrata per finalità di qualità e formazione."
+    )
+
+
 def test_number_hold_secs_parses_default_and_override() -> None:
     assert BOT_MODULE.number_hold_secs({}) == 2.0
     assert BOT_MODULE.number_hold_secs({"NUMBER_HOLD_SECS": "1.25"}) == 1.25
