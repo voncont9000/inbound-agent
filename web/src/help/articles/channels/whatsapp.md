@@ -10,8 +10,8 @@ WhatsApp connects through the phone number ID provided for the account. The assi
 
 ## Connect a WhatsApp channel
 
-1. Open the assistant's settings and select **Channels**.
-2. Choose **Add a channel**, then select **WhatsApp**.
+1. Open **Channels** from the workspace navigation and choose **Add channel**.
+2. Select **WhatsApp** and choose the assistant that should handle the messages.
 3. Enter the phone number ID provided for your WhatsApp Business account and choose **Add channel**.
 4. Check that the connection is shown for the intended assistant. Ask your administrator if you do not have the ID.
 
@@ -25,3 +25,5 @@ WhatsApp connects through the phone number ID provided for the account. The assi
 ### Good to know
 
 The app does not provide embedded WhatsApp sign-up or a template editor. Calendar booking can be used in supported live interactions when the relevant ability is configured.
+
+To move the connection to another assistant or remove it, use the workspace Channels page.

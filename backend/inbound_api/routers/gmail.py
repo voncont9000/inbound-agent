@@ -74,7 +74,7 @@ async def gmail_oauth_callback(code: str, state: str):
     if get_settings().gmail_mode == "off":
         raise HTTPException(status_code=409, detail="Gmail is not enabled")
     try:
-        tenant_id, assistant_id, _user_id, _features = verify_state_with_features(state)
+        tenant_id, assistant_id, _user_id, features = verify_state_with_features(state)
     except ValueError:
         raise HTTPException(
             status_code=400, detail="Invalid or expired Gmail OAuth state"
@@ -136,7 +136,12 @@ async def gmail_oauth_callback(code: str, state: str):
         }
         await enqueue_gmail_sync(session, connection.id)
     base = (settings.allowed_origins or ["http://localhost:5173"])[0].rstrip("/")
-    return RedirectResponse(f"{base}/assistants/{assistant_id}/settings", status_code=303)
+    destination = (
+        f"{base}/channels?connected=gmail"
+        if not features
+        else f"{base}/assistants/{assistant_id}/settings"
+    )
+    return RedirectResponse(destination, status_code=303)
 
 
 async def exchange_google_code(code: str, settings, *, transport=None):

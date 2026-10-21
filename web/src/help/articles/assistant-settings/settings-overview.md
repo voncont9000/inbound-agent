@@ -14,7 +14,7 @@ Assistant settings are grouped into tabs. Most changes are saved together, while
 2. Use the tabs **General**, **Rules**, **Knowledge**, **Abilities**, **Channels** and **Advanced** to find the setting you need.
 3. Review any validation messages before saving. A tab with errors shows a count beside its name.
 
-**General** holds the assistant's identity, voice and greeting, plus **Instructions** (Custom prompt) with services and intake fields, prices and contact details. **Rules** holds conversation rules and urgency conditions. **Knowledge** holds office hours, FAQs and knowledge sources. **Abilities** holds Calendar booking, Call forwarding, after-conversation actions and Readback. **Channels** holds channel connections, email filters and controls to add or remove channels. **Advanced** holds other live actions, call settings, review threshold and recording.
+**General** holds the assistant's identity, voice and greeting, plus **Instructions** (Custom prompt) with services and intake fields, prices and contact details. **Rules** holds conversation rules and urgency conditions. **Knowledge** holds office hours, FAQs and knowledge sources. **Abilities** holds Calendar booking, Call forwarding, after-conversation actions and Readback. **Channels** shows the assistant's connected channels and links to the workspace Channels page, where owners add, reassign, remove and filter connections. **Advanced** holds other live actions, call settings, review threshold and recording.
 
 ## Save assistant settings
 

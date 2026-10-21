@@ -247,9 +247,69 @@ async def test_callback_stores_granted_scopes_and_keeps_existing_refresh_token(m
     response = await gmail_router.gmail_oauth_callback("auth-code", state)
 
     assert response.status_code == 303
+    assert response.headers["location"] == f"https://app.test/assistants/{assistant_id}/settings"
     assert connection.credentials_ciphertext == "existing-encrypted-refresh-token"
     assert connection.settings["google_scopes"] == granted_scopes
     assert connection.settings["history_id"] == "history-42"
+
+
+@pytest.mark.asyncio
+async def test_plain_gmail_oauth_redirects_to_workspace_channels(monkeypatch):
+    tenant_id, assistant_id, user_id = uuid4(), uuid4(), uuid4()
+    monkeypatch.setattr(
+        gmail_oauth_state,
+        "get_settings",
+        lambda: SimpleNamespace(voice_service_token="test-secret"),
+    )
+    state = gmail_oauth_state.issue_state(tenant_id, assistant_id, user_id)
+    settings = SimpleNamespace(
+        gmail_mode="google",
+        gmail_pubsub_topic="projects/example/topics/gmail",
+        allowed_origins=["https://app.test"],
+    )
+    connection = SimpleNamespace(
+        id=uuid4(),
+        assistant_id=assistant_id,
+        status="active",
+        settings={},
+        credentials_ciphertext="existing-encrypted-refresh-token",
+    )
+    session = SimpleNamespace(
+        get=AsyncMock(return_value=object()),
+        scalar=AsyncMock(return_value=connection),
+    )
+
+    @asynccontextmanager
+    async def fake_tenant_session(requested_tenant_id):
+        assert requested_tenant_id == tenant_id
+        yield session
+
+    class FakeGmailClient:
+        def __init__(self, _connection, _settings):
+            pass
+
+        async def watch(self, _topic):
+            return "history-42"
+
+    monkeypatch.setattr(gmail_router, "get_settings", lambda: settings)
+    monkeypatch.setattr(gmail_router, "tenant_session", fake_tenant_session)
+    monkeypatch.setattr(
+        gmail_router,
+        "exchange_google_code",
+        AsyncMock(
+            return_value=(
+                {"access_token": "access-token", "scope": "openid email"},
+                {"emailAddress": "owner@example.test"},
+            )
+        ),
+    )
+    monkeypatch.setattr(gmail_router, "GoogleGmailClient", FakeGmailClient)
+    monkeypatch.setattr(gmail_router, "enqueue_gmail_sync", AsyncMock())
+
+    response = await gmail_router.gmail_oauth_callback("auth-code", state)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "https://app.test/channels?connected=gmail"
 
 
 def test_gmail_connection_response_exposes_features_not_scopes(monkeypatch):

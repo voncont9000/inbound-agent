@@ -54,7 +54,9 @@ describe("home dashboard", () => {
     expect(await screen.findByRole("img", { name: /in 24 hours/ })).toBeInTheDocument();
     expect(screen.getByTestId("current-location")).toHaveTextContent("/?range=today");
 
-    await user.selectOptions(await screen.findByRole("combobox", { name: "Assistant" }), await screen.findByRole("option", { name: "Brightside reception" }));
+    const assistantFilter = await screen.findByRole("combobox", { name: "Assistant" });
+    await within(assistantFilter).findByRole("option", { name: "Brightside reception" });
+    await user.selectOptions(assistantFilter, assistantId);
     await waitFor(() => expect(requests.at(-1)?.get("assistant_id")).toBe(assistantId));
     expect(requests.at(-1)?.get("range")).toBe("today");
 

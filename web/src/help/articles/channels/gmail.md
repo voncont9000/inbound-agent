@@ -10,10 +10,11 @@ Gmail lets the assistant triage incoming messages and prepare replies as drafts.
 
 ## Connect Gmail
 
-1. Open the assistant's settings and select **Channels**.
-2. Choose **Add a channel**, then select **Gmail inbox**.
+1. Open **Channels** from the workspace navigation and choose **Add channel**.
+2. Select **Gmail inbox** and choose the assistant that should handle it.
 3. Choose **Connect with Google** and follow the connection prompts. In a deployment using the fake Gmail provider, enter the mailbox address instead.
-4. Review the Gmail triage categories and adjust them if needed.
+4. Open the Gmail row menu and choose **Email filters** to set which messages reach the assistant.
+5. Review the assistant's Gmail triage categories and adjust them in its settings if needed.
 
 ## Choose which emails reach the assistant
 
@@ -22,6 +23,8 @@ Gmail lets the assistant triage incoming messages and prepare replies as drafts.
 3. Choose **Save filters**. If you add multiple filters, an email is included when it matches at least one of them.
 
 Recipient filters check the `To`, `Cc`, `Delivered-To`, `X-Original-To`, `X-Forwarded-To` and `Envelope-To` headers. Messages that do not match remain in Gmail and are labelled **AI/Skipped**.
+
+You can also filter by sender address or display name, or by subject. Matching ignores letter case. Use **Channels** in the workspace navigation to add, reassign or remove inbox connections.
 
 ## Review triaged messages
 

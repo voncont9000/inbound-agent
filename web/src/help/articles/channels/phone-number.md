@@ -10,8 +10,8 @@ Phone routing must be arranged for your workspace. The app does not provide a nu
 
 ## Add a phone channel
 
-1. Open the assistant's settings and select **Channels**.
-2. Choose **Add a channel**, then select **Phone number**.
+1. Open **Channels** from the workspace navigation and choose **Add channel**.
+2. Select **Phone number** and choose the assistant that should answer the calls.
 3. Enter the phone number your administrator provided, using international format such as `+44 20 7946 0000`.
 4. Choose **Add channel**. The connection is saved straight away; you don't need **Save changes**.
 
@@ -24,3 +24,5 @@ Phone routing must be arranged for your workspace. The app does not provide a nu
 ### Good to know
 
 The number and its connection to the phone service are managed outside the assistant setup flow. Do not change routing details unless your administrator has provided them.
+
+To move the number to another assistant or remove it, use the Channels page in the workspace navigation.

@@ -353,6 +353,69 @@ export const handlers = [
     },
     warnings: [],
   })),
+  http.get<never, never, Schemas["ChannelConnectionsResponse"]>("*/api/channels", ({ request }) => {
+    const tenant = selectedTenant(request);
+    const ids = new Set(tenant.assistants.map(({ id }) => id));
+    const items = Object.values(mockDb.channels).flat()
+      .filter((channel) => ids.has(channel.assistant_id))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return HttpResponse.json<Schemas["ChannelConnectionsResponse"]>({ items });
+  }),
+  http.post<never, Schemas["WorkspaceChannelCreate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/channels", async ({ request }) => {
+    const body = await requestJson<Schemas["WorkspaceChannelCreate"]>(request);
+    const tenant = selectedTenant(request);
+    if (!findAssistant(tenant, body.assistant_id)) return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    const tenantAssistantIds = new Set(tenant.assistants.map(({ id }) => id));
+    const duplicate = Object.values(mockDb.channels).flat().some((channel) =>
+      tenantAssistantIds.has(channel.assistant_id) && channel.kind === body.kind && channel.external_id === body.external_id,
+    );
+    if (duplicate) return HttpResponse.json<ApiErrorResponse>({ detail: "This channel is already connected" }, { status: 409 });
+    const channel: Schemas["ChannelConnectionResponse"] = {
+      id: crypto.randomUUID(), assistant_id: body.assistant_id, kind: body.kind,
+      external_id: body.external_id, status: "active", settings: body.settings ?? {},
+      created_at: isoNow(), google_features: [],
+    };
+    mockDb.channels[body.assistant_id] = [...(mockDb.channels[body.assistant_id] ?? []), channel];
+    return HttpResponse.json<Schemas["ChannelConnectionResponse"]>(channel, { status: 201 });
+  }),
+  http.patch<{ channel_id: string }, Schemas["ChannelConnectionUpdate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/channels/:channel_id", async ({ params, request }) => {
+    const channelId = String(params.channel_id);
+    const tenant = selectedTenant(request);
+    const tenantAssistantIds = new Set(tenant.assistants.map(({ id }) => id));
+    const currentAssistantId = Object.keys(mockDb.channels).find((assistantId) =>
+      tenantAssistantIds.has(assistantId) && (mockDb.channels[assistantId] ?? []).some(({ id }) => id === channelId),
+    );
+    if (!currentAssistantId) return HttpResponse.json<ApiErrorResponse>({ detail: "Channel connection not found" }, { status: 404 });
+    const body = await requestJson<Schemas["ChannelConnectionUpdate"]>(request);
+    const channel = mockDb.channels[currentAssistantId].find(({ id }) => id === channelId)!;
+    if (body.assistant_id && !findAssistant(tenant, body.assistant_id)) {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Assistant not found" }, { status: 404 });
+    }
+    if (body.include_rules !== undefined && channel.kind !== "gmail") {
+      return HttpResponse.json<ApiErrorResponse>({ detail: "Include rules are only supported for Gmail" }, { status: 422 });
+    }
+    const assistantId = body.assistant_id ?? currentAssistantId;
+    const updated: Schemas["ChannelConnectionResponse"] = {
+      ...channel,
+      assistant_id: assistantId,
+      settings: body.include_rules === undefined
+        ? channel.settings
+        : { ...channel.settings, include_rules: body.include_rules },
+    };
+    mockDb.channels[currentAssistantId] = mockDb.channels[currentAssistantId].filter(({ id }) => id !== channelId);
+    mockDb.channels[assistantId] = [...(mockDb.channels[assistantId] ?? []), updated];
+    return HttpResponse.json<Schemas["ChannelConnectionResponse"]>(updated);
+  }),
+  http.delete<{ channel_id: string }, never, ApiResponse<never>>("*/api/channels/:channel_id", ({ params, request }) => {
+    const channelId = String(params.channel_id);
+    const tenantAssistantIds = new Set(selectedTenant(request).assistants.map(({ id }) => id));
+    const assistantId = Object.keys(mockDb.channels).find((id) =>
+      tenantAssistantIds.has(id) && (mockDb.channels[id] ?? []).some(({ id: rowId }) => rowId === channelId),
+    );
+    if (!assistantId) return HttpResponse.json<ApiErrorResponse>({ detail: "Channel connection not found" }, { status: 404 });
+    mockDb.channels[assistantId] = mockDb.channels[assistantId].filter(({ id }) => id !== channelId);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>("*/api/assistants/:id/channels", ({ params }) => HttpResponse.json<Schemas["ChannelConnectionsResponse"]>({ items: mockDb.channels[String(params.id)] ?? [] })),
   http.post<{ id: string }, Schemas["ChannelConnectionCreate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/assistants/:id/channels", async ({ params, request }) => {
     const assistantId = String(params.id);
