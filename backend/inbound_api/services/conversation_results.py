@@ -105,7 +105,16 @@ async def persist_voice_report(
     conversation.ended_at = payload.ended_at
     conversation.end_reason = payload.end_reason
     conversation.summary = payload.summary
-    conversation.metrics = {**(conversation.metrics or {}), **payload.metrics}
+    recap = (
+        payload.post_call_intake.get("customer_recap")
+        if isinstance(payload.post_call_intake, dict)
+        else None
+    )
+    conversation.metrics = {
+        **(conversation.metrics or {}),
+        **payload.metrics,
+        "customer_recap": recap,
+    }
     conversation.estimated_cost = payload.estimated_cost
     await enqueue(session, "graph_ingest", {"conversation_id": str(conversation.id)})
     await enqueue(session, "post_actions_run", {"conversation_id": str(conversation.id)})
@@ -143,6 +152,10 @@ async def persist_extracted_results(
             session.add(intake)
         else:
             intake.data = data
+    conversation.metrics = {
+        **(conversation.metrics or {}),
+        "customer_recap": post_call_intake.get("customer_recap"),
+    }
     await session.execute(
         delete(Task).where(
             Task.conversation_id == conversation.id,

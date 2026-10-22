@@ -13,9 +13,11 @@ from inbound_core.config import (
     WebhookAction,
 )
 from inbound_core.post_actions import (
+    EMAIL_TEMPLATES,
     TEMPLATE_VARIABLES,
     derive_events,
     matched_events,
+    render_email_body,
     render_template,
 )
 from sqlalchemy import select
@@ -31,8 +33,12 @@ from inbound_api.models import (
     PostActionSecret,
     Task,
 )
+from inbound_api.post_actions.email_html import render_email_html
 from inbound_api.post_actions.service import build_action_context, render_action_subject
 from inbound_api.schemas import (
+    EmailActionTemplateResponse,
+    EmailPreviewRequest,
+    EmailPreviewResponse,
     PostActionTestRequest,
     PostActionTestResponse,
     PostActionVariable,
@@ -55,6 +61,70 @@ async def list_post_action_variables(_: TenantContext = _staff):
         PostActionVariable(name=name, description=description)
         for name, description in TEMPLATE_VARIABLES
     ]
+
+
+@router.get(
+    "/post-actions/email-templates",
+    response_model=list[EmailActionTemplateResponse],
+)
+async def list_post_action_email_templates(_: TenantContext = _staff):
+    return EMAIL_TEMPLATES
+
+
+@router.post(
+    "/assistants/{assistant_id}/post-actions/email-preview",
+    response_model=EmailPreviewResponse,
+)
+async def preview_post_action_email(
+    assistant_id: UUID,
+    payload: EmailPreviewRequest,
+    _: TenantContext = _owner,
+    session: AsyncSession = _tenant_session_dependency,
+) -> EmailPreviewResponse:
+    assistant = await session.get(Assistant, assistant_id)
+    if assistant is None:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    config = AssistantConfig.model_validate(assistant.config)
+    service_key = next(iter(config.services), "")
+    service = config.services.get(service_key)
+    intake_lines = []
+    seen_fields = set()
+    for configured_service in config.services.values():
+        for field in configured_service.fields:
+            if field.name in seen_fields:
+                continue
+            seen_fields.add(field.name)
+            intake_lines.append(f"{field.label or field.name}: Example")
+    settings = get_settings()
+    preview_id = "00000000-0000-0000-0000-000000000000"
+    context = {
+        "business_name": config.business_name,
+        "contact.name": "Alex Morgan",
+        "contact.first_name": "Alex",
+        "contact.email": "alex@example.com",
+        "contact.phone": "+44 20 7946 0000",
+        "customer_recap": "You asked us to arrange a call about your enquiry.",
+        "next_step": "Call back",
+        "summary": "Alex Morgan asked for a call back about an enquiry.",
+        "intake_table": "\n".join(intake_lines),
+        "channel": "phone",
+        "test_call": False,
+        "started_at": "2026-01-01 09:00 UTC",
+        "service": service.label if service else service_key,
+        "service_key": service_key,
+        "urgency": "normal",
+        "urgency_reasons": "",
+        "tasks": "",
+        "events": "",
+        "conversation.id": preview_id,
+        "conversation.link": (f"{settings.app_base_url.rstrip('/')}/conversations/{preview_id}"),
+    }
+    text = render_email_body(payload.body_template, context)
+    return EmailPreviewResponse(
+        subject=render_action_subject(payload.subject_template, context),
+        text=text,
+        html=render_email_html(body_text=text, business_name=config.business_name),
+    )
 
 
 @router.post(
@@ -123,7 +193,7 @@ async def test_post_action(
         rendered = {
             "to": [to] if to else [],
             "subject": render_action_subject(action.subject_template, context),
-            "body": render_template(action.body_template, context),
+            "body": render_email_body(action.body_template, context),
         }
     elif isinstance(action, NotifyStaffAction):
         if settings.email_sender == "off":
@@ -131,7 +201,7 @@ async def test_post_action(
         rendered = {
             "to": [str(address) for address in action.to],
             "subject": render_action_subject(action.subject_template, context),
-            "body": render_template(action.body_template, context),
+            "body": render_email_body(action.body_template, context),
         }
     elif isinstance(action, SheetsRowAction):
         if settings.sheets_writer == "off":

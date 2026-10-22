@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -87,6 +88,28 @@ async def test_post_action_dry_run_and_webhook_secret_lifecycle(tenant_pair, mon
     assert {item["name"]: item["description"] for item in variables.json()}[
         "test_call"
     ] == "True for browser test calls."
+
+    email_templates = await client.get("/post-actions/email-templates")
+    assert email_templates.status_code == 200, email_templates.text
+    inquiry = next(
+        template for template in email_templates.json() if template["key"] == "inquiry_confirmation"
+    )
+    assert inquiry["audience"] == "customer"
+    preview = await client.post(
+        f"/assistants/{assistant_id}/post-actions/email-preview",
+        json={
+            "subject_template": inquiry["subject_template"],
+            "body_template": inquiry["body_template"],
+        },
+    )
+    assert preview.status_code == 200, preview.text
+    assert "You asked us to arrange a call about your enquiry." in preview.json()["text"]
+    assert "Alex" in preview.json()["text"]
+    assert "<html>" in preview.json()["html"]
+    preview_path = (
+        Path(__file__).resolve().parents[1] / "var" / "email-preview-inquiry-confirmation.html"
+    )
+    preview_path.write_text(preview.json()["html"], encoding="utf-8")
 
     dry_run = await client.post(
         f"/assistants/{assistant_id}/post-actions/test",

@@ -468,6 +468,26 @@ class PostActionVariable(BaseModel):
     description: str
 
 
+class EmailActionTemplateResponse(BaseModel):
+    key: str
+    label: str
+    description: str
+    audience: Literal["customer", "staff"]
+    subject_template: str
+    body_template: str
+
+
+class EmailPreviewRequest(BaseModel):
+    subject_template: str
+    body_template: str
+
+
+class EmailPreviewResponse(BaseModel):
+    subject: str
+    text: str
+    html: str
+
+
 class WebhookSecretSummary(BaseModel):
     action_key: str
     created_at: datetime

@@ -61,11 +61,33 @@ so consumers can deduplicate deliveries.
 ## Template variables
 
 The owner settings page fetches the available variables from `GET /post-actions/variables`.
-They include `business_name`, `contact.name`, `contact.email`, `contact.phone`, `channel`,
-`started_at`, `service`, `service_key`, `intake.<field_name>`, `intake_table`, `summary`,
-`urgency`, `urgency_reasons`, `tasks`, `events`, `test_call`, `conversation.id`, and
-`conversation.link`. Unknown placeholders render as an empty string. Subject line CR/LF
-characters are sanitized.
+They include `business_name`, `contact.name`, `contact.first_name`, `contact.email`,
+`contact.phone`, `channel`, `started_at`, `service`, `service_key`, `intake.<field_name>`,
+`intake_table`, `summary`, `customer_recap`, `next_step`, `urgency`, `urgency_reasons`, `tasks`,
+`events`, `test_call`, `conversation.id`, and `conversation.link`. `customer_recap` is a
+customer-facing recap extracted in the conversation language; `next_step` is the title of an open
+callback or follow-up task. Unknown or empty placeholders render as an empty string.
+
+Use `{{name|fallback text}}` to provide literal text when a variable is empty, for example
+`Hello {{contact.first_name|there}},`. Fallbacks cannot contain braces or `|`. Email bodies drop
+any line whose placeholders all render empty (a fallback counts as non-empty), collapse runs of
+three or more blank lines to one blank line, and trim surrounding whitespace. Subjects continue
+to use `render_action_subject` and sanitize CR/LF characters.
+
+Email actions can start from six editable, vertical-agnostic templates: four customer templates
+(`inquiry_confirmation`, `callback_confirmation`, `request_received`, and
+`conversation_summary`) and two staff templates (`staff_new_enquiry` and `staff_urgent`).
+Templates are listed by `GET /post-actions/email-templates`; `POST
+/assistants/{assistant_id}/post-actions/email-preview` renders an example with the assistant's
+business name. Selecting a template replaces the subject and body after confirmation when custom
+text is present.
+
+Email delivery includes both a plain-text body and a safely escaped HTML alternative. The HTML
+layout uses a centered 600px card, a business-name header, paragraphs, and inline styles. Lines
+formatted as `Label: value` render as a two-column details table; HTTP(S) URLs are linked, and a
+conversation link on its own paragraph becomes an “Open conversation” button. No external fonts
+or images are loaded.
+
 Substituted Google Sheets cell values that begin with spreadsheet formula characters are
 escaped before being written.
 

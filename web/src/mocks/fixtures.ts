@@ -2,6 +2,10 @@ import type { Schemas } from "../api/client";
 import type { AssistantConfig, Locale } from "../lib/config";
 import templateData from "./templates.json";
 import templateSampleData from "./template_samples.json";
+import emailActionTemplateData from "./email_action_templates.json";
+
+export const emailActionTemplates =
+  emailActionTemplateData as Schemas["EmailActionTemplateResponse"][];
 
 const ids = {
   tenants: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"],

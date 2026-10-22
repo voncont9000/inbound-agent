@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import type { Schemas } from "../api/client";
 import type { paths } from "../api/schema";
 import { validateAssistantConfig, type Locale } from "../lib/config";
-import { authUser, setupDraftFixture, templates, templateSamples, testCallResponse, voiceCatalogueFor } from "./fixtures";
+import { authUser, emailActionTemplates, setupDraftFixture, templates, templateSamples, testCallResponse, voiceCatalogueFor } from "./fixtures";
 import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
 import type { TenantFixture } from "./fixtures";
@@ -121,10 +121,53 @@ export const handlers = [
   http.get<never, never, Schemas["PostActionVariable"][]>("*/api/post-actions/variables", () =>
     HttpResponse.json<Schemas["PostActionVariable"][]>([
       { name: "contact.name", description: "The customer's name." },
+      { name: "contact.first_name", description: "The first part of the customer's name, when known." },
       { name: "channel", description: "The conversation channel." },
       { name: "summary", description: "Conversation summary." },
+      { name: "customer_recap", description: "A customer-facing recap of the conversation." },
+      { name: "next_step", description: "The title of the next open callback or follow-up task." },
       { name: "started_at", description: "The conversation start time in the assistant's timezone." },
     ]),
+  ),
+  http.get<never, never, Schemas["EmailActionTemplateResponse"][]>(
+    "*/api/post-actions/email-templates",
+    () => HttpResponse.json(emailActionTemplates),
+  ),
+  http.post<{ id: string }, Schemas["EmailPreviewRequest"], ApiResponse<Schemas["EmailPreviewResponse"]>>(
+    "*/api/assistants/:id/post-actions/email-preview",
+    async ({ request }) => {
+      const body = await requestJson<Schemas["EmailPreviewRequest"]>(request);
+      const context: Record<string, string> = {
+        business_name: "Brightside Plumbing & Heating",
+        "contact.name": "Alex Morgan",
+        "contact.first_name": "Alex",
+        "contact.email": "alex@example.com",
+        "contact.phone": "+44 20 7946 0000",
+        customer_recap: "You asked us to arrange a call about your enquiry.",
+        next_step: "Call back",
+        summary: "Alex Morgan asked for a call back about an enquiry.",
+        channel: "phone",
+        intake_table: "Name: Alex Morgan\nEmail: alex@example.com",
+        "conversation.link": "https://app.example.test/conversations/preview",
+        urgency_reasons: "",
+      };
+      const render = (template: string) => template.replace(
+        /\{\{\s*([A-Za-z0-9_.]+)(?:\|([^{}|]*))?\s*\}\}/g,
+        (_placeholder, name: string, fallback: string | undefined) =>
+          context[name]?.trim() || fallback?.trim() || "",
+      );
+      const text = render(body.body_template);
+      const escapeHtml = (value: string) => value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;");
+      return HttpResponse.json<Schemas["EmailPreviewResponse"]>({
+        subject: render(body.subject_template),
+        text,
+        html: `<html><body><h1>${escapeHtml(context.business_name)}</h1><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p></body></html>`,
+      });
+    },
   ),
   http.post<{ id: string }, Schemas["PostActionTestRequest"], ApiResponse<Schemas["PostActionTestResponse"]>>("*/api/assistants/:id/post-actions/test", async ({ request, params }) => {
     const body = await requestJson<Schemas["PostActionTestRequest"]>(request);

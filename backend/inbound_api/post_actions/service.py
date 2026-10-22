@@ -17,6 +17,7 @@ from inbound_core.post_actions import (
     derive_events,
     format_value,
     matched_events,
+    render_email_body,
     render_subject,
     render_template,
 )
@@ -42,6 +43,7 @@ from inbound_api.models import (
     TaskSource,
     TaskStatus,
 )
+from inbound_api.post_actions.email_html import render_email_html
 from inbound_api.post_actions.providers import (
     ActionSkipped,
     EmailSender,
@@ -301,11 +303,25 @@ async def build_action_context(
             ).all()
         )
     merged_tasks = [task for task in merged_tasks if task.status != TaskStatus.DISMISSED]
+    display_name = person.display_name if person else ""
+    recap = (conversation.metrics or {}).get("customer_recap")
+    next_task = next(
+        (
+            task
+            for task in merged_tasks
+            if task.kind in {"follow_up", "callback"} and task.status == TaskStatus.OPEN
+        ),
+        None,
+    )
+    next_step = next_task.payload.get("title", "") if next_task is not None else ""
+    if not isinstance(next_step, str):
+        next_step = ""
     lines: list[str] = []
     labels = {field.name: field.label for field in service_config.fields} if service_config else {}
     variables = {
         "business_name": config.business_name,
-        "contact.name": person.display_name if person else "",
+        "contact.name": display_name,
+        "contact.first_name": display_name.split()[0] if display_name else "",
         "contact.email": email,
         "contact.phone": phone,
         "channel": conversation.channel.value,
@@ -316,6 +332,8 @@ async def build_action_context(
         "service": service_label,
         "service_key": service_key,
         "summary": conversation.summary or "",
+        "customer_recap": recap if isinstance(recap, str) else "",
+        "next_step": next_step,
         "urgency": "urgent" if "urgent" in (events or []) else "normal",
         "urgency_reasons": format_value((conversation.metrics or {}).get("urgency_reasons", [])),
         "tasks": "\n".join(_task_text(task) for task in merged_tasks),
@@ -363,21 +381,31 @@ async def _dispatch_action(
         except ValidationError as error:
             raise ActionSkipped("The known customer email address is invalid") from error
         sender = email_sender or email_sender_from_settings(session, settings=settings)
+        text = render_email_body(action.body_template, context)
         return await sender.send(
             assistant_id=assistant.id,
             tenant_id=assistant.tenant_id,
             to=[recipient],
             subject=render_action_subject(action.subject_template, context),
-            body=render_template(action.body_template, context),
+            body=text,
+            html=render_email_html(
+                body_text=text,
+                business_name=str(context.get("business_name", "")),
+            ),
         )
     if isinstance(action, NotifyStaffAction):
         sender = email_sender or email_sender_from_settings(session, settings=settings)
+        text = render_email_body(action.body_template, context)
         return await sender.send(
             assistant_id=assistant.id,
             tenant_id=assistant.tenant_id,
             to=[str(address) for address in action.to],
             subject=render_action_subject(action.subject_template, context),
-            body=render_template(action.body_template, context),
+            body=text,
+            html=render_email_html(
+                body_text=text,
+                business_name=str(context.get("business_name", "")),
+            ),
         )
     if isinstance(action, SheetsRowAction):
         if sheets_writer is None:

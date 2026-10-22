@@ -48,6 +48,7 @@ class EmailSender(Protocol):
         to: list[str],
         subject: str,
         body: str,
+        html: str | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -87,6 +88,7 @@ class GmailEmailSender:
         to: list[str],
         subject: str,
         body: str,
+        html: str | None = None,
     ) -> dict[str, Any]:
         connection = await action_google_connection_for(
             self.session,
@@ -105,6 +107,8 @@ class GmailEmailSender:
         message["From"] = connection.external_id
         message["Subject"] = subject
         message.set_content(body)
+        if html is not None:
+            message.add_alternative(html, subtype="html")
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip("=")
         async with httpx.AsyncClient(
             transport=self.transport, timeout=20, follow_redirects=False
@@ -136,21 +140,25 @@ class ResendEmailSender:
         to: list[str],
         subject: str,
         body: str,
+        html: str | None = None,
     ) -> dict[str, Any]:
         if not self.settings.resend_api_key or not self.settings.email_from:
             raise PermanentActionError("Resend email settings are incomplete")
         async with httpx.AsyncClient(
             transport=self.transport, timeout=20, follow_redirects=False
         ) as client:
+            payload = {
+                "from": self.settings.email_from,
+                "to": to,
+                "subject": subject,
+                "text": body,
+            }
+            if html is not None:
+                payload["html"] = html
             response = await client.post(
                 f"{self.settings.resend_base_url.rstrip('/')}/emails",
                 headers={"Authorization": f"Bearer {self.settings.resend_api_key}"},
-                json={
-                    "from": self.settings.email_from,
-                    "to": to,
-                    "subject": subject,
-                    "text": body,
-                },
+                json=payload,
             )
         _raise_http_response(response, "Resend send")
         return {"message_id": response.json().get("id")}
@@ -168,6 +176,7 @@ class FakeEmailSender:
         to: list[str],
         subject: str,
         body: str,
+        html: str | None = None,
     ) -> dict[str, Any]:
         message_id = f"fake-{datetime.now(UTC).timestamp()}"
         _append_jsonl(
@@ -178,6 +187,7 @@ class FakeEmailSender:
                 "to": to,
                 "subject": subject,
                 "body": body,
+                "html": html,
                 "message_id": message_id,
             },
         )

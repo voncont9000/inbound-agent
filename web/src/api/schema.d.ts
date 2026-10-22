@@ -201,6 +201,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistants/{assistant_id}/post-actions/email-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Post Action Email */
+        post: operations["preview_post_action_email_assistants__assistant_id__post_actions_email_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants/{assistant_id}/post-actions/test": {
         parameters: {
             query?: never;
@@ -845,6 +862,23 @@ export interface paths {
         };
         /** Gmail Oauth Callback */
         get: operations["gmail_oauth_callback_oauth_google_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/post-actions/email-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Post Action Email Templates */
+        get: operations["list_post_action_email_templates_post_actions_email_templates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2191,6 +2225,24 @@ export interface components {
             /** Urgent Within Days */
             urgent_within_days: number;
         };
+        /** EmailActionTemplateResponse */
+        EmailActionTemplateResponse: {
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "customer" | "staff";
+            /** Body Template */
+            body_template: string;
+            /** Description */
+            description: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Subject Template */
+            subject_template: string;
+        };
         /** EmailCustomerAction */
         EmailCustomerAction: {
             /** Body Template */
@@ -2220,6 +2272,22 @@ export interface components {
              * @enum {string}
              */
             field: "from" | "to" | "subject";
+        };
+        /** EmailPreviewRequest */
+        EmailPreviewRequest: {
+            /** Body Template */
+            body_template: string;
+            /** Subject Template */
+            subject_template: string;
+        };
+        /** EmailPreviewResponse */
+        EmailPreviewResponse: {
+            /** Html */
+            html: string;
+            /** Subject */
+            subject: string;
+            /** Text */
+            text: string;
         };
         /** EmailTriageConfig */
         EmailTriageConfig: {
@@ -3807,6 +3875,43 @@ export interface operations {
             };
         };
     };
+    preview_post_action_email_assistants__assistant_id__post_actions_email_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     test_post_action_assistants__assistant_id__post_actions_test_post: {
         parameters: {
             query?: never;
@@ -5182,6 +5287,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_post_action_email_templates_post_actions_email_templates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailActionTemplateResponse"][];
                 };
             };
             /** @description Validation Error */

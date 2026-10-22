@@ -116,6 +116,7 @@ FR-E7 suggested rules are explicitly out of scope for this implementation.
 - FR-T1: **Calendar** (Google Calendar first, Outlook later): live availability lookup and confirmed appointment booking for configured appointment types on voice and WhatsApp. Google Calendar events are created only after the caller or WhatsApp customer chooses and confirms an offered slot; per-assistant configuration defines durations, notice, horizon, buffers, attendee updates, and voice-only holding messages. Rescheduling, cancellation, and confirmation email remain future work.
 - FR-T2: **Google Sheets**: (a) append one row per conversation with the extraction fields (intake log) to a sheet the firm picks; (b) read lookup tables (e.g. fee list, fee earners per practice area, office hours) as knowledge. OAuth, least-privilege scopes (`drive.file` where possible).
 - FR-T3: **Email** actions: send a confirmation or summary email to the caller (from the connected Gmail mailbox, using templates), and notify staff by email.
+- Customer emails use editable, vertical-agnostic templates with a customer-facing recap and safely escaped HTML alongside plain text.
 
 **Implementation status:** The M1 after-conversation framework now supports configurable
 event-triggered customer/staff email, Google Sheets rows, and signed webhooks with tenant-scoped

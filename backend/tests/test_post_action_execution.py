@@ -6,12 +6,14 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from cryptography.fernet import Fernet
+from inbound_core.config import AssistantConfig
 from sqlalchemy import select
 
 from inbound_api.db import tenant_session
 from inbound_api.jobs import current_job
 from inbound_api.models import (
     ActionRun,
+    Assistant,
     ChannelConnection,
     Conversation,
     ConversationChannel,
@@ -19,8 +21,11 @@ from inbound_api.models import (
     Intake,
     IntakeVersion,
     Job,
+    Person,
     PostActionSecret,
     Task,
+    TaskSource,
+    TaskStatus,
 )
 from inbound_api.post_actions.providers import (
     FakeEmailSender,
@@ -28,6 +33,7 @@ from inbound_api.post_actions.providers import (
     GmailEmailSender,
 )
 from inbound_api.post_actions.service import (
+    build_action_context,
     execute_conversation_action,
     plan_conversation_actions,
     render_action_subject,
@@ -72,6 +78,50 @@ async def _assistant_and_conversation(tenant_pair, actions):
             )
         )
     return account, config, assistant_id, conversation_id
+
+
+@pytest.mark.asyncio
+async def test_action_context_includes_customer_recap_first_name_and_open_next_step(tenant_pair):
+    account, config_data, assistant_id, conversation_id = await _assistant_and_conversation(
+        tenant_pair, []
+    )
+    tenant_id = UUID(account["tenant_id"])
+    async with tenant_session(tenant_id) as session:
+        conversation = await session.get(Conversation, conversation_id)
+        assistant = await session.get(Assistant, assistant_id)
+        person = Person(tenant_id=tenant_id, display_name="Alex Morgan")
+        session.add(person)
+        await session.flush()
+        conversation.person_id = person.id
+        conversation.metrics = {"customer_recap": "You asked us to arrange a call."}
+        context = await build_action_context(
+            session,
+            conversation=conversation,
+            assistant=assistant,
+            config=AssistantConfig.model_validate(config_data),
+            tasks=[
+                Task(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    kind="callback",
+                    status=TaskStatus.DONE,
+                    payload={"title": "Old callback"},
+                    source=TaskSource.POST_CALL,
+                ),
+                Task(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    kind="follow_up",
+                    status=TaskStatus.OPEN,
+                    payload={"title": "Send details"},
+                    source=TaskSource.POST_CALL,
+                ),
+            ],
+        )
+
+    assert context["contact.first_name"] == "Alex"
+    assert context["customer_recap"] == "You asked us to arrange a call."
+    assert context["next_step"] == "Send details"
 
 
 async def _create_assistant(client, name):

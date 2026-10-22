@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
 import type { AssistantConfig } from "../lib/config";
+import { EMAIL_ACTION_DEFAULTS } from "../lib/emailActionDefaults";
 import { keyFromLabel } from "../lib/keys";
 import { isGoogleSheetsUrl, parseGoogleSheetId } from "../lib/sheets";
 import { templateVariableOptions, type TemplateVariableOption } from "../lib/templateVariables";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorState, LoadingState } from "./States";
 import { TemplateInput } from "./TemplateInput";
 
@@ -84,8 +86,8 @@ function actionSummary(action: PostAction) {
 
 function createAction(kind: ActionKind, key: string): PostAction {
   const trigger = { events: ["conversation_completed"] as Array<(typeof events)[number]>, channels: [], services: [] };
-  if (kind === "email_customer") return { kind, key, enabled: true, trigger, subject_template: "Thanks for contacting {{business_name}}", body_template: "Hello {{contact.name}},\n\n{{summary}}" };
-  if (kind === "notify_staff") return { kind, key, enabled: true, trigger, to: ["team@example.com"], subject_template: "New enquiry from {{contact.name}}", body_template: "{{summary}}\n\n{{intake_table}}" };
+  if (kind === "email_customer") return { ...EMAIL_ACTION_DEFAULTS.email_customer, kind, key, enabled: true, trigger };
+  if (kind === "notify_staff") return { ...EMAIL_ACTION_DEFAULTS.notify_staff, kind, key, enabled: true, trigger, to: ["team@example.com"] };
   if (kind === "sheets_row") return { kind, key, enabled: true, trigger, spreadsheet_id: "", sheet_name: "Sheet1", columns: [{ header: "Started", value_template: "{{started_at}}" }, { header: "Name", value_template: "{{contact.name}}" }, { header: "Channel", value_template: "{{channel}}" }, { header: "Summary", value_template: "{{summary}}" }] };
   return { kind, key, enabled: true, trigger, url: "https://example.com/webhook" };
 }
@@ -104,7 +106,7 @@ function SheetsColumnValue({
   variables: TemplateVariableOption[];
 }) {
   const [customText, setCustomText] = useState(false);
-  const match = /^\{\{([A-Za-z0-9_.]+)\}\}$/.exec(value);
+  const match = /^\{\{([A-Za-z0-9_.]+)(?:\|[^{}|]*)?\}\}$/.exec(value);
   const customTextValue = value !== "" && !match;
   const showTemplateInput = customTextValue || (customText && !match);
 
@@ -205,12 +207,18 @@ export function PostActionsEditor({
   const [expandedActionKey, setExpandedActionKey] = useState<string | null>(null);
   const [showActionPicker, setShowActionPicker] = useState(false);
   const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<{ actionKey: string; templateKey: string } | null>(null);
+  const [emailPreview, setEmailPreview] = useState<Schemas["EmailPreviewResponse"] | null>(null);
   const actionCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const addActionButtonRef = useRef<HTMLButtonElement>(null);
   const actions = config.post_actions ?? [];
   const variables = useQuery({
     queryKey: ["post-action-variables"],
     queryFn: () => unwrap(api.GET("/post-actions/variables")),
+  });
+  const emailTemplates = useQuery({
+    queryKey: ["post-action-email-templates"],
+    queryFn: () => unwrap(api.GET("/post-actions/email-templates")),
   });
   const variableOptions = templateVariableOptions(variables.data ?? [], config.services);
   const channelsQuery = useQuery({
@@ -227,6 +235,13 @@ export function PostActionsEditor({
       body: { action, conversation_id: null },
     })),
     onSuccess: (result, action) => setResults((current) => ({ ...current, [action.key]: result })),
+  });
+  const previewEmail = useMutation({
+    mutationFn: (body: Schemas["EmailPreviewRequest"]) => unwrap(api.POST(
+      "/assistants/{assistant_id}/post-actions/email-preview",
+      { params: { path: { assistant_id: assistantId } }, body },
+    )),
+    onSuccess: setEmailPreview,
   });
   const connectSheets = useMutation({
     mutationFn: () => unwrap(api.POST("/assistants/{assistant_id}/channels/gmail/oauth-start", {
@@ -274,6 +289,40 @@ export function PostActionsEditor({
       const current = postActions[index];
       if (current) postActions[index] = change(current);
     });
+  };
+
+  const chooseEmailTemplate = (action: PostAction, index: number, templateKey: string) => {
+    if (action.kind !== "email_customer" && action.kind !== "notify_staff") return;
+    const audience = action.kind === "email_customer" ? "customer" : "staff";
+    const candidates = (emailTemplates.data ?? []).filter((template) => template.audience === audience);
+    const template = candidates.find(({ key }) => key === templateKey);
+    if (!template) return;
+    const matchesTemplate = candidates.some(({ subject_template, body_template }) =>
+      subject_template === action.subject_template && body_template === action.body_template,
+    );
+    if ((action.subject_template.trim() || action.body_template.trim()) && !matchesTemplate) {
+      setPendingTemplate({ actionKey: action.key, templateKey });
+      return;
+    }
+    setAction(index, (current) =>
+      current.kind === "email_customer" || current.kind === "notify_staff"
+        ? { ...current, subject_template: template.subject_template, body_template: template.body_template }
+        : current,
+    );
+  };
+
+  const applyPendingTemplate = () => {
+    if (!pendingTemplate) return;
+    const index = actions.findIndex(({ key }) => key === pendingTemplate.actionKey);
+    const template = emailTemplates.data?.find(({ key }) => key === pendingTemplate.templateKey);
+    if (index >= 0 && template) {
+      setAction(index, (current) =>
+        current.kind === "email_customer" || current.kind === "notify_staff"
+          ? { ...current, subject_template: template.subject_template, body_template: template.body_template }
+          : current,
+      );
+    }
+    setPendingTemplate(null);
   };
 
   const addAction = (kind: ActionKind) => {
@@ -362,8 +411,33 @@ export function PostActionsEditor({
             </div></fieldset>
             {(action.kind === "email_customer" || action.kind === "notify_staff") && <>
               {action.kind === "notify_staff" && <label className="field">Staff recipients<input data-action-first-field aria-label={`Staff recipients ${index + 1}`} value={action.to.join(", ")} onChange={(event) => setAction(index, (current) => current.kind === "notify_staff" ? { ...current, to: event.target.value.split(",").map((email) => email.trim()).filter(Boolean) } : current)} /></label>}
+              <label className="field">Start from a template
+                <select
+                  aria-label="Start from a template"
+                  value={(emailTemplates.data ?? []).find((template) =>
+                    template.audience === (action.kind === "email_customer" ? "customer" : "staff") &&
+                    template.subject_template === action.subject_template &&
+                    template.body_template === action.body_template,
+                  )?.key ?? ""}
+                  disabled={emailTemplates.isLoading}
+                  onChange={(event) => chooseEmailTemplate(action, index, event.target.value)}
+                >
+                  <option value="">Choose a template</option>
+                  {(emailTemplates.data ?? [])
+                    .filter(({ audience }) => audience === (action.kind === "email_customer" ? "customer" : "staff"))
+                    .map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
+                </select>
+              </label>
               <TemplateInput id={`post-action-subject-${index}`} label="Subject template" ariaLabel={`Subject template ${index + 1}`} value={action.subject_template} variables={variableOptions} firstField={action.kind === "email_customer"} onChange={(value) => setAction(index, (current) => current.kind === "email_customer" || current.kind === "notify_staff" ? { ...current, subject_template: value } : current)} />
               <TemplateInput id={`post-action-body-${index}`} label="Body template" ariaLabel={`Body template ${index + 1}`} value={action.body_template} variables={variableOptions} multiline onChange={(value) => setAction(index, (current) => current.kind === "email_customer" || current.kind === "notify_staff" ? { ...current, body_template: value } : current)} />
+              <div className="button-row">
+                <button type="button" disabled={previewEmail.isPending} onClick={() => previewEmail.mutate({
+                  subject_template: action.subject_template,
+                  body_template: action.body_template,
+                })}>{previewEmail.isPending ? "Preparing preview…" : "Preview email"}</button>
+              </div>
+              {emailTemplates.error && <p role="alert">Email templates could not be loaded.</p>}
+              {previewEmail.error && <p role="alert">{previewEmail.error.message}</p>}
             </>}
             {action.kind === "sheets_row" && <>
               <GoogleSheetLinkField id={`post-action-sheet-link-${index}`} index={index} value={action.spreadsheet_id} onChange={(spreadsheetId) => setAction(index, (current) => current.kind === "sheets_row" ? { ...current, spreadsheet_id: spreadsheetId } : current)} />
@@ -394,6 +468,20 @@ export function PostActionsEditor({
     {actions.length > 0 && <div className="post-action-add-area">
       <button ref={addActionButtonRef} hidden={showActionPicker} type="button" className="button-secondary post-action-add" aria-expanded={showActionPicker} aria-controls="post-action-picker" onClick={() => setShowActionPicker(true)}>Add another action</button>
       {showActionPicker && <div id="post-action-picker">{actionPicker}</div>}
+    </div>}
+    {pendingTemplate && <ConfirmDialog
+      title="Replace the current subject and message?"
+      onCancel={() => setPendingTemplate(null)}
+      onConfirm={applyPendingTemplate}
+      confirmLabel="Replace"
+    >The selected template will replace the current subject and message.</ConfirmDialog>}
+    {emailPreview && <div className="dialog-backdrop">
+      <div className="dialog post-action-email-preview" role="dialog" aria-modal="true" aria-labelledby="email-preview-title">
+        <h2 id="email-preview-title">Email preview</h2>
+        <p><strong>Subject:</strong> {emailPreview.subject}</p>
+        <iframe title="Email preview" sandbox="" srcDoc={emailPreview.html} />
+        <div className="button-row"><button type="button" onClick={() => setEmailPreview(null)}>Close preview</button></div>
+      </div>
     </div>}
   </section>;
 }
