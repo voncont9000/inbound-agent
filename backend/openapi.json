@@ -5131,6 +5131,11 @@
             "title": "Name",
             "type": "string"
           },
+          "pauses_mid_sentence": {
+            "default": false,
+            "title": "Pauses Mid Sentence",
+            "type": "boolean"
+          },
           "preview_url": {
             "anyOf": [
               {

@@ -67,6 +67,7 @@ export function voiceCatalogueFor(locale: Locale): Schemas["VoiceCatalogueRespon
         locale: "en-GB",
         preview_url: null,
         is_default: true,
+        pauses_mid_sentence: false,
       },
       {
         id: `voice-${locale}-1`,
@@ -76,6 +77,7 @@ export function voiceCatalogueFor(locale: Locale): Schemas["VoiceCatalogueRespon
         locale: details.firstLocale ?? locale,
         preview_url: `https://preview.example/${locale}-1.mp3`,
         is_default: false,
+        pauses_mid_sentence: false,
       },
       {
         id: `voice-${locale}-2`,
@@ -85,6 +87,7 @@ export function voiceCatalogueFor(locale: Locale): Schemas["VoiceCatalogueRespon
         locale: details.secondLocale ?? locale,
         preview_url: `https://preview.example/${locale}-2.mp3`,
         is_default: false,
+        pauses_mid_sentence: false,
       },
       ...extraVoices(locale),
     ],
@@ -107,6 +110,7 @@ function extraVoices(locale: Locale): Schemas["VoiceCard"][] {
     locale: voiceDetails[locale].firstLocale ?? locale,
     preview_url: `https://preview.example/${locale}-${index + 3}.mp3`,
     is_default: false,
+    pauses_mid_sentence: locale === "en-GB" && index === 7,
   }));
 }
 

@@ -1,6 +1,10 @@
 import pytest
 
-from inbound_core.voice_pace import speechify_rate_percent, speechify_voice_wpm
+from inbound_core.voice_pace import (
+    speechify_rate_percent,
+    speechify_voice_pauses_mid_sentence,
+    speechify_voice_wpm,
+)
 
 
 @pytest.mark.parametrize(
@@ -23,3 +27,9 @@ def test_speechify_rate_percent(voice_id: str, speed: float, expected: int) -> N
 def test_speechify_voice_wpm_returns_measured_values_or_none() -> None:
     assert speechify_voice_wpm("alec") == 136
     assert speechify_voice_wpm("unknown") is None
+
+
+def test_speechify_voice_pauses_mid_sentence_uses_measured_threshold() -> None:
+    assert speechify_voice_pauses_mid_sentence("cleon") is True
+    assert speechify_voice_pauses_mid_sentence("helen") is False
+    assert speechify_voice_pauses_mid_sentence("unknown") is False

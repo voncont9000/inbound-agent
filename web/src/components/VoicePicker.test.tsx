@@ -12,13 +12,14 @@ import { VoicePicker } from "./VoicePicker";
 function renderPicker(
   onChange: (next: { language: Locale; voiceId: string | null }) => void,
   language: Locale = "en-GB",
+  voiceId: string | null = null,
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <VoicePicker language={language} voiceId={null} onChange={onChange} />
+      <VoicePicker language={language} voiceId={voiceId} onChange={onChange} />
     </QueryClientProvider>,
   );
 }
@@ -84,6 +85,7 @@ describe("VoicePicker", () => {
       locale: "en-GB",
       preview_url: "https://preview.example/shared.mp3",
       is_default: false,
+      pauses_mid_sentence: false,
     };
     server.use(
       http.get("*/api/voices", ({ request }) => {
@@ -166,14 +168,31 @@ describe("VoicePicker", () => {
     expect(within(list).getAllByRole("radio")).toHaveLength(6);
     expect(within(list).getByRole("radio", { name: /Ivy/ })).toBeChecked();
     expect(within(list).getByRole("radio", { name: /Beatrice/ })).toBeInTheDocument();
-    expect(screen.getByText(/Recommended voices for this language \(6 of 13\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Recommended voices for this language \(6 of 12\)/)).toBeInTheDocument();
 
-    const expander = screen.getByRole("button", { name: "Show all 13 voices" });
+    const expander = screen.getByRole("button", { name: "Show all 12 voices" });
     expect(expander).toHaveAttribute("aria-expanded", "false");
     await user.click(expander);
-    expect(within(list).getAllByRole("radio")).toHaveLength(13);
+    expect(within(list).getAllByRole("radio")).toHaveLength(12);
     await user.click(screen.getByRole("button", { name: "Show recommended voices" }));
     expect(within(list).getAllByRole("radio")).toHaveLength(6);
+  });
+
+  it("hides pause-risk voices unless selected and explains the selected voice", async () => {
+    const user = userEvent.setup();
+    const initial = renderPicker(vi.fn());
+    const list = await screen.findByRole("radiogroup", { name: "Voice" });
+
+    await user.click(screen.getByRole("button", { name: "Show all 12 voices" }));
+    expect(within(list).queryByRole("radio", { name: /Felix/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    initial.unmount();
+
+    renderPicker(vi.fn(), "en-GB", "voice-en-GB-10");
+    expect(await screen.findByRole("radio", { name: /Felix/ })).toBeChecked();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "This voice pauses mid-sentence, so calls can sound choppy. Choose another voice for smoother speech.",
+    );
   });
 
   it("filters every voice by search, gender and accent", async () => {
@@ -183,7 +202,7 @@ describe("VoicePicker", () => {
 
     await user.type(screen.getByRole("searchbox", { name: "Search voices" }), "oscar");
     expect(within(list).getAllByRole("radio").map((radio) => radio.getAttribute("value"))).toEqual(["voice-en-GB-12"]);
-    expect(screen.getByText("1 of 13 voices match.")).toBeInTheDocument();
+    expect(screen.getByText("1 of 12 voices match.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Show all/ })).not.toBeInTheDocument();
 
     await user.clear(screen.getByRole("searchbox", { name: "Search voices" }));

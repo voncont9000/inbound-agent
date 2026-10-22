@@ -22,6 +22,7 @@ from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.soniox.stt import SonioxSTTService
 from pipecat.services.speechify.tts import SpeechifyHttpTTSService, _SpeechMarkAccumulator
 
+from inbound_voice.phone_speech import PhoneNumberSpeechTransform
 from inbound_voice.pronunciation import PronunciationTransform
 from inbound_voice.providers import (
     SpeechifyVoiceAgentTTSService,
@@ -614,10 +615,32 @@ def test_create_tts_attaches_pronunciation_transform(provider: str, model: str |
 
     service = asyncio.run(create_service())
 
+    assert len(service._text_transforms) == 2
+    phone_aggregation_type, phone_transform = service._text_transforms[0]
+    pronunciation_aggregation_type, pronunciation_transform = service._text_transforms[1]
+    assert phone_aggregation_type == "*"
+    assert isinstance(phone_transform, PhoneNumberSpeechTransform)
+    assert pronunciation_aggregation_type == "*"
+    assert isinstance(pronunciation_transform, PronunciationTransform)
+
+
+def test_speechify_tts_attaches_phone_transform_without_pronunciations() -> None:
+    async def create_service():
+        async with aiohttp.ClientSession() as session:
+            environment = _environment()
+            return create_tts(
+                resolve_providers(environment),
+                environment,
+                session,
+            )
+
+    service = asyncio.run(create_service())
+
     assert len(service._text_transforms) == 1
     aggregation_type, transform = service._text_transforms[0]
     assert aggregation_type == "*"
-    assert isinstance(transform, PronunciationTransform)
+    assert isinstance(transform, PhoneNumberSpeechTransform)
+    assert transform._region == "GB"
 
 
 def test_deepgram_keeps_original_text_in_context_frame() -> None:

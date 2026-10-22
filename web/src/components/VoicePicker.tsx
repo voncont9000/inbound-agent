@@ -67,15 +67,25 @@ export function VoicePicker({
 
   const allVoices = useMemo(() => voicesQuery.data?.voices ?? [], [voicesQuery.data]);
   const selectedVoiceId = voiceId ?? voicesQuery.data?.default_voice_id ?? "";
+  const selectedVoicePauses = allVoices.some(
+    (voice) => voice.id === selectedVoiceId && voice.pauses_mid_sentence,
+  );
+  const availableVoices = useMemo(
+    () =>
+      allVoices.filter(
+        (voice) => !voice.pauses_mid_sentence || voice.id === selectedVoiceId,
+      ),
+    [allVoices, selectedVoiceId],
+  );
   const query = search.trim().toLowerCase();
   const filtering = Boolean(query || gender || accent);
   const visibleVoices = useMemo(() => {
-    if (!filtering) return showAll ? allVoices : recommendedVoices(allVoices, language, selectedVoiceId);
-    return allVoices.filter((voice) =>
+    if (!filtering) return showAll ? availableVoices : recommendedVoices(availableVoices, language, selectedVoiceId);
+    return availableVoices.filter((voice) =>
       (!query || `${voice.name} ${voice.accent} ${voice.locale}`.toLowerCase().includes(query)) &&
       (!gender || voice.gender === gender) &&
       (!accent || voice.accent === accent));
-  }, [allVoices, filtering, showAll, language, selectedVoiceId, query, gender, accent]);
+  }, [availableVoices, filtering, showAll, language, selectedVoiceId, query, gender, accent]);
 
   useEffect(() => {
     const list = listRef.current;
@@ -156,9 +166,9 @@ export function VoicePicker({
 
   const catalogue = voicesQuery.data;
   if (!catalogue) return <EmptyState>No voices are available.</EmptyState>;
-  const genders = uniqueValues(catalogue.voices, "gender");
-  const accents = uniqueValues(catalogue.voices, "accent");
-  const canExpand = !filtering && catalogue.voices.length > RECOMMENDED_VOICE_COUNT;
+  const genders = uniqueValues(availableVoices, "gender");
+  const accents = uniqueValues(availableVoices, "accent");
+  const canExpand = !filtering && availableVoices.length > RECOMMENDED_VOICE_COUNT;
   const multilingualUnavailable =
     language === "multi" &&
     !catalogue.locales.some(({ code }) => code === "multi");
@@ -250,15 +260,21 @@ export function VoicePicker({
         )}
         <p className="help voice-picker-count">
           {filtering
-            ? `${visibleVoices.length} of ${catalogue.voices.length} voices match.`
+            ? `${visibleVoices.length} of ${availableVoices.length} voices match.`
             : canExpand && !showAll
-              ? `Recommended voices for this language (${visibleVoices.length} of ${catalogue.voices.length}).`
+              ? `Recommended voices for this language (${visibleVoices.length} of ${availableVoices.length}).`
               : ""}
           {canExpand && <button type="button" className="button-link" aria-expanded={showAll} aria-controls={listId} onClick={() => setShowAll(!showAll)}>
-            {showAll ? "Show recommended voices" : `Show all ${catalogue.voices.length} voices`}
+            {showAll ? "Show recommended voices" : `Show all ${availableVoices.length} voices`}
           </button>}
         </p>
       </fieldset>
+      {selectedVoicePauses && (
+        <p className="help" role="note">
+          This voice pauses mid-sentence, so calls can sound choppy. Choose another voice for
+          smoother speech.
+        </p>
+      )}
       {changingLanguage && (
         <p role="status" className="muted">
           Loading voices…
