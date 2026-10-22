@@ -29,12 +29,14 @@ def render_email_html(*, body_text: str, business_name: str) -> str:
             continue
 
         detail_rows = [_DETAIL_LINE.fullmatch(line) for line in paragraph.splitlines()]
-        if detail_rows and all(detail_rows):
+        if len(detail_rows) >= 2 and all(detail_rows):
             rows = "".join(
                 "<tr>"
-                f'<th align="left" style="padding:8px 12px;border-bottom:1px solid #e5e7eb;'
-                f'color:#4b5563;font-weight:600">{escape(match.group(1))}</th>'
-                f'<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">'
+                f'<th width="35%" align="left" valign="top" style="padding:8px 12px;'
+                f"border-bottom:1px solid #e5e7eb;color:#4b5563;font-weight:600;"
+                f'vertical-align:top">{escape(match.group(1))}</th>'
+                f'<td valign="top" style="padding:8px 12px;border-bottom:1px solid #e5e7eb;'
+                f'vertical-align:top">'
                 f"{_linkify(match.group(2))}</td>"
                 "</tr>"
                 for match in detail_rows
@@ -49,7 +51,7 @@ def render_email_html(*, body_text: str, business_name: str) -> str:
 
         rendered_paragraphs.append(
             '<p style="margin:0 0 20px;line-height:1.6;color:#283044">'
-            f"{_linkify(paragraph).replace(chr(10), '<br>')}</p>"
+            f"{_render_paragraph(paragraph)}</p>"
         )
 
     content = "".join(rendered_paragraphs)
@@ -71,6 +73,17 @@ def render_email_html(*, body_text: str, business_name: str) -> str:
         f"{escaped_business_name}</div>"
         "</td></tr></table></td></tr></table></body></html>"
     )
+
+
+def _render_paragraph(paragraph: str) -> str:
+    lines = []
+    for line in paragraph.splitlines():
+        detail = _DETAIL_LINE.fullmatch(line)
+        if detail:
+            lines.append(f"<strong>{escape(detail.group(1))}:</strong> {_linkify(detail.group(2))}")
+        else:
+            lines.append(_linkify(line))
+    return "<br>".join(lines)
 
 
 def _linkify(text: str) -> str:

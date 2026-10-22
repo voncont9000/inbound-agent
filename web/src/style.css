@@ -327,6 +327,8 @@ code { color: var(--accent-text); font-size: 0.9em; background: var(--surface-se
 .error-summary ul { margin: 0; padding-left: 1.2rem; }
 .dialog-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: var(--space-4); background: rgb(15 15 22 / 56%); z-index: 50; }
 .dialog { width: min(520px, 100%); background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: var(--shadow-pop); display: grid; gap: var(--space-3); }
+.post-action-email-preview { width: min(720px, calc(100vw - 32px)); }
+.post-action-email-preview iframe { display: block; width: 100%; height: min(70vh, 640px); border: 1px solid var(--border, #e5e7eb); border-radius: var(--radius-lg); background: #f3f4f6; }
 .dialog .button-row { justify-content: flex-end; margin-top: var(--space-4); }
 .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); }
 .intake-table { min-width: 850px; }

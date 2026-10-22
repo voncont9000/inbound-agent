@@ -211,6 +211,21 @@ def test_email_html_escapes_content_and_formats_details_and_links():
     assert "Open conversation" in rendered
     assert "A &amp; B &lt;Services&gt;" in rendered
     assert "Sent by A &amp; B &lt;Services&gt;" in rendered
+    assert rendered.count('<th width="35%"') == 2
+    assert rendered.count('<td valign="top"') == 2
+    assert rendered.count("vertical-align:top") == 4
+
+
+def test_email_html_renders_single_detail_line_as_bold_label_paragraph():
+    rendered = render_email_html(
+        body_text="Next step: Call back",
+        business_name="Example",
+    )
+
+    assert "<p " in rendered
+    assert "<strong>Next step:</strong> Call back</p>" in rendered
+    assert "<th" not in rendered
+    assert "<tbody>" not in rendered
 
 
 @pytest.mark.asyncio
