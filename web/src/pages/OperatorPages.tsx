@@ -557,7 +557,11 @@ function ConversationDetail({ id, embedded = false, onDeleted }: {
       </div>
     </section>
     <section className="panel"><h2>After-conversation actions</h2>{(detail.action_runs ?? []).length ? detail.action_runs?.map((run) => <article className="list-row stack" key={run.id}><strong>{run.action_key} · {run.action_kind}</strong><span>Status: {run.status} · attempts: {run.attempts} · fires: {run.fire_count}</span><span>Events: {run.fired_events.join(", ") || "—"}</span>{run.pending_events.length > 0 && <span>Pending: {run.pending_events.join(", ")}</span>}{run.last_error && <p role="alert">{run.last_error}</p>}<pre>{JSON.stringify(run.output, null, 2)}</pre></article>) : <p className="muted">No after-conversation actions have run.</p>}</section>
-    <section className="panel"><h2>Tasks</h2>{detail.tasks.length ? detail.tasks.map((task) => <div className="list-row" key={task.id}><span>{task.kind} · {task.source} · {compactPayload(task.payload)}</span><label className="sr-only" htmlFor={`conversation-task-${task.id}`}>Status for {task.kind}</label><select id={`conversation-task-${task.id}`} value={task.status} onChange={(event) => patchTask.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></div>) : <p className="muted">No tasks.</p>}</section>
+    <section className="panel"><h2>Tasks</h2>{detail.tasks.length ? detail.tasks.map((task) => {
+      const label = taskLabel(task.kind, task.payload);
+      const details = taskDetails(task.kind, task.payload);
+      return <div className="list-row" key={task.id}><span><strong>{label}</strong> · {task.source}{details ? ` · ${details}` : ""}</span><label className="sr-only" htmlFor={`conversation-task-${task.id}`}>Status for {label}</label><select id={`conversation-task-${task.id}`} value={task.status} onChange={(event) => patchTask.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></div>;
+    }) : <p className="muted">No tasks.</p>}</section>
     {deleteDialogOpen && <ConfirmDialog
       title="Delete 1 conversation?"
       confirmLabel="Delete"
@@ -668,9 +672,41 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function compactPayload(payload: Record<string, unknown>) {
-  const summary = payload.reason ?? payload.summary ?? payload.details;
-  return summary ? String(summary) : JSON.stringify(payload);
+const taskKindLabels: Record<string, string> = {
+  callback: "Call back",
+  follow_up: "Follow up",
+  urgent: "Urgent follow-up",
+  action_setup_needed: "Setup needed",
+  action_failed: "Action failed",
+};
+
+const taskKindsWithKnownPayloads = new Set([
+  "callback",
+  "follow_up",
+  "urgent",
+  "complaint",
+  "knowledge_gap",
+  "needs_human",
+  "email_needs_human",
+  "action_setup_needed",
+  "action_failed",
+  "transfer_failed",
+]);
+
+function taskLabel(kind: string, payload: Record<string, unknown>) {
+  const title = payload.title;
+  if (typeof title === "string" && title.trim()) return title.trim();
+  if (taskKindLabels[kind]) return taskKindLabels[kind];
+  return kind.replaceAll("_", " ").replace(/(^\w|\s\w)/g, (letter) => letter.toUpperCase());
+}
+
+function taskDetails(kind: string, payload: Record<string, unknown>) {
+  for (const key of ["reason", "message", "summary", "details"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+  }
+  return taskKindsWithKnownPayloads.has(kind) ? "" : JSON.stringify(payload);
 }
 
 function useRowSelection(rowIds: string[]) {
@@ -796,7 +832,11 @@ export function ContactPage() {
     <section className="panel"><h2>Identities</h2>{detail.identities.map((identity) => <div className="list-row" key={identity.id}><label className="check-row"><input type="checkbox" checked={selectedIdentities.includes(identity.id)} onChange={(event) => setSelectedIdentities((current) => event.target.checked ? [...current, identity.id] : current.filter((item) => item !== identity.id))} />{identity.type}: {identity.value_normalized}</label><span>{identity.verified ? "Verified" : "Unverified"} · {identity.source} · {identity.confidence.toFixed(2)}</span></div>)}{!detail.identities.length && <p className="muted">No identities yet.</p>}<button type="button" disabled={!selectedIdentities.length} onClick={() => setDialog("split")}>Split selected identities</button></section>
     <section className="panel"><h2>Active facts</h2>{detail.active_facts.map((fact) => <div className="list-row" key={fact.id}><span><strong>{fact.predicate}</strong>: {displayValue(fact.value)}<br /><span className="muted">{fact.evidence} · confidence {fact.confidence.toFixed(2)} · since {formatDate(fact.valid_from)}</span></span></div>)}{!detail.active_facts.length && <p className="muted">No facts yet.</p>}</section>
     <section className="panel"><h2>Conversations</h2>{detail.conversations.map((conversation) => <div className="list-row" key={conversation.id}><Link to={`/conversations/${conversation.id}`}>{conversation.channel} · {conversation.summary ?? conversation.external_ref}</Link><span>{formatDate(conversation.started_at)}</span></div>)}{!detail.conversations.length && <p className="muted">No conversations yet.</p>}</section>
-    <section className="panel"><h2>Open tasks</h2>{detail.open_tasks.map((task) => <p key={task.id}>{task.kind} · {task.status} · {compactPayload(task.payload)}</p>)}{!detail.open_tasks.length && <p className="muted">No open tasks.</p>}</section>
+    <section className="panel"><h2>Open tasks</h2>{detail.open_tasks.map((task) => {
+      const label = taskLabel(task.kind, task.payload);
+      const details = taskDetails(task.kind, task.payload);
+      return <p key={task.id}><strong>{label}</strong> · {task.status}{details ? ` · ${details}` : ""}</p>;
+    })}{!detail.open_tasks.length && <p className="muted">No open tasks.</p>}</section>
     <section className="panel"><h2>Open commitments</h2>{detail.open_commitments.map((commitment) => <p key={commitment.id}>{commitment.what} · {commitment.due_at ? formatDate(commitment.due_at) : "No due date"} · {commitment.status}</p>)}{!detail.open_commitments.length && <p className="muted">No open commitments.</p>}</section>
     <section className="panel"><h2>Context card preview</h2>{detail.context_card ? <pre className="context-card">{detail.context_card}</pre> : <p className="muted">No context card yet.</p>}</section>
     {dialog === "merge" && <ConfirmDialog title={`Merge ${mergeChoices.find(({ id: other }) => other === otherId)?.display_name ?? "contact"} into ${detail.display_name}?`} onCancel={() => setDialog("")} onConfirm={() => merge.mutate()} confirmLabel="Merge">Identities, facts and conversations move to {detail.display_name}. This is audited and can be reversed by a split.</ConfirmDialog>}
@@ -849,9 +889,14 @@ export function TasksPage() {
     {tasks.isLoading && <LoadingState />}{tasks.error && <ErrorState message="Tasks could not be loaded." />}{!rows.length && !tasks.isLoading && !tasks.error && <EmptyState>No tasks match these filters.</EmptyState>}
     <div className="table-wrap"><table><thead><tr>
       {canDelete && <th className="select-cell"><input ref={selection.selectAllRef} type="checkbox" aria-label="Select all tasks" checked={selection.allSelected} onChange={selection.toggleAll} /></th>}
-      <th>Kind</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => <tr key={task.id} aria-selected={canDelete ? selection.selectedIds.includes(task.id) : undefined}>
-      {canDelete && <td className="select-cell"><input type="checkbox" aria-label={`Select ${task.kind} task`} checked={selection.selectedIds.includes(task.id)} onChange={() => selection.toggle(task.id)} /></td>}
-      <td className="cell-primary">{task.kind}</td><td><Badge tone={statusTone(task.status)}>{task.status}</Badge></td><td>{task.source}</td><td className="cell-muted">{formatDate(task.due_at)}</td><td>{compactPayload(task.payload)}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {task.kind}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td></tr>)}</tbody></table></div>
+      <th>Task</th><th>Status</th><th>Source</th><th>Due</th><th>Details</th><th>Update status</th></tr></thead><tbody>{rows.map((task) => {
+        const label = taskLabel(task.kind, task.payload);
+        const details = taskDetails(task.kind, task.payload);
+        return <tr key={task.id} aria-selected={canDelete ? selection.selectedIds.includes(task.id) : undefined}>
+          {canDelete && <td className="select-cell"><input type="checkbox" aria-label={`Select ${label} task`} checked={selection.selectedIds.includes(task.id)} onChange={() => selection.toggle(task.id)} /></td>}
+          <td className="cell-primary">{label}</td><td><Badge tone={statusTone(task.status)}>{task.status}</Badge></td><td>{task.source}</td><td className="cell-muted">{formatDate(task.due_at)}</td><td>{details || "—"}</td><td><label className="sr-only" htmlFor={`task-status-${task.id}`}>Status for {label}</label><select id={`task-status-${task.id}`} value={task.status} onChange={(event) => update.mutate({ id: task.id, status: event.target.value as Schemas["TaskUpdate"]["status"] })}><option value="open">open</option><option value="done">done</option><option value="dismissed">dismissed</option></select></td>
+        </tr>;
+      })}</tbody></table></div>
     {confirmOpen && <ConfirmDialog
       title={`Delete ${count} task${count === 1 ? "" : "s"}?`}
       confirmLabel="Delete"

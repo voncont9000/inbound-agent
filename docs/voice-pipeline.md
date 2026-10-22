@@ -145,10 +145,13 @@ urgency, callback, complaint, and end-call actions remain opt-in. When live conf
 is disabled, the assistant still reads back critical values and asks the caller to confirm
 without calling a tool. Caller-final transcripts are
 always checked against configured keyword urgency rules. In v1, date-deadline escalation,
-callback requests, and complaints are post-call tasks; the employment unfair-dismissal
-deadline rule is calculated from merged intake in code. Live tasks use source `live` and
-post-call tasks use `post_call`. The live prompt offers a callback at most once per topic,
-and post-call extraction does not treat contact details or an unaccepted offer as consent.
+callback requests, complaints, and generic staff follow-ups are post-call tasks; the employment
+unfair-dismissal deadline rule is calculated from merged intake in code. Follow-up extraction
+creates a titled task when staff need to confirm or provide something after the conversation,
+including when the assistant promises to get back in touch. An explicit callback creates a
+callback task instead of a second follow-up task. Live tasks use source `live` and post-call
+tasks use `post_call`. The live prompt offers a callback at most once per topic, and post-call
+extraction does not treat contact details or an unaccepted offer as consent.
 
 ## Conversation rules and pronunciation
 

@@ -105,7 +105,10 @@ describe("operator workflows", () => {
     expect(transfer).toHaveTextContent("no-answer");
     expect(transfer).toHaveTextContent("1200 ms");
     expect(screen.getByRole("heading", { name: "Tasks" }).parentElement).toHaveTextContent(
-      "transfer_failed",
+      "Transfer Failed",
+    );
+    expect(screen.getByRole("heading", { name: "Tasks" }).parentElement).toHaveTextContent(
+      "Caller asked for a person.",
     );
   });
 
@@ -877,6 +880,103 @@ describe("operator workflows", () => {
       ).toBe(true),
     );
     server.events.removeListener("request:start", listener);
+  });
+
+  it("shows readable task labels and details without exposing known payload JSON", async () => {
+    const tasks: Schemas["TaskListResponse"] = {
+      items: [
+        {
+          id: "60000000-0000-4000-8000-000000000101",
+          kind: "action_setup_needed",
+          status: "open",
+          due_at: null,
+          source: "live",
+          payload: {
+            action_key: "email_customer",
+            message: "Connect a Gmail account to send follow-up emails",
+          },
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000102",
+          kind: "follow_up",
+          status: "open",
+          due_at: null,
+          source: "post_call",
+          payload: {
+            title: "Confirm availability",
+            reason: "The caller asked about Monday or Tuesday.",
+          },
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000103",
+          kind: "callback",
+          status: "open",
+          due_at: null,
+          source: "post_call",
+          payload: { reason: "The caller asked for a call back." },
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000104",
+          kind: "follow_up",
+          status: "open",
+          due_at: null,
+          source: "post_call",
+          payload: {
+            reason: "Staff should confirm the next available time.",
+            message: "Check availability.",
+          },
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000105",
+          kind: "urgent",
+          status: "open",
+          due_at: null,
+          source: "post_call",
+          payload: { reason: "A time-sensitive issue needs review." },
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000106",
+          kind: "action_failed",
+          status: "open",
+          due_at: null,
+          source: "post_call",
+          payload: { message: "The email could not be sent." },
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000107",
+          kind: "custom_task",
+          status: "open",
+          due_at: null,
+          source: "live",
+          payload: { opaque: "preserved for unknown kinds" },
+        },
+      ],
+    };
+    server.use(
+      http.get<never, never, Schemas["TaskListResponse"]>(
+        "*/api/tasks",
+        () => HttpResponse.json(tasks),
+      ),
+    );
+
+    renderApp("/tasks", { loggedIn: true });
+    await screen.findByRole("columnheader", { name: "Task" });
+
+    await screen.findByRole("cell", { name: "Setup needed" });
+    expect(screen.getByRole("cell", { name: "Setup needed" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Confirm availability" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Call back" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Follow up" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Urgent follow-up" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Action failed" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Custom Task" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "The caller asked about Monday or Tuesday." })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Connect a Gmail account to send follow-up emails" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Staff should confirm the next available time." })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: '{"opaque":"preserved for unknown kinds"}' })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Select Call back task" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Status for Confirm availability")).toBeInTheDocument();
+    expect(screen.queryByText('{"action_key":"email_customer","message":"Connect a Gmail account to send follow-up emails"}')).not.toBeInTheDocument();
   });
 
   it("sends knowledge-gap filters to the server", async () => {

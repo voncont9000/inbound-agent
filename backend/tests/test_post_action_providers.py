@@ -105,7 +105,11 @@ async def test_gmail_sender_posts_base64url_mime_and_classifies_status(monkeypat
     import inbound_api.post_actions.providers as providers
 
     connection = SimpleNamespace(external_id="firm@example.com")
-    monkeypatch.setattr(providers, "google_connection_for", lambda *_: _resolved(connection))
+    monkeypatch.setattr(
+        providers,
+        "action_google_connection_for",
+        lambda *_args, **_kwargs: _resolved(connection),
+    )
     monkeypatch.setattr(providers, "google_access_token", lambda *_: _resolved("access-token"))
     requests = []
 
@@ -114,12 +118,14 @@ async def test_gmail_sender_posts_base64url_mime_and_classifies_status(monkeypat
         return httpx.Response(200, json={"id": "message-1"})
 
     sender = GmailEmailSender(None, transport=httpx.MockTransport(respond))
-    await sender.send(
+    output = await sender.send(
         assistant_id="assistant-1",
+        tenant_id="tenant-1",
         to=["caller@example.com"],
         subject="Your appointment",
         body="Hello from the firm",
     )
+    assert output["from"] == "firm@example.com"
     request = requests[0]
     assert request.method == "POST"
     assert request.url.path.endswith("/users/me/messages/send")
@@ -143,6 +149,7 @@ async def test_gmail_sender_posts_base64url_mime_and_classifies_status(monkeypat
         with pytest.raises(error_type):
             await failing.send(
                 assistant_id="assistant-1",
+                tenant_id="tenant-1",
                 to=["caller@example.com"],
                 subject="Subject",
                 body="Body",
@@ -164,8 +171,11 @@ async def test_sheets_writer_headers_append_and_quotes_sheet_name(monkeypatch):
         return httpx.Response(200, json={"updates": {"updatedRange": "Sheet!A2:B2"}})
 
     writer = GoogleSheetsWriter(transport=httpx.MockTransport(respond))
-    connection = SimpleNamespace(assistant_id="assistant-1")
-    await writer.append_row(
+    connection = SimpleNamespace(
+        assistant_id="assistant-1",
+        external_id="account@example.test",
+    )
+    result = await writer.append_row(
         connection=connection,
         spreadsheet_id="sheet-id",
         sheet_name="Owner's Data",
@@ -179,6 +189,7 @@ async def test_sheets_writer_headers_append_and_quotes_sheet_name(monkeypatch):
     assert json.loads(header_request.content)["values"] == [["Name", "Email"]]
     assert append_request.url.params["valueInputOption"] == "USER_ENTERED"
     assert append_request.url.params["insertDataOption"] == "INSERT_ROWS"
+    assert result["account_email"] == "account@example.test"
     assert json.loads(append_request.content)["values"] == [["Alex", "alex@example.com"]]
 
     requests.clear()

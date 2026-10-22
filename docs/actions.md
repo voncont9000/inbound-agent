@@ -85,12 +85,14 @@ Development and tests default to fake providers that append rendered records to 
 | `POST_ACTION_WEBHOOK_ALLOW_PRIVATE_URLS` | Defaults to false; allow local/private webhook targets only in dev/test |
 | `APP_BASE_URL` | Base URL used for conversation links |
 
-The Gmail and Google Sheets providers use the assistant's Google OAuth connection and existing
-feature-scope checks. Sheets requires an active connection with the Sheets feature even in fake
-writer mode. Resend requires `RESEND_API_KEY` and `EMAIL_FROM`. Webhook signatures use the
-Fernet-encrypted signing secret stored per assistant/action; secret values are returned only once
-when generated or rotated. Production rejects fake providers, private webhook targets, and
-incomplete provider configuration.
+For after-conversation email and Sheets actions, the providers first use the assistant's active
+Gmail connection when it has the required feature, then fall back to the newest eligible active
+Gmail connection in the same workspace. A connection from another workspace is never used.
+This fallback is specific to after-conversation actions; Calendar booking and inbox access remain
+assistant-scoped. Sheets requires the Sheets feature even in fake writer mode. Resend requires
+`RESEND_API_KEY` and `EMAIL_FROM`. Webhook signatures use the Fernet-encrypted signing secret
+stored per assistant/action; secret values are returned only once when generated or rotated.
+Production rejects fake providers, private webhook targets, and incomplete provider configuration.
 
 ## Webhooks
 
@@ -132,8 +134,9 @@ request but before the database transaction commits can repeat that send. Webhoo
 should use the stable event ID for deduplication. Transient failures retry with the regular
 worker backoff; permanent failures and skipped actions update the action run. Missing connection
 or signing setup creates an `action_setup_needed` task where appropriate, while final delivery
-failures create an `action_failed` task. A missing customer email skips the confirmation
-without creating a setup task.
+failures create an `action_failed` task. Both task kinds include a readable title and a short
+setup or failure message. A missing customer email skips the confirmation without creating a
+setup task.
 
 The owner can dry-run an action against the latest or selected conversation. Dry runs render the
 recipient, subject/body, sheet row, or webhook payload without sending, writing, or recording a

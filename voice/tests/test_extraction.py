@@ -462,6 +462,7 @@ def test_post_call_tasks_use_merged_deadlines_and_sources() -> None:
     ) == [
         {
             "type": "callback",
+            "title": "Call back",
             "reason": "Discuss options",
             "preferred_time": None,
             "due_at": "2026-02-03T09:00:00+00:00",
