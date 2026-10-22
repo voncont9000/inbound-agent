@@ -182,6 +182,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
             "status": "no-answer",
             "latency_ms": 1200,
         },
+        "customer_recap": None,
     }
     assert "end_call" not in task_kinds
     assert "transfer_failed" in task_kinds

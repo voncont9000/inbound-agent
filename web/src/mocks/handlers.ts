@@ -174,8 +174,25 @@ export const handlers = [
     const action = body.action;
     const conversation = selectedTenant(request).conversations.find(({ assistant_id }) => assistant_id === params.id);
     if (!conversation) return HttpResponse.json<ApiErrorResponse>({ detail: "Conversation not found" }, { status: 404 });
+    const templateContext = {
+      business_name: "Brightside Plumbing & Heating",
+      summary: conversation.summary ?? "",
+    };
+    const renderTemplate = (template: string) => {
+      const resolve = (name: string, fallback?: string) => templateContext[name as keyof typeof templateContext]?.trim() || fallback?.trim() || "";
+      const placeholderPattern = /\{\{\s*([A-Za-z0-9_.]+)(?:\|([^{}|]*))?\s*\}\}/g;
+      const lines = template.split("\n").filter((line) => {
+        const placeholders = [...line.matchAll(placeholderPattern)];
+        return !placeholders.length || !placeholders.every(([, name, fallback]) => !resolve(name, fallback));
+      });
+      return lines
+        .map((line) => line.replace(placeholderPattern, (_match, name: string, fallback?: string) => resolve(name, fallback)))
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    };
     const rendered = action.kind === "email_customer" || action.kind === "notify_staff"
-      ? { to: action.kind === "notify_staff" ? action.to : ["jamie.morgan@example.com"], subject: action.subject_template.replace("{{business_name}}", "Brightside Plumbing & Heating"), body: action.body_template.replace("{{summary}}", conversation.summary ?? "") }
+      ? { to: action.kind === "notify_staff" ? action.to : ["jamie.morgan@example.com"], subject: action.subject_template.replace("{{business_name}}", "Brightside Plumbing & Heating"), body: renderTemplate(action.body_template) }
       : action.kind === "sheets_row"
         ? { spreadsheet_id: action.spreadsheet_id, sheet_name: action.sheet_name, headers: action.columns.map(({ header }) => header), row: action.columns.map(({ value_template }) => value_template) }
         : { url: action.url, payload: { event_id: "dry-run", action_key: action.key, events: ["conversation_completed"], conversation_id: conversation.id, context: {} } };

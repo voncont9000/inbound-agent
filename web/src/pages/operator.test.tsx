@@ -433,7 +433,7 @@ describe("operator workflows", () => {
     await user.click(screen.getByRole("button", { name: /Email the customer/ }));
     await user.click(screen.getByRole("button", { name: "Send test" }));
     expect(await screen.findByText("Ready to send.")).toBeInTheDocument();
-    expect(screen.getByText(/Thanks for contacting Brightside Plumbing/)).toBeInTheDocument();
+    expect(screen.getByText(/Thank you for contacting Brightside Plumbing/)).toBeInTheDocument();
   });
 
   it("offers Google Sheets connection when a sheet action has no Sheets scope", async () => {
