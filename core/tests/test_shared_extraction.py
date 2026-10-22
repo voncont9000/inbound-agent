@@ -8,8 +8,10 @@ import pytest
 
 from inbound_core.config import AssistantConfig, OfficeHours, RulesConfig, SentenceUrgencyRule
 from inbound_core.extraction import (
+    EMPTY_FOLLOW_UP,
     _extraction_prompt,
     _extraction_schema,
+    _follow_up,
     build_intake_artifacts,
     build_post_call_tasks,
     extract_intake,
@@ -77,6 +79,171 @@ class _Models:
             text=json.dumps(response),
             usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=5),
         )
+
+
+def test_follow_up_parser_handles_missing_garbage_and_sanitizes_values() -> None:
+    assert _follow_up(None) == EMPTY_FOLLOW_UP
+    assert _follow_up(["invalid"]) == EMPTY_FOLLOW_UP
+    assert _follow_up({"needed": "yes", "title": "Do something", "reason": []}) == {
+        "needed": False,
+        "title": None,
+        "reason": None,
+    }
+    assert _follow_up(
+        {
+            "needed": True,
+            "title": f"  {'Confirm appointment time ' * 5} ",
+            "reason": "  Confirm the requested time.  ",
+        }
+    ) == {
+        "needed": True,
+        "title": ("Confirm appointment time " * 5)[:60].strip(),
+        "reason": "Confirm the requested time.",
+    }
+
+
+def test_follow_up_extraction_creates_one_generic_staff_task() -> None:
+    config = _config()
+    output = {
+        "service": "general",
+        "fields": [],
+        "summary": "The caller asked about availability.",
+        "callback_requested": {
+            "requested": False,
+            "reason": None,
+            "preferred_time": None,
+            "preferred_time_iso": None,
+        },
+        "follow_up": {
+            "needed": True,
+            "title": "Confirm viewing times",
+            "reason": "The caller asked whether a viewing is available on Monday or Tuesday.",
+        },
+        "complaint": {"made": False, "summary": None},
+        "unanswered_questions": [],
+    }
+
+    class Models:
+        async def generate_content(self, **_arguments):
+            return SimpleNamespace(
+                text=json.dumps(output),
+                usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=5),
+            )
+
+    result = asyncio.run(
+        extract_intake(
+            [
+                {"role": "assistant", "text": "The team will be in touch."},
+                {"role": "caller", "text": "Can I view on Monday or Tuesday?"},
+            ],
+            {"service": "general", "fields": {}},
+            config,
+            SimpleNamespace(aio=SimpleNamespace(models=Models())),
+            "test-model",
+        )
+    )
+    post_call, merged = build_intake_artifacts(
+        {"service": "general", "fields": {}},
+        result,
+        config,
+    )
+
+    assert build_post_call_tasks(post_call, merged, config) == [
+        {
+            "type": "follow_up",
+            "title": "Confirm viewing times",
+            "reason": "The caller asked whether a viewing is available on Monday or Tuesday.",
+            "source": "post_call",
+        }
+    ]
+
+
+def test_explicit_callback_creates_one_titled_callback_task() -> None:
+    config = _config()
+    post_call = {
+        "service": "general",
+        "fields": {},
+        "callback_requested": {
+            "requested": True,
+            "reason": "The caller asked for a call on Tuesday.",
+            "preferred_time": "Tuesday",
+            "preferred_time_iso": None,
+        },
+        "follow_up": {
+            "needed": True,
+            "title": "Call back Tuesday",
+            "reason": "Call the caller on Tuesday.",
+        },
+        "complaint": {"made": False, "summary": None},
+    }
+
+    tasks = build_post_call_tasks(post_call, {"service": "general", "fields": {}}, config)
+    assert len(tasks) == 1
+    assert tasks[0]["type"] == "callback"
+    assert tasks[0]["title"] == "Call back Tuesday"
+    assert tasks[0]["reason"] == "The caller asked for a call on Tuesday."
+    assert tasks[0]["source"] == "post_call"
+
+
+def test_follow_up_needed_false_creates_no_follow_up_task() -> None:
+    config = _config()
+    post_call = {
+        "service": "general",
+        "fields": {},
+        "callback_requested": {
+            "requested": False,
+            "reason": None,
+            "preferred_time": None,
+            "preferred_time_iso": None,
+        },
+        "follow_up": {"needed": False, "title": None, "reason": None},
+        "complaint": {"made": False, "summary": None},
+    }
+
+    assert build_post_call_tasks(post_call, {"service": "general", "fields": {}}, config) == []
+
+
+def test_follow_up_task_deduplicates_equivalent_open_tasks() -> None:
+    config = _config()
+    post_call = {
+        "service": "general",
+        "fields": {},
+        "callback_requested": {"requested": False},
+        "follow_up": {"needed": True, "title": "Send the quote", "reason": "Send the quote."},
+        "complaint": {"made": False},
+    }
+
+    assert (
+        build_post_call_tasks(
+            post_call,
+            {"service": "general", "fields": {}},
+            config,
+            [{"type": "follow_up", "title": "Send the quote"}],
+        )
+        == []
+    )
+    assert (
+        build_post_call_tasks(
+            post_call,
+            {"service": "general", "fields": {}},
+            config,
+            [{"type": "callback", "status": "open"}],
+        )
+        == []
+    )
+    assert build_post_call_tasks(
+        post_call,
+        {"service": "general", "fields": {}},
+        config,
+        [{"type": "callback", "status": "done"}],
+    ) == [
+        {
+            "type": "follow_up",
+            "title": "Send the quote",
+            "reason": "Send the quote.",
+            "source": "post_call",
+        }
+    ]
 
 
 def test_extraction_uses_injected_client_and_message_thread_wording() -> None:
@@ -480,10 +647,13 @@ def test_sentence_urgency_schema_and_prompt_are_omitted_without_sentence_rules()
 
     schema = _extraction_schema(config)
     prompt = _extraction_prompt(*args)
+    expected_prompt = (
+        Path(__file__).with_name("extraction_prompt_main.txt").read_text().rstrip("\n") + "\n\n"
+    )
 
     assert "urgency_matches" not in schema["properties"]
     assert "Urgency rules" not in prompt
-    assert prompt == Path(__file__).with_name("extraction_prompt_main.txt").read_text()
+    assert prompt == expected_prompt
 
 
 @pytest.mark.parametrize("channel", ["whatsapp", "gmail"])

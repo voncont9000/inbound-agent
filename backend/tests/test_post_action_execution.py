@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import httpx
@@ -11,6 +12,7 @@ from inbound_api.db import tenant_session
 from inbound_api.jobs import current_job
 from inbound_api.models import (
     ActionRun,
+    ChannelConnection,
     Conversation,
     ConversationChannel,
     ConversationStatus,
@@ -20,7 +22,11 @@ from inbound_api.models import (
     PostActionSecret,
     Task,
 )
-from inbound_api.post_actions.providers import FakeEmailSender, FakeWebhookSender
+from inbound_api.post_actions.providers import (
+    FakeEmailSender,
+    FakeWebhookSender,
+    GmailEmailSender,
+)
 from inbound_api.post_actions.service import (
     execute_conversation_action,
     plan_conversation_actions,
@@ -66,6 +72,68 @@ async def _assistant_and_conversation(tenant_pair, actions):
             )
         )
     return account, config, assistant_id, conversation_id
+
+
+async def _create_assistant(client, name):
+    templates = (await client.get("/templates")).json()
+    config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    response = await client.post(
+        "/assistants",
+        json={"name": name, "template": "uk_law_firm", "config": config},
+    )
+    assert response.status_code == 201, response.text
+    return UUID(response.json()["id"])
+
+
+async def _add_gmail_connection(account, assistant_id, email):
+    tenant_id = UUID(account["tenant_id"])
+    async with tenant_session(tenant_id) as session:
+        session.add(
+            ChannelConnection(
+                tenant_id=tenant_id,
+                assistant_id=assistant_id,
+                kind="gmail",
+                external_id=email,
+                status="active",
+                settings={"google_features": ["gmail"]},
+            )
+        )
+
+
+async def _execute_gmail_action(account, conversation_id, *, transport):
+    tenant_id = UUID(account["tenant_id"])
+    settings = Settings(email_sender="gmail")
+    async with tenant_session(tenant_id) as session:
+        await plan_conversation_actions(session, conversation_id)
+    async with tenant_session(tenant_id) as session:
+        result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="staff",
+            fire_count=1,
+            settings=settings,
+            email_sender=GmailEmailSender(session, transport=transport, settings=settings),
+        )
+        run = await session.scalar(
+            select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+        )
+        tasks = list(
+            await session.scalars(select(Task).where(Task.conversation_id == conversation_id))
+        )
+    return result, run, tasks
+
+
+def _notify_staff_action():
+    return [
+        {
+            "kind": "notify_staff",
+            "key": "staff",
+            "trigger": {"events": ["conversation_completed"]},
+            "to": ["staff@example.com"],
+            "subject_template": "Follow up",
+            "body_template": "{{summary}}",
+        }
+    ]
 
 
 def test_test_call_email_subject_prefix_is_added_once():
@@ -131,7 +199,187 @@ async def test_execution_skips_missing_sheets_scope_and_unknown_customer_email(
     assert runs["sheet"].status == "skipped"
     assert runs["customer"].status == "skipped"
     assert [task.kind for task in tasks] == ["action_setup_needed"]
+    assert tasks[0].payload["title"] == "Connect Google Sheets"
+    assert tasks[0].payload["message"] == "Connect Google Sheets to log conversations"
     assert not (tmp_path / "emails.jsonl").exists()
+
+
+@pytest.mark.asyncio
+async def test_email_action_uses_workspace_gmail_and_not_another_tenant(tenant_pair, monkeypatch):
+    import inbound_api.integrations.google_auth as google_auth
+    import inbound_api.post_actions.providers as providers
+
+    monkeypatch.setattr(
+        google_auth,
+        "get_settings",
+        lambda: SimpleNamespace(gmail_mode="fake"),
+    )
+
+    async def fake_access_token(_connection):
+        return "fake-access-token"
+
+    monkeypatch.setattr(providers, "google_access_token", fake_access_token)
+    account = tenant_pair["first"]
+    _, _, assistant_id, conversation_id = await _assistant_and_conversation(
+        tenant_pair, _notify_staff_action()
+    )
+    other_assistant_id = await _create_assistant(account["client"], "Workspace Gmail owner")
+    await _add_gmail_connection(account, other_assistant_id, "workspace@example.test")
+
+    foreign_account = tenant_pair["second"]
+    foreign_assistant_id = await _create_assistant(foreign_account["client"], "Foreign Gmail owner")
+    await _add_gmail_connection(foreign_account, foreign_assistant_id, "foreign@example.test")
+
+    requests = []
+
+    async def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={"id": "sent-1"})
+
+    result, run, _ = await _execute_gmail_action(
+        account,
+        conversation_id,
+        transport=httpx.MockTransport(respond),
+    )
+
+    assert result["status"] == "succeeded"
+    assert run is not None
+    assert run.output == {"message_id": "sent-1", "from": "workspace@example.test"}
+    assert len(requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_email_action_skips_when_only_foreign_tenant_has_gmail(tenant_pair, monkeypatch):
+    import inbound_api.integrations.google_auth as google_auth
+    import inbound_api.post_actions.providers as providers
+
+    monkeypatch.setattr(
+        google_auth,
+        "get_settings",
+        lambda: SimpleNamespace(gmail_mode="fake"),
+    )
+    monkeypatch.setattr(providers, "google_access_token", lambda *_: None)
+    account = tenant_pair["first"]
+    _, _, _, conversation_id = await _assistant_and_conversation(
+        tenant_pair, _notify_staff_action()
+    )
+
+    foreign_account = tenant_pair["second"]
+    foreign_assistant_id = await _create_assistant(foreign_account["client"], "Foreign Gmail owner")
+    await _add_gmail_connection(foreign_account, foreign_assistant_id, "foreign-only@example.test")
+
+    requests = []
+
+    async def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={"id": "unexpected"})
+
+    result, run, tasks = await _execute_gmail_action(
+        account,
+        conversation_id,
+        transport=httpx.MockTransport(respond),
+    )
+
+    assert result["status"] == "skipped"
+    assert run is not None and run.status == "skipped"
+    assert requests == []
+    assert len(tasks) == 1
+    assert tasks[0].kind == "action_setup_needed"
+    assert tasks[0].payload == {
+        "title": "Connect Gmail",
+        "action_key": "staff",
+        "message": "Connect a Gmail account to send follow-up emails",
+    }
+
+
+@pytest.mark.asyncio
+async def test_email_action_prefers_assistants_own_gmail(tenant_pair, monkeypatch):
+    import inbound_api.integrations.google_auth as google_auth
+    import inbound_api.post_actions.providers as providers
+
+    monkeypatch.setattr(
+        google_auth,
+        "get_settings",
+        lambda: SimpleNamespace(gmail_mode="fake"),
+    )
+
+    async def fake_access_token(_connection):
+        return "fake-access-token"
+
+    monkeypatch.setattr(providers, "google_access_token", fake_access_token)
+    account = tenant_pair["first"]
+    _, _, assistant_id, conversation_id = await _assistant_and_conversation(
+        tenant_pair, _notify_staff_action()
+    )
+    other_assistant_id = await _create_assistant(account["client"], "Other Gmail owner")
+    await _add_gmail_connection(account, other_assistant_id, "workspace@example.test")
+    await _add_gmail_connection(account, assistant_id, "assistant@example.test")
+
+    async def respond(_request):
+        return httpx.Response(200, json={"id": "sent-own"})
+
+    result, run, _ = await _execute_gmail_action(
+        account,
+        conversation_id,
+        transport=httpx.MockTransport(respond),
+    )
+
+    assert result["status"] == "succeeded"
+    assert run is not None
+    assert run.output == {"message_id": "sent-own", "from": "assistant@example.test"}
+
+
+@pytest.mark.asyncio
+async def test_sheets_action_uses_workspace_connection(tenant_pair, tmp_path, monkeypatch):
+    import inbound_api.integrations.google_auth as google_auth
+
+    monkeypatch.setattr(
+        google_auth,
+        "get_settings",
+        lambda: SimpleNamespace(gmail_mode="fake"),
+    )
+    actions = [
+        {
+            "kind": "sheets_row",
+            "key": "sheet",
+            "trigger": {"events": ["conversation_completed"]},
+            "spreadsheet_id": "test-sheet",
+            "sheet_name": "Conversations",
+            "columns": [{"header": "Summary", "value_template": "{{summary}}"}],
+        }
+    ]
+    account, _, _, conversation_id = await _assistant_and_conversation(tenant_pair, actions)
+    other_assistant_id = await _create_assistant(account["client"], "Workspace Sheets owner")
+    tenant_id = UUID(account["tenant_id"])
+    async with tenant_session(tenant_id) as session:
+        session.add(
+            ChannelConnection(
+                tenant_id=tenant_id,
+                assistant_id=other_assistant_id,
+                kind="gmail",
+                external_id="sheets-owner@example.test",
+                status="active",
+                settings={"google_features": ["sheets"]},
+            )
+        )
+        await plan_conversation_actions(session, conversation_id)
+
+    settings = Settings(sheets_writer="fake", post_actions_fake_dir=tmp_path)
+    async with tenant_session(tenant_id) as session:
+        result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="sheet",
+            fire_count=1,
+            settings=settings,
+        )
+        run = await session.scalar(
+            select(ActionRun).where(ActionRun.conversation_id == conversation_id)
+        )
+
+    assert result["status"] == "succeeded"
+    assert run is not None
+    assert run.output["account_email"] == "sheets-owner@example.test"
 
 
 @pytest.mark.asyncio
@@ -305,6 +553,7 @@ async def test_execution_retries_transient_failure_then_fails_at_max_attempts(te
     assert result["status"] == "failed"
     assert run is not None and run.status == "failed" and run.attempts == 3
     assert [task.kind for task in tasks] == ["action_failed"]
+    assert tasks[0].payload["title"] == "After-conversation action failed"
 
 
 @pytest.mark.asyncio

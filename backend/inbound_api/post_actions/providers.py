@@ -17,9 +17,8 @@ import httpx
 from inbound_core.knowledge import pinned_opener
 
 from inbound_api.integrations.google_auth import (
+    action_google_connection_for,
     google_access_token,
-    google_connection_for,
-    has_google_feature,
 )
 from inbound_api.jobs import PermanentJobError
 from inbound_api.models import ChannelConnection
@@ -45,6 +44,7 @@ class EmailSender(Protocol):
         self,
         *,
         assistant_id,
+        tenant_id,
         to: list[str],
         subject: str,
         body: str,
@@ -83,15 +83,21 @@ class GmailEmailSender:
         self,
         *,
         assistant_id,
+        tenant_id,
         to: list[str],
         subject: str,
         body: str,
     ) -> dict[str, Any]:
-        connection = await google_connection_for(self.session, assistant_id)
+        connection = await action_google_connection_for(
+            self.session,
+            assistant_id=assistant_id,
+            tenant_id=tenant_id,
+            feature="gmail",
+        )
         if connection is None:
             raise ActionSkipped(
-                "Google Gmail is not connected",
-                {"message": "Connect Gmail to send emails"},
+                "No Gmail account with email-send access is connected in this workspace",
+                {"message": "Connect a Gmail account to send follow-up emails"},
             )
         token = await google_access_token(connection)
         message = EmailMessage()
@@ -109,7 +115,7 @@ class GmailEmailSender:
                 json={"raw": raw},
             )
         _raise_http_response(response, "Gmail send")
-        return {"message_id": response.json().get("id")}
+        return {"message_id": response.json().get("id"), "from": connection.external_id}
 
 
 class ResendEmailSender:
@@ -126,6 +132,7 @@ class ResendEmailSender:
         self,
         *,
         assistant_id,
+        tenant_id=None,
         to: list[str],
         subject: str,
         body: str,
@@ -157,6 +164,7 @@ class FakeEmailSender:
         self,
         *,
         assistant_id,
+        tenant_id=None,
         to: list[str],
         subject: str,
         body: str,
@@ -205,7 +213,11 @@ class FakeSheetsWriter:
                 "row": row,
             },
         )
-        return {"updated_range": f"'{sheet_name}'!A1"}
+        result = {"updated_range": f"'{sheet_name}'!A1"}
+        account_email = getattr(connection, "external_id", None)
+        if account_email:
+            result["account_email"] = account_email
+        return result
 
 
 class GoogleSheetsWriter:
@@ -255,7 +267,10 @@ class GoogleSheetsWriter:
                 json={"values": [row]},
             )
         _raise_http_response(append_response, "Google Sheets append")
-        return {"updated_range": append_response.json().get("updates", {}).get("updatedRange")}
+        return {
+            "updated_range": append_response.json().get("updates", {}).get("updatedRange"),
+            "account_email": connection.external_id,
+        }
 
 
 class OffSheetsWriter:
@@ -373,15 +388,21 @@ async def sheets_writer_for(
     session,
     assistant_id,
     *,
+    tenant_id,
     settings: Settings | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> tuple[ChannelConnection, SheetsWriter]:
     settings = settings or get_settings()
-    connection = await google_connection_for(session, assistant_id)
-    if connection is None or not has_google_feature(connection, "sheets"):
+    connection = await action_google_connection_for(
+        session,
+        assistant_id=assistant_id,
+        tenant_id=tenant_id,
+        feature="sheets",
+    )
+    if connection is None:
         raise ActionSkipped(
-            "Google Sheets is not connected",
-            {"message": "Connect Google Sheets for this assistant"},
+            "No Google account with Sheets access is connected in this workspace",
+            {"message": "Connect Google Sheets to log conversations"},
         )
     if settings.sheets_writer == "off":
         return connection, OffSheetsWriter()

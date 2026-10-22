@@ -88,6 +88,48 @@ async def google_connection_for(
     )
 
 
+async def action_google_connection_for(
+    session: AsyncSession,
+    *,
+    assistant_id: Any,
+    tenant_id: Any,
+    feature: str,
+) -> ChannelConnection | None:
+    assistant_connection = await session.scalar(
+        select(ChannelConnection)
+        .where(
+            ChannelConnection.assistant_id == assistant_id,
+            ChannelConnection.tenant_id == tenant_id,
+            ChannelConnection.kind == "gmail",
+            ChannelConnection.status == "active",
+        )
+        .order_by(ChannelConnection.created_at.desc())
+        .limit(1)
+    )
+    if assistant_connection is not None and has_google_feature(assistant_connection, feature):
+        return assistant_connection
+
+    tenant_connections = (
+        await session.scalars(
+            select(ChannelConnection)
+            .where(
+                ChannelConnection.tenant_id == tenant_id,
+                ChannelConnection.kind == "gmail",
+                ChannelConnection.status == "active",
+            )
+            .order_by(ChannelConnection.created_at.desc())
+        )
+    ).all()
+    return next(
+        (
+            connection
+            for connection in tenant_connections
+            if has_google_feature(connection, feature)
+        ),
+        None,
+    )
+
+
 def has_google_feature(connection: Any, feature: str) -> bool:
     required_scopes = GOOGLE_SCOPE_SETS.get(feature)
     if required_scopes is None:

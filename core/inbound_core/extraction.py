@@ -28,6 +28,8 @@ EMPTY_CALLBACK_REQUEST = {
     "preferred_time_iso": None,
 }
 
+EMPTY_FOLLOW_UP = {"needed": False, "title": None, "reason": None}
+
 
 EMPTY_COMPLAINT = {"made": False, "summary": None}
 
@@ -50,6 +52,7 @@ async def extract_intake(
             "fields": {},
             "summary": None,
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
+            "follow_up": EMPTY_FOLLOW_UP.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
             "unanswered_questions": [],
             "urgency_matches": [],
@@ -134,6 +137,7 @@ async def extract_intake(
             "summary": _summary(parsed.get("summary")),
             "fields": fields,
             "callback_requested": _callback_request(parsed.get("callback_requested")),
+            "follow_up": _follow_up(parsed.get("follow_up")),
             "complaint": _complaint(parsed.get("complaint")),
             "unanswered_questions": _unanswered_questions(parsed.get("unanswered_questions")),
             "urgency_matches": urgency_matches,
@@ -147,6 +151,7 @@ async def extract_intake(
             "summary": None,
             "fields": {},
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
+            "follow_up": EMPTY_FOLLOW_UP.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
             "unanswered_questions": [],
             "urgency_matches": [],
@@ -317,6 +322,7 @@ def build_intake_artifacts(
         "summary": _summary(result.get("summary")),
         "fields": extracted_fields,
         "callback_requested": _callback_request(result.get("callback_requested")),
+        "follow_up": _follow_up(result.get("follow_up")),
         "complaint": _complaint(result.get("complaint")),
         "urgency_matches": list(result.get("urgency_matches", [])),
     }
@@ -416,10 +422,16 @@ def build_post_call_tasks(
         )
 
     callback = _callback_request(post_call.get("callback_requested"))
-    if callback["requested"] and not any(task.get("type") == "callback" for task in tasks):
+    existing_follow_up_tasks = any(
+        task.get("type") in {"callback", "follow_up"} and task.get("status", "open") == "open"
+        for task in tasks
+    )
+    callback_generated = False
+    if callback["requested"] and not existing_follow_up_tasks:
         generated.append(
             {
                 "type": "callback",
+                "title": _follow_up(post_call.get("follow_up"))["title"] or "Call back",
                 "reason": callback["reason"] or "Caller requested a callback.",
                 "preferred_time": callback["preferred_time"],
                 "due_at": _callback_due_at(
@@ -427,6 +439,18 @@ def build_post_call_tasks(
                     config,
                     call_ended_at=call_ended_at,
                 ),
+                "source": "post_call",
+            }
+        )
+        callback_generated = True
+
+    follow_up = _follow_up(post_call.get("follow_up"))
+    if follow_up["needed"] and not callback_generated and not existing_follow_up_tasks:
+        generated.append(
+            {
+                "type": "follow_up",
+                "title": follow_up["title"] or "Follow up",
+                "reason": follow_up["reason"] or "Follow up on the customer's request.",
                 "source": "post_call",
             }
         )
@@ -450,6 +474,26 @@ def _callback_request(value: Any) -> dict[str, Any]:
         "reason": value.get("reason"),
         "preferred_time": value.get("preferred_time"),
         "preferred_time_iso": value.get("preferred_time_iso"),
+    }
+
+
+def _follow_up(value: Any) -> dict[str, Any]:
+    value = value if isinstance(value, dict) else {}
+    needed = value.get("needed") is True
+    title = value.get("title")
+    if isinstance(title, str):
+        title = title.strip()[:60].strip() or None
+    else:
+        title = None
+    reason = value.get("reason")
+    if isinstance(reason, str):
+        reason = reason.strip() or None
+    else:
+        reason = None
+    return {
+        "needed": needed,
+        "title": title if needed else None,
+        "reason": reason,
     }
 
 
@@ -646,6 +690,16 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
                 ],
                 "additionalProperties": False,
             },
+            "follow_up": {
+                "type": "object",
+                "properties": {
+                    "needed": {"type": "boolean"},
+                    "title": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "reason": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                },
+                "required": ["needed", "title", "reason"],
+                "additionalProperties": False,
+            },
             "summary": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "complaint": {
                 "type": "object",
@@ -674,6 +728,7 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
             "fields",
             "summary",
             "callback_requested",
+            "follow_up",
             "complaint",
             "unanswered_questions",
         ],
@@ -754,6 +809,15 @@ def _extraction_prompt(
         "caller's original wording. Resolve a clear preferred time into preferred_time_iso as "
         "ISO 8601 with a UTC offset in the office-hours timezone; use null if it is unclear."
     )
+    follow_up_instruction = (
+        "Set follow_up.needed true when someone from the business has to act after this "
+        "conversation: the assistant said the team will get back in touch, the caller requested "
+        "something only staff can confirm or provide, or a callback was requested. Set it false "
+        "when no business follow-up is needed. When true, title must be a short imperative action "
+        "of 2–6 words drawn from this conversation (for example, 'Call back', 'Confirm appointment "
+        "time', or 'Send the quote'). Reason must be one sentence with useful specifics, including "
+        "what needs action and any relevant timing or preferences."
+    )
     is_phone = channel == "phone"
     interaction = "call" if is_phone else "message thread"
     interaction_noun = "call" if is_phone else "conversation"
@@ -775,6 +839,7 @@ local part clearly matches the caller's name, use its spelling (for example,
 "siobhan.mcallister@" means "Siobhan McAllister").
 Set confirmed_by_caller true only when the assistant read that value back and the caller
 affirmed it. {callback_requested_instruction}
+{follow_up_instruction}
 Include the reason and preferred time if stated. Set complaint.made only when the
 caller made a complaint, and summarize it briefly.
 {unanswered_questions_instruction}{urgency_instruction}

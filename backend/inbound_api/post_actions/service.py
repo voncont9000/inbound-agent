@@ -26,6 +26,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.channels.credentials import decrypt_credential
+from inbound_api.integrations.google_auth import action_google_connection_for
 from inbound_api.jobs import current_job, enqueue
 from inbound_api.models import (
     ActionRun,
@@ -202,6 +203,7 @@ async def execute_conversation_action(
                 conversation,
                 kind="action_setup_needed",
                 action_key=action.key,
+                action_kind=action.kind,
                 details=error.setup_task,
             )
         return {"status": "skipped"}
@@ -213,6 +215,7 @@ async def execute_conversation_action(
             conversation,
             kind="action_failed",
             action_key=action.key,
+            action_kind=action.kind,
             details={"message": str(error)},
         )
         return {"status": "failed"}
@@ -226,6 +229,7 @@ async def execute_conversation_action(
                 conversation,
                 kind="action_failed",
                 action_key=action.key,
+                action_kind=action.kind,
                 details={"message": "Action delivery failed after retries"},
             )
             return {"status": "failed"}
@@ -361,6 +365,7 @@ async def _dispatch_action(
         sender = email_sender or email_sender_from_settings(session, settings=settings)
         return await sender.send(
             assistant_id=assistant.id,
+            tenant_id=assistant.tenant_id,
             to=[recipient],
             subject=render_action_subject(action.subject_template, context),
             body=render_template(action.body_template, context),
@@ -369,30 +374,37 @@ async def _dispatch_action(
         sender = email_sender or email_sender_from_settings(session, settings=settings)
         return await sender.send(
             assistant_id=assistant.id,
+            tenant_id=assistant.tenant_id,
             to=[str(address) for address in action.to],
             subject=render_action_subject(action.subject_template, context),
             body=render_template(action.body_template, context),
         )
     if isinstance(action, SheetsRowAction):
-        connection, writer = (
-            await sheets_writer_for(session, assistant.id, settings=settings)
-            if sheets_writer is None
-            else (None, sheets_writer)
-        )
+        if sheets_writer is None:
+            connection, writer = await sheets_writer_for(
+                session,
+                assistant.id,
+                tenant_id=assistant.tenant_id,
+                settings=settings,
+            )
+        else:
+            connection = await action_google_connection_for(
+                session,
+                assistant_id=assistant.id,
+                tenant_id=assistant.tenant_id,
+                feature="sheets",
+            )
+            writer = sheets_writer
+            if connection is None:
+                raise ActionSkipped(
+                    "No Google account with Sheets access is connected in this workspace",
+                    {"message": "Connect Google Sheets to log conversations"},
+                )
         headers = [column.header for column in action.columns]
         row = [
             render_template(column.value_template, context, sheet_cell=True)
             for column in action.columns
         ]
-        if connection is None:
-            from inbound_api.integrations.google_auth import google_connection_for
-
-            connection = await google_connection_for(session, assistant.id)
-            if connection is None:
-                raise ActionSkipped(
-                    "Google Sheets is not connected",
-                    {"message": "Connect Google Sheets for this assistant"},
-                )
         return await writer.append_row(
             connection=connection,
             spreadsheet_id=action.spreadsheet_id,
@@ -472,8 +484,19 @@ def _add_action_task(
     *,
     kind: str,
     action_key: str,
+    action_kind: str,
     details: dict[str, Any],
 ) -> None:
+    title = (
+        "After-conversation action failed"
+        if kind == "action_failed"
+        else {
+            "email_customer": "Connect Gmail",
+            "notify_staff": "Connect Gmail",
+            "sheets_row": "Connect Google Sheets",
+            "webhook": "Set up webhook",
+        }.get(action_kind, f"Set up {action_kind.replace('_', ' ').capitalize()}")
+    )
     session.add(
         Task(
             tenant_id=conversation.tenant_id,
@@ -482,7 +505,7 @@ def _add_action_task(
             kind=kind,
             source=TaskSource.LIVE,
             status=TaskStatus.OPEN,
-            payload={"action_key": action_key, **details},
+            payload={**details, "title": title, "action_key": action_key},
         )
     )
 

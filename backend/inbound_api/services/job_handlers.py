@@ -676,10 +676,18 @@ async def run_message_extract(
         config,
         caller_id=(conversation.metrics or {}).get("from_number"),
     )
+    existing_tasks = await session.scalars(
+        select(Task).where(
+            Task.conversation_id == conversation.id,
+            Task.status == TaskStatus.OPEN,
+            Task.source != TaskSource.POST_CALL,
+        )
+    )
     tasks = build_post_call_tasks(
         post_call,
         merged,
         config,
+        [{"type": task.kind, "status": task.status.value} for task in existing_tasks],
         call_ended_at=messages[-1].ts if messages else conversation.started_at,
     )
     gaps = build_knowledge_gap_tasks(result.get("unanswered_questions", []))

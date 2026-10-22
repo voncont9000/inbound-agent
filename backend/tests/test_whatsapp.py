@@ -950,12 +950,12 @@ async def test_message_extract_persists_results_and_tasks(graph_env, monkeypatch
         (tenant_id, conversation_id),
     ) == [("The customer requested a callback.",)]
     assert graph_env["execute"](
-        "SELECT kind, source, payload->>'reason' FROM tasks "
+        "SELECT kind, source, payload->>'title', payload->>'reason' FROM tasks "
         "WHERE tenant_id = %s AND conversation_id = %s ORDER BY kind",
         (tenant_id, conversation_id),
     ) == [
-        ("callback", "post_call", "Customer asked to speak with the team"),
-        ("urgent", "post_call", "The customer said a deadline is in two weeks."),
+        ("callback", "post_call", "Call back", "Customer asked to speak with the team"),
+        ("urgent", "post_call", None, "The customer said a deadline is in two weeks."),
     ]
     assert graph_env["execute"](
         "SELECT question FROM knowledge_gaps WHERE tenant_id = %s AND conversation_id = %s",
