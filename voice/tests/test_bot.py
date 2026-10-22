@@ -377,6 +377,65 @@ def test_italian_recording_consent_uses_the_assistant_locale() -> None:
     )
 
 
+def test_run_bot_passes_recording_consent_to_tts_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assistant = BOT_MODULE.load_assistant_config(BOT_MODULE.ASSISTANT_CONFIG)
+    assistant = assistant.model_copy(
+        update={
+            "recording": assistant.recording.model_copy(
+                update={"enabled": True, "consent_message": "This call may be recorded."}
+            )
+        }
+    )
+    prepared = SimpleNamespace(
+        assistant=assistant,
+        call_start=None,
+        route=None,
+        context_card=None,
+        api=None,
+        availability_task=None,
+    )
+    providers = SimpleNamespace(
+        stt="assemblyai",
+        tts="speechify",
+        tts_voice=None,
+        llm="google",
+        llm_model="test-model",
+    )
+    captured: dict[str, object] = {}
+
+    class StopBeforePipeline(Exception):
+        pass
+
+    monkeypatch.setattr(BOT_MODULE, "resolve_providers", lambda _env: providers)
+    monkeypatch.setattr(
+        BOT_MODULE,
+        "resolve_voice_language",
+        lambda *_args: SimpleNamespace(locale="en-GB"),
+    )
+    monkeypatch.setattr(BOT_MODULE, "LocalFilesCallSink", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        BOT_MODULE,
+        "CallTools",
+        lambda *_args, **_kwargs: SimpleNamespace(check_caller_text=lambda *_args: None),
+    )
+    monkeypatch.setattr(BOT_MODULE, "CallMetricsObserver", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(BOT_MODULE, "create_stt", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(BOT_MODULE, "create_llm", lambda *_args, **_kwargs: object())
+
+    def capture_tts(*_args, **kwargs):
+        captured.update(kwargs)
+        raise StopBeforePipeline
+
+    monkeypatch.setattr(BOT_MODULE, "create_tts", capture_tts)
+
+    with pytest.raises(StopBeforePipeline):
+        asyncio.run(BOT_MODULE.run_bot(object(), prepared=prepared))
+
+    assert captured["lead_pause_texts"] == ["This call may be recorded."]
+
+
 def test_number_hold_secs_parses_default_and_override() -> None:
     assert BOT_MODULE.number_hold_secs({}) == 2.0
     assert BOT_MODULE.number_hold_secs({"NUMBER_HOLD_SECS": "1.25"}) == 1.25

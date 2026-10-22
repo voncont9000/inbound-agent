@@ -878,6 +878,16 @@ async def run_bot(
             sample_rate=output_sample_rate,
             voice_language=voice_language,
             pronunciations=assistant.rules.pronunciations,
+            lead_pause_texts=(
+                [
+                    recording_consent_message(
+                        assistant.language,
+                        assistant.recording.consent_message,
+                    )
+                ]
+                if assistant.recording.enabled
+                else ()
+            ),
             speed=assistant.call_settings.speech_speed,
         )
         context = create_llm_context(

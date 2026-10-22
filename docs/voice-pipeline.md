@@ -236,8 +236,17 @@ Speech speed is supported by Deepgram Aura and ElevenLabs HTTP/WebSocket. Speech
 measured voice-pacing rates so 1.0× is a natural conversational pace; faster voices retain
 their natural rate and slower voices are raised toward 175 WPM. The slider applies relative
 SSML prosody rates. Speechify audio is streamed with a 500 ms hold-back window to trim detected
-trailing sentence silence to at most 120 ms; cumulative word-time offsets are reduced by the
-trimmed duration.
+trailing silence to at most 300 ms for sentence-final requests (`.`, `!`, `?`, or `…`) and
+120 ms for chunks without terminal punctuation; cumulative word-time offsets are reduced by
+the trimmed duration. A production call had about 130 ms between sentences because Pipecat sent
+each sentence as a separate Speechify request and the service trimmed its trailing silence.
+Speechify had 700–870 ms gaps between sentences inside a single request, and a measured leading
+`<break time="500ms"/>` added exactly 500 ms.
+
+The service retains 300 ms after sentence-final requests and inserts a 300 ms SSML break before
+the configured recording notice and before a question request that follows another request in
+the same TTS context. These transitions add about 600 ms (the retained sentence tail plus the
+explicit section break), compared with the roughly 130 ms measured in the call.
 
 When recording is enabled, the pipeline starts a mono `AudioBufferProcessor` on client
 connect and stores 16-bit WAV audio in that call's run directory. On connect, the bot queues
