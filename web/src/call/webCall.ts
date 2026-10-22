@@ -3,6 +3,8 @@
  * Mirrors `voice/inbound_voice/static/web_call.html`: 16 kHz PCM16 mono up, 24 kHz PCM16 down,
  * `{"type":"clear"}` text frames stop queued playback.
  */
+import { PlaybackScheduler } from "./playbackScheduler";
+
 export type WebCallEvents = {
   onConnected: () => void;
   onEnded: (error?: string) => void;
@@ -79,7 +81,7 @@ export class BrowserWebCallSession implements WebCallSession {
   private playbackContext: AudioContext | null = null;
   private worklet: AudioWorkletNode | null = null;
   private scheduled = new Set<AudioBufferSourceNode>();
-  private playCursor = 0;
+  private playbackScheduler = new PlaybackScheduler();
   private muted = false;
   private finished = false;
 
@@ -167,9 +169,12 @@ export class BrowserWebCallSession implements WebCallSession {
     source.connect(context.destination);
     this.scheduled.add(source);
     source.onended = () => this.scheduled.delete(source);
-    const startAt = Math.max(this.playCursor, context.currentTime);
+    const previousUnderruns = this.playbackScheduler.underruns;
+    const startAt = this.playbackScheduler.schedule(context.currentTime, audio.duration);
+    if (this.playbackScheduler.underruns > previousUnderruns) {
+      console.debug("Browser call playback underrun; lead increased", this.playbackScheduler.lead);
+    }
     source.start(startAt);
-    this.playCursor = startAt + audio.duration;
   }
 
   private stopPlayback() {
@@ -177,7 +182,7 @@ export class BrowserWebCallSession implements WebCallSession {
       try { source.stop(); } catch { /* already stopped */ }
     }
     this.scheduled.clear();
-    this.playCursor = this.playbackContext?.currentTime ?? 0;
+    this.playbackScheduler.reset(this.playbackContext?.currentTime ?? 0);
   }
 
   private async finish(error?: string) {

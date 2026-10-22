@@ -564,6 +564,10 @@ against live services.
 
 Hosted browser practice calls can use same-origin WebSocket PCM at 16 kHz input and 24 kHz
 output for HTTPS reverse proxies that cannot forward WebRTC's direct UDP media.
+Browser playback starts with a 150 ms lead buffer and grows it by 50 ms per mid-utterance
+underrun, up to 400 ms. Real-time PCM pacing leaves about 35 ms of queued audio, so the
+adaptive buffer absorbs network and main-thread jitter; a clear frame resets playback while
+preserving the learned lead.
 An owner-generated assistant test link carries a signed, short-lived `call_token`; the
 browser server resolves its assistant configuration and knowledge digest through the
 internal voice API and fails closed when that route cannot be verified.
