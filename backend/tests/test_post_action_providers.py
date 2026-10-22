@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from inbound_api.post_actions.email_html import render_email_html
 from inbound_api.post_actions.providers import (
     FakeEmailSender,
     FakeSheetsWriter,
@@ -36,6 +37,7 @@ async def test_fake_providers_append_rendered_records(tmp_path):
         to=["caller@example.test"],
         subject="Thanks",
         body="Hello",
+        html="<p>Hello</p>",
     )
     await sheets.append_row(
         connection=type("Connection", (), {"assistant_id": "assistant-1"})(),
@@ -51,6 +53,7 @@ async def test_fake_providers_append_rendered_records(tmp_path):
     )
 
     assert json.loads((tmp_path / "emails.jsonl").read_text())["to"] == ["caller@example.test"]
+    assert json.loads((tmp_path / "emails.jsonl").read_text())["html"] == "<p>Hello</p>"
     assert json.loads((tmp_path / "sheets.jsonl").read_text())["row"] == ["Example"]
     assert json.loads((tmp_path / "webhooks.jsonl").read_text())["body"]["event_id"] == "run:1"
 
@@ -90,6 +93,34 @@ async def test_resend_classifies_provider_status(status, error_type):
 
 
 @pytest.mark.asyncio
+async def test_resend_sends_html_alongside_text():
+    requests = []
+
+    async def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={"id": "message-1"})
+
+    sender = ResendEmailSender(
+        settings=Settings(
+            email_sender="resend",
+            resend_api_key="test-key",
+            email_from="Inbound <inbound@example.test>",
+        ),
+        transport=httpx.MockTransport(respond),
+    )
+    await sender.send(
+        assistant_id="assistant-1",
+        to=["caller@example.test"],
+        subject="Hello",
+        body="Plain text",
+        html="<p>HTML</p>",
+    )
+
+    assert json.loads(requests[0].content)["text"] == "Plain text"
+    assert json.loads(requests[0].content)["html"] == "<p>HTML</p>"
+
+
+@pytest.mark.asyncio
 async def test_webhook_rejects_blocked_destination(monkeypatch):
     import inbound_api.post_actions.providers as providers
 
@@ -124,6 +155,7 @@ async def test_gmail_sender_posts_base64url_mime_and_classifies_status(monkeypat
         to=["caller@example.com"],
         subject="Your appointment",
         body="Hello from the firm",
+        html="<p>Hello from the firm</p>",
     )
     assert output["from"] == "firm@example.com"
     request = requests[0]
@@ -137,7 +169,11 @@ async def test_gmail_sender_posts_base64url_mime_and_classifies_status(monkeypat
     assert mime["From"] == "firm@example.com"
     assert mime["To"] == "caller@example.com"
     assert mime["Subject"] == "Your appointment"
-    assert mime.get_content().strip() == "Hello from the firm"
+    assert mime.get_content_type() == "multipart/alternative"
+    parts = list(mime.iter_parts())
+    assert [part.get_content_type() for part in parts] == ["text/plain", "text/html"]
+    assert parts[0].get_content().strip() == "Hello from the firm"
+    assert parts[1].get_content().strip() == "<p>Hello from the firm</p>"
 
     for status, error_type in ((403, PermanentActionError), (503, httpx.HTTPStatusError)):
         failing = GmailEmailSender(
@@ -154,6 +190,42 @@ async def test_gmail_sender_posts_base64url_mime_and_classifies_status(monkeypat
                 subject="Subject",
                 body="Body",
             )
+
+
+def test_email_html_escapes_content_and_formats_details_and_links():
+    rendered = render_email_html(
+        body_text=(
+            "<script>alert('x')</script>\nSecond line\n\n"
+            "Name: Alex Morgan\nPhone: +44 20 7946 0000\n\n"
+            "https://app.example.test/conversations/123"
+        ),
+        business_name="A & B <Services>",
+    )
+
+    assert "<script>" not in rendered
+    assert "&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;" in rendered
+    assert "<br>Second line" in rendered
+    assert '<table role="presentation"' in rendered
+    assert "<th" in rendered and "Name" in rendered
+    assert 'href="https://app.example.test/conversations/123"' in rendered
+    assert "Open conversation" in rendered
+    assert "A &amp; B &lt;Services&gt;" in rendered
+    assert "Sent by A &amp; B &lt;Services&gt;" in rendered
+    assert rendered.count('<th width="35%"') == 2
+    assert rendered.count('<td valign="top"') == 2
+    assert rendered.count("vertical-align:top") == 4
+
+
+def test_email_html_renders_single_detail_line_as_bold_label_paragraph():
+    rendered = render_email_html(
+        body_text="Next step: Call back",
+        business_name="Example",
+    )
+
+    assert "<p " in rendered
+    assert "<strong>Next step:</strong> Call back</p>" in rendered
+    assert "<th" not in rendered
+    assert "<tbody>" not in rendered
 
 
 @pytest.mark.asyncio

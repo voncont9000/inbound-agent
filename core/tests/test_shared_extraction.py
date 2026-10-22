@@ -9,6 +9,7 @@ import pytest
 from inbound_core.config import AssistantConfig, OfficeHours, RulesConfig, SentenceUrgencyRule
 from inbound_core.extraction import (
     EMPTY_FOLLOW_UP,
+    _customer_recap,
     _extraction_prompt,
     _extraction_schema,
     _follow_up,
@@ -102,12 +103,20 @@ def test_follow_up_parser_handles_missing_garbage_and_sanitizes_values() -> None
     }
 
 
+def test_customer_recap_strips_caps_and_maps_empty_values_to_none() -> None:
+    assert _customer_recap("  You asked us to call you.  ") == "You asked us to call you."
+    assert _customer_recap("   ") is None
+    assert _customer_recap(None) is None
+    assert _customer_recap("x" * 700) == "x" * 600
+
+
 def test_follow_up_extraction_creates_one_generic_staff_task() -> None:
     config = _config()
     output = {
         "service": "general",
         "fields": [],
         "summary": "The caller asked about availability.",
+        "customer_recap": "  You asked us to confirm viewing times.  ",
         "callback_requested": {
             "requested": False,
             "reason": None,
@@ -148,6 +157,8 @@ def test_follow_up_extraction_creates_one_generic_staff_task() -> None:
         config,
     )
 
+    assert result["customer_recap"] == "You asked us to confirm viewing times."
+    assert post_call["customer_recap"] == "You asked us to confirm viewing times."
     assert build_post_call_tasks(post_call, merged, config) == [
         {
             "type": "follow_up",

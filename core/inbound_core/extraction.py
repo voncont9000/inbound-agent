@@ -51,6 +51,7 @@ async def extract_intake(
             "model": model,
             "fields": {},
             "summary": None,
+            "customer_recap": None,
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "follow_up": EMPTY_FOLLOW_UP.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
@@ -135,6 +136,7 @@ async def extract_intake(
             "service": service_name,
             "model": model,
             "summary": _summary(parsed.get("summary")),
+            "customer_recap": _customer_recap(parsed.get("customer_recap")),
             "fields": fields,
             "callback_requested": _callback_request(parsed.get("callback_requested")),
             "follow_up": _follow_up(parsed.get("follow_up")),
@@ -149,6 +151,7 @@ async def extract_intake(
             "service": live_intake.get("service"),
             "model": model,
             "summary": None,
+            "customer_recap": None,
             "fields": {},
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "follow_up": EMPTY_FOLLOW_UP.copy(),
@@ -320,6 +323,7 @@ def build_intake_artifacts(
         "service": service_name,
         "model": result.get("model", ""),
         "summary": _summary(result.get("summary")),
+        "customer_recap": _customer_recap(result.get("customer_recap")),
         "fields": extracted_fields,
         "callback_requested": _callback_request(result.get("callback_requested")),
         "follow_up": _follow_up(result.get("follow_up")),
@@ -507,6 +511,13 @@ def _summary(value: Any) -> str | None:
         return None
     summary = " ".join(value.split())
     return summary or None
+
+
+def _customer_recap(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    recap = value.strip()[:600].strip()
+    return recap or None
 
 
 def _parse_aware_datetime(value: Any) -> datetime | None:
@@ -701,6 +712,7 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
                 "additionalProperties": False,
             },
             "summary": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "customer_recap": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "complaint": {
                 "type": "object",
                 "properties": {
@@ -727,6 +739,7 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
             "service",
             "fields",
             "summary",
+            "customer_recap",
             "callback_requested",
             "follow_up",
             "complaint",
@@ -818,6 +831,12 @@ def _extraction_prompt(
         "time', or 'Send the quote'). Reason must be one sentence with useful specifics, including "
         "what needs action and any relevant timing or preferences."
     )
+    customer_recap_instruction = (
+        "customer_recap: 1–3 sentences addressed directly to the customer (second person), in the "
+        "language of the conversation, restating what they asked for and any next step the "
+        "assistant agreed. Do not include internal notes, urgency judgements or promises the "
+        "assistant did not make. Null if there was no real request."
+    )
     is_phone = channel == "phone"
     interaction = "call" if is_phone else "message thread"
     interaction_noun = "call" if is_phone else "conversation"
@@ -840,6 +859,7 @@ local part clearly matches the caller's name, use its spelling (for example,
 Set confirmed_by_caller true only when the assistant read that value back and the caller
 affirmed it. {callback_requested_instruction}
 {follow_up_instruction}
+{customer_recap_instruction}
 Include the reason and preferred time if stated. Set complaint.made only when the
 caller made a complaint, and summarize it briefly.
 {unanswered_questions_instruction}{urgency_instruction}

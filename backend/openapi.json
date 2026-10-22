@@ -3002,6 +3002,48 @@
         "title": "DateDeadlineUrgencyRule",
         "type": "object"
       },
+      "EmailActionTemplateResponse": {
+        "properties": {
+          "audience": {
+            "enum": [
+              "customer",
+              "staff"
+            ],
+            "title": "Audience",
+            "type": "string"
+          },
+          "body_template": {
+            "title": "Body Template",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "subject_template": {
+            "title": "Subject Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "description",
+          "audience",
+          "subject_template",
+          "body_template"
+        ],
+        "title": "EmailActionTemplateResponse",
+        "type": "object"
+      },
       "EmailCustomerAction": {
         "additionalProperties": false,
         "properties": {
@@ -3066,6 +3108,47 @@
           "contains"
         ],
         "title": "EmailIncludeRule",
+        "type": "object"
+      },
+      "EmailPreviewRequest": {
+        "properties": {
+          "body_template": {
+            "title": "Body Template",
+            "type": "string"
+          },
+          "subject_template": {
+            "title": "Subject Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_template",
+          "body_template"
+        ],
+        "title": "EmailPreviewRequest",
+        "type": "object"
+      },
+      "EmailPreviewResponse": {
+        "properties": {
+          "html": {
+            "title": "Html",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "text",
+          "html"
+        ],
+        "title": "EmailPreviewResponse",
         "type": "object"
       },
       "EmailTriageConfig": {
@@ -6522,6 +6605,75 @@
         ]
       }
     },
+    "/assistants/{assistant_id}/post-actions/email-preview": {
+      "post": {
+        "operationId": "preview_post_action_email_assistants__assistant_id__post_actions_email_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assistant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assistant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Post Action Email",
+        "tags": [
+          "post-actions"
+        ]
+      }
+    },
     "/assistants/{assistant_id}/post-actions/test": {
       "post": {
         "operationId": "test_post_action_assistants__assistant_id__post_actions_test_post",
@@ -9150,6 +9302,59 @@
         "summary": "Gmail Oauth Callback",
         "tags": [
           "gmail"
+        ]
+      }
+    },
+    "/post-actions/email-templates": {
+      "get": {
+        "operationId": "list_post_action_email_templates_post_actions_email_templates_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EmailActionTemplateResponse"
+                  },
+                  "title": "Response List Post Action Email Templates Post Actions Email Templates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Post Action Email Templates",
+        "tags": [
+          "post-actions"
         ]
       }
     },

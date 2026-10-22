@@ -616,12 +616,13 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
                 Conversation.external_ref == "wa:123456:447700900123:wamid.results"
             )
         )
+        conversation.metrics = {**(conversation.metrics or {}), "preserved_metric": "kept"}
         await persist_extracted_results(
             session,
             tenant_id,
             conversation,
             live_intake={},
-            post_call_intake={"summary": "First"},
+            post_call_intake={"summary": "First", "customer_recap": "First recap"},
             merged_intake={"summary": "First"},
             summary="First summary",
             tasks=[{"kind": "follow_up", "note": "old"}],
@@ -643,12 +644,14 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
             tenant_id,
             conversation,
             live_intake={},
-            post_call_intake={"summary": "Second"},
+            post_call_intake={"summary": "Second", "customer_recap": "Second recap"},
             merged_intake={"summary": "Second"},
             summary="Second summary",
             tasks=[{"kind": "follow_up", "note": "new"}],
             knowledge_gaps=[{"question": "How soon?", "evidence": "Updated"}],
         )
+        assert conversation.metrics["customer_recap"] == "Second recap"
+        assert conversation.metrics["preserved_metric"] == "kept"
 
     assert set(
         graph_env["execute"](
@@ -673,6 +676,11 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
         )[0][0]
         == 1
     )
+    assert graph_env["execute"](
+        "SELECT metrics->>'customer_recap', metrics->>'preserved_metric' FROM conversations "
+        "WHERE tenant_id = %s AND external_ref = %s",
+        (tenant_id, "wa:123456:447700900123:wamid.results"),
+    ) == [("Second recap", "kept")]
     assert graph_env["execute"](
         "SELECT summary FROM conversations WHERE tenant_id = %s AND external_ref = "
         "'wa:123456:447700900123:wamid.results'",

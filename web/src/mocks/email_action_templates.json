@@ -1,0 +1,50 @@
+[
+  {
+    "audience": "customer",
+    "body_template": "Hello {{contact.first_name|there}},\n\nThank you for contacting {{business_name}}. This email confirms that we have received your enquiry.\n\n{{customer_recap}}\n\nNext step: {{next_step}}\n\nA member of our team will get back to you as soon as possible. If anything changes in the meantime, simply reply to this email.\n\nKind regards,\n{{business_name}}",
+    "description": "Confirm receipt of an enquiry and explain what happens next.",
+    "key": "inquiry_confirmation",
+    "label": "Confirmation of inquiry",
+    "subject_template": "We've received your enquiry \u2013 {{business_name}}"
+  },
+  {
+    "audience": "customer",
+    "body_template": "Hello {{contact.first_name|there}},\n\nThank you for speaking with {{business_name}}. We'll call you back as soon as we can.\n\n{{customer_recap}}\n\nNumber we'll call: {{contact.phone}}\n\nIf another number or time suits you better, just reply to this email.\n\nKind regards,\n{{business_name}}",
+    "description": "Confirm an agreed callback and give the customer a way to update their details.",
+    "key": "callback_confirmation",
+    "label": "Callback confirmation",
+    "subject_template": "We'll call you back \u2013 {{business_name}}"
+  },
+  {
+    "audience": "customer",
+    "body_template": "Hello {{contact.first_name|there}},\n\nThank you for your request. We'll confirm the details with you shortly.\n\n{{customer_recap}}\n\nNext step: {{next_step}}\n\nKind regards,\n{{business_name}}",
+    "description": "Acknowledge a request and describe the configured next step.",
+    "key": "request_received",
+    "label": "Request received",
+    "subject_template": "Your request \u2013 {{business_name}}"
+  },
+  {
+    "audience": "customer",
+    "body_template": "Hello {{contact.first_name|there}},\n\nHere is a summary of your conversation with {{business_name}}.\n\n{{customer_recap}}\n\nThe details you gave us:\n{{intake_table}}\n\nIf anything is wrong or missing, reply to this email and we'll update it.\n\nKind regards,\n{{business_name}}",
+    "description": "Share a recap and the details recorded from the conversation.",
+    "key": "conversation_summary",
+    "label": "Summary of your conversation",
+    "subject_template": "Summary of your conversation with {{business_name}}"
+  },
+  {
+    "audience": "staff",
+    "body_template": "{{summary}}\n\nNext step: {{next_step}}\nName: {{contact.name}}\nPhone: {{contact.phone}}\nEmail: {{contact.email}}\nChannel: {{channel}}\n\n{{intake_table}}\n\n{{conversation.link}}",
+    "description": "Send your team the conversation summary and recorded details.",
+    "key": "staff_new_enquiry",
+    "label": "New enquiry",
+    "subject_template": "New enquiry from {{contact.name|a customer}}"
+  },
+  {
+    "audience": "staff",
+    "body_template": "Why it's urgent: {{urgency_reasons}}\n\n{{summary}}\n\nNext step: {{next_step}}\nName: {{contact.name}}\nPhone: {{contact.phone}}\nEmail: {{contact.email}}\nChannel: {{channel}}\n\n{{conversation.link}}",
+    "description": "Alert your team to an urgent conversation and its recorded details.",
+    "key": "staff_urgent",
+    "label": "Urgent enquiry",
+    "subject_template": "Urgent: {{contact.name|a customer}} needs attention"
+  }
+]

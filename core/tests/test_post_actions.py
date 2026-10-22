@@ -3,10 +3,12 @@ from pydantic import ValidationError
 
 from inbound_core.config import AssistantConfig, EmailCustomerAction, NotifyStaffAction
 from inbound_core.post_actions import (
+    EMAIL_TEMPLATES,
     TEMPLATE_VARIABLES,
     derive_events,
     format_value,
     matched_events,
+    render_email_body,
     render_subject,
     render_template,
 )
@@ -98,6 +100,54 @@ def test_template_rendering_substitutes_plain_text_and_ignores_unknown_names():
 def test_template_rendering_substitutes_boolean_context_values():
     assert render_template("test call: {{test_call}}", {"test_call": True}) == "test call: true"
     assert render_template("test call: {{test_call}}", {"test_call": False}) == "test call: false"
+
+
+def test_template_fallbacks_are_used_only_for_empty_values():
+    assert (
+        render_template(
+            "{{contact.name|a customer}} / {{contact.email|reply here}} / {{summary}}",
+            {"contact.name": "", "contact.email": "alex@example.test"},
+        )
+        == "a customer / alex@example.test / "
+    )
+
+
+def test_email_body_drops_empty_placeholder_lines_and_collapses_newlines():
+    assert (
+        render_email_body(
+            "Hello {{contact.first_name|there}},\n\n"
+            "Next step: {{next_step}}\n\n"
+            "{{customer_recap}}\n\n\n\nKeep in touch.",
+            {"contact.first_name": "", "next_step": "", "customer_recap": ""},
+        )
+        == "Hello there,\n\nKeep in touch."
+    )
+    assert (
+        render_email_body(
+            "Name: {{contact.name}} / {{contact.email}}",
+            {"contact.name": "", "contact.email": "alex@example.test"},
+        )
+        == "Name:  / alex@example.test"
+    )
+
+
+def test_smart_email_templates_have_expected_keys_and_audiences():
+    assert [template["key"] for template in EMAIL_TEMPLATES] == [
+        "inquiry_confirmation",
+        "callback_confirmation",
+        "request_received",
+        "conversation_summary",
+        "staff_new_enquiry",
+        "staff_urgent",
+    ]
+    assert [template["audience"] for template in EMAIL_TEMPLATES] == [
+        "customer",
+        "customer",
+        "customer",
+        "customer",
+        "staff",
+        "staff",
+    ]
 
 
 @pytest.mark.parametrize("value", ["=SUM(A1:A2)", "+cmd", "-1", "@value", "\tvalue", "\rvalue"])

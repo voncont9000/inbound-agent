@@ -10,9 +10,12 @@ export type TemplateVariableOption = {
 const friendlyLabels: Record<string, string> = {
   business_name: "Business name",
   "contact.name": "Customer name",
+  "contact.first_name": "Customer first name",
   "contact.email": "Customer email",
   "contact.phone": "Customer phone",
   summary: "Conversation summary",
+  customer_recap: "Customer recap",
+  next_step: "Next step",
   started_at: "Conversation start time",
   conversation_id: "Conversation ID",
   channel: "Channel",
