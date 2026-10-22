@@ -54,6 +54,10 @@ def api_settings_from_env(env: Mapping[str, str]) -> ApiSettings | None:
     return ApiSettings(base_url, service_token, route_timeout)
 
 
+class UnknownChannelError(RuntimeError):
+    pass
+
+
 class VoiceApiClient:
     def __init__(
         self,
@@ -74,6 +78,8 @@ class VoiceApiClient:
                 "/internal/voice/route",
                 params={"to": to_number, "from": from_number},
             )
+            if response.status_code == 404:
+                raise UnknownChannelError("Unknown phone number")
             response.raise_for_status()
             return RouteResponse.model_validate(response.json())
 

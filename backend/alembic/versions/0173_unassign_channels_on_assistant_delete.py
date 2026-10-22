@@ -1,13 +1,13 @@
 """Allow channel connections to remain after assistant deletion.
 
 Revision ID: 0173
-Revises: 0172
+Revises: 0170
 """
 
 from alembic import op
 
 revision = "0173"
-down_revision = "0172"
+down_revision = "0170"
 branch_labels = None
 depends_on = None
 
