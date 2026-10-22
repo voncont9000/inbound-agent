@@ -3049,6 +3049,11 @@ export interface components {
             locale: string;
             /** Name */
             name: string;
+            /**
+             * Pauses Mid Sentence
+             * @default false
+             */
+            pauses_mid_sentence: boolean;
             /** Preview Url */
             preview_url: string | null;
         };

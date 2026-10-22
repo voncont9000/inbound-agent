@@ -11,6 +11,7 @@ from inbound_core.languages import (
     MULTI_LANGUAGES,
     Locale,
 )
+from inbound_core.voice_pace import speechify_voice_pauses_mid_sentence
 
 from inbound_api.schemas import (
     VoiceCard,
@@ -188,6 +189,7 @@ class SpeechifyVoiceCatalogue:
             locale=voice_locale,
             preview_url=preview_url if isinstance(preview_url, str) else None,
             is_default=voice.get("id") == DEFAULT_VOICE_ID,
+            pauses_mid_sentence=speechify_voice_pauses_mid_sentence(str(voice.get("id", ""))),
         )
 
     def _default_voice(self) -> VoiceCard:
@@ -199,6 +201,7 @@ class SpeechifyVoiceCatalogue:
             locale=DEFAULT_LOCALE,
             preview_url=None,
             is_default=True,
+            pauses_mid_sentence=False,
         )
 
     def _response(self, locale: Locale, voices: list[VoiceCard]) -> VoiceCatalogueResponse:

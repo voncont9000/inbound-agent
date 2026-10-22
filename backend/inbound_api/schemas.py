@@ -191,6 +191,7 @@ class VoiceCard(BaseModel):
     locale: str
     preview_url: str | None
     is_default: bool
+    pauses_mid_sentence: bool = False
 
 
 class VoiceCatalogueResponse(BaseModel):

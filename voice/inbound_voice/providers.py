@@ -29,6 +29,7 @@ from pipecat.services.speechify.tts import SpeechifyHttpTTSService
 from pipecat.transcriptions.language import Language
 from pipecat.utils.types import NOT_GIVEN
 
+from inbound_voice.phone_speech import PhoneNumberSpeechTransform
 from inbound_voice.pronunciation import PronunciationTransform
 
 DEEPGRAM_TTS_VOICES = {
@@ -385,7 +386,14 @@ def create_tts(
     speed: float = 1.0,
 ):
     voice_language = voice_language or _default_voice_language(providers, env)
-    text_transforms = [("*", PronunciationTransform(pronunciations))] if pronunciations else None
+    region = (
+        voice_language.locale.rsplit("-", maxsplit=1)[1].upper()
+        if "-" in voice_language.locale
+        else None
+    )
+    text_transforms = [("*", PhoneNumberSpeechTransform(region))]
+    if pronunciations:
+        text_transforms.append(("*", PronunciationTransform(pronunciations)))
     if providers.tts == "speechify":
         voice_id = voice_language.speechify_voice
         rate_percent = speechify_rate_percent(voice_id, speed)

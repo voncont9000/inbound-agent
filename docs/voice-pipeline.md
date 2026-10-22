@@ -84,6 +84,36 @@ multilingual locale for ElevenLabs and Deepgram because those providers do not s
 during a call. An assistant that already has `language: multi` keeps that selected value in the
 settings picker, which explains that the default voice language will be used.
 
+### Speechify pauses and phone-number speech
+
+The voice-pause metric counts internal silences of at least 250 ms below -50 dBFS in six
+punctuation-free English sentences, using 8 kHz PCM and each voice's production rate. Results
+are normalized to pauses per 10 seconds of audio. Across 43 English voices, the measured range
+is 0 to 5.84 pauses per 10 seconds. The picker hides voices above the 3.0 threshold, except
+when one is already selected. The nine flagged voices are alec, cleon, chase, dorian, marian,
+jaime, carter, lorne, and wren. Cleon measured 4.75 pauses per 10 seconds; helen measured 0.
+Some voices insert 400–800 ms pauses mid-sentence even without punctuation. The production
+recording matched Speechify's raw pause pattern, and audio arrived faster than real time, so
+the pipeline did not add those gaps.
+
+To refresh the measurement data, run this from `voice/` inside the phone container:
+
+```sh
+python -m eval.measure_voice_pauses
+```
+
+Every TTS provider applies a phone-number text transform. It parses possible numbers using
+the assistant locale's region, preserves international-format numbers, and spells each
+formatted digit group out with brief pauses between groups. For example, `+447716131661`
+becomes `+4 4, 7 7 1 6, 1 3 1 6 6 1`, and `020 4652 5154` in `en-GB` becomes
+`0 2 0, 4 6 5 2, 5 1 5 4`. Speechify read `+447716131661` as a cardinal number; speech-to-text
+returned `+447,716,131,661`, and the audio clip was 12 seconds. The manually spaced
+`+4 4, 7 7 1 6, 1 3 1, 6 6 1` was recognized as “plus four four seven seven one six one
+three one six six one”; `0 7 7 1 6, 1 3 1, 6 6 1` was recognized as “zero seven seven one six
+…”. SSML
+`<say-as interpret-as="telephone">` did not change the result. Word timestamps still refer to
+the transformed text, so stored transcripts show phone digits with these spaces and commas.
+
 For Deepgram Aura-2, German, Spanish (Spain and Mexico), French, and Italian use their mapped
 Aura-2 voices. Portuguese and `multi` warn and retain the existing English Pandora fallback.
 An explicit `TTS_VOICE` still overrides the mapped Deepgram voice. Provider selection and

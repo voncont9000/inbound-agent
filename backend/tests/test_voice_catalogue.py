@@ -106,6 +106,16 @@ async def test_catalogue_maps_filters_and_follows_speechify_pages(monkeypatch) -
     assert response.locales[-1].multilingual is True
 
 
+def test_catalogue_maps_pause_risk_and_default_voice_is_not_flagged() -> None:
+    catalogue = SpeechifyVoiceCatalogue()
+
+    cleon = catalogue._map_voice(_voice("cleon", "en-GB"), "en-GB", "simba-3.2")
+    default = catalogue._default_voice()
+
+    assert cleon.pauses_mid_sentence is True
+    assert default.pauses_mid_sentence is False
+
+
 @pytest.mark.asyncio
 async def test_catalogue_locale_options_follow_tts_provider_after_cache_hit(monkeypatch) -> None:
     settings = SimpleNamespace(tts_provider="speechify")
