@@ -43,7 +43,7 @@ Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) 
 ## 6. Core concepts
 - **Workspace (tenant):** one business. Has members with roles (owner, staff). Data is strictly isolated per tenant.
 - **Assistant:** persona, language(s), voice, rules, prompt, knowledge, abilities and a configurable extraction schema. One assistant serves all channels, with per-channel overrides (greeting, length, tone). Business-specific fields and rules are editable configuration; law firms are the first template, not the product model.
-- **Channel connection:** phone number, Gmail mailbox (OAuth) or WhatsApp number (WABA).
+- **Channel connection:** phone number, Gmail mailbox (OAuth) or WhatsApp number (WABA). Deleting an assistant leaves its channels in the workspace as unassigned. Unassigned phone and WhatsApp channels do not answer or ingest messages; unassigned Gmail does not ingest inbox mail but can still send configured after-conversation action emails. Reassigning a channel resumes its assistant-scoped behavior.
 - **Contact:** matched by phone/email/WhatsApp ID. Has built-in and custom fields, some AI-maintained ("intelligent fields").
 - **Conversation:** channel, participants, messages/turns, transcript, recording (voice), summary, intent, outcome, tags, extracted results, status (open / handled / needs human / closed).
 - **Knowledge:** company info, FAQ entries, documents/URLs (chunked for RAG), opening hours. **Knowledge gaps** are generated from questions the assistant could not answer.

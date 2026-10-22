@@ -10,6 +10,7 @@ export interface MockDatabase {
   setupDraftRequests: Schemas["AssistantSetupDraftCreate"][];
   setupCompletions: Schemas["AssistantSetupComplete"][];
   channels: Record<string, Schemas["ChannelConnectionResponse"][]>;
+  unassignedChannels: Record<string, Schemas["ChannelConnectionResponse"][]>;
   postActionSecrets: Record<string, Schemas["WebhookSecretSummary"][]>;
 }
 
@@ -52,6 +53,7 @@ function createDb(): MockDatabase {
         google_features: [],
       }],
     },
+    unassignedChannels: Object.fromEntries(tenants.map(({ tenant }) => [tenant.id, []])),
     postActionSecrets: {},
   };
 }

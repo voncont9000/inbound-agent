@@ -2,6 +2,7 @@ import { waitFor, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { server } from "../mocks/server";
+import { mockDb } from "../mocks/db";
 import { renderApp } from "../test/renderApp";
 
 const firstAssistantId = "20000000-0000-4000-8000-000000000001";
@@ -33,6 +34,38 @@ describe("workspace Channels page", () => {
     await user.type(search, "assistant@example");
     expect(screen.getByText(gmailAddress)).toBeInTheDocument();
     expect(screen.queryByText(phoneNumber)).not.toBeInTheDocument();
+  });
+
+  it("shows an unassigned channel and reassigns it through the workspace endpoint", async () => {
+    const user = userEvent.setup();
+    const original = mockDb.channels[firstAssistantId].find(({ external_id }) => external_id === gmailAddress)!;
+    mockDb.channels[firstAssistantId] = mockDb.channels[firstAssistantId].filter(
+      ({ id }) => id !== original.id,
+    );
+    mockDb.unassignedChannels[mockDb.tenants[0].tenant.id].push({
+      ...original,
+      assistant_id: null,
+    });
+    let capturedBody: unknown;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PATCH" && new URL(request.url).pathname.endsWith(`/api/channels/${original.id}`)) {
+        void request.clone().json().then((body) => { capturedBody = body; });
+      }
+    };
+    server.events.on("request:start", listener);
+    renderApp("/channels", { loggedIn: true });
+
+    expect(await screen.findByText("Unassigned")).toBeInTheDocument();
+    const select = screen.getByLabelText(`Assistant for ${gmailAddress}`);
+    expect(select).toHaveValue("");
+    expect(screen.getByRole("option", { name: "Unassigned — choose an assistant" })).toBeDisabled();
+    await user.selectOptions(select, secondAssistantId);
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Move inbox" }));
+
+    await waitFor(() => expect(capturedBody).toEqual({ assistant_id: secondAssistantId }));
+    expect(select).toHaveValue(secondAssistantId);
+    server.events.removeListener("request:start", listener);
   });
 
   it("adds a phone channel for a selected second assistant", async () => {

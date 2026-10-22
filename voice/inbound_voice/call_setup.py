@@ -12,6 +12,7 @@ from loguru import logger
 
 from inbound_voice.api_client import (
     DEFAULT_SPOOL_DIR,
+    UnknownChannelError,
     VoiceApiClient,
     api_settings_from_env,
 )
@@ -139,6 +140,8 @@ async def prepare_call(
         )
     except Exception as error:
         availability_task.cancel()
+        if channel == "phone" and isinstance(error, UnknownChannelError):
+            raise
         logger.warning(
             "Voice API route lookup failed; using local assistant configuration: {}", error
         )

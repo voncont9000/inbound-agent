@@ -15,7 +15,12 @@ from inbound_core.call_report import CallReport, CallStart, RouteResponse
 
 from eval.fake_api import build_parser as build_fake_api_parser
 from eval.fake_api import create_fake_api
-from inbound_voice.api_client import ApiSettings, VoiceApiClient, api_settings_from_env
+from inbound_voice.api_client import (
+    ApiSettings,
+    UnknownChannelError,
+    VoiceApiClient,
+    api_settings_from_env,
+)
 from inbound_voice.call_report import build_call_report
 from inbound_voice.config import load_assistant_config
 
@@ -75,6 +80,25 @@ async def test_route_start_and_report_happy_path(tmp_path: Path) -> None:
     assert len(app.state.fake["calls"]) == 1
     assert app.state.fake["reports"][0]["conversation_id"] == str(conversation_id)
     assert app.state.fake["reports"][0]["external_call_id"] == "CA-test-call"
+
+
+@pytest.mark.asyncio
+async def test_route_404_raises_unknown_channel_error(tmp_path: Path) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            404,
+            json={"detail": "Unknown number"},
+            request=request,
+        )
+
+    client = VoiceApiClient(
+        ApiSettings("http://fake", "test-service-token"),
+        spool_dir=tmp_path,
+        transport=httpx.MockTransport(handle),
+    )
+
+    with pytest.raises(UnknownChannelError, match="Unknown phone number"):
+        await client.route("+441234567890", "+447700900001")
 
 
 @pytest.mark.asyncio

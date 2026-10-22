@@ -15,7 +15,7 @@ from inbound_core.languages import LOCALES
 from inbound_core.setup_draft import build_services_draft_prompt, parse_services_draft
 from inbound_core.templates import find_template
 from inbound_core.templates import list_templates as load_templates
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
@@ -431,6 +431,26 @@ async def delete_assistant(
         )
         if result.skipped_in_progress_ids:
             raise HTTPException(status_code=409, detail="Conversation is still in progress")
+    channel_ids = list(
+        await session.scalars(
+            select(ChannelConnection.id).where(ChannelConnection.assistant_id == assistant_id)
+        )
+    )
+    if channel_ids:
+        await session.execute(
+            update(ChannelConnection)
+            .where(ChannelConnection.assistant_id == assistant_id)
+            .values(assistant_id=None)
+        )
+        await session.flush()
+        for channel_id in channel_ids:
+            await write_audit(
+                session,
+                ctx,
+                "channel.unassigned",
+                "channel_connection",
+                channel_id,
+            )
     await write_audit(session, ctx, "assistant.deleted", "assistant", assistant_id)
     await enqueue(
         session,

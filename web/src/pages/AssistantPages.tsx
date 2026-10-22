@@ -184,6 +184,7 @@ export function AssistantsPage() {
       setDeleteTarget(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["assistants"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-channels"] }),
         queryClient.invalidateQueries({ queryKey: ["conversations"] }),
         queryClient.invalidateQueries({ queryKey: ["conversation"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
@@ -299,6 +300,7 @@ export function AssistantsPage() {
       <p>{deleteTarget.conversation_count > 0
         ? `This also permanently deletes its ${deleteTarget.conversation_count} conversation${deleteTarget.conversation_count === 1 ? "" : "s"}, including transcripts and recordings. Contacts are kept. This can't be undone.`
         : "This can't be undone."}</p>
+      <p>Its phone numbers, inboxes and WhatsApp numbers stay on the Channels page, unassigned.</p>
       {deleteError && <p role="alert">{deleteError}</p>}
     </ConfirmDialog>}
   </main>;

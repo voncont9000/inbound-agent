@@ -101,7 +101,9 @@ export function ChannelsPage() {
   const assistantsList = useMemo(() => assistants.data?.items ?? [], [assistants.data?.items]);
   const channelList = channels.data?.items ?? [];
   const assistantById = new Map(assistantsList.map((assistant) => [assistant.id, assistant]));
-  const gmailAssistantIds = new Set(channelList.filter(({ kind }) => kind === "gmail").map(({ assistant_id }) => assistant_id));
+  const gmailAssistantIds = new Set(channelList.flatMap(({ kind, assistant_id }) =>
+    kind === "gmail" && assistant_id ? [assistant_id] : [],
+  ));
   const gmailAvailable = assistantsList.some(({ id }) => !gmailAssistantIds.has(id));
   const filteredAssistant = assistantFilterId ? assistantById.get(assistantFilterId) : undefined;
 
@@ -196,7 +198,7 @@ export function ChannelsPage() {
 
   const term = search.trim().toLocaleLowerCase();
   const visibleChannels = channelList.filter((channel) => {
-    const assistantName = assistantById.get(channel.assistant_id)?.name ?? "";
+    const assistantName = assistantById.get(channel.assistant_id ?? "")?.name ?? "";
     return (kindFilter === "all" || channel.kind === kindFilter)
       && (!assistantFilterId || channel.assistant_id === assistantFilterId)
       && (!term || channel.external_id.toLocaleLowerCase().includes(term) || assistantName.toLocaleLowerCase().includes(term));
@@ -381,14 +383,15 @@ export function ChannelsPage() {
               <tr className="channel-table-row">
                 <td data-label="Channel"><span className="channel-table-name"><ChannelIcon kind={channel.kind} size={18} />{channelLabel(channel.kind)}</span></td>
                 <td data-label="Number / address"><span className="channel-table-id">{channel.external_id}</span></td>
-                <td data-label="Assistant"><select
+                <td data-label="Assistant">{channel.assistant_id === null && <Badge tone="neutral">Unassigned</Badge>}<select
                   aria-label={`Assistant for ${channel.external_id}`}
-                  value={channel.assistant_id}
+                  value={channel.assistant_id ?? ""}
                   onChange={(event) => {
                     if (channel.kind === "gmail") setPendingReassignment({ channel, assistantId: event.target.value });
                     else reassign.mutate({ channel, assistantId: event.target.value });
                   }}
                 >
+                  {channel.assistant_id === null && <option value="" disabled>Unassigned — choose an assistant</option>}
                   {assistantsList.map((assistant) => {
                     const hasGmail = gmailAssistantIds.has(assistant.id);
                     return <option

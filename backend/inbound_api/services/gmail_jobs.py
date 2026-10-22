@@ -68,6 +68,8 @@ async def gmail_sync(session: AsyncSession, payload: dict) -> None:
     connection = await session.get(ChannelConnection, connection_id)
     if connection is None or connection.kind != "gmail" or connection.status != "active":
         return
+    if connection.assistant_id is None:
+        return
     client = gmail_client_for(connection, settings)
     connection_settings = dict(connection.settings or {})
     cursor = connection_settings.get("history_id")
@@ -116,6 +118,8 @@ async def _process_message(
     *,
     webhook_received_at: str | None,
 ) -> None:
+    if connection.assistant_id is None:
+        return
     external_id = f"gmail:{message_id}"
     if await session.scalar(select(Message.id).where(Message.external_id == external_id).limit(1)):
         return

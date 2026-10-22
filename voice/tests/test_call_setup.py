@@ -7,7 +7,7 @@ import pytest
 from inbound_core.booking import AvailabilityResponse
 from inbound_core.call_report import RouteResponse
 
-from inbound_voice.api_client import VoiceApiClient
+from inbound_voice.api_client import UnknownChannelError, VoiceApiClient
 from inbound_voice.call_setup import prepare_call
 from inbound_voice.config import load_assistant_config
 
@@ -42,6 +42,28 @@ async def test_route_failure_falls_back_but_keeps_api_and_call_start(
     assert prepared.api is not None
     assert prepared.call_start is not None
     assert prepared.call_start.external_call_id == "CA123"
+
+
+@pytest.mark.asyncio
+async def test_unknown_phone_route_does_not_fall_back_to_local_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def unknown_route(self, to_number: str, from_number: str | None):
+        raise UnknownChannelError("Unknown phone number")
+
+    monkeypatch.setattr(VoiceApiClient, "route", unknown_route)
+    with pytest.raises(UnknownChannelError, match="Unknown phone number"):
+        await prepare_call(
+            {
+                "API_BASE_URL": "https://api.example.com",
+                "VOICE_SERVICE_TOKEN": "test-token",
+                "ASSISTANT_CONFIG": ASSISTANT_PATH,
+            },
+            channel="phone",
+            to_number="+441234567890",
+            from_number="+447700900001",
+            external_call_id="CA-unknown",
+        )
 
 
 @pytest.mark.asyncio

@@ -23,6 +23,7 @@ from starlette.datastructures import FormData
 from starlette.websockets import WebSocketState
 
 from bot import resolve_caller_id, run_bot
+from inbound_voice.api_client import UnknownChannelError
 from inbound_voice.call_setup import prepare_call
 from inbound_voice.replay import RedisReplayGuard, ReplayGuard, replay_guard_from_env
 from inbound_voice.transfer import (
@@ -212,6 +213,10 @@ def create_app(
                 call_transfer=call_transfer,
             )
         except WebSocketDisconnect:
+            return
+        except UnknownChannelError:
+            logger.warning("No voice route for destination {}; ending call.", start.to_number)
+            await websocket.close(code=1000)
             return
         except Exception as error:
             logger.exception("Twilio media stream failed: {}", error)

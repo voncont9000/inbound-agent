@@ -487,9 +487,11 @@ report requests. `ROUTE_TIMEOUT_SECONDS` defaults to 2 seconds. WebRTC calls als
 `WEB_CALL_TO_NUMBER`; without it the runner uses the local `ASSISTANT_CONFIG`. Phone calls
 use the dialled `To` number supplied by Twilio.
 
-The route lookup runs before the greeting. If routing fails or times out, the call uses the
-local assistant YAML, while retaining the API call metadata so the start and report are
-still attempted. The call-start request is started asynchronously after pipeline setup.
+The route lookup runs before the greeting. On the phone path, an unknown or unassigned
+number returns 404 and is hung up without running the local assistant. Other routing
+failures or timeouts use the local assistant YAML, while retaining the API call metadata so
+the start and report are still attempted. The call-start request is started asynchronously
+after pipeline setup.
 After intake finalization and metrics persistence, the voice service posts the report.
 Start and report requests retry up to five times on transport errors, timeouts, HTTP 408,
 429, and 5xx responses, with 0.5, 1, 2, and 4 second backoffs. Route lookup is a single

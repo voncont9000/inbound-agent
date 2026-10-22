@@ -260,7 +260,7 @@ class ChannelConnectionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    assistant_id: UUID
+    assistant_id: UUID | None
     kind: Literal["phone", "gmail", "whatsapp", "web"]
     external_id: str
     status: str

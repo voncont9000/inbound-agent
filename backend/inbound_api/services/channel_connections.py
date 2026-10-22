@@ -73,6 +73,7 @@ async def update_channel_connection(
     allow_assistant_reassignment: bool = False,
 ) -> ChannelConnection:
     changed = False
+    was_unassigned = connection.assistant_id is None
     if "assistant_id" in payload.model_fields_set:
         if not allow_assistant_reassignment:
             raise HTTPException(
@@ -96,6 +97,8 @@ async def update_channel_connection(
         changed = True
     if changed:
         await write_audit(session, ctx, "channel.updated", "channel_connection", connection.id)
+        if connection.kind == "gmail" and was_unassigned and connection.assistant_id is not None:
+            await enqueue_gmail_sync(session, connection.id)
     return connection
 
 

@@ -12,6 +12,7 @@ from inbound_core.config import TransferTarget
 
 import phone_server
 from bot import resolve_caller_id
+from inbound_voice.api_client import UnknownChannelError
 from inbound_voice.config import load_assistant_config
 from inbound_voice.transfer import FakeTwilioCallControl
 from inbound_voice.twilio import (
@@ -488,6 +489,28 @@ def test_websocket_closes_when_pipeline_returns_after_end_frame(
                 websocket.receive_json()
 
     assert completed == [True]
+
+
+def test_websocket_hangs_up_unknown_number_without_running_bot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def unknown_route(*args, **kwargs):
+        raise UnknownChannelError("Unknown phone number")
+
+    async def unexpected_run_bot(*args, **kwargs):
+        pytest.fail("the bot must not run for an unknown phone number")
+
+    monkeypatch.setattr(phone_server, "prepare_call", unknown_route)
+    monkeypatch.setattr(phone_server, "run_bot", unexpected_run_bot)
+    with TestClient(create_app({})) as client:
+        with client.websocket_connect("/twilio/ws") as websocket:
+            _send_start(
+                websocket,
+                "CA-unknown",
+                {"To": "+449876543210", "From": "+441234567890"},
+            )
+            with pytest.raises(WebSocketDisconnect):
+                websocket.receive_text()
 
 
 def test_websocket_accepts_signed_stream_token(
