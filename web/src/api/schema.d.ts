@@ -1667,11 +1667,8 @@ export interface components {
         };
         /** ChannelConnectionResponse */
         ChannelConnectionResponse: {
-            /**
-             * Assistant Id
-             * Format: uuid
-             */
-            assistant_id: string;
+            /** Assistant Id */
+            assistant_id: string | null;
             /**
              * Created At
              * Format: date-time

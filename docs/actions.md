@@ -89,7 +89,9 @@ For after-conversation email and Sheets actions, the providers first use the ass
 Gmail connection when it has the required feature, then fall back to the newest eligible active
 Gmail connection in the same workspace. A connection from another workspace is never used.
 This fallback is specific to after-conversation actions; Calendar booking and inbox access remain
-assistant-scoped. Sheets requires the Sheets feature even in fake writer mode. Resend requires
+assistant-scoped. An unassigned Gmail connection remains eligible for these workspace-scoped send
+and Sheets actions after its assistant is deleted. It does not receive or ingest inbound mail until
+reassigned. Sheets requires the Sheets feature even in fake writer mode. Resend requires
 `RESEND_API_KEY` and `EMAIL_FROM`. Webhook signatures use the Fernet-encrypted signing secret
 stored per assistant/action; secret values are returned only once when generated or rotated.
 Production rejects fake providers, private webhook targets, and incomplete provider configuration.

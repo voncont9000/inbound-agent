@@ -1719,9 +1719,16 @@
       "ChannelConnectionResponse": {
         "properties": {
           "assistant_id": {
-            "format": "uuid",
-            "title": "Assistant Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant Id"
           },
           "created_at": {
             "format": "date-time",

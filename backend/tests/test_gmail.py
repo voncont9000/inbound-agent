@@ -29,6 +29,30 @@ from inbound_api.services.gmail_queue import enqueue_gmail_sync
 from inbound_api.services.job_handlers import _message_extraction_rows
 
 
+@pytest.mark.asyncio
+async def test_gmail_sync_does_not_advance_unassigned_connection_cursor(monkeypatch):
+    connection = SimpleNamespace(
+        id=uuid4(),
+        kind="gmail",
+        status="active",
+        assistant_id=None,
+        settings={"history_id": "cursor-before-delete"},
+    )
+    session = SimpleNamespace(get=AsyncMock(return_value=connection))
+    enqueue = AsyncMock()
+    monkeypatch.setattr(
+        gmail_jobs,
+        "get_settings",
+        lambda: SimpleNamespace(gmail_mode="fake"),
+    )
+    monkeypatch.setattr(gmail_jobs, "enqueue_gmail_sync", enqueue)
+
+    await gmail_jobs.gmail_sync(session, {"connection_id": str(connection.id)})
+
+    assert connection.settings == {"history_id": "cursor-before-delete"}
+    enqueue.assert_not_awaited()
+
+
 def make_message(headers=(), labels=("INBOX",)):
     return {
         "id": "m1",

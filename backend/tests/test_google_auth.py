@@ -130,6 +130,56 @@ async def test_google_connection_for_returns_active_gmail_connection():
     assert "channel_connections.status" in query
 
 
+@pytest.mark.asyncio
+async def test_action_google_connection_for_finds_unassigned_gmail_in_same_tenant(monkeypatch):
+    tenant_id = uuid4()
+    assistant_id = uuid4()
+    unassigned = SimpleNamespace(
+        assistant_id=None,
+        tenant_id=tenant_id,
+        kind="gmail",
+        status="active",
+        settings={"google_features": ["gmail"]},
+    )
+    other_tenant = SimpleNamespace(
+        assistant_id=None,
+        tenant_id=uuid4(),
+        kind="gmail",
+        status="active",
+        settings={"google_features": ["gmail"]},
+    )
+    monkeypatch.setattr(
+        google_auth,
+        "has_google_feature",
+        lambda connection, feature: feature == "gmail",
+    )
+
+    class Session:
+        query = None
+
+        async def scalar(self, _statement):
+            return None
+
+        async def scalars(self, statement):
+            self.query = str(statement)
+            return SimpleNamespace(
+                all=lambda: [
+                    row for row in (other_tenant, unassigned) if row.tenant_id == tenant_id
+                ]
+            )
+
+    session = Session()
+    result = await google_auth.action_google_connection_for(
+        session,
+        assistant_id=assistant_id,
+        tenant_id=tenant_id,
+        feature="gmail",
+    )
+
+    assert result is unassigned
+    assert "channel_connections.tenant_id" in session.query
+
+
 async def test_oauth_start_requests_features_and_signed_state(monkeypatch):
     tenant_id, assistant_id, user_id = uuid4(), uuid4(), uuid4()
     settings = SimpleNamespace(

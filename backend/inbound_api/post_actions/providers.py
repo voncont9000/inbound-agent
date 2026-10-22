@@ -206,7 +206,9 @@ class FakeSheetsWriter:
             self.path,
             {
                 "ts": datetime.now(UTC).isoformat(),
-                "assistant_id": str(connection.assistant_id),
+                "assistant_id": (
+                    str(connection.assistant_id) if connection.assistant_id is not None else None
+                ),
                 "spreadsheet_id": spreadsheet_id,
                 "sheet_name": sheet_name,
                 "headers": headers,
