@@ -1,5 +1,5 @@
 from collections import deque
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import dataclass
 from math import ceil, sqrt
 from struct import iter_unpack
@@ -106,34 +106,106 @@ def _trailing_silence_cut_range(
     return len(audio) - silent_windows * window_bytes, bytes_to_trim
 
 
+_SENTENCE_FINAL_PUNCTUATION = frozenset(".!?…")
+_SENTENCE_CLOSERS = "\"'”’»›)]}"
+
+
+def _sentence_final_punctuation(text: str) -> str | None:
+    candidate = text.rstrip()
+    while candidate and candidate[-1] in _SENTENCE_CLOSERS:
+        candidate = candidate[:-1].rstrip()
+    return candidate[-1] if candidate and candidate[-1] in _SENTENCE_FINAL_PUNCTUATION else None
+
+
+def _first_sentence(text: str) -> str:
+    normalized = " ".join(text.strip().split())
+    for index, character in enumerate(normalized):
+        if character not in _SENTENCE_FINAL_PUNCTUATION:
+            continue
+        end = index + 1
+        while end < len(normalized) and normalized[end] in _SENTENCE_CLOSERS:
+            end += 1
+        if end == len(normalized) or normalized[end].isspace():
+            return normalized[:end]
+    return normalized
+
+
+def _normalize_pause_text(text: str) -> str:
+    return " ".join(text.strip().casefold().split())
+
+
 class SpeechifyVoiceAgentTTSService(SpeechifyHttpTTSService):
     def __init__(
         self,
         *,
         rate_percent: int,
         trailing_silence_ms: int = 120,
+        sentence_pause_ms: int = 300,
+        section_pause_ms: int = 300,
+        lead_pause_texts: Sequence[str] = (),
         **kwargs: Any,
     ) -> None:
         self._rate_percent = rate_percent
         self._trailing_silence_ms = trailing_silence_ms
+        self._sentence_pause_ms = sentence_pause_ms
+        self._section_pause_ms = section_pause_ms
+        self._lead_pause_texts = tuple(
+            _normalize_pause_text(_first_sentence(lead_text))
+            for lead_text in lead_pause_texts
+            if lead_text.strip()
+        )
+        self._lead_pause_for_next_payload = False
+        self._request_context_id: str | None = None
+        self._context_request_count = 0
         super().__init__(**kwargs)
 
     def _build_payload(self, text: str) -> dict[str, Any]:
         payload = super()._build_payload(text)
-        if self._rate_percent != 0:
-            payload["input"] = (
-                f'<speak><prosody rate="{self._rate_percent:+d}%">{escape(text)}</prosody></speak>'
-            )
+        if self._rate_percent != 0 or self._lead_pause_for_next_payload:
+            parts = []
+            if self._lead_pause_for_next_payload:
+                parts.append(f'<break time="{self._section_pause_ms}ms"/>')
+            escaped_text = escape(text)
+            if self._rate_percent != 0:
+                parts.append(f'<prosody rate="{self._rate_percent:+d}%">{escaped_text}</prosody>')
+            else:
+                parts.append(escaped_text)
+            payload["input"] = f"<speak>{''.join(parts)}</speak>"
         return payload
 
+    async def _run_speechify_tts(
+        self,
+        text: str,
+        context_id: str,
+    ) -> AsyncGenerator[Frame | None, None]:
+        try:
+            async for frame in super().run_tts(text, context_id):
+                yield frame
+        finally:
+            self._lead_pause_for_next_payload = False
+
     async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame | None, None]:
+        if context_id != self._request_context_id:
+            self._request_context_id = context_id
+            self._context_request_count = 0
+        is_not_first_request = self._context_request_count > 0
+        self._context_request_count += 1
+        normalized_text = _normalize_pause_text(text)
+        matches_lead_text = bool(normalized_text) and any(
+            lead_text.startswith(normalized_text) or normalized_text.startswith(lead_text)
+            for lead_text in self._lead_pause_texts
+        )
+        self._lead_pause_for_next_payload = matches_lead_text or (
+            is_not_first_request and _sentence_final_punctuation(text) == "?"
+        )
+
         pending_frames: deque[_BufferedSpeechifyAudio | Frame | None] = deque()
         held_bytes = 0
         holdback_bytes: int | None = None
         first_audio = True
         cumulative_time_before = self._cumulative_time
 
-        async for frame in super().run_tts(text, context_id):
+        async for frame in self._run_speechify_tts(text, context_id):
             if not isinstance(frame, TTSAudioRawFrame):
                 pending_frames.append(frame)
                 while pending_frames and not isinstance(pending_frames[0], _BufferedSpeechifyAudio):
@@ -198,7 +270,11 @@ class SpeechifyVoiceAgentTTSService(SpeechifyHttpTTSService):
                 tail,
                 last_chunk.sample_rate,
                 last_chunk.num_channels,
-                self._trailing_silence_ms,
+                (
+                    self._sentence_pause_ms
+                    if _sentence_final_punctuation(text) is not None
+                    else self._trailing_silence_ms
+                ),
             )
             trim_end = trim_start + bytes_to_trim
             offset = 0
@@ -383,6 +459,7 @@ def create_tts(
     *,
     voice_language: VoiceLanguage | None = None,
     pronunciations: list[PronunciationEntry] | None = None,
+    lead_pause_texts: Sequence[str] = (),
     speed: float = 1.0,
 ):
     voice_language = voice_language or _default_voice_language(providers, env)
@@ -417,7 +494,11 @@ def create_tts(
             "text_transforms": text_transforms,
             "settings": SpeechifyHttpTTSService.Settings(**settings),
         }
-        return SpeechifyVoiceAgentTTSService(rate_percent=rate_percent, **service_kwargs)
+        return SpeechifyVoiceAgentTTSService(
+            rate_percent=rate_percent,
+            lead_pause_texts=lead_pause_texts,
+            **service_kwargs,
+        )
     if providers.tts == "elevenlabs":
         speed_setting = {"speed": speed} if speed != 1.0 else {}
         if providers.elevenlabs_model in ELEVENLABS_HTTP_ONLY_MODELS:

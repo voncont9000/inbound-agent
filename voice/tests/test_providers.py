@@ -350,7 +350,7 @@ def test_create_tts() -> None:
     assert deepgram_default._settings.speed is None
 
 
-def test_speechify_payload_only_wraps_nonzero_rate_and_escapes_text() -> None:
+def test_speechify_payload_wraps_nonzero_rate_and_escapes_text() -> None:
     async def create_services() -> tuple[SpeechifyVoiceAgentTTSService, ...]:
         async with aiohttp.ClientSession() as session:
             return tuple(
@@ -363,7 +363,7 @@ def test_speechify_payload_only_wraps_nonzero_rate_and_escapes_text() -> None:
                         voice="alec",
                     ),
                 )
-                for rate_percent in (0, 29)
+                for rate_percent in (0, 22)
             )
 
     unchanged, adjusted = asyncio.run(create_services())
@@ -372,7 +372,73 @@ def test_speechify_payload_only_wraps_nonzero_rate_and_escapes_text() -> None:
     assert unchanged._build_payload(text)["input"] == text
     assert (
         adjusted._build_payload(text)["input"]
-        == '<speak><prosody rate="+29%">Hello &amp; &lt;team&gt;</prosody></speak>'
+        == '<speak><prosody rate="+22%">Hello &amp; &lt;team&gt;</prosody></speak>'
+    )
+
+
+def test_speechify_adds_lead_and_following_question_breaks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payloads = []
+
+    async def capture_payload(self, text: str, context_id: str):
+        payloads.append(self._build_payload(text)["input"])
+        if False:
+            yield None
+
+    monkeypatch.setattr(SpeechifyHttpTTSService, "run_tts", capture_payload)
+
+    async def collect() -> None:
+        service = await _speechify_service(
+            lead_pause_texts=("This call may be recorded. The call may be retained.",)
+        )
+        requests = [
+            ("THIS   CALL may be recorded.", "recording"),
+            ("Is this still the best number?", "first-question"),
+            ("Thanks for calling.", "follow-up"),
+            ("Is that still the best number?", "follow-up"),
+            ("Here is another detail.", "statement-context"),
+            ("That is all.", "follow-up"),
+            ("Another statement.", "statement-context"),
+        ]
+        for text, context_id in requests:
+            async for _ in service.run_tts(text, context_id):
+                pass
+
+    asyncio.run(collect())
+
+    assert payloads[0].startswith('<speak><break time="300ms"/>')
+    assert payloads[0].endswith(
+        '<prosody rate="+29%">THIS   CALL may be recorded.</prosody></speak>'
+    )
+    assert payloads[1] == (
+        '<speak><prosody rate="+29%">Is this still the best number?</prosody></speak>'
+    )
+    assert payloads[2] == '<speak><prosody rate="+29%">Thanks for calling.</prosody></speak>'
+    assert payloads[3] == (
+        '<speak><break time="300ms"/><prosody rate="+29%">'
+        "Is that still the best number?</prosody></speak>"
+    )
+    assert payloads[4] == ('<speak><prosody rate="+29%">Here is another detail.</prosody></speak>')
+    assert payloads[5] == '<speak><prosody rate="+29%">That is all.</prosody></speak>'
+    assert payloads[6] == '<speak><prosody rate="+29%">Another statement.</prosody></speak>'
+
+
+def test_speechify_rate_zero_break_uses_ssml_without_prosody() -> None:
+    async def create_service() -> SpeechifyVoiceAgentTTSService:
+        async with aiohttp.ClientSession() as session:
+            return SpeechifyVoiceAgentTTSService(
+                rate_percent=0,
+                api_key="test-speechify-key",
+                aiohttp_session=session,
+                settings=SpeechifyHttpTTSService.Settings(model="simba-3.2", voice="alec"),
+            )
+
+    service = asyncio.run(create_service())
+    service._lead_pause_for_next_payload = True
+
+    assert service._build_payload("Hello & <team>")["input"] == (
+        '<speak><break time="300ms"/>Hello &amp; &lt;team&gt;</speak>'
     )
 
 
@@ -421,14 +487,53 @@ def _speechify_audio(
     )
 
 
-async def _speechify_service() -> SpeechifyVoiceAgentTTSService:
+async def _speechify_service(
+    *,
+    lead_pause_texts: tuple[str, ...] = (),
+) -> SpeechifyVoiceAgentTTSService:
     async with aiohttp.ClientSession() as session:
         return SpeechifyVoiceAgentTTSService(
             rate_percent=29,
+            lead_pause_texts=lead_pause_texts,
             api_key="test-speechify-key",
             aiohttp_session=session,
             sample_rate=24_000,
         )
+
+
+def test_speechify_selects_sentence_or_chunk_trailing_silence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trailing_silence_values = []
+
+    def capture_trailing_silence(
+        audio: bytes,
+        sample_rate: int,
+        num_channels: int,
+        trailing_silence_ms: int,
+    ) -> tuple[int, int]:
+        trailing_silence_values.append(trailing_silence_ms)
+        return len(audio), 0
+
+    async def fake_run_tts(self, text: str, context_id: str):
+        yield _speechify_audio(300, amplitude=0, context_id=context_id)
+
+    monkeypatch.setattr(
+        "inbound_voice.providers._trailing_silence_cut_range",
+        capture_trailing_silence,
+    )
+    monkeypatch.setattr(SpeechifyHttpTTSService, "run_tts", fake_run_tts)
+
+    async def collect() -> None:
+        service = await _speechify_service()
+        async for _ in service.run_tts("Thanks for calling.", "sentence"):
+            pass
+        async for _ in service.run_tts("Thanks for calling", "chunk"):
+            pass
+
+    asyncio.run(collect())
+
+    assert trailing_silence_values == [300, 120]
 
 
 def test_speechify_trims_trailing_silence_and_streams_before_completion(
