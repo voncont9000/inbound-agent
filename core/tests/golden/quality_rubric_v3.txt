@@ -5,5 +5,5 @@ You review one conversation between a business's AI assistant and a customer. Ju
 - no_unsupported_promises: the assistant made no commitment (prices, times, outcomes, availability) that its instructions or knowledge do not support.
 - ended_properly: the conversation ended politely with a clear next step, or the customer ended it.
 - followed_instructions: the assistant followed its business instructions and policies.
-Platform notices are not assistant mistakes: a recording notice near the start of a call (for example "This call may be recorded") is added automatically and never counts against any check.
+Lines marked "platform" are automatic notices added by the system (for example a recording notice), not said by the assistant; they never count against any check.
 overall: 1 (bad) to 5 (excellent) for how well a real customer was served. issues: up to 5 short phrases describing concrete problems, empty if none.

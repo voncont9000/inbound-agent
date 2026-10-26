@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from inbound_core.languages import DEFAULT_RECORDING_NOTICE, LOCALES
 from inbound_core.quality import (
     CHECK_KEYS,
     JUDGE_VERSION,
@@ -14,14 +15,51 @@ from inbound_core.quality import (
     needs_review,
     normalize_judgement,
     objective_metrics,
+    split_platform_notices,
 )
 
 
-def test_rubric_matches_v2_golden() -> None:
-    golden = Path(__file__).with_name("golden") / "quality_rubric_v2.txt"
+def test_rubric_matches_v3_golden() -> None:
+    golden = Path(__file__).with_name("golden") / "quality_rubric_v3.txt"
 
-    assert JUDGE_VERSION == "v2"
+    assert JUDGE_VERSION == "v3"
     assert RUBRIC_PROMPT == golden.read_text(encoding="utf-8").rstrip("\n")
+
+
+def test_split_platform_notices_labels_automatic_lines_and_preserves_other_rows() -> None:
+    italian_notice = LOCALES["it-IT"].recording_notice
+    caller_row = {"role": "caller", "text": f"I heard this notice: {DEFAULT_RECORDING_NOTICE}"}
+    unchanged_row = {"role": "assistant", "text": "Hello, how can I help?"}
+    rows = [
+        {"role": "assistant", "text": DEFAULT_RECORDING_NOTICE},
+        {
+            "role": "assistant",
+            "text": f"Hello, how can I help? {DEFAULT_RECORDING_NOTICE}",
+        },
+        {
+            "role": "assistant",
+            "text": f"Before. {italian_notice} Middle. {DEFAULT_RECORDING_NOTICE} After.",
+        },
+        caller_row,
+        unchanged_row,
+    ]
+
+    split_rows = split_platform_notices(rows, {DEFAULT_RECORDING_NOTICE, italian_notice})
+
+    assert split_rows == [
+        {"role": "platform", "text": DEFAULT_RECORDING_NOTICE},
+        {"role": "assistant", "text": "Hello, how can I help?"},
+        {"role": "platform", "text": DEFAULT_RECORDING_NOTICE},
+        {"role": "assistant", "text": "Before."},
+        {"role": "platform", "text": italian_notice},
+        {"role": "assistant", "text": "Middle."},
+        {"role": "platform", "text": DEFAULT_RECORDING_NOTICE},
+        {"role": "assistant", "text": "After."},
+        caller_row,
+        unchanged_row,
+    ]
+    assert split_rows[8] is caller_row
+    assert split_rows[9] is unchanged_row
 
 
 def test_normalize_judgement_fills_drops_deduplicates_and_trims() -> None:

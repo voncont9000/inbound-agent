@@ -29,10 +29,11 @@ conversation is reused rather than duplicated. Test conversations are scored too
 `is_test` flag in administrative listings.
 
 The worker uses `GOOGLE_API_KEY` and `QUALITY_JUDGE_MODEL` (default
-`gemini-3.5-flash-lite`) to apply rubric version `v2`. Rubric v2 clarifies that platform notices
-are not assistant mistakes: an automatically added recording notice near the start of a call
-(for example, “This call may be recorded”) never counts against any check. The rubric covers six
-checks:
+`gemini-3.5-flash-lite`) to apply rubric version `v3`. Before judging, the worker labels known
+recording notices as `platform` transcript rows, separating them from assistant speech. The
+notices include the default and locale-specific recording notices, plus the assistant's configured
+consent message when its configuration parses. Lines marked `platform` are automatic system
+notices, not said by the assistant, and never count against any check. The rubric covers six checks:
 
 - `answered_question`
 - `collected_required_details`

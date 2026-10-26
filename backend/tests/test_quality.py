@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+from inbound_core.languages import DEFAULT_RECORDING_NOTICE
 from sqlalchemy import select
 
 from inbound_api.db import tenant_session
@@ -51,6 +52,7 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
     tenant_id = UUID(account["tenant_id"])
     assistant_id = uuid4()
     conversation_id = uuid4()
+    custom_notice = "This recording is for quality and training."
     captured: list[dict] = []
     responses = [_judgement(5, True), _judgement(4, False)]
     settings = get_settings()
@@ -83,7 +85,22 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
                 id=assistant_id,
                 tenant_id=tenant_id,
                 name="Quality assistant",
-                config={"instructions": "Help customers clearly."},
+                config={
+                    "business_name": "Quality assistant",
+                    "greeting": "Hello",
+                    "office_hours": {
+                        "days": ["Monday"],
+                        "opens": "09:00",
+                        "closes": "17:00",
+                    },
+                    "price_list": [],
+                    "policies": [],
+                    "contacts": {},
+                    "services": {"general": {"label": "General", "fields": []}},
+                    "urgency_rules": [],
+                    "live_actions": [],
+                    "recording": {"consent_message": custom_notice},
+                },
             )
         )
         session.add(
@@ -96,6 +113,15 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
                 status=ConversationStatus.COMPLETED,
                 started_at=datetime.now(UTC),
                 metrics=metrics,
+            )
+        )
+        session.add(
+            Message(
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                role=MessageRole.ASSISTANT,
+                text=f"Hello, how can I help? {DEFAULT_RECORDING_NOTICE} {custom_notice}",
+                ts=datetime.now(UTC),
             )
         )
         session.add(
@@ -127,7 +153,7 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
         assert first_score is not None
         first_score_id = first_score.id
         assert first_score.judge_model == "test-judge-model"
-        assert first_score.judge_version == "v2"
+        assert first_score.judge_version == "v3"
         assert first_score.objective == {
             "response_p50_s": 1.2,
             "response_p95_s": 2.4,
@@ -163,6 +189,10 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
         "issues",
     ]
     assert captured[0]["contents"].startswith("You review one conversation")
+    assert f"platform: {DEFAULT_RECORDING_NOTICE}" in captured[0]["contents"]
+    assert f"assistant: {DEFAULT_RECORDING_NOTICE}" not in captured[0]["contents"]
+    assert f"platform: {custom_notice}" in captured[0]["contents"]
+    assert f"assistant: {custom_notice}" not in captured[0]["contents"]
     assert captured[0]["closed"] is True
     assert captured[1]["closed"] is True
 

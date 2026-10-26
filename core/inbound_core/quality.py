@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Iterable
 from typing import Any
 
-JUDGE_VERSION = "v2"
+JUDGE_VERSION = "v3"
 DEFAULT_QUALITY_JUDGE_MODEL = "gemini-3.5-flash-lite"
 MAX_ISSUES = 5
 MAX_INSTRUCTIONS_CHARS = 12_000
@@ -39,7 +40,7 @@ RUBRIC_PROMPT = """You review one conversation between a business's AI assistant
 - no_unsupported_promises: the assistant made no commitment (prices, times, outcomes, availability) that its instructions or knowledge do not support.
 - ended_properly: the conversation ended politely with a clear next step, or the customer ended it.
 - followed_instructions: the assistant followed its business instructions and policies.
-Platform notices are not assistant mistakes: a recording notice near the start of a call (for example "This call may be recorded") is added automatically and never counts against any check.
+Lines marked "platform" are automatic notices added by the system (for example a recording notice), not said by the assistant; they never count against any check.
 overall: 1 (bad) to 5 (excellent) for how well a real customer was served. issues: up to 5 short phrases describing concrete problems, empty if none."""  # noqa: E501
 
 
@@ -68,6 +69,50 @@ def _truncate(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + "\n[truncated]"
 
 
+def split_platform_notices(
+    rows: list[dict[str, Any]], notices: Iterable[str]
+) -> list[dict[str, Any]]:
+    """Label matching automatic notices separately from assistant transcript text."""
+    notice_texts = sorted(
+        {notice.strip() for notice in notices if isinstance(notice, str) and notice.strip()},
+        key=lambda notice: (-len(notice), notice),
+    )
+    split_rows: list[dict[str, Any]] = []
+    for row in rows:
+        text = row.get("text")
+        if row.get("role") != "assistant" or not isinstance(text, str):
+            split_rows.append(row)
+            continue
+
+        cursor = 0
+        row_segments: list[dict[str, Any]] = []
+        while cursor < len(text):
+            matches = []
+            for notice in notice_texts:
+                position = text.find(notice, cursor)
+                if position >= 0:
+                    matches.append((position, notice))
+            if not matches:
+                break
+
+            position, notice = min(matches, key=lambda match: (match[0], -len(match[1]), match[1]))
+            assistant_text = text[cursor:position].strip()
+            if assistant_text:
+                row_segments.append({"role": "assistant", "text": assistant_text})
+            row_segments.append({"role": "platform", "text": notice})
+            cursor = position + len(notice)
+
+        if not row_segments:
+            split_rows.append(row)
+            continue
+
+        assistant_text = text[cursor:].strip()
+        if assistant_text:
+            row_segments.append({"role": "assistant", "text": assistant_text})
+        split_rows.extend(row_segments)
+    return split_rows
+
+
 def build_judge_prompt(
     *,
     instructions: str,
@@ -76,7 +121,7 @@ def build_judge_prompt(
     tasks: list[dict[str, Any]],
     channel: str,
 ) -> str:
-    """Assemble the judge input; rows are {"role": "assistant"|"caller", "text": str}."""
+    """Assemble the judge input from assistant, caller and platform transcript rows."""
     transcript = "\n".join(
         f"{index}. {row.get('role', 'unknown')}: {row.get('text', '')}"
         for index, row in enumerate(transcript_rows, start=1)
