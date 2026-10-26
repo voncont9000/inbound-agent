@@ -159,6 +159,63 @@ async def test_admin_routes_overview_filters_details_and_eval_round_trip(
     assert [item["conversation_id"] for item in flagged.json()["items"]] == [
         str(seeded["conversation_id"])
     ]
+    reviewed = await client.post(
+        "/admin/conversations/review",
+        json={
+            "conversation_ids": [str(seeded["conversation_id"])],
+            "reviewed": True,
+        },
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json() == {"updated": 1}
+    with psycopg.connect(owner_database_url) as connection:
+        reviewed_at, reviewed_by = connection.execute(
+            "SELECT reviewed_at, reviewed_by FROM conversation_scores WHERE conversation_id = %s",
+            (str(seeded["conversation_id"]),),
+        ).fetchone()
+    assert reviewed_at is not None
+    assert str(reviewed_by) == first["user_id"]
+    reviewed_flagged = await client.get("/admin/conversations", params={"needs_review": "true"})
+    assert reviewed_flagged.json()["items"] == []
+    reviewed_detail = await client.get(f"/admin/conversations/{seeded['conversation_id']}")
+    assert reviewed_detail.json()["score"]["reviewed_at"] is not None
+    reviewed_overview = await client.get("/admin/overview", params={"days": 30})
+    assert reviewed_overview.json()["needs_review"] == 0
+    assert sum(day["needs_review"] for day in reviewed_overview.json()["by_day"]) == 0
+    assert all(tenant["needs_review"] == 0 for tenant in reviewed_overview.json()["by_tenant"])
+
+    reopened = await client.post(
+        "/admin/conversations/review",
+        json={
+            "conversation_ids": [str(seeded["conversation_id"])],
+            "reviewed": False,
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json() == {"updated": 1}
+    with psycopg.connect(owner_database_url) as connection:
+        reviewed_at, reviewed_by = connection.execute(
+            "SELECT reviewed_at, reviewed_by FROM conversation_scores WHERE conversation_id = %s",
+            (str(seeded["conversation_id"]),),
+        ).fetchone()
+    assert reviewed_at is None
+    assert reviewed_by is None
+    reopened_flagged = await client.get("/admin/conversations", params={"needs_review": "true"})
+    assert [item["conversation_id"] for item in reopened_flagged.json()["items"]] == [
+        str(seeded["conversation_id"])
+    ]
+    reopened_overview = await client.get("/admin/overview", params={"days": 30})
+    assert reopened_overview.json()["needs_review"] == 1
+    unknown_ids = await client.post(
+        "/admin/conversations/review",
+        json={
+            "conversation_ids": [str(uuid4()), str(seeded["other_conversation_id"])],
+            "reviewed": True,
+        },
+    )
+    assert unknown_ids.status_code == 200, unknown_ids.text
+    assert unknown_ids.json() == {"updated": 0}
+
     tenant_filter = await client.get(
         "/admin/conversations", params={"tenant_id": seeded["other_tenant_id"]}
     )
@@ -264,6 +321,16 @@ async def test_admin_routes_require_admin_and_authentication(
         assert unauthenticated.status_code == 401, (path, unauthenticated.text)
         non_admin = await getattr(second["client"], method)(path)
         assert non_admin.status_code == 404, (path, non_admin.text)
+
+    review_payload = {"conversation_ids": [str(uuid4())], "reviewed": True}
+    unauthenticated_review = await api_client.post(
+        "/admin/conversations/review", json=review_payload
+    )
+    assert unauthenticated_review.status_code == 401
+    non_admin_review = await second["client"].post(
+        "/admin/conversations/review", json=review_payload
+    )
+    assert non_admin_review.status_code == 404
 
 
 async def test_auth_responses_include_platform_admin_flag(

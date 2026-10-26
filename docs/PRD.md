@@ -277,7 +277,9 @@ urgency behavior is unchanged.
 ### 7.13 Quality review and evals
 
 Platform administrators can review vertical-neutral conversation quality scores, inspect flagged
-conversations, and manage evaluation cases and runs. See [quality review and evaluations](quality.md)
+conversations, mark one or multiple flagged calls as reviewed, reopen a reviewed call, and manage
+evaluation cases and runs. Needs-review totals include only flagged scores that have not been
+reviewed; rescoring clears the previous review state. See [quality review and evaluations](quality.md)
 for the rubric, data model, security boundary, and API.
 
 - FR-Q1: Maintain enabled, scripted regression cases with ordered caller utterances and configurable checks; run them through the voice harness, retain scored results, and identify provider failures without creating real conversations or actions. See [quality.md](./quality.md).

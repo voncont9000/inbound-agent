@@ -2,11 +2,11 @@ import re
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from statistics import median
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text, update
 
 from inbound_api.auth import require_platform_admin
 from inbound_api.db import session_factory, tenant_session
@@ -21,6 +21,7 @@ from inbound_api.models import (
     Message,
     MessageRole,
     Tenant,
+    User,
 )
 from inbound_api.schemas import (
     AdminConversationDetail,
@@ -28,6 +29,8 @@ from inbound_api.schemas import (
     AdminConversationListResponse,
     AdminDaySummary,
     AdminOverview,
+    AdminReviewRequest,
+    AdminReviewResponse,
     AdminTenantSummary,
     ConversationScoreResponse,
     EvalCaseResponse,
@@ -169,6 +172,7 @@ async def list_conversations(
             is_test=row["is_test"],
             overall=row["overall"],
             needs_review=row["needs_review"],
+            reviewed_at=row["reviewed_at"],
             issues=row["issues"] if isinstance(row["issues"], list) else [],
             objective=row["objective"],
         )
@@ -235,6 +239,7 @@ async def conversation_detail(conversation_id: UUID) -> AdminConversationDetail:
             judge_version=score.judge_version,
             overall=score.overall,
             needs_review=score.needs_review,
+            reviewed_at=score.reviewed_at,
             checks=score.checks,
             issues=score.issues,
             objective=score.objective,
@@ -273,6 +278,34 @@ async def rescore(conversation_id: UUID) -> dict[str, bool]:
             raise HTTPException(status_code=404, detail="Not Found")
         await enqueue_conversation_score(session, conversation_id)
     return {"queued": True}
+
+
+@router.post("/conversations/review", response_model=AdminReviewResponse)
+async def review_conversations(
+    request: AdminReviewRequest,
+    admin_user: Annotated[User, Depends(require_platform_admin)],
+) -> AdminReviewResponse:
+    updated = 0
+    for conversation_id in dict.fromkeys(request.conversation_ids):
+        try:
+            tenant_id = await _conversation_tenant_id(conversation_id)
+        except HTTPException as error:
+            if error.status_code == status.HTTP_404_NOT_FOUND:
+                continue
+            raise
+        async with tenant_session(tenant_id) as session:
+            values = (
+                {"reviewed_at": func.now(), "reviewed_by": admin_user.id}
+                if request.reviewed
+                else {"reviewed_at": None, "reviewed_by": None}
+            )
+            result = await session.execute(
+                update(ConversationScore)
+                .where(ConversationScore.conversation_id == conversation_id)
+                .values(**values)
+            )
+            updated += result.rowcount or 0
+    return AdminReviewResponse(updated=updated)
 
 
 @router.post(

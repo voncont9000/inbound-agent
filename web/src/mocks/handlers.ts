@@ -5,8 +5,8 @@ import { validateAssistantConfig, type Locale } from "../lib/config";
 import { authUser, emailActionTemplates, setupDraftFixture, templates, templateSamples, testCallResponse, voiceCatalogueFor } from "./fixtures";
 import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
-import { adminConversationDetails, adminEvalRunSummaries, adminItem, adminOverview, mockAdminEvalCases, mockAdminEvalRuns } from "./admin";
-import type { AdminConversationQuery, EvalCaseResponse } from "../api/adminApi";
+import { adminConversationDetails, adminEvalRunSummaries, adminItem, adminOverview, mockAdminEvalCases, mockAdminEvalRuns, reviewMockConversations } from "./admin";
+import type { AdminConversationQuery, AdminReviewRequest, EvalCaseResponse } from "../api/adminApi";
 import type { TenantFixture } from "./fixtures";
 import assistantConfigSchema from "./assistant-config.schema.json";
 import type { AssistantConfig } from "../lib/config";
@@ -114,7 +114,8 @@ export const handlers = [
       cursor: params.get("cursor") ?? undefined,
     };
     let items = adminConversationDetails.map(adminItem).sort((a, b) => b.started_at.localeCompare(a.started_at));
-    if (query.needs_review !== undefined) items = items.filter(({ needs_review }) => needs_review === query.needs_review);
+    if (query.needs_review === true) items = items.filter(({ needs_review, reviewed_at }) => needs_review === true && reviewed_at === null);
+    if (query.needs_review === false) items = items.filter(({ needs_review }) => needs_review === false);
     if (query.tenant_id) items = items.filter(({ tenant_id }) => tenant_id === query.tenant_id);
     if (query.assistant_id) items = items.filter(({ assistant_id }) => assistant_id === query.assistant_id);
     const start = Number(query.cursor ?? 0);
@@ -127,6 +128,12 @@ export const handlers = [
     if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
     const detail = adminConversationDetails.find(({ conversation_id }) => conversation_id === params.id);
     return detail ? HttpResponse.json(detail) : HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+  }),
+  http.post("*/api/admin/conversations/review", async ({ request }) => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+    const body = await request.json() as AdminReviewRequest;
+    const updated = reviewMockConversations(body.conversation_ids, body.reviewed);
+    return HttpResponse.json({ updated });
   }),
   http.post("*/api/admin/conversations/:id/rescore", ({ params }) => {
     if (!mockDb.isPlatformAdmin || !adminConversationDetails.some(({ conversation_id }) => conversation_id === params.id)) {

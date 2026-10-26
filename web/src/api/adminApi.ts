@@ -7,6 +7,8 @@ export type AdminOverview = AdminSchemas["AdminOverview"];
 export type AdminConversationItem = AdminSchemas["AdminConversationItem"];
 export type AdminConversationListResponse = AdminSchemas["AdminConversationListResponse"];
 export type AdminConversationDetail = AdminSchemas["AdminConversationDetail"];
+export type AdminReviewRequest = AdminSchemas["AdminReviewRequest"];
+export type AdminReviewResponse = AdminSchemas["AdminReviewResponse"];
 export type ConversationScoreResponse = AdminSchemas["ConversationScoreResponse"];
 export type ConversationScoreCheck = AdminSchemas["ConversationScoreCheck"];
 export type EvalCaseResponse = AdminSchemas["EvalCaseResponse"];
@@ -22,6 +24,10 @@ export function getAdminOverview(days: number): Promise<AdminOverview> {
 
 export function listAdminConversations(query: AdminConversationQuery): Promise<AdminConversationListResponse> {
   return unwrap(api.GET("/admin/conversations", { params: { query } }));
+}
+
+export function reviewConversations(body: AdminReviewRequest): Promise<AdminReviewResponse> {
+  return unwrap(api.POST("/admin/conversations/review", { body }));
 }
 
 export function getAdminConversation(conversationId: string): Promise<AdminConversationDetail> {

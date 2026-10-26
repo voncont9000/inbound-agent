@@ -9,6 +9,51 @@
   gap: 0;
 }
 
+.reviewRow {
+  cursor: pointer;
+}
+
+.reviewCardHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.mobileSelectAll {
+  display: none;
+  margin-bottom: var(--space-3);
+}
+
+.rowActionGroup {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bulkReviewBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
 .reviewCard {
   display: grid;
   gap: var(--space-2);
@@ -227,6 +272,14 @@
 
   .mobileList {
     display: grid;
+  }
+
+  .mobileSelectAll {
+    display: block;
+  }
+
+  .rowActions {
+    flex-wrap: wrap;
   }
 
   .workspaceDesktop,

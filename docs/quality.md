@@ -52,6 +52,19 @@ Voice objective metrics are recorded when latency data is available: `response_p
 These are derived from the conversation's voice latency summary, turn records, duration,
 interruption count, and TTS usage. Text conversations have `objective: null`.
 
+### Human review
+
+`needs_review` is the judge's score result. The unresolved review queue and the overview's
+needs-review totals count scores where `needs_review` is true and `reviewed_at` is null. Marking a
+conversation reviewed records the administrator and timestamp without changing the judge result;
+reopening it clears both review fields. A new score, including a rescore, clears the review state so
+the new result can be reviewed independently.
+
+The admin review list supports marking one or multiple conversations reviewed. The detail page
+supports both marking reviewed and reopening. `POST /admin/conversations/review` accepts 1–100
+conversation IDs and a `reviewed` boolean; IDs without a conversation or score are ignored and do
+not contribute to the `updated` count.
+
 ### Platform administration
 
 Every `/admin` route requires an authenticated platform-admin email. Platform-wide overview and
@@ -68,6 +81,7 @@ The API provides:
 - `GET /admin/conversations` for filtered, cursor-paginated cross-tenant listings.
 - `GET /admin/conversations/{conversation_id}` for transcript, merged intake, score, and optional
   trace link.
+- `POST /admin/conversations/review` to mark scored conversations reviewed or reopen them.
 - `POST /admin/conversations/{conversation_id}/rescore` to queue a score.
 - `POST /admin/conversations/{conversation_id}/eval-case` to create an evaluation case from a
   conversation.

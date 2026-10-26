@@ -95,6 +95,7 @@ export const adminConversationDetails: AdminConversationDetail[] = channelList.m
     judge_version: "v1",
     overall: needsReview ? (index === 3 ? 2 : 3) : index % 2 ? 4 : 5,
     needs_review: needsReview,
+    reviewed_at: null,
     checks,
     issues,
     objective,
@@ -137,6 +138,7 @@ export function adminItem(detail: AdminConversationDetail): AdminConversationIte
     is_test: detail.is_test,
     overall: detail.score?.overall ?? null,
     needs_review: detail.score?.needs_review ?? null,
+    reviewed_at: detail.score?.reviewed_at ?? null,
     issues: detail.score?.issues ?? [],
     objective: detail.score?.objective ?? null,
   };
@@ -194,9 +196,23 @@ export let mockAdminEvalRuns: EvalRunResponse[] = [
 ];
 
 export const resetAdminMocks = () => {
+  for (const detail of adminConversationDetails) {
+    if (detail.score) detail.score.reviewed_at = null;
+  }
   mockAdminEvalCases = [...adminEvalCases];
   mockAdminEvalRuns = mockAdminEvalRuns.map((run, index) => ({ ...run, ...evalRunSummaries[index] }));
 };
+
+export function reviewMockConversations(conversationIds: string[], reviewed: boolean): number {
+  const ids = new Set(conversationIds);
+  let updated = 0;
+  for (const detail of adminConversationDetails) {
+    if (!ids.has(detail.conversation_id) || !detail.score) continue;
+    detail.score.reviewed_at = reviewed ? new Date().toISOString() : null;
+    updated += 1;
+  }
+  return updated;
+}
 
 export function adminEvalRunSummaries(): EvalRunSummary[] {
   return mockAdminEvalRuns.map((run) => ({
@@ -215,7 +231,7 @@ export function adminOverview(days: number): AdminOverview {
   start.setDate(start.getDate() - days + 1);
   const selected = adminConversationDetails.filter(({ started_at }) => new Date(started_at) >= start);
   const scored = selected.filter(({ score }) => score !== null);
-  const reviewed = scored.filter(({ score }) => score?.needs_review);
+  const reviewed = scored.filter(({ score }) => score?.needs_review && !score.reviewed_at);
   const responseValues = scored.flatMap(({ score }) => {
     const responseP50 = readObjective(score?.objective ?? null)?.response_p50_s;
     return responseP50 === null || responseP50 === undefined ? [] : [responseP50];
@@ -233,7 +249,7 @@ export function adminOverview(days: number): AdminOverview {
       date: dateString,
       conversations: rows.length,
       avg_overall: scores.length ? Number((scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(1)) : null,
-      needs_review: rows.filter(({ score }) => score?.needs_review).length,
+      needs_review: rows.filter(({ score }) => score?.needs_review && !score.reviewed_at).length,
     };
   });
   return {
@@ -253,7 +269,7 @@ export function adminOverview(days: number): AdminOverview {
         tenant_name,
         conversations: rows.length,
         avg_overall: scores.length ? Number((scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(1)) : null,
-        needs_review: rows.filter(({ score }) => score?.needs_review).length,
+      needs_review: rows.filter(({ score }) => score?.needs_review && !score.reviewed_at).length,
       };
     }),
   };

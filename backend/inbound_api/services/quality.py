@@ -126,6 +126,8 @@ async def conversation_score(
         "judge_version": JUDGE_VERSION,
         "overall": judgement["overall"],
         "needs_review": review,
+        "reviewed_at": None,
+        "reviewed_by": None,
         "checks": judgement["checks"],
         "issues": judgement["issues"],
         "objective": objective,
