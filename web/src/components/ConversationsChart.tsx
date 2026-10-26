@@ -1,5 +1,5 @@
 import type { Schemas } from "../api/client";
-import { channelLabels, type DashboardChannel as Channel } from "../lib/dashboard";
+import { channelLabels, niceMax, type DashboardChannel as Channel } from "../lib/dashboard";
 import styles from "./Dashboard.module.css";
 
 type Point = Schemas["DashboardSeriesPoint"];
@@ -7,13 +7,6 @@ const colors: Record<Channel, string> = { phone: "var(--ink)", whatsapp: "var(--
 const width = 720;
 const height = 240;
 const pad = { top: 12, right: 8, bottom: 28, left: 36 };
-
-function niceMax(value: number) {
-  if (value <= 4) return 4;
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => value / candidate <= 4) ?? 10 * magnitude;
-  return Math.ceil(value / step) * step;
-}
 
 export function ConversationsChart({ series, bucket, timezone }: { series: Point[]; bucket: "hour" | "day"; timezone: string }) {
   const channels = (Object.keys(channelLabels) as Channel[]).filter((channel) => channel !== "web" || series.some((point) => point.web > 0));

@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import shell from "./components/AppShell.module.css";
 import { RequireAuth } from "./auth/RequireAuth";
+import { RequireAdmin } from "./auth/RequireAdmin";
 import { useAuth } from "./auth/AuthProvider";
+import { isPlatformAdmin } from "./auth/platformAdmin";
 import { TestCallProvider } from "./call/TestCallProvider";
 import type { WebCallSessionFactory } from "./call/webCall";
 import { TestCallBar } from "./components/TestCallBar";
@@ -13,6 +15,7 @@ import { HomePage } from "./pages/HomePage";
 import { AssistantsPage, AssistantSettingsPage, AssistantSettingsRedirect } from "./pages/AssistantPages";
 import { ContactsPage, ContactPage, ConversationPage, InboxPage, KnowledgeGapsPage, TasksPage } from "./pages/OperatorPages";
 import { HelpArticlePage, HelpHomePage } from "./help/HelpPages";
+import { AdminConversationPage, AdminEvalsPage, AdminOverviewPage } from "./pages/AdminPages";
 import wordmark from "./assets/brand/yelvo-wordmark.svg";
 import mark from "./assets/brand/yelvo-mark.svg";
 
@@ -27,6 +30,7 @@ const NAV = [
   { to: "/assistants", label: "Assistants", icon: icon("M12 2a3 3 0 0 1 3 3v1h2a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h2V5a3 3 0 0 1 3-3M9 13h.01M15 13h.01M9 17h6") },
   { to: "/channels", label: "Channels", icon: icon("M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4") },
   { to: "/help", label: "Help", icon: icon("M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0") },
+  { to: "/admin", label: "Admin", adminOnly: true, icon: icon("M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11M9 12l2 2 4-4") },
 ];
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -42,7 +46,7 @@ function AppShell() {
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
   const initials = (user?.display_name ?? "?").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const navigation = <nav className={shell.navigation} aria-label="Main navigation">
-    {NAV.map(({ to, label, end, icon: glyph }) => <NavLink key={to} to={to} end={end}>{glyph}<span>{label}</span></NavLink>)}
+    {NAV.filter(({ adminOnly }) => !adminOnly || isPlatformAdmin(user)).map(({ to, label, end, icon: glyph }) => <NavLink key={to} to={to} end={end}>{glyph}<span>{label}</span></NavLink>)}
   </nav>;
 
   return (
@@ -77,7 +81,7 @@ function AppShell() {
         </header>
         <div id="mobile-navigation" className={shell.mobileNav} hidden={!menuOpen}>{navigation}</div>
         <div className={shell.content}><Outlet /></div>
-        <TestCallBar />
+        {!location.pathname.startsWith("/admin") && <TestCallBar />}
       </div>
     </div>
   );
@@ -108,6 +112,11 @@ export default function App({ createWebCallSession }: { createWebCallSession?: W
               <Route path="/knowledge-gaps" element={<KnowledgeGapsPage />} />
               <Route path="/help" element={<HelpHomePage />} />
               <Route path="/help/:category/:article" element={<HelpArticlePage />} />
+              <Route element={<RequireAdmin />}>
+                <Route path="/admin" element={<AdminOverviewPage />} />
+                <Route path="/admin/conversations/:id" element={<AdminConversationPage />} />
+                <Route path="/admin/evals" element={<AdminEvalsPage />} />
+              </Route>
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

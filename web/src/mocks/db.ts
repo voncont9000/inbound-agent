@@ -1,9 +1,11 @@
 import { cloneFixtures, authUser, memberships, templates, type TenantFixture } from "./fixtures";
 import type { Schemas } from "../api/client";
+import { resetAdminMocks } from "./admin";
 
 export interface MockDatabase {
   tenants: TenantFixture[];
   loggedIn: boolean;
+  isPlatformAdmin: boolean;
   user: typeof authUser;
   memberships: typeof memberships;
   jobs: Record<string, { tenantId: string; assistantId: string; polls: number; job: Schemas["JobResponse"] }>;
@@ -26,6 +28,7 @@ function createDb(): MockDatabase {
   return {
     tenants,
     loggedIn: browserSession(),
+    isPlatformAdmin: true,
     user: { ...authUser },
     memberships: JSON.parse(JSON.stringify(memberships)) as typeof memberships,
     jobs: {},
@@ -62,6 +65,7 @@ export let mockDb = createDb();
 
 export function resetMockDb(): void {
   mockDb = createDb();
+  resetAdminMocks();
 }
 
 export function setMockSession(loggedIn: boolean): void {
@@ -69,6 +73,11 @@ export function setMockSession(loggedIn: boolean): void {
   if (typeof localStorage === "undefined") return;
   if (loggedIn) localStorage.setItem("inbound.mock.session", "1");
   else localStorage.removeItem("inbound.mock.session");
+}
+
+export function setMockPlatformAdmin(isPlatformAdmin: boolean): void {
+  mockDb.isPlatformAdmin = isPlatformAdmin;
+  mockDb.user = { ...mockDb.user, is_platform_admin: isPlatformAdmin };
 }
 
 export function selectedTenantId(request: Request): string {

@@ -328,7 +328,7 @@ in response.`,
   recording: { enabled: false, consent_message: "This call may be recorded for quality and training purposes.", retention_days: 30 },
 };
 
-const fakeUser: Schemas["UserResponse"] = { id: "40000000-0000-4000-8000-000000000001", email: "demo@example.com", display_name: "Sam Taylor", is_platform_admin: false };
+const fakeUser: Schemas["UserResponse"] = { id: "40000000-0000-4000-8000-000000000001", email: "demo@example.com", display_name: "Sam Taylor", is_platform_admin: true };
 export const memberships: Schemas["TenantResponse"][] = [
   { id: ids.tenants[0], name: "Brightside Plumbing & Heating", role: "owner" },
   { id: ids.tenants[1], name: "Demo & Co Solicitors", role: "staff" },
