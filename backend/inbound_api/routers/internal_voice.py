@@ -47,7 +47,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 async def require_voice_service_token(
-    x_service_token: str = Header(alias="X-Service-Token"),
+    x_service_token: str = Header(default="", alias="X-Service-Token"),
 ) -> None:
     if not hmac.compare_digest(x_service_token, get_settings().voice_service_token):
         raise HTTPException(status_code=401, detail="Invalid service token")

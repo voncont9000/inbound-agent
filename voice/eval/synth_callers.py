@@ -8,6 +8,8 @@ import io
 import math
 import os
 import re
+import shutil
+import struct
 import subprocess
 import wave
 from collections.abc import Mapping
@@ -16,6 +18,7 @@ from typing import Any
 
 import aiohttp
 import numpy as np
+import soxr
 import yaml
 
 VOICE_ROOT = Path(__file__).resolve().parents[1]
@@ -134,11 +137,64 @@ def phone_band_wav(mp3_audio: bytes) -> bytes:
     return result.stdout
 
 
+def phone_band_from_wav(wav_bytes: bytes) -> bytes:
+    if len(wav_bytes) < 12 or wav_bytes[:4] != b"RIFF" or wav_bytes[8:12] != b"WAVE":
+        raise ValueError("Speechify did not return a RIFF/WAVE file.")
+
+    format_chunk = None
+    data_chunk = None
+    position = 12
+    while position + 8 <= len(wav_bytes):
+        chunk_id = wav_bytes[position : position + 4]
+        chunk_size = struct.unpack_from("<I", wav_bytes, position + 4)[0]
+        chunk_start = position + 8
+        chunk_end = min(chunk_start + chunk_size, len(wav_bytes))
+        chunk_data = wav_bytes[chunk_start:chunk_end]
+        if chunk_id == b"fmt ":
+            format_chunk = chunk_data
+        elif chunk_id == b"data":
+            data_chunk = chunk_data
+            if chunk_size > len(wav_bytes) - chunk_start:
+                data_chunk = wav_bytes[chunk_start:]
+                break
+        if chunk_end == len(wav_bytes):
+            break
+        position = chunk_start + chunk_size + (chunk_size & 1)
+
+    if format_chunk is None or len(format_chunk) < 16 or data_chunk is None:
+        raise ValueError("Speechify WAV must contain fmt and data chunks.")
+    encoding, channels, sample_rate, _, _, sample_width = struct.unpack_from(
+        "<HHIIHH", format_chunk
+    )
+    if encoding != 1 or sample_width != 16 or channels < 1 or sample_rate < 1:
+        raise ValueError("Speechify WAV must use 16-bit PCM audio.")
+    frame_width = channels * 2
+    frame_count = len(data_chunk) // frame_width
+    if frame_count == 0:
+        raise ValueError("Speechify WAV contains no complete PCM frames.")
+    samples = np.frombuffer(data_chunk[: frame_count * frame_width], dtype="<i2")
+    if channels > 1:
+        samples = np.rint(samples.reshape(-1, channels).astype(np.float64).mean(axis=1))
+        samples = samples.clip(-32768, 32767).astype(np.int16)
+    else:
+        samples = samples.astype(np.int16, copy=False)
+    at_8khz = soxr.resample(samples.astype(np.float32), sample_rate, 8000)
+    at_48khz = soxr.resample(at_8khz, 8000, WEBRTC_SAMPLE_RATE)
+    output = io.BytesIO()
+    with wave.open(output, "wb") as audio_file:
+        audio_file.setnchannels(1)
+        audio_file.setsampwidth(2)
+        audio_file.setframerate(WEBRTC_SAMPLE_RATE)
+        audio_file.writeframes(np.rint(at_48khz).clip(-32768, 32767).astype(np.int16).tobytes())
+    return output.getvalue()
+
+
 async def _synthesize_utterance(
     session: aiohttp.ClientSession,
     api_key: str,
     text: str,
     caller_voice: str,
+    audio_format: str = "mp3",
 ) -> bytes:
     async with session.post(
         SPEECHIFY_URL,
@@ -147,7 +203,7 @@ async def _synthesize_utterance(
             "input": text,
             "voice_id": caller_voice,
             "model": "simba-3.2",
-            "audio_format": "mp3",
+            "audio_format": audio_format,
         },
     ) as response:
         if response.status >= 400:
@@ -191,6 +247,7 @@ async def synthesize_scenarios(
     if not pending:
         return targets
 
+    ffmpeg_available = shutil.which("ffmpeg") is not None
     api_key = environment.get("SPEECHIFY_API_KEY", "").strip()
     if not api_key:
         raise ValueError("SPEECHIFY_API_KEY is required to synthesize uncached caller audio.")
@@ -200,8 +257,16 @@ async def synthesize_scenarios(
         for _, _, parts, pauses, caller_voice, path in pending:
             segment_wavs = []
             for part in parts:
-                audio = await _synthesize_utterance(session, api_key, part, caller_voice)
-                segment_wavs.append(phone_band_wav(audio))
+                audio = await _synthesize_utterance(
+                    session,
+                    api_key,
+                    part,
+                    caller_voice,
+                    audio_format="mp3" if ffmpeg_available else "wav",
+                )
+                segment_wavs.append(
+                    phone_band_wav(audio) if ffmpeg_available else phone_band_from_wav(audio)
+                )
             converted = combine_segment_wavs(segment_wavs, pauses)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(converted)

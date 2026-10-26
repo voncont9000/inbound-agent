@@ -28,6 +28,26 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
+class EvalCaseChecks(BaseModel):
+    transcript_checks: dict[str, str] = Field(default_factory=dict)
+    assistant_checks: dict[str, str] = Field(default_factory=dict)
+    intake_checks: dict[str, str] = Field(default_factory=dict)
+
+
+class InternalEvalCase(BaseModel):
+    id: UUID
+    name: str
+    assistant_id: UUID | None
+    source_conversation_id: UUID | None
+    caller_utterances: list[str]
+    checks: EvalCaseChecks
+    route: RouteResponse | None
+
+
+class InternalEvalCaseList(BaseModel):
+    items: list[InternalEvalCase]
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr

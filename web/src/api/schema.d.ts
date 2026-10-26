@@ -802,6 +802,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/eval-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Eval Cases */
+        get: operations["list_eval_cases_internal_eval_cases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/eval-runs": {
         parameters: {
             query?: never;
@@ -2647,6 +2664,21 @@ export interface components {
              */
             spam: string;
         };
+        /** EvalCaseChecks */
+        EvalCaseChecks: {
+            /** Assistant Checks */
+            assistant_checks?: {
+                [key: string]: string;
+            };
+            /** Intake Checks */
+            intake_checks?: {
+                [key: string]: string;
+            };
+            /** Transcript Checks */
+            transcript_checks?: {
+                [key: string]: string;
+            };
+        };
         /** EvalCaseResponse */
         EvalCaseResponse: {
             /** Assistant Id */
@@ -2873,6 +2905,29 @@ export interface components {
              * @enum {string}
              */
             version: "live" | "post_call" | "merged";
+        };
+        /** InternalEvalCase */
+        InternalEvalCase: {
+            /** Assistant Id */
+            assistant_id: string | null;
+            /** Caller Utterances */
+            caller_utterances: string[];
+            checks: components["schemas"]["EvalCaseChecks"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            route: components["schemas"]["RouteResponse"] | null;
+            /** Source Conversation Id */
+            source_conversation_id: string | null;
+        };
+        /** InternalEvalCaseList */
+        InternalEvalCaseList: {
+            /** Items */
+            items: components["schemas"]["InternalEvalCase"][];
         };
         /** JobResponse */
         JobResponse: {
@@ -5595,11 +5650,42 @@ export interface operations {
             };
         };
     };
+    list_eval_cases_internal_eval_cases_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Service-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEvalCaseList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_eval_run_internal_eval_runs_post: {
         parameters: {
             query?: never;
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Service-Token"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5633,8 +5719,8 @@ export interface operations {
     availability_internal_voice_availability_post: {
         parameters: {
             query?: never;
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Service-Token"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5668,8 +5754,8 @@ export interface operations {
     book_internal_voice_book_post: {
         parameters: {
             query?: never;
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Service-Token"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5703,8 +5789,8 @@ export interface operations {
     start_call_internal_voice_calls_post: {
         parameters: {
             query?: never;
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Service-Token"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5743,7 +5829,7 @@ export interface operations {
             header: {
                 "X-External-Call-ID": string;
                 "Content-Length"?: string | null;
-                "X-Service-Token": string;
+                "X-Service-Token"?: string;
             };
             path: {
                 conversation_id: string;
@@ -5777,8 +5863,8 @@ export interface operations {
     report_call_internal_voice_calls__conversation_id__report_post: {
         parameters: {
             query?: never;
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Service-Token"?: string;
             };
             path: {
                 conversation_id: string;
@@ -5817,8 +5903,8 @@ export interface operations {
                 to: string;
                 from?: string | null;
             };
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Service-Token"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5850,8 +5936,8 @@ export interface operations {
             query: {
                 token: string;
             };
-            header: {
-                "X-Service-Token": string;
+            header?: {
+                "X-Service-Token"?: string;
             };
             path?: never;
             cookie?: never;

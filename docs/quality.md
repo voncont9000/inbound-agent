@@ -12,7 +12,7 @@ Pipecat exports conversation → turn → STT/LLM/TTS spans. Conversation spans 
 Email addresses and phone-like numbers in exported span attributes are redacted on a best-effort
 basis; spelled-out words are not detected. The conversation trace ID is stored in
 `conversations.metrics["trace_id"]`. When `LANGFUSE_HOST` is set, the backend builds
-`trace_url = f"{LANGFUSE_HOST}/trace/{trace_id}"` for the admin view.
+`trace_url = f"{LANGFUSE_HOST}/trace/{trace_id}` for the admin view.
 
 ## Conversation quality review and evaluations
 
@@ -71,9 +71,79 @@ The API provides:
   `GET /admin/eval-runs/{eval_run_id}` to inspect evaluation data.
 
 `eval_cases` stores reusable caller utterances and check expectations; `eval_runs` stores run
-metadata, aggregate counts, and per-case results. The internal
-`POST /internal/eval-runs` endpoint accepts completed evaluation results and requires the voice
-service token. There is intentionally no internal eval-case read endpoint in this workstream.
+metadata, aggregate counts, and per-case results. The internal `GET /internal/eval-cases` endpoint
+returns enabled cases to the phone runner, and `POST /internal/eval-runs` accepts completed
+evaluation results. Both endpoints require the voice service token.
+
+### Regression evals
+
+Regression evals run enabled scripted cases through the phone harness, score the resulting
+transcript and intake data, and store a summary for comparison over time. Provider calls use the
+selected production STT, TTS, and LLM providers, so a run can incur provider usage charges.
+
+The `eval_cases` and `eval_runs` tables are owned by the conversation-quality migration (`0180`).
+Cases store a name, optional source conversation and assistant IDs, caller utterances, named checks,
+and an enabled flag. Runs store timestamps, trigger, optional Git SHA, summary counts, and
+per-case results. The internal service contract is:
+
+- `GET /internal/eval-cases` returns enabled cases and a resolved assistant route when possible.
+  Route lookup uses `conversation_tenant(uuid)` on the case's source conversation; when no source
+  conversation exists, the route is `null`. A case with an `assistant_id` but no source
+  conversation is reported by the runner as the pre-run failure `assistant not found`.
+- `POST /internal/eval-runs` stores a run and returns its `eval_run_id`.
+
+Both endpoints require the `X-Service-Token` voice service token. Case creation is an admin
+workflow: retain caller messages as `caller_utterances` in their original order, and create
+`intake_checks` from final intake values using regex-escaped literal patterns. Cases without an
+assistant can use the harness's default test route.
+
+Inside the production phone container:
+
+```sh
+docker exec -it inbound-phone-1 python -m eval.run_cases
+docker exec -it inbound-phone-1 python -m eval.run_cases --list
+docker exec -it inbound-phone-1 python -m eval.run_cases --case CASE_UUID
+docker exec -it inbound-phone-1 python -m eval.run_cases --no-post
+```
+
+The runner reads `API_BASE_URL` and `VOICE_SERVICE_TOKEN` from its environment. Provider selection
+defaults to `STT_PROVIDER=assemblyai`, `TTS_PROVIDER=speechify`, and `LLM_PROVIDER=google`;
+`--stt`, `--tts`, and `--llm` can override them for a run. `--trigger` defaults to `EVAL_TRIGGER`
+or `manual`. Results, scenarios, and call artifacts are written under
+`voice/eval/results/cases/<UTC timestamp>/`.
+
+For a local backend:
+
+```sh
+cd voice
+API_BASE_URL=http://localhost:8000 \
+VOICE_SERVICE_TOKEN=dev-only-voice-service-token \
+uv run python -m eval.run_cases --list
+```
+
+Run without `--list` to execute calls and post results, or add `--no-post` to keep results local.
+The optional deploy hook is disabled by default. Set `RUN_EVALS_AFTER_DEPLOY=1` in the production
+environment to run evals after the deployment health check; failures are reported but do not fail
+the deployment.
+
+The eval runner sends Twilio-simulated webhooks to a local fake call-control server, switches its
+fake backend route per case, and uses an isolated temporary spool. It does not create real
+conversations, call the production backend for call handling, or invoke live assistant actions.
+Provider requests for speech recognition, speech synthesis, and model responses remain real.
+
+### Approximate cost
+
+Using the rates in [`voice/config/prices.yaml`](../voice/config/prices.yaml), a roughly two-minute
+case is approximately **$0.036 USD**: about $0.015 for two minutes of AssemblyAI STT, $0.010 for
+1,000 characters of assistant Speechify output, $0.0085 for 20,000 Gemini 3.5 Flash Lite input
+tokens plus 1,000 output tokens, and $0.002 for 200 characters of synthesized caller audio.
+This is an estimate, not a measured bill; actual call duration, prompt/context size, response
+length, cache hits, and provider billing granularity change the cost. The simulated call control
+does not incur Twilio call charges.
+
+The ffmpeg-free caller-audio path requests WAV from Speechify and resamples it locally. This WAV
+response path has not yet been verified against the live Speechify API; validate it on the first
+production run.
 
 ### Configuration
 

@@ -20,3 +20,4 @@ async def tenant_session(tenant_id: UUID) -> AsyncIterator[AsyncSession]:
             {"tenant_id": str(tenant_uuid)},
         )
         yield session
+

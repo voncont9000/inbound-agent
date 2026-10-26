@@ -268,6 +268,20 @@ def create_fake_api(
         )
         return {"assistant": str(assistant_path)}
 
+    @app.post("/_fake/route")
+    async def change_route(
+        payload: RouteResponse,
+        x_service_token: str | None = Header(default=None, alias="X-Service-Token"),
+    ) -> dict[str, str]:
+        await require_token(x_service_token)
+        app.state.fake["route_response"] = payload.model_copy(
+            update={
+                "booking_available": payload.config.booking is not None
+                and {"check_availability", "book_appointment"} <= set(payload.config.live_actions)
+            }
+        )
+        return {"assistant_id": str(payload.assistant_id)}
+
     return app
 
 

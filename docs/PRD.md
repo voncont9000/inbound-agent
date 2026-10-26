@@ -278,6 +278,8 @@ Platform administrators can review vertical-neutral conversation quality scores,
 conversations, and manage evaluation cases and runs. See [quality review and evaluations](quality.md)
 for the rubric, data model, security boundary, and API.
 
+- FR-Q1: Maintain enabled, scripted regression cases with ordered caller utterances and configurable checks; run them through the voice harness, retain scored results, and identify provider failures without creating real conversations or actions. See [quality.md](./quality.md).
+
 ## 8. Non-functional requirements
 - **Latency:** see metrics. Stream everything. Region-pinned processing (EU first).
 - **Reliability:** 99.9% call answer availability. If the AI pipeline fails, fall back to voicemail or transfer. Durable, idempotent processing for email and WhatsApp webhooks (retries, dedupe by message ID).

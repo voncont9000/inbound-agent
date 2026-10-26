@@ -430,6 +430,9 @@ livekit.com/benchmarks/latency.
 
 ## Scripted A/B calls
 
+For backend-managed regression cases, runner options, isolation boundaries, and approximate
+provider cost, see [Regression evals](quality.md).
+
 ### First scripted smoke call (2026-10-17)
 
 AssemblyAI + Speechify, employment scenario: headline VAD-stop-to-audio p50 **3.40 s** /

@@ -3703,6 +3703,33 @@
         "title": "EmailTriageConfig",
         "type": "object"
       },
+      "EvalCaseChecks": {
+        "properties": {
+          "assistant_checks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Assistant Checks",
+            "type": "object"
+          },
+          "intake_checks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Intake Checks",
+            "type": "object"
+          },
+          "transcript_checks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Transcript Checks",
+            "type": "object"
+          }
+        },
+        "title": "EvalCaseChecks",
+        "type": "object"
+      },
       "EvalCaseResponse": {
         "properties": {
           "assistant_id": {
@@ -4245,6 +4272,90 @@
           "data"
         ],
         "title": "IntakeResponse",
+        "type": "object"
+      },
+      "InternalEvalCase": {
+        "properties": {
+          "assistant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant Id"
+          },
+          "caller_utterances": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Caller Utterances",
+            "type": "array"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/EvalCaseChecks"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Conversation Id"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "assistant_id",
+          "source_conversation_id",
+          "caller_utterances",
+          "checks",
+          "route"
+        ],
+        "title": "InternalEvalCase",
+        "type": "object"
+      },
+      "InternalEvalCaseList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InternalEvalCase"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "InternalEvalCaseList",
         "type": "object"
       },
       "JobResponse": {
@@ -9794,6 +9905,49 @@
         ]
       }
     },
+    "/internal/eval-cases": {
+      "get": {
+        "operationId": "list_eval_cases_internal_eval_cases_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Service-Token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Service-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalEvalCaseList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Eval Cases",
+        "tags": [
+          "internal evals"
+        ]
+      }
+    },
     "/internal/eval-runs": {
       "post": {
         "operationId": "create_eval_run_internal_eval_runs_post",
@@ -9801,8 +9955,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
@@ -9853,8 +10008,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
@@ -9905,8 +10061,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
@@ -9957,8 +10114,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
@@ -10061,8 +10219,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
@@ -10117,8 +10276,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
@@ -10194,8 +10354,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
@@ -10245,8 +10406,9 @@
           {
             "in": "header",
             "name": "X-Service-Token",
-            "required": true,
+            "required": false,
             "schema": {
+              "default": "",
               "title": "X-Service-Token",
               "type": "string"
             }
