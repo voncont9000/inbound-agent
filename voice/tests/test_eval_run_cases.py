@@ -1,6 +1,7 @@
 import asyncio
 import json
 import socket
+import sys
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from eval.run_cases import (
     case_metrics,
     case_to_scenario,
     fetch_cases,
+    main,
     post_run,
     run_cases,
 )
@@ -46,7 +48,7 @@ def test_case_to_scenario_maps_case_and_route(monkeypatch) -> None:
     route = _route_response()
     case = _case(assistant_id=str(route.assistant_id), route=route.model_dump(mode="json"))
 
-    scenario, returned_route = case_to_scenario(case)
+    scenario, failures = case_to_scenario(case)
 
     assert scenario == {
         "caller_voice": "catriona",
@@ -56,7 +58,7 @@ def test_case_to_scenario_maps_case_and_route(monkeypatch) -> None:
         "assistant_checks": {"assistant_greeting": "hello"},
         "intake_checks": {"caller_name": "Alex"},
     }
-    assert returned_route == route
+    assert failures == []
 
 
 @pytest.mark.parametrize(
@@ -207,6 +209,25 @@ def test_cli_defaults_follow_environment(monkeypatch) -> None:
     assert args.port == 7871
     assert args.no_post is False
     assert args.list is False
+
+
+@pytest.mark.parametrize(
+    "variable",
+    ["STT_PROVIDER", "TTS_PROVIDER", "LLM_PROVIDER"],
+)
+def test_invalid_provider_environment_exits_with_parser_error(
+    monkeypatch, capsys, variable
+) -> None:
+    for provider_variable in ("STT_PROVIDER", "TTS_PROVIDER", "LLM_PROVIDER"):
+        monkeypatch.delenv(provider_variable, raising=False)
+    monkeypatch.setenv(variable, "invalid")
+    monkeypatch.setattr(sys, "argv", ["eval.run_cases"])
+
+    with pytest.raises(SystemExit) as error:
+        main()
+
+    assert error.value.code == 2
+    assert f"{variable} must be one of:" in capsys.readouterr().err
 
 
 def test_git_sha_uses_environment(monkeypatch) -> None:

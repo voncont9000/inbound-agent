@@ -93,9 +93,6 @@ def case_to_scenario(case: Mapping[str, Any]) -> tuple[dict[str, Any] | None, li
     if failures:
         return None, failures
 
-    route = None
-    if route_data is not None:
-        route = RouteResponse.model_validate(route_data)
     scenario = {
         "caller_voice": os.environ.get("EVAL_CALLER_VOICE", DEFAULT_CALLER_VOICE),
         "caller_id": CALLER_ID,
@@ -104,7 +101,7 @@ def case_to_scenario(case: Mapping[str, Any]) -> tuple[dict[str, Any] | None, li
         "assistant_checks": checks.get("assistant_checks", {}),
         "intake_checks": checks.get("intake_checks", {}),
     }
-    return scenario, route
+    return scenario, []
 
 
 def case_failures(scored: Mapping[str, Any]) -> list[str]:
@@ -225,7 +222,7 @@ async def _set_fake_route(api_base_url: str, route: RouteResponse) -> None:
             response.raise_for_status()
 
 
-async def _real_run_case(
+async def _run_live_cases(
     cases: Sequence[Mapping[str, Any]],
     scenarios_path: Path,
     result_dir: Path,
@@ -414,7 +411,7 @@ async def _run(arguments: argparse.Namespace) -> int:
     result_dir = _results_directory()
     started_at = datetime.now(UTC)
     try:
-        result = await _real_run_case(
+        result = await _run_live_cases(
             cases,
             result_dir / "scenarios.yaml",
             result_dir,
@@ -454,7 +451,12 @@ async def _run(arguments: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = build_parser()
+    try:
+        parser = build_parser()
+    except ValueError as error:
+        argparse.ArgumentParser(description="Run backend-configured voice regression evals.").error(
+            str(error)
+        )
     arguments = parser.parse_args()
     try:
         exit_code = asyncio.run(_run(arguments))
