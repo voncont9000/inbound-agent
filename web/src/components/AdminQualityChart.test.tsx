@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { AdminOverview } from "../api/admin";
+import type { AdminOverview } from "../api/adminApi";
 import { AdminQualityChart } from "./AdminQualityChart";
 
 describe("admin quality chart", () => {

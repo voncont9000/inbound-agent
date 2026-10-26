@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Quality and observability
 
 ## Tracing

@@ -1,64 +1,59 @@
-import {
-  type AdminConversationDetail,
-  type AdminConversationList,
-  type AdminConversationQuery,
-  type AdminEvalCaseList,
-  type AdminEvalRun,
-  type AdminEvalRunList,
-  type AdminOverview,
-} from "./admin";
-import { ApiError, errorMessage } from "./errors";
+import { api, unwrap } from "./client";
+import type { components, operations } from "./schema";
 
-// Replace with `api.GET(...)` + unwrap once schema.d.ts is regenerated.
-async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${window.location.origin}/api${path}`, {
-    ...init,
-    credentials: "include",
-  });
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    body = undefined;
-  }
-  if (!response.ok) {
-    throw new ApiError(errorMessage(body), response.status, body);
-  }
-  return body as T;
-}
+type AdminSchemas = components["schemas"];
+
+export type AdminOverview = AdminSchemas["AdminOverview"];
+export type AdminConversationItem = AdminSchemas["AdminConversationItem"];
+export type AdminConversationListResponse = AdminSchemas["AdminConversationListResponse"];
+export type AdminConversationDetail = AdminSchemas["AdminConversationDetail"];
+export type ConversationScoreResponse = AdminSchemas["ConversationScoreResponse"];
+export type ConversationScoreCheck = AdminSchemas["ConversationScoreCheck"];
+export type EvalCaseResponse = AdminSchemas["EvalCaseResponse"];
+export type EvalRunSummary = AdminSchemas["EvalRunSummary"];
+export type EvalRunResponse = AdminSchemas["EvalRunResponse"];
+export type AdminConversationQuery = NonNullable<
+  operations["list_conversations_admin_conversations_get"]["parameters"]["query"]
+>;
 
 export function getAdminOverview(days: number): Promise<AdminOverview> {
-  return adminFetch(`/admin/overview?days=${days}`);
+  return unwrap(api.GET("/admin/overview", { params: { query: { days } } }));
 }
 
-export function listAdminConversations(query: AdminConversationQuery): Promise<AdminConversationList> {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined) params.set(key, String(value));
-  }
-  return adminFetch(`/admin/conversations?${params.toString()}`);
+export function listAdminConversations(query: AdminConversationQuery): Promise<AdminConversationListResponse> {
+  return unwrap(api.GET("/admin/conversations", { params: { query } }));
 }
 
-export function getAdminConversation(id: string): Promise<AdminConversationDetail> {
-  return adminFetch(`/admin/conversations/${encodeURIComponent(id)}`);
+export function getAdminConversation(conversationId: string): Promise<AdminConversationDetail> {
+  return unwrap(api.GET("/admin/conversations/{conversation_id}", {
+    params: { path: { conversation_id: conversationId } },
+  }));
 }
 
-export function rescoreConversation(id: string): Promise<void> {
-  return adminFetch(`/admin/conversations/${encodeURIComponent(id)}/rescore`, { method: "POST" });
+export async function rescoreConversation(conversationId: string): Promise<{ queued: boolean }> {
+  const response = await unwrap(api.POST("/admin/conversations/{conversation_id}/rescore", {
+    params: { path: { conversation_id: conversationId } },
+  }));
+  return { queued: response.queued };
 }
 
-export function createEvalCase(id: string): Promise<{ eval_case_id: string }> {
-  return adminFetch(`/admin/conversations/${encodeURIComponent(id)}/eval-case`, { method: "POST" });
+export async function createEvalCase(conversationId: string): Promise<{ eval_case_id: string }> {
+  const response = await unwrap(api.POST("/admin/conversations/{conversation_id}/eval-case", {
+    params: { path: { conversation_id: conversationId } },
+  }));
+  return { eval_case_id: response.eval_case_id };
 }
 
-export function listEvalCases(): Promise<AdminEvalCaseList> {
-  return adminFetch("/admin/eval-cases");
+export function listEvalCases(): Promise<EvalCaseResponse[]> {
+  return unwrap(api.GET("/admin/eval-cases"));
 }
 
-export function listEvalRuns(): Promise<AdminEvalRunList> {
-  return adminFetch("/admin/eval-runs");
+export function listEvalRuns(): Promise<EvalRunSummary[]> {
+  return unwrap(api.GET("/admin/eval-runs"));
 }
 
-export function getEvalRun(id: string): Promise<AdminEvalRun> {
-  return adminFetch(`/admin/eval-runs/${encodeURIComponent(id)}`);
+export function getEvalRun(evalRunId: string): Promise<EvalRunResponse> {
+  return unwrap(api.GET("/admin/eval-runs/{eval_run_id}", {
+    params: { path: { eval_run_id: evalRunId } },
+  }));
 }

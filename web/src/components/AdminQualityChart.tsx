@@ -1,4 +1,4 @@
-import type { AdminOverview } from "../api/admin";
+import type { AdminOverview } from "../api/adminApi";
 import { niceMax } from "../lib/dashboard";
 import styles from "./Dashboard.module.css";
 import moduleStyles from "./Admin.module.css";

@@ -18,6 +18,7 @@ export const api = createClient<paths>({
 
 api.use({
   onRequest({ request }) {
+    if (new URL(request.url).pathname.startsWith("/api/admin/")) return request;
     if (typeof localStorage === "undefined") return request;
     try {
       const memberships = JSON.parse(

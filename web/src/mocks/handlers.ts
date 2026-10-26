@@ -6,7 +6,7 @@ import { authUser, emailActionTemplates, setupDraftFixture, templates, templateS
 import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
 import { adminConversationDetails, adminEvalRunSummaries, adminItem, adminOverview, mockAdminEvalCases, mockAdminEvalRuns } from "./admin";
-import type { AdminConversationQuery, AdminEvalCase } from "../api/admin";
+import type { AdminConversationQuery, EvalCaseResponse } from "../api/adminApi";
 import type { TenantFixture } from "./fixtures";
 import assistantConfigSchema from "./assistant-config.schema.json";
 import type { AssistantConfig } from "../lib/config";
@@ -99,12 +99,12 @@ function toContactSummary(detail: Schemas["ContactDetailResponse"]): Schemas["Co
 
 export const handlers = [
   http.get("*/api/admin/overview", ({ request }) => {
-    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
     const days = Number(new URL(request.url).searchParams.get("days") ?? 7);
     return HttpResponse.json(adminOverview([7, 30, 90].includes(days) ? days : 7));
   }),
   http.get("*/api/admin/conversations", ({ request }) => {
-    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
     const params = new URL(request.url).searchParams;
     const query: AdminConversationQuery = {
       needs_review: params.has("needs_review") ? params.get("needs_review") === "true" : undefined,
@@ -124,28 +124,32 @@ export const handlers = [
     return HttpResponse.json({ items: page, next_cursor: next });
   }),
   http.get("*/api/admin/conversations/:id", ({ params }) => {
-    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
-    const detail = adminConversationDetails.find(({ id }) => id === params.id);
-    return detail ? HttpResponse.json(detail) : HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+    const detail = adminConversationDetails.find(({ conversation_id }) => conversation_id === params.id);
+    return detail ? HttpResponse.json(detail) : HttpResponse.json({ detail: "Not Found" }, { status: 404 });
   }),
   http.post("*/api/admin/conversations/:id/rescore", ({ params }) => {
-    if (!mockDb.isPlatformAdmin || !adminConversationDetails.some(({ id }) => id === params.id)) {
-      return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    if (!mockDb.isPlatformAdmin || !adminConversationDetails.some(({ conversation_id }) => conversation_id === params.id)) {
+      return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
     }
-    return new HttpResponse(null, { status: 202 });
+    return HttpResponse.json({ queued: true }, { status: 202 });
   }),
   http.post("*/api/admin/conversations/:id/eval-case", ({ params }) => {
-    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
-    const conversation = adminConversationDetails.find(({ id }) => id === params.id);
-    if (!conversation) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+    const conversation = adminConversationDetails.find(({ conversation_id }) => conversation_id === params.id);
+    if (!conversation) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
     const date = new Date().toISOString().slice(0, 10);
-    const evalCase: AdminEvalCase = {
+    const evalCase: EvalCaseResponse = {
       id: `77000000-0000-4000-8000-${String(mockAdminEvalCases.length + 1).padStart(12, "0")}`,
-      source_conversation_id: conversation.id,
+      source_conversation_id: conversation.conversation_id,
       name: `${conversation.assistant_name} – ${date}`,
       assistant_id: conversation.assistant_id,
       caller_utterances: conversation.messages.filter(({ role }) => role === "caller").map(({ text }) => text),
-      checks: { transcript_checks: [], assistant_checks: [], intake_checks: [] },
+      checks: {
+        transcript_checks: {},
+        assistant_checks: {},
+        intake_checks: Object.fromEntries(Object.keys(conversation.intake ?? {}).map((key) => [key, { required: true }])),
+      },
       created_at: new Date().toISOString(),
       enabled: true,
     };
@@ -153,17 +157,17 @@ export const handlers = [
     return HttpResponse.json({ eval_case_id: evalCase.id }, { status: 201 });
   }),
   http.get("*/api/admin/eval-cases", () => {
-    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
-    return HttpResponse.json({ items: mockAdminEvalCases });
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+    return HttpResponse.json(mockAdminEvalCases);
   }),
   http.get("*/api/admin/eval-runs", () => {
-    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
-    return HttpResponse.json({ items: adminEvalRunSummaries() });
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+    return HttpResponse.json(adminEvalRunSummaries());
   }),
   http.get("*/api/admin/eval-runs/:id", ({ params }) => {
-    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
     const run = mockAdminEvalRuns.find(({ id }) => id === params.id);
-    return run ? HttpResponse.json(run) : HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    return run ? HttpResponse.json(run) : HttpResponse.json({ detail: "Not Found" }, { status: 404 });
   }),
   http.get<never, never, Schemas["DashboardSummary"]>("*/api/dashboard/summary", ({ request }) => {
     const query = new URL(request.url).searchParams;
@@ -458,6 +462,7 @@ export const handlers = [
       display_name: body.display_name,
       is_platform_admin: false,
     };
+    mockDb.isPlatformAdmin = false;
     mockDb.loggedIn = true;
     if (typeof localStorage !== "undefined") localStorage.setItem("inbound.mock.session", "1");
     return HttpResponse.json<Schemas["AuthResponse"]>({ user: mockDb.user, tenants: mockDb.memberships, access_token: "mock-token" }, { status: 201 });

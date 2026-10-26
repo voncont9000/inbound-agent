@@ -1,7 +1,12 @@
 import { Fragment, useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, useParams, useSearchParams } from "react-router-dom";
-import type { AdminCheck, AdminConversationItem, AdminEvalRun, AdminObjective } from "../api/admin";
+import type {
+  AdminConversationItem,
+  EvalCaseResponse,
+  EvalRunResponse,
+  EvalRunSummary,
+} from "../api/adminApi";
 import {
   createEvalCase,
   getAdminConversation,
@@ -18,7 +23,18 @@ import dashboardStyles from "../components/Dashboard.module.css";
 import styles from "../components/Admin.module.css";
 import { channelLabels } from "../lib/dashboard";
 import { transcriptRows } from "../lib/transcript";
-import { scoreTone } from "../lib/admin";
+import {
+  countCaseChecks,
+  readObjective,
+  readRunResults,
+  readRunSummary,
+  scoreTone,
+  type AdminObjective,
+} from "../lib/admin";
+
+function channelLabel(channel: string) {
+  return channelLabels[channel as keyof typeof channelLabels] ?? channel;
+}
 
 function AdminSubnav() {
   return <nav className="subnav" aria-label="Admin navigation">
@@ -75,7 +91,7 @@ function ReviewItem({ item }: { item: AdminConversationItem }) {
       <span aria-hidden="true">·</span>
       <span>{item.tenant_name}</span>
       <span aria-hidden="true">·</span>
-      <span>{channelLabels[item.channel]}</span>
+      <span>{channelLabel(item.channel)}</span>
     </div>
     <div className={styles.reviewBadges}>
       <ScoreBadge overall={item.overall} />
@@ -94,7 +110,7 @@ function AdminConversationTable({ items }: { items: AdminConversationItem[] }) {
           <td className="cell-muted">{dateLabel(item.started_at)}</td>
           <td>{item.tenant_name}</td>
           <td className="cell-primary"><Link to={`/admin/conversations/${item.conversation_id}`}>{item.assistant_name}</Link>{item.is_test && <> <Badge>Test</Badge></>}</td>
-          <td>{channelLabels[item.channel]}</td>
+          <td>{channelLabel(item.channel)}</td>
           <td><ScoreBadge overall={item.overall} /></td>
           <td>{reviewText(item)}</td>
         </tr>)}</tbody>
@@ -206,7 +222,7 @@ export function AdminOverviewPage() {
   </main>;
 }
 
-const checkLabels: Record<AdminCheck["key"], string> = {
+const checkLabels: Record<string, string> = {
   answered_question: "Answered the question",
   collected_required_details: "Collected required details",
   language_consistent: "Same language throughout",
@@ -256,7 +272,7 @@ export function AdminConversationPage() {
     {conversation && <>
       <PageHeader title={`${conversation.assistant_name} · ${conversation.tenant_name}`} />
       <div className={styles.detailMeta}>
-        <span>{channelLabels[conversation.channel]}</span><span aria-hidden="true">·</span>
+        <span>{channelLabel(conversation.channel)}</span><span aria-hidden="true">·</span>
         <span>{dateLabel(conversation.started_at)}</span><span aria-hidden="true">·</span>
         <span>Duration {durationLabel(conversation.started_at, conversation.ended_at)}</span>
         {conversation.is_test && <><span aria-hidden="true">·</span><Badge>Test</Badge></>}
@@ -277,13 +293,13 @@ export function AdminConversationPage() {
           <p className="muted">Judge {conversation.score.judge_model} · rubric {conversation.score.judge_version}</p>
           <h3 className={styles.qualitySectionHeading}>Checks</h3>
           <ul className={styles.checkList}>{conversation.score.checks.map((check) => <li key={check.key}>
-            <span>{checkLabels[check.key]}</span>
+            <span>{checkLabels[check.key] ?? check.key}</span>
             <Badge tone={check.passed === false ? "danger" : check.passed === true ? "success" : "neutral"}>{check.passed === false ? "Failed" : check.passed === true ? "Passed" : "Not applicable"}</Badge>
             {check.passed === false && check.note && <p className={`muted ${styles.checkNote}`}>{check.note}</p>}
           </li>)}</ul>
           {conversation.score.issues.length > 0 && <><h3 className={styles.qualitySectionHeading}>Issues</h3><ul>{conversation.score.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul></>}
           <h3 className={styles.qualitySectionHeading}>Objective metrics</h3>
-          <ObjectiveMetrics objective={conversation.score.objective} />
+          <ObjectiveMetrics objective={readObjective(conversation.score.objective)} />
         </> : <EmptyState title="Not scored yet">There is no quality score for this conversation.</EmptyState>}
       </section>
       <section className="panel">
@@ -306,16 +322,17 @@ export function AdminConversationPage() {
 }
 
 function failureLabel(caseId: string, cases: { id: string; name: string }[]) {
-  return cases.find(({ id }) => id === caseId)?.name ?? "Unknown eval case";
+  return cases.find(({ id }) => id === caseId)?.name ?? "Deleted case";
 }
 
-function EvalRunDetails({ run, cases }: { run: AdminEvalRun | undefined; cases: { id: string; name: string }[] }) {
+function EvalRunDetails({ run, cases }: { run: EvalRunResponse | undefined; cases: EvalCaseResponse[] }) {
   if (!run) return null;
-  const failedCount = run.results.filter(({ passed }) => !passed).length;
-  const passedCount = run.results.filter(({ passed }) => passed).length;
+  const results = readRunResults(run.results);
+  const failedCount = results.filter(({ passed }) => !passed).length;
+  const passedCount = results.filter(({ passed }) => passed).length;
   return <>
     <p className="muted">{passedCount} passed · {failedCount} failed</p>
-    {run.results.filter(({ passed }) => !passed).map((result) => <section key={result.eval_case_id}>
+    {results.filter(({ passed }) => !passed).map((result) => <section key={result.eval_case_id}>
       <h3>{failureLabel(result.eval_case_id, cases)}</h3>
       <ul>{result.failures.map((failure) => <li key={failure}>{failure}</li>)}</ul>
     </section>)}
@@ -328,8 +345,8 @@ export function AdminEvalsPage() {
   const cases = useQuery({ queryKey: ["admin-eval-cases"], queryFn: listEvalCases });
   const runs = useQuery({ queryKey: ["admin-eval-runs"], queryFn: listEvalRuns });
   const expandedRun = useQuery({ queryKey: ["admin-eval-run", expandedId], queryFn: () => getEvalRun(expandedId), enabled: Boolean(expandedId) });
-  const evalCases = cases.data?.items ?? [];
-  const evalRuns = runs.data?.items ?? [];
+  const evalCases = cases.data ?? [];
+  const evalRuns: EvalRunSummary[] = runs.data ?? [];
 
   return <main className="page" id="main-content">
     <PageHeader title="Evals" />
@@ -344,12 +361,13 @@ export function AdminEvalsPage() {
           <thead><tr><th>Started</th><th>Trigger</th><th>Commit</th><th>Result</th></tr></thead>
           <tbody>{evalRuns.map((run) => {
             const expanded = expandedId === run.id;
-            const tone = run.summary.failed ? "danger" : "success";
+            const summary = readRunSummary(run.summary);
+            const tone = summary.failed ? "danger" : "success";
             return <Fragment key={run.id}>
               <tr>
                 <td><button type="button" className={`button-link ${styles.runButton}`} aria-expanded={expanded} onClick={() => setExpandedId(expanded ? "" : run.id)}>{dateLabel(run.started_at)}</button></td>
                 <td>{run.trigger}</td><td>{run.git_sha?.slice(0, 7) ?? "—"}</td>
-                <td><Badge tone={tone}>{run.summary.passed}/{run.summary.cases} passed</Badge></td>
+                <td><Badge tone={tone}>{summary.passed}/{summary.cases} passed</Badge></td>
               </tr>
               {expanded && <tr><td colSpan={4}>
                 {expandedRun.isLoading && <LoadingState label="Loading run results…" />}
@@ -362,11 +380,12 @@ export function AdminEvalsPage() {
         <ul className={styles.mobileRuns} aria-label="Eval runs">
           {evalRuns.map((run) => {
             const expanded = expandedId === run.id;
-            const tone = run.summary.failed ? "danger" : "success";
+            const summary = readRunSummary(run.summary);
+            const tone = summary.failed ? "danger" : "success";
             return <li className={styles.runCard} key={run.id}>
               <button type="button" className={`button-link ${styles.runButton}`} aria-expanded={expanded} onClick={() => setExpandedId(expanded ? "" : run.id)}>{dateLabel(run.started_at)}</button>
               <p className={styles.runMeta}>{run.trigger} · {run.git_sha?.slice(0, 7) ?? "—"}</p>
-              <div><Badge tone={tone}>{run.summary.passed}/{run.summary.cases} passed</Badge></div>
+              <div><Badge tone={tone}>{summary.passed}/{summary.cases} passed</Badge></div>
               {expanded && <div className={styles.runCases}>
                 {expandedRun.isLoading && <LoadingState label="Loading run results…" />}
                 {expandedRun.error && <ErrorState message="The eval run could not be loaded." />}
@@ -383,7 +402,7 @@ export function AdminEvalsPage() {
       {cases.error && <ErrorState message="Eval cases could not be loaded." />}
       {!cases.isLoading && !cases.error && !evalCases.length && <EmptyState>No eval cases yet.</EmptyState>}
       {evalCases.map((evalCase) => {
-        const checksCount = Object.values(evalCase.checks).reduce((sum, list) => sum + list.length, 0);
+        const checksCount = countCaseChecks(evalCase.checks);
         const callerTurns = evalCase.caller_utterances.length;
         return <article className={styles.evalCase} key={evalCase.id}>
           <div className="row"><strong>{evalCase.name}</strong><Badge tone={evalCase.enabled ? "success" : "neutral"}>{evalCase.enabled ? "Enabled" : "Disabled"}</Badge></div>

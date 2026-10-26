@@ -58,7 +58,7 @@ describe("platform admin pages", () => {
     const reviewToggle = await screen.findByRole("checkbox", { name: "Needs review only" });
     await waitFor(() => expect(requests.length).toBeGreaterThan(0));
     expect(requests[0].get("needs_review")).toBe("true");
-    const reviewPanel = Array.from(document.querySelectorAll("section.panel"))
+    const reviewPanel = Array.from(document.querySelectorAll<HTMLElement>("section.panel"))
       .find((section) => section.querySelector("h2")?.textContent === "Needs review")!;
     await waitFor(() => expect(reviewPanel.querySelector("article a")).toBeTruthy());
     const mobileCard = reviewPanel.querySelector("article")!;
@@ -82,8 +82,24 @@ describe("platform admin pages", () => {
     await waitFor(() => expect(requests.some((query) => query.has("cursor"))).toBe(true));
   });
 
+  it("loads review results after selecting a workspace", async () => {
+    const requests = captureAdminRequests("/api/admin/conversations");
+    const user = userEvent.setup();
+    renderApp("/admin", { loggedIn: true });
+    await screen.findByRole("option", { name: "Fieldwork Studio" });
+    const workspace = screen.getByLabelText("Workspace", { selector: "#admin-workspace" });
+    await user.selectOptions(workspace, "71000000-0000-4000-8000-000000000002");
+
+    await waitFor(() => expect(requests.at(-1)?.get("tenant_id")).toBe("71000000-0000-4000-8000-000000000002"));
+    expect(requests.at(-1)?.get("needs_review")).toBe("true");
+    await waitFor(() => expect(screen.queryByText("Conversations could not be loaded.")).not.toBeInTheDocument());
+    const reviewPanel = Array.from(document.querySelectorAll<HTMLElement>("section.panel"))
+      .find((section) => section.querySelector("h2")?.textContent === "Needs review")!;
+    await waitFor(() => expect(within(reviewPanel).getAllByRole("link", { name: "Jordan" }).length).toBeGreaterThan(0));
+  });
+
   it("renders conversation checks, notes, issues, objective metrics, transcript, and trace link", async () => {
-    renderApp(`/admin/conversations/${adminConversationDetails[0].id}`, { loggedIn: true });
+    renderApp(`/admin/conversations/${adminConversationDetails[0].conversation_id}`, { loggedIn: true });
     expect(await screen.findByRole("heading", { name: /Avery · Northstar Services/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to admin" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Admin navigation" })).not.toBeInTheDocument();
@@ -106,10 +122,25 @@ describe("platform admin pages", () => {
   it("hides trace when missing and shows empty score state", async () => {
     const conversation = { ...adminConversationDetails[10], trace_url: null, score: null };
     server.use(http.get("*/api/admin/conversations/:id", () => HttpResponse.json(conversation)));
-    renderApp(`/admin/conversations/${conversation.id}`, { loggedIn: true });
+    renderApp(`/admin/conversations/${conversation.conversation_id}`, { loggedIn: true });
     expect(await screen.findByText("Not scored yet")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rescore" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open trace" })).not.toBeInTheDocument();
+  });
+
+  it("uses the raw label for an unknown score check", async () => {
+    const conversation = adminConversationDetails[0];
+    const response = {
+      ...conversation,
+      score: conversation.score && {
+        ...conversation.score,
+        checks: [{ key: "future_check", passed: false, note: "New check detail." }],
+      },
+    };
+    server.use(http.get("*/api/admin/conversations/:id", () => HttpResponse.json(response)));
+    renderApp(`/admin/conversations/${conversation.conversation_id}`, { loggedIn: true });
+    expect(await screen.findByText("future_check")).toBeInTheDocument();
+    expect(screen.getByText("New check detail.")).toBeInTheDocument();
   });
 
   it("queues rescoring and creates an eval case with notices", async () => {
@@ -118,14 +149,14 @@ describe("platform admin pages", () => {
       if (request.url.includes("/api/admin/conversations/")) requests.push(`${request.method} ${new URL(request.url).pathname}`);
     });
     const user = userEvent.setup();
-    renderApp(`/admin/conversations/${adminConversationDetails[0].id}`, { loggedIn: true });
+    renderApp(`/admin/conversations/${adminConversationDetails[0].conversation_id}`, { loggedIn: true });
     await user.click(await screen.findByRole("button", { name: "Rescore" }));
     expect(await screen.findByText("Rescore queued")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Make eval case" }));
     expect(await screen.findByText("Eval case created.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View evals" })).toHaveAttribute("href", "/admin/evals");
-    expect(requests).toContain(`POST /api/admin/conversations/${adminConversationDetails[0].id}/rescore`);
-    expect(requests).toContain(`POST /api/admin/conversations/${adminConversationDetails[0].id}/eval-case`);
+    expect(requests).toContain(`POST /api/admin/conversations/${adminConversationDetails[0].conversation_id}/rescore`);
+    expect(requests).toContain(`POST /api/admin/conversations/${adminConversationDetails[0].conversation_id}/eval-case`);
   });
 
   it("lists eval runs and cases and expands failed run results", async () => {
