@@ -1,6 +1,7 @@
 export const EMAIL_ACTION_DEFAULTS = {
   email_customer: {
     key: "inquiry_confirmation",
+    translate_to_customer_language: true,
     subject_template: "We've received your enquiry – {{business_name}}",
     body_template: [
       "Hello {{contact.first_name|there}},",

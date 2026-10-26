@@ -7,6 +7,7 @@ import httpx
 import pytest
 from cryptography.fernet import Fernet
 from inbound_core.config import AssistantConfig
+from inbound_core.post_actions import TEMPLATE_VARIABLES
 from sqlalchemy import select
 
 from inbound_api.db import tenant_session
@@ -27,6 +28,7 @@ from inbound_api.models import (
     TaskSource,
     TaskStatus,
 )
+from inbound_api.post_actions import service as post_action_service
 from inbound_api.post_actions.providers import (
     FakeEmailSender,
     FakeWebhookSender,
@@ -38,15 +40,27 @@ from inbound_api.post_actions.service import (
     plan_conversation_actions,
     render_action_subject,
 )
+from inbound_api.post_actions.translation import TranslatedEmail
 from inbound_api.settings import Settings, get_settings
 
 
-async def _assistant_and_conversation(tenant_pair, actions):
+class RecordingEmailSender:
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, **message):
+        self.sent.append(message)
+        return {"message_id": "sent-1", "from": "assistant@example.test"}
+
+
+async def _assistant_and_conversation(tenant_pair, actions, *, language=None):
     account = tenant_pair["first"]
     client = account["client"]
     templates = (await client.get("/templates")).json()
     config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
     config["post_actions"] = actions
+    if language is not None:
+        config["language"] = language
     response = await client.post(
         "/assistants",
         json={"name": "Post-action test assistant", "template": "uk_law_firm", "config": config},
@@ -80,6 +94,66 @@ async def _assistant_and_conversation(tenant_pair, actions):
     return account, config, assistant_id, conversation_id
 
 
+def _customer_email_action(*, translate=True):
+    return {
+        "kind": "email_customer",
+        "key": "customer",
+        "trigger": {"events": ["conversation_completed"]},
+        "subject_template": "Follow-up for {{business_name}}",
+        "body_template": (
+            "Hello {{contact.first_name|there}},\n\n"
+            "We received your request from {{business_name}}. "
+            "Our team will be in touch soon."
+        ),
+        "translate_to_customer_language": translate,
+    }
+
+
+async def _prepare_customer_email(
+    tenant_pair,
+    *,
+    language="Italian",
+    config_language=None,
+    translate=True,
+    test_call=False,
+):
+    account, config, assistant_id, conversation_id = await _assistant_and_conversation(
+        tenant_pair,
+        [_customer_email_action(translate=translate)],
+        language=config_language,
+    )
+    tenant_id = UUID(account["tenant_id"])
+    async with tenant_session(tenant_id) as session:
+        conversation = await session.get(Conversation, conversation_id)
+        conversation.metrics = {
+            "conversation_language": language,
+            "test_call": test_call,
+        }
+        intake = await session.scalar(
+            select(Intake).where(Intake.conversation_id == conversation_id)
+        )
+        intake.data = {
+            "service": "conveyancing",
+            "fields": {"email": {"value": "customer@example.com"}},
+        }
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 1}
+    return account, config, assistant_id, conversation_id
+
+
+async def _send_customer_email(account, conversation_id, *, sender=None):
+    email_sender = sender or RecordingEmailSender()
+    async with tenant_session(UUID(account["tenant_id"])) as session:
+        result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="customer",
+            fire_count=1,
+            settings=Settings(email_sender="fake", google_api_key="test-api-key"),
+            email_sender=email_sender,
+        )
+    return result, email_sender
+
+
 @pytest.mark.asyncio
 async def test_action_context_includes_customer_recap_first_name_and_open_next_step(tenant_pair):
     account, config_data, assistant_id, conversation_id = await _assistant_and_conversation(
@@ -93,7 +167,10 @@ async def test_action_context_includes_customer_recap_first_name_and_open_next_s
         session.add(person)
         await session.flush()
         conversation.person_id = person.id
-        conversation.metrics = {"customer_recap": "You asked us to arrange a call."}
+        conversation.metrics = {
+            "customer_recap": "You asked us to arrange a call.",
+            "conversation_language": "Italian",
+        }
         context = await build_action_context(
             session,
             conversation=conversation,
@@ -121,6 +198,8 @@ async def test_action_context_includes_customer_recap_first_name_and_open_next_s
 
     assert context["contact.first_name"] == "Alex"
     assert context["customer_recap"] == "You asked us to arrange a call."
+    assert context["conversation_language"] == "Italian"
+    assert "conversation_language" not in {name for name, _ in TEMPLATE_VARIABLES}
     assert context["next_step"] == "Send details"
 
 
@@ -190,6 +269,146 @@ def test_test_call_email_subject_prefix_is_added_once():
     assert render_action_subject("Summary", {"test_call": True}) == "[Test] Summary"
     assert render_action_subject("[Test] Summary", {"test_call": True}) == "[Test] Summary"
     assert render_action_subject("Summary", {"test_call": False}) == "Summary"
+
+
+@pytest.mark.asyncio
+async def test_customer_email_translation_reaches_sender_and_translates_footer(
+    tenant_pair, monkeypatch
+):
+    calls = []
+
+    async def translate(**arguments):
+        calls.append(arguments)
+        return TranslatedEmail(
+            subject="Risposta per l'azienda",
+            body="Grazie per averci contattato. Il nostro team ti risponderà presto.",
+            footer_label="Inviato da",
+        )
+
+    monkeypatch.setattr(post_action_service, "translate_email", translate)
+    account, config, _, conversation_id = await _prepare_customer_email(
+        tenant_pair,
+        language="Italian",
+        test_call=True,
+    )
+    result, sender = await _send_customer_email(account, conversation_id)
+
+    assert result["status"] == "succeeded"
+    assert result["output"]["message_id"] == "sent-1"
+    assert result["output"]["from"] == "assistant@example.test"
+    assert result["output"]["translated_to"] == "Italian"
+    assert calls[0]["target_language"] == "Italian"
+    assert calls[0]["subject"] == f"Follow-up for {config['business_name']}"
+    assert calls[0]["body"].startswith("Hello there,")
+    assert sender.sent[0]["subject"] == "[Test] Risposta per l'azienda"
+    assert sender.sent[0]["body"] == (
+        "Grazie per averci contattato. Il nostro team ti risponderà presto."
+    )
+    assert f"Inviato da {config['business_name']}" in sender.sent[0]["html"]
+
+
+@pytest.mark.asyncio
+async def test_customer_email_translation_failure_falls_back_to_rendered_content(
+    tenant_pair, monkeypatch
+):
+    async def failed_translation(**_arguments):
+        return None
+
+    monkeypatch.setattr(post_action_service, "translate_email", failed_translation)
+    account, config, _, conversation_id = await _prepare_customer_email(tenant_pair)
+    result, sender = await _send_customer_email(account, conversation_id)
+
+    assert result["status"] == "succeeded"
+    assert result["output"]["translation"] == "failed"
+    assert sender.sent[0]["subject"] == f"Follow-up for {config['business_name']}"
+    assert sender.sent[0]["body"].startswith("Hello there,")
+    assert f"Sent by {config['business_name']}" in sender.sent[0]["html"]
+
+
+@pytest.mark.asyncio
+async def test_customer_email_translation_falls_back_to_configured_language(
+    tenant_pair, monkeypatch
+):
+    calls = []
+
+    async def translate(**arguments):
+        calls.append(arguments)
+        return TranslatedEmail("Antwort", "Vielen Dank für Ihre Anfrage.", "Gesendet von")
+
+    monkeypatch.setattr(post_action_service, "translate_email", translate)
+    account, _, _, conversation_id = await _prepare_customer_email(
+        tenant_pair,
+        language=None,
+        config_language="de-DE",
+    )
+    result, _ = await _send_customer_email(account, conversation_id)
+
+    assert result["output"]["translated_to"] == "German"
+    assert calls[0]["target_language"] == "German"
+
+
+@pytest.mark.asyncio
+async def test_customer_email_translation_skips_when_disabled_or_multi_language_is_unclear(
+    tenant_pair, monkeypatch
+):
+    calls = []
+
+    async def translate(**arguments):
+        calls.append(arguments)
+        return None
+
+    monkeypatch.setattr(post_action_service, "translate_email", translate)
+    account, _, _, conversation_id = await _prepare_customer_email(
+        tenant_pair,
+        language="Italian",
+        translate=False,
+    )
+    disabled_result, disabled_sender = await _send_customer_email(account, conversation_id)
+    assert disabled_result["output"]["translation"] == "skipped"
+    assert disabled_sender.sent[0]["body"].startswith("Hello there,")
+
+    multi_account, _, _, multi_conversation_id = await _prepare_customer_email(
+        tenant_pair,
+        language=None,
+        config_language="multi",
+    )
+    multi_result, multi_sender = await _send_customer_email(multi_account, multi_conversation_id)
+    assert multi_result["output"]["translation"] == "skipped"
+    assert multi_sender.sent[0]["body"].startswith("Hello there,")
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_notify_staff_email_is_not_translated(tenant_pair, monkeypatch):
+    calls = []
+
+    async def translate(**arguments):
+        calls.append(arguments)
+        raise AssertionError("Staff email must not be translated")
+
+    monkeypatch.setattr(post_action_service, "translate_email", translate)
+    account, _, _, conversation_id = await _assistant_and_conversation(
+        tenant_pair,
+        _notify_staff_action(),
+    )
+    tenant_id = UUID(account["tenant_id"])
+    async with tenant_session(tenant_id) as session:
+        assert await plan_conversation_actions(session, conversation_id) == {"queued": 1}
+    sender = RecordingEmailSender()
+    async with tenant_session(tenant_id) as session:
+        result = await execute_conversation_action(
+            session,
+            conversation_id=conversation_id,
+            action_key="staff",
+            fire_count=1,
+            settings=Settings(email_sender="fake"),
+            email_sender=sender,
+        )
+
+    assert result["status"] == "succeeded"
+    assert "translation" not in result["output"]
+    assert len(sender.sent) == 1
+    assert calls == []
 
 
 @pytest.mark.asyncio

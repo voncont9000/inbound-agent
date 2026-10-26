@@ -62,6 +62,7 @@ describe("validateAssistantConfig", () => {
         trigger: { events: [], channels: [], services: ["missing-service"] },
         subject_template: "Thanks",
         body_template: "Hello",
+        translate_to_customer_language: true,
       },
       {
         kind: "webhook",

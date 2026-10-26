@@ -3660,6 +3660,11 @@
             "title": "Subject Template",
             "type": "string"
           },
+          "translate_to_customer_language": {
+            "default": true,
+            "title": "Translate To Customer Language",
+            "type": "boolean"
+          },
           "trigger": {
             "$ref": "#/components/schemas/PostActionTrigger"
           }

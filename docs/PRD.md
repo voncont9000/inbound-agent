@@ -119,6 +119,7 @@ FR-E7 suggested rules are explicitly out of scope for this implementation.
 - FR-T2: **Google Sheets**: (a) append one row per conversation with the extraction fields (intake log) to a sheet the firm picks; (b) read lookup tables (e.g. fee list, fee earners per practice area, office hours) as knowledge. OAuth, least-privilege scopes (`drive.file` where possible).
 - FR-T3: **Email** actions: send a confirmation or summary email to the caller (from the connected Gmail mailbox, using templates), and notify staff by email.
 - Customer emails use editable, vertical-agnostic templates with a customer-facing recap and safely escaped HTML alongside plain text.
+- Customer emails can be translated into the detected conversation language (or the assistant's configured language); translation failures send the original template. Translation is enabled by default for customer emails and costs one Flash-Lite call of approximately 1–2k tokens per email.
 
 **Implementation status:** The M1 after-conversation framework now supports configurable
 event-triggered customer/staff email, Google Sheets rows, and signed webhooks with tenant-scoped

@@ -48,6 +48,10 @@ def _customer_action(**overrides):
     )
 
 
+def test_customer_email_translation_defaults_to_enabled():
+    assert _customer_action().translate_to_customer_language is True
+
+
 def test_derive_events_always_includes_completion_and_maps_task_kinds():
     assert derive_events(
         ["urgent", "callback", "complaint", "needs_human", "email_needs_human"]

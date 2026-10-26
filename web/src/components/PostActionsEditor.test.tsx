@@ -48,6 +48,7 @@ describe("PostActionsEditor email templates", () => {
       key: inquiry.key,
       subject_template: inquiry.subject_template,
       body_template: inquiry.body_template,
+      translate_to_customer_language: true,
     });
     const staff = emailActionTemplates.find(({ key }) => key === "staff_new_enquiry")!;
     expect(EMAIL_ACTION_DEFAULTS.notify_staff).toMatchObject({
@@ -65,6 +66,7 @@ describe("PostActionsEditor email templates", () => {
       trigger: { events: ["conversation_completed"], channels: [], services: [] },
       subject_template: inquiry.subject_template,
       body_template: inquiry.body_template,
+      translate_to_customer_language: true,
     };
     const user = userEvent.setup();
     renderEditor(makeConfig(action) as AssistantConfig);
@@ -84,6 +86,45 @@ describe("PostActionsEditor email templates", () => {
     expect(body).toHaveValue("Hello {{contact.first_name|there}}.");
   });
 
+  it("enables customer-language translation by default and updates the config when toggled", async () => {
+    const action = {
+      kind: "email_customer",
+      key: "customer-email",
+      enabled: true,
+      trigger: { events: ["conversation_completed"], channels: [], services: [] },
+      subject_template: inquiry.subject_template,
+      body_template: inquiry.body_template,
+    } as unknown as PostAction;
+    const user = userEvent.setup();
+    renderEditor(makeConfig(action) as AssistantConfig);
+    await user.click(await screen.findByRole("button", { name: /Expand Email the customer settings/ }));
+
+    const checkbox = await screen.findByRole("checkbox", { name: "Send in the customer's language" });
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText(
+      "Translated automatically into the language the customer used. Names, numbers and links stay unchanged.",
+    )).toBeInTheDocument();
+    await user.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it("does not show customer-language translation for staff email actions", async () => {
+    const action: PostAction = {
+      kind: "notify_staff",
+      key: "staff-email",
+      enabled: true,
+      trigger: { events: ["conversation_completed"], channels: [], services: [] },
+      to: ["team@example.test"],
+      subject_template: "New enquiry",
+      body_template: "A customer contacted the team.",
+    };
+    const user = userEvent.setup();
+    renderEditor(makeConfig(action) as AssistantConfig);
+    await user.click(await screen.findByRole("button", { name: /Expand Notify your team settings/ }));
+
+    expect(screen.queryByRole("checkbox", { name: "Send in the customer's language" })).not.toBeInTheDocument();
+  });
+
   it("confirms before replacing custom text", async () => {
     const action: PostAction = {
       kind: "email_customer",
@@ -92,6 +133,7 @@ describe("PostActionsEditor email templates", () => {
       trigger: { events: ["conversation_completed"], channels: [], services: [] },
       subject_template: "My custom subject",
       body_template: "My custom body",
+      translate_to_customer_language: true,
     };
     const user = userEvent.setup();
     renderEditor(makeConfig(action) as AssistantConfig);
@@ -117,6 +159,7 @@ describe("PostActionsEditor email templates", () => {
       trigger: { events: ["conversation_completed"], channels: [], services: [] },
       subject_template: inquiry.subject_template,
       body_template: inquiry.body_template,
+      translate_to_customer_language: true,
     };
     const user = userEvent.setup();
     renderEditor(makeConfig(action) as AssistantConfig);

@@ -256,6 +256,7 @@ class EmailCustomerAction(PostActionBase):
     kind: Literal["email_customer"]
     subject_template: str = Field(min_length=1)
     body_template: str = Field(min_length=1)
+    translate_to_customer_language: bool = True
 
 
 class NotifyStaffAction(PostActionBase):

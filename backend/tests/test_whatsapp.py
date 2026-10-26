@@ -622,7 +622,11 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
             tenant_id,
             conversation,
             live_intake={},
-            post_call_intake={"summary": "First", "customer_recap": "First recap"},
+            post_call_intake={
+                "summary": "First",
+                "customer_recap": "First recap",
+                "conversation_language": "English",
+            },
             merged_intake={"summary": "First"},
             summary="First summary",
             tasks=[{"kind": "follow_up", "note": "old"}],
@@ -644,13 +648,18 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
             tenant_id,
             conversation,
             live_intake={},
-            post_call_intake={"summary": "Second", "customer_recap": "Second recap"},
+            post_call_intake={
+                "summary": "Second",
+                "customer_recap": "Second recap",
+                "conversation_language": "Italian",
+            },
             merged_intake={"summary": "Second"},
             summary="Second summary",
             tasks=[{"kind": "follow_up", "note": "new"}],
             knowledge_gaps=[{"question": "How soon?", "evidence": "Updated"}],
         )
         assert conversation.metrics["customer_recap"] == "Second recap"
+        assert conversation.metrics["conversation_language"] == "Italian"
         assert conversation.metrics["preserved_metric"] == "kept"
 
     assert set(
@@ -677,10 +686,11 @@ async def test_extracted_results_replace_open_tasks_and_dedupe_gaps(graph_env):
         == 1
     )
     assert graph_env["execute"](
-        "SELECT metrics->>'customer_recap', metrics->>'preserved_metric' FROM conversations "
+        "SELECT metrics->>'customer_recap', metrics->>'conversation_language', "
+        "metrics->>'preserved_metric' FROM conversations "
         "WHERE tenant_id = %s AND external_ref = %s",
         (tenant_id, "wa:123456:447700900123:wamid.results"),
-    ) == [("Second recap", "kept")]
+    ) == [("Second recap", "Italian", "kept")]
     assert graph_env["execute"](
         "SELECT summary FROM conversations WHERE tenant_id = %s AND external_ref = "
         "'wa:123456:447700900123:wamid.results'",
@@ -1187,6 +1197,12 @@ async def test_whatsapp_fake_actions_complete_and_are_visible(tenant_pair, monke
         )
         assert assistant_response.status_code == 201, assistant_response.text
         assistant_id = UUID(assistant_response.json()["id"])
+        stored_assistant = await client.get(f"/assistants/{assistant_id}")
+        assert stored_assistant.status_code == 200, stored_assistant.text
+        assert (
+            stored_assistant.json()["config"]["post_actions"][0]["translate_to_customer_language"]
+            is True
+        )
         channel_response = await client.post(
             f"/assistants/{assistant_id}/channels",
             json={"kind": "whatsapp", "external_id": "123456"},
@@ -1204,6 +1220,15 @@ async def test_whatsapp_fake_actions_complete_and_are_visible(tenant_pair, monke
             post_action_webhook_allow_private_urls=True,
             google_api_key="test-key",
             message_extract_delay_seconds=0,
+        )
+
+        async def skip_email_translation(**_arguments):
+            return None
+
+        monkeypatch.setattr(
+            post_action_service,
+            "translate_email",
+            skip_email_translation,
         )
         monkeypatch.setattr(
             get_settings(), "credentials_encryption_key", Fernet.generate_key().decode()

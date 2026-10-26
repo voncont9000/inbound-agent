@@ -432,7 +432,10 @@ async def test_book_slot_persists_booking_message_commitment_and_metrics(graph_e
                 transcript=[],
                 live_intake={"fields": {}},
                 merged_intake={"fields": {}},
-                post_call_intake={"customer_recap": "You asked us to confirm."},
+                post_call_intake={
+                    "customer_recap": "You asked us to confirm.",
+                    "conversation_language": "German",
+                },
                 tasks=[],
                 knowledge_gaps=[],
                 ended_at=BOOKING_NOW + timedelta(minutes=10),
@@ -445,6 +448,7 @@ async def test_book_slot_persists_booking_message_commitment_and_metrics(graph_e
         assert conversation.metrics["booking"]["booking_id"] == str(booking.id)
         assert conversation.metrics["call"] == "complete"
         assert conversation.metrics["customer_recap"] == "You asked us to confirm."
+        assert conversation.metrics["conversation_language"] == "German"
 
 
 @pytest.mark.asyncio

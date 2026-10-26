@@ -52,6 +52,7 @@ async def extract_intake(
             "fields": {},
             "summary": None,
             "customer_recap": None,
+            "conversation_language": None,
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "follow_up": EMPTY_FOLLOW_UP.copy(),
             "complaint": EMPTY_COMPLAINT.copy(),
@@ -137,6 +138,7 @@ async def extract_intake(
             "model": model,
             "summary": _summary(parsed.get("summary")),
             "customer_recap": _customer_recap(parsed.get("customer_recap")),
+            "conversation_language": _conversation_language(parsed.get("conversation_language")),
             "fields": fields,
             "callback_requested": _callback_request(parsed.get("callback_requested")),
             "follow_up": _follow_up(parsed.get("follow_up")),
@@ -152,6 +154,7 @@ async def extract_intake(
             "model": model,
             "summary": None,
             "customer_recap": None,
+            "conversation_language": None,
             "fields": {},
             "callback_requested": EMPTY_CALLBACK_REQUEST.copy(),
             "follow_up": EMPTY_FOLLOW_UP.copy(),
@@ -324,6 +327,7 @@ def build_intake_artifacts(
         "model": result.get("model", ""),
         "summary": _summary(result.get("summary")),
         "customer_recap": _customer_recap(result.get("customer_recap")),
+        "conversation_language": _conversation_language(result.get("conversation_language")),
         "fields": extracted_fields,
         "callback_requested": _callback_request(result.get("callback_requested")),
         "follow_up": _follow_up(result.get("follow_up")),
@@ -520,6 +524,17 @@ def _customer_recap(value: Any) -> str | None:
     return recap or None
 
 
+def _conversation_language(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    language = value.strip()
+    if not language or len(language) > 40:
+        return None
+    if any(not (character.isalpha() or character in " -()") for character in language):
+        return None
+    return language
+
+
 def _parse_aware_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
@@ -713,6 +728,7 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
             },
             "summary": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "customer_recap": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "conversation_language": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "complaint": {
                 "type": "object",
                 "properties": {
@@ -740,6 +756,7 @@ def _extraction_schema(config: AssistantConfig) -> dict[str, Any]:
             "fields",
             "summary",
             "customer_recap",
+            "conversation_language",
             "callback_requested",
             "follow_up",
             "complaint",
@@ -837,6 +854,10 @@ def _extraction_prompt(
         "assistant agreed. Do not include internal notes, urgency judgements or promises the "
         "assistant did not make. Null if there was no real request."
     )
+    conversation_language_instruction = (
+        "conversation_language: the English name of the main language the customer spoke or "
+        "wrote (for example, English, Italian, or German). Return null when unclear."
+    )
     is_phone = channel == "phone"
     interaction = "call" if is_phone else "message thread"
     interaction_noun = "call" if is_phone else "conversation"
@@ -860,6 +881,7 @@ Set confirmed_by_caller true only when the assistant read that value back and th
 affirmed it. {callback_requested_instruction}
 {follow_up_instruction}
 {customer_recap_instruction}
+{conversation_language_instruction}
 Include the reason and preferred time if stated. Set complaint.made only when the
 caller made a complaint, and summarize it briefly.
 {unanswered_questions_instruction}{urgency_instruction}
