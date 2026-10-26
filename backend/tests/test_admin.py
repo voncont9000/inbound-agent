@@ -5,28 +5,38 @@ from uuid import UUID, uuid4
 import psycopg
 from httpx import AsyncClient
 
-from inbound_api.routers.admin import eval_intake_checks
+from inbound_api.routers.admin import eval_intake_checks, speakable_digits
 from inbound_api.settings import get_settings
 
 
-def test_eval_intake_checks_omits_caller_id_and_handles_value_lengths() -> None:
+def test_speakable_digits() -> None:
+    assert speakable_digits("Yeah, it's 077 16. 131. 661.") == (
+        "Yeah, it's 0 7 7 16. 1 3 1. 6 6 1."
+    )
+    assert speakable_digits("£500,000") == "£500,000"
+    assert speakable_digits("500,000") == "500,000"
+    assert speakable_digits("2-bed flat") == "2-bed flat"
+    assert speakable_digits("+44 131661.") == "+44 1 3 1 6 6 1."
+
+
+def test_eval_intake_checks_only_keeps_values_said_by_caller() -> None:
     assert eval_intake_checks(
         {
-            "caller_phone": {"value": "+44 7716 131661"},
-            "domestic_phone": {"value": "07716 131661"},
-            "spoken_phone": {"value": "020 7946 0123"},
-            "reason": {"value": "Looking to buy a property around £500,000 and ask about viewings"},
-            "name": {"value": "Alice Smith"},
-            "empty": {"value": ""},
+            "name_not_said": {"value": "Vincent Opitz"},
+            "name_said": {"value": "Alice Smith"},
+            "phone_said": {"value": "+447716131661"},
+            "phone_not_said": {"value": "+442071234567"},
+            "email_said": {"value": "a+b@example.test"},
+            "reason": {"value": "Looking to buy a property around £500,000"},
             "blank": {"value": "   "},
             "missing": {"value": None},
         },
-        {"+447716131661"},
+        "Hello,   Alice Smith. My number is 0 7 7 1 6 1 3 1 6 6 1. My email is a+b@example.test.",
     ) == {
-        "domestic_phone": r"(?i)^07716\ 131661$",
-        "spoken_phone": r"(?i)^020\ 7946\ 0123$",
+        "name_said": r"(?i)^Alice\ Smith$",
+        "phone_said": r"(?i)^\+447716131661$",
+        "email_said": r"(?i)^a\+b@example\.test$",
         "reason": r"\S",
-        "name": r"(?i)^Alice\ Smith$",
     }
 
 
@@ -95,9 +105,12 @@ def _seed_conversations(owner_database_url: str, tenant_pair: dict) -> dict[str,
                 )
         for message_index, (role, message) in enumerate(
             (
-                ("caller", "I need help with A+B."),
-                ("assistant", "I can help with that."),
-                ("caller", "My email is a+b@example.test."),
+                ("caller", "Yeah, it's 077"),
+                ("caller", "16."),
+                ("caller", "131."),
+                ("caller", "661."),
+                ("assistant", "Okay."),
+                ("caller", "My name is Alice Smith and my email is a+b@example.test."),
             )
         ):
             connection.execute(
@@ -289,13 +302,12 @@ async def test_admin_routes_overview_filters_details_and_eval_round_trip(
     created_case = next(item for item in cases.json() if item["id"] == eval_case_id)
     assert created_case["name"] == "Admin assistant 0 – " + detail_data["started_at"][:10]
     assert created_case["caller_utterances"] == [
-        "I need help with A+B.",
-        "My email is a+b@example.test.",
+        "Yeah, it's 0 7 7 16. 1 3 1. 6 6 1.",
+        "My name is Alice Smith and my email is a+b@example.test.",
     ]
     assert created_case["checks"]["intake_checks"] == {
         "email": r"(?i)^a\+b@example\.test$",
-        "plain": r"(?i)^A\.B$",
-        "spoken_phone": r"(?i)^020\ 7946\ 0123$",
+        "caller_phone": r"(?i)^\+44\ 7716\ 131661$",
         "reason": r"\S",
         "name": r"(?i)^Alice\ Smith$",
     }

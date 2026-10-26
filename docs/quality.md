@@ -115,10 +115,11 @@ per-case results. The internal service contract is:
 - `POST /internal/eval-runs` stores a run and returns its `eval_run_id`.
 
 Both endpoints require the `X-Service-Token` voice service token. Case creation is an admin
-workflow: retain caller messages as `caller_utterances` in their original order, and create
-`intake_checks` with escaped, case-insensitive exact patterns for values of up to four words and
-`\S` for longer values. Empty values and values whose digits match the source caller ID are omitted,
-since the eval runner replaces that ID. Cases without an assistant can use the harness's default
+workflow: consecutive caller-message fragments are joined into one utterance, and digit runs of at
+least three digits are spaced for clear speech while amounts and grouped numbers are preserved.
+`intake_checks` use escaped, case-insensitive exact patterns: values over four words require `\S`,
+while shorter values are included only when the caller says them (phone values are matched by their
+last nine digits). Empty values are omitted. Cases without an assistant can use the harness's default
 test route.
 
 Inside the production phone container:
