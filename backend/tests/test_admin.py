@@ -65,15 +65,23 @@ def _seed_conversations(owner_database_url: str, tenant_pair: dict) -> dict[str,
                         json.dumps(objective),
                     ),
                 )
-        for role, message in (
-            ("caller", "I need help with A+B."),
-            ("assistant", "I can help with that."),
-            ("caller", "My email is a+b@example.test."),
+        for message_index, (role, message) in enumerate(
+            (
+                ("caller", "I need help with A+B."),
+                ("assistant", "I can help with that."),
+                ("caller", "My email is a+b@example.test."),
+            )
         ):
             connection.execute(
                 "INSERT INTO messages (tenant_id, conversation_id, role, text, ts) "
                 "VALUES (%s, %s, %s, %s, %s)",
-                (tenant_ids[0], conversation_ids[0], role, message, now),
+                (
+                    tenant_ids[0],
+                    conversation_ids[0],
+                    role,
+                    message,
+                    now + timedelta(seconds=message_index),
+                ),
             )
         connection.execute(
             "INSERT INTO intakes (tenant_id, conversation_id, version, data) "
