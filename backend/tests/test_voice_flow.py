@@ -331,11 +331,15 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
             .where(KnowledgeGap.conversation_id == UUID(conversation_id))
         )
     assert (message_count, task_count, gap_count) == (1, 3, 1)
-    assert await run_next_job()
     job = await client.get(f"/jobs/{job_id}")
-    assert job.json()["status"] == "succeeded"
-    assert job.json()["attempts"] == 1
-    assert job.json()["error"] is None
+    job_data = job.json()
+    while job_data["attempts"] == 0:
+        assert await run_next_job()
+        job = await client.get(f"/jobs/{job_id}")
+        job_data = job.json()
+    assert job_data["status"] == "succeeded"
+    assert job_data["attempts"] == 1
+    assert job_data["error"] is None
 
 
 async def test_voice_post_actions_refire_for_new_event(tenant_pair, tmp_path) -> None:
