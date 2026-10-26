@@ -211,15 +211,21 @@ function AdminConversationTable({ items, reviewOnly, selectedIds, reviewPendingI
 }) {
   const navigate = useNavigate();
   const allSelected = items.length > 0 && items.every(({ conversation_id }) => selectedIds.has(conversation_id));
+  const selectAllInput = () => <input
+    type="checkbox"
+    aria-label="Select all conversations"
+    checked={allSelected}
+    onChange={onSelectAll}
+  />;
   const selectAll = <label className={styles.selectAll}>
-    <input type="checkbox" aria-label="Select all conversations" checked={allSelected} onChange={onSelectAll} />
+    {selectAllInput()}
     <span>Select all</span>
   </label>;
   return <>
     <div className={styles.mobileSelectAll}>{selectAll}</div>
     <div className={`table-wrap ${styles.desktopList}`}>
-      <table>
-        <thead><tr><th>{selectAll}</th><th>Started</th><th>Workspace</th><th>Assistant</th><th>Channel</th><th>Score</th><th>Issues</th><th>Actions</th></tr></thead>
+      <table className={styles.reviewTable}>
+        <thead><tr><th>{selectAllInput()}</th><th>Started</th><th>Workspace</th><th>Assistant</th><th>Channel</th><th>Score</th><th>Issues</th><th>Actions</th></tr></thead>
         <tbody>{items.map((item) => <tr
           key={item.conversation_id}
           className={styles.reviewRow}
