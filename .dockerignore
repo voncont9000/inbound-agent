@@ -6,6 +6,8 @@
 **/.ruff_cache
 **/node_modules
 web/dist
+site/dist
+site/dist-ssr
 backend/var
 voice/spool
 voice/runs

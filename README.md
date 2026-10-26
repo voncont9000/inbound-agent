@@ -7,6 +7,7 @@ A personalised, vertical-agnostic AI agent that takes customer inquiries via pho
 - [M1 architecture and agent seams](docs/m1-architecture.md), including the [home dashboard metric definitions](docs/m1-architecture.md#home-dashboard)
 - [Voice pipeline (M0 architecture)](docs/voice-pipeline.md)
 - [Production deployment](docs/deployment.md): single-server Hetzner operations runbook
+- [Yelvo marketing website](docs/website.md): site structure, development, prerendering, and deployment
 - [Text channels: Gmail and WhatsApp](docs/text-channels.md)
 - [Google Calendar booking](docs/booking.md): appointment types, Calendar connection, and booking behavior
 - [After-conversation actions](docs/actions.md)

@@ -9,6 +9,7 @@ and Redis stay on the private Compose network. Only Caddy publishes application 
 | Public path / port | Destination | Behavior |
 |---|---|---|
 | `/` and frontend assets | Caddy static files | SPA fallback; fingerprinted assets are immutable and `index.html` is not cached |
+| `https://yelvo.vinci-labs.tech/` and static assets | Caddy static files in `/srv/site` | Prerendered marketing site; route HTML is not cached and fingerprinted assets are immutable |
 | `/api/*` | backend:8000 | Prefix stripped before forwarding |
 | `/api/internal/*` | Caddy | Always 404 from the public edge |
 | `/webhooks/*`, `/oauth/*` | backend:8000 | Prefix preserved |
@@ -33,6 +34,7 @@ Repository-to-runtime mapping:
 | `backend/Dockerfile` | Backend API, worker, and migration image |
 | `voice/Dockerfile` | Phone and browser-call services |
 | `web/Dockerfile` | Built SPA and Caddy edge |
+| `site/` | Prerendered Yelvo marketing site built into the Caddy image |
 | `backend/initdb/01-roles.sh` | Initial Postgres application roles |
 | `deploy/docker-compose.prod.yml` | Production services and persistent volumes |
 | `deploy/Caddyfile` | Public routing, TLS, and response headers |
@@ -91,6 +93,8 @@ openssl rand -hex 32
 Use separate random values for `POSTGRES_PASSWORD`, `INBOUND_APP_PASSWORD`, and
 `VOICE_SERVICE_TOKEN`. Replace the placeholder email/domain, then edit
 `deploy/.env.production` through a protected editor. Do not put secrets in shell history. The
+`SITE_DOMAIN` variable selects the marketing-site host served by Caddy and defaults to
+`yelvo.vinci-labs.tech`. Its DNS `A` record already points to `188.245.155.13`.
 example intentionally starts with WhatsApp, Twilio, Gmail, and Calendar disabled. Keep
 `GMAIL_MODE=off` on first deploy until Google OAuth, Pub/Sub, and credential encryption are
 configured. Keep `CALENDAR_MODE=off` until Calendar is configured; `google` requires
