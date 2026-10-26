@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Quality and observability
 
 ## Tracing
@@ -160,3 +161,21 @@ Set these values for both the API and worker:
 | `GOOGLE_API_KEY` | Required for scoring | API key used by the scoring worker |
 
 See the [deployment runbook](deployment.md) for production environment configuration.
+
+## Admin view (web)
+
+The Admin area is available to platform admins only. It provides a cross-workspace view of assistant quality; workspace selection does not limit the underlying admin data.
+
+### Pages
+
+- **Overview** shows conversations and scored counts, average score, review volume, response-time percentiles, daily quality, and a workspace comparison. The review list can be filtered by workspace and assistant, switched between needs-review-only and all conversations, and paged with Load more. Filters and the 7-, 30-, or 90-day range are stored in the URL.
+- **Conversation detail** shows the score, judge model and rubric version, check results and notes, issues, objective call metrics where available, and the transcript. Rescore queues another score; Make eval case creates an evaluation case from the caller utterances. Trace links are shown only when the API provides one.
+- **Evals** lists evaluation runs and cases. Expanding a run shows its failed cases and failure messages; case rows show caller turns, checks, enabled state, and source conversation where available.
+
+### Quality contract
+
+`needs_review` follows the backend contract: `overall <= 3 OR any check failed OR max_response_s > 3.0`. The scored checks are `answered_question`, `collected_required_details`, `language_consistent`, `no_unsupported_promises`, `ended_properly`, and `followed_instructions`. A check may be not applicable. Objective timing metrics are absent for channels without call timing.
+
+Evaluation cases store caller utterances and transcript, assistant, and intake checks. Evaluation runs record case results and failures, plus the run trigger, commit SHA, and pass/fail summary.
+
+The web Admin API uses generated types from `web/src/api/schema.d.ts`.

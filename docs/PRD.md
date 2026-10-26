@@ -9,6 +9,8 @@
 ## 1. Summary
 A multi-tenant SaaS for businesses, with a **library of assistant templates**: Blank is the neutral default for new assistants, and industry templates such as the UK law firm preset provide optional starting configurations (see [templates.md](./templates.md)). An AI agent answers inbound customer enquiries on **phone** (speech-to-text → LLM → text-to-speech), **email** (Gmail) and **WhatsApp**, for one business. Each business configures its own assistant, intake fields, critical fields, urgency rules, optional live actions, and review threshold in a shape intended for later editing in app settings. Live actions are configurable and default to none; keyword urgency remains live, while other v1 urgency escalation and follow-up actions are post-call. All channels share one knowledge base, one contact store and one conversation inbox. It answers questions, captures structured lead and request data, books or routes requests, and hands off to a human when needed. The business owner sees every conversation with a summary and the extracted results.
 
+**Platform admin: quality.** Platform admins can review conversation quality across workspaces, inspect scored transcripts, and manage evaluation cases and runs. See §7.13.
+
 ## 2. Problem
 Small and mid-sized businesses (cafés, trades, clinics, agencies, wholesalers) miss calls, answer emails late and handle WhatsApp by hand. The enquiries are repetitive: hours, prices, availability, orders, bookings, callbacks. Existing tools such as Fonio work, but they split voice, email and WhatsApp into separately priced products and depend on a lot of tuning parameters.
 

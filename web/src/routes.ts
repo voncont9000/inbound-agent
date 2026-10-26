@@ -15,4 +15,7 @@ export const routes = [
   { path: "/knowledge-gaps", label: "Knowledge gaps" },
   { path: "/help", label: "Help center" },
   { path: "/help/:category/:article", label: "Help article" },
+  { path: "/admin", label: "Admin overview" },
+  { path: "/admin/conversations/:id", label: "Admin conversation" },
+  { path: "/admin/evals", label: "Admin evals" },
 ] as const;

@@ -5,6 +5,8 @@ import { validateAssistantConfig, type Locale } from "../lib/config";
 import { authUser, emailActionTemplates, setupDraftFixture, templates, templateSamples, testCallResponse, voiceCatalogueFor } from "./fixtures";
 import { mockDashboardSummary, type DashboardMockQuery } from "./dashboard";
 import { mockDb, selectedTenant, selectedTenantId } from "./db";
+import { adminConversationDetails, adminEvalRunSummaries, adminItem, adminOverview, mockAdminEvalCases, mockAdminEvalRuns } from "./admin";
+import type { AdminConversationQuery, AdminEvalCase } from "../api/admin";
 import type { TenantFixture } from "./fixtures";
 import assistantConfigSchema from "./assistant-config.schema.json";
 import type { AssistantConfig } from "../lib/config";
@@ -96,6 +98,73 @@ function toContactSummary(detail: Schemas["ContactDetailResponse"]): Schemas["Co
 }
 
 export const handlers = [
+  http.get("*/api/admin/overview", ({ request }) => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    const days = Number(new URL(request.url).searchParams.get("days") ?? 7);
+    return HttpResponse.json(adminOverview([7, 30, 90].includes(days) ? days : 7));
+  }),
+  http.get("*/api/admin/conversations", ({ request }) => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    const params = new URL(request.url).searchParams;
+    const query: AdminConversationQuery = {
+      needs_review: params.has("needs_review") ? params.get("needs_review") === "true" : undefined,
+      tenant_id: params.get("tenant_id") ?? undefined,
+      assistant_id: params.get("assistant_id") ?? undefined,
+      limit: Number(params.get("limit") ?? 10),
+      cursor: params.get("cursor") ?? undefined,
+    };
+    let items = adminConversationDetails.map(adminItem).sort((a, b) => b.started_at.localeCompare(a.started_at));
+    if (query.needs_review !== undefined) items = items.filter(({ needs_review }) => needs_review === query.needs_review);
+    if (query.tenant_id) items = items.filter(({ tenant_id }) => tenant_id === query.tenant_id);
+    if (query.assistant_id) items = items.filter(({ assistant_id }) => assistant_id === query.assistant_id);
+    const start = Number(query.cursor ?? 0);
+    const limit = Math.max(1, Math.min(query.limit ?? 10, 100));
+    const page = items.slice(start, start + limit);
+    const next = start + limit < items.length ? String(start + limit) : null;
+    return HttpResponse.json({ items: page, next_cursor: next });
+  }),
+  http.get("*/api/admin/conversations/:id", ({ params }) => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    const detail = adminConversationDetails.find(({ id }) => id === params.id);
+    return detail ? HttpResponse.json(detail) : HttpResponse.json({ detail: "Not found" }, { status: 404 });
+  }),
+  http.post("*/api/admin/conversations/:id/rescore", ({ params }) => {
+    if (!mockDb.isPlatformAdmin || !adminConversationDetails.some(({ id }) => id === params.id)) {
+      return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    }
+    return new HttpResponse(null, { status: 202 });
+  }),
+  http.post("*/api/admin/conversations/:id/eval-case", ({ params }) => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    const conversation = adminConversationDetails.find(({ id }) => id === params.id);
+    if (!conversation) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    const date = new Date().toISOString().slice(0, 10);
+    const evalCase: AdminEvalCase = {
+      id: `77000000-0000-4000-8000-${String(mockAdminEvalCases.length + 1).padStart(12, "0")}`,
+      source_conversation_id: conversation.id,
+      name: `${conversation.assistant_name} – ${date}`,
+      assistant_id: conversation.assistant_id,
+      caller_utterances: conversation.messages.filter(({ role }) => role === "caller").map(({ text }) => text),
+      checks: { transcript_checks: [], assistant_checks: [], intake_checks: [] },
+      created_at: new Date().toISOString(),
+      enabled: true,
+    };
+    mockAdminEvalCases.push(evalCase);
+    return HttpResponse.json({ eval_case_id: evalCase.id }, { status: 201 });
+  }),
+  http.get("*/api/admin/eval-cases", () => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    return HttpResponse.json({ items: mockAdminEvalCases });
+  }),
+  http.get("*/api/admin/eval-runs", () => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    return HttpResponse.json({ items: adminEvalRunSummaries() });
+  }),
+  http.get("*/api/admin/eval-runs/:id", ({ params }) => {
+    if (!mockDb.isPlatformAdmin) return HttpResponse.json({ detail: "Not found" }, { status: 404 });
+    const run = mockAdminEvalRuns.find(({ id }) => id === params.id);
+    return run ? HttpResponse.json(run) : HttpResponse.json({ detail: "Not found" }, { status: 404 });
+  }),
   http.get<never, never, Schemas["DashboardSummary"]>("*/api/dashboard/summary", ({ request }) => {
     const query = new URL(request.url).searchParams;
     const tenant = selectedTenant(request);

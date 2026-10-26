@@ -20,6 +20,9 @@ describe("web route contracts", () => {
       "/knowledge-gaps",
       "/help",
       "/help/:category/:article",
+      "/admin",
+      "/admin/conversations/:id",
+      "/admin/evals",
     ]);
   });
 });

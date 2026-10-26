@@ -121,6 +121,12 @@ describe("global test-call bar", () => {
     await waitFor(() => expect(screen.queryByRole("region", { name: "Test call" })).not.toBeInTheDocument());
   });
 
+  it("is hidden on platform admin routes", async () => {
+    renderApp("/admin", { loggedIn: true, createWebCallSession: fakeFactory().factory });
+    await screen.findByRole("heading", { name: "Admin" });
+    expect(screen.queryByRole("region", { name: "Test call" })).not.toBeInTheDocument();
+  });
+
   it("collapses with the keyboard and remembers the collapsed state and assistant", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     withTwoAssistants();
