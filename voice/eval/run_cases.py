@@ -410,6 +410,7 @@ async def _run(arguments: argparse.Namespace) -> int:
 
     result_dir = _results_directory()
     started_at = datetime.now(UTC)
+    execution_failed = False
     try:
         result = await _run_live_cases(
             cases,
@@ -421,8 +422,21 @@ async def _run(arguments: argparse.Namespace) -> int:
             port=arguments.port,
         )
     except Exception as error:
-        print(f"Regression eval execution failed: {error}", file=sys.stderr)
-        return 2
+        execution_failed = True
+        error_text = f"{type(error).__name__}: {error}"
+        print(f"Regression eval execution failed: {error_text}", file=sys.stderr)
+        result = {
+            "summary": {"cases": len(cases), "passed": 0, "failed": len(cases)},
+            "results": [
+                {
+                    "eval_case_id": str(case["id"]),
+                    "passed": False,
+                    "failures": [f"execution failed: {error_text}"],
+                    "metrics": {},
+                }
+                for case in cases
+            ],
+        }
     payload = {
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
@@ -447,7 +461,7 @@ async def _run(arguments: argparse.Namespace) -> int:
             print(f"Could not post eval run: {error}\nLocal results: {result_dir}", file=sys.stderr)
             return 2
         print(f"Posted eval run {created['eval_run_id']}")
-    return 1 if result["summary"]["failed"] else 0
+    return 2 if execution_failed else 1 if result["summary"]["failed"] else 0
 
 
 def main() -> None:
