@@ -228,13 +228,15 @@ export function SignupPage() {
           <label htmlFor="signup-website">Website (optional)</label>
           <input id="signup-website" type="text" inputMode="url" autoComplete="url" placeholder="example.co.uk" value={form.website} onChange={(event) => change("website", event.target.value)} />
         </div>
-        <div className={`${styles.actions} ${styles.businessActions}`}>
-          <button className="button-secondary" type="button" onClick={() => { clearError(); setStep("account"); }}>Back</button>
-          <button className="button-primary" type="submit" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
+        <div className={styles.businessSubmission}>
+          <div className={`${styles.actions} ${styles.businessActions}`}>
+            <button className="button-secondary" type="button" onClick={() => { clearError(); setStep("account"); }}>Back</button>
+            <button className="button-primary" type="submit" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
+          </div>
+          <p className={styles.terms}>By creating an account you agree to our <a href={privacyUrl}>privacy policy</a>.</p>
         </div>
       </>}
     </form>
-    {step === "business" && <p className={styles.terms}>By creating an account you agree to our <a href={privacyUrl}>privacy policy</a>.</p>}
     <p className={styles.accountLink}>Already registered? <Link to="/login">Sign in</Link></p>
   </AuthShell>;
 }

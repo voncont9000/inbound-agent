@@ -342,6 +342,15 @@ export const handlers = [
   }),
   http.post<never, Schemas["AssistantSetupDraftCreate"], ApiResponse<Schemas["JobResponse"]>>("*/api/assistant-setup/drafts", async ({ request }) => {
     const body = await requestJson<Schemas["AssistantSetupDraftCreate"]>(request);
+    if (!body.business_name.trim()) {
+      return HttpResponse.json<Schemas["HTTPValidationError"]>({
+        detail: [{
+          loc: ["body", "business_name"],
+          msg: "String should have at least 1 character",
+          type: "string_too_short",
+        }],
+      }, { status: 422 });
+    }
     mockDb.setupDraftRequests.push(body);
     const id = crypto.randomUUID();
     const createdAt = isoNow();

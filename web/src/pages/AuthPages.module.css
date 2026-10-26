@@ -124,14 +124,32 @@
 
 .stepCount {
   color: var(--body);
-  font-family: var(--font-hand);
-  font-size: 12px;
+  font-family: inherit;
+  font-size: 13px;
   line-height: 1.3;
 }
 
 .form {
   width: 100%;
   min-width: 0;
+}
+
+.form:global(.stack) {
+  gap: 20px;
+}
+
+.form :global(.field) {
+  gap: 6px;
+}
+
+.form > .actions,
+.businessSubmission {
+  margin-top: 8px;
+}
+
+.businessSubmission {
+  display: grid;
+  gap: 12px;
 }
 
 .passwordField {
@@ -193,7 +211,7 @@
 }
 
 .terms {
-  margin-top: calc(-1 * var(--space-2));
+  margin: 0;
 }
 
 @keyframes auth-enter {
