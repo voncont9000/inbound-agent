@@ -42,3 +42,15 @@ def test_report_uses_last_end_call_source_and_separates_estimated_cost(tmp_path:
     assert report.end_reason == "goodbye_detected"
     assert report.estimated_cost == {"total": 0.42}
     assert report.metrics == {"call_duration_seconds": 8}
+
+
+def test_report_includes_trace_id_from_metrics_artifact(tmp_path: Path) -> None:
+    trace_id = "0123456789abcdef0123456789abcdef"
+    (tmp_path / "metrics.json").write_text(
+        f'{{"trace_id":"{trace_id}","call_duration_seconds":8}}',
+        encoding="utf-8",
+    )
+
+    report = build_call_report(tmp_path, "external-call")
+
+    assert report.metrics["trace_id"] == trace_id

@@ -144,6 +144,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
         ],
         "metrics": {
             "duration_seconds": 300,
+            "trace_id": "0123456789abcdef0123456789abcdef",
             "transfer": {
                 "target_key": "duty_solicitor",
                 "status": "no-answer",
@@ -177,6 +178,7 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
     assert conversation.metrics == {
         "from_number": "+447700900456",
         "duration_seconds": 300,
+        "trace_id": "0123456789abcdef0123456789abcdef",
         "transfer": {
             "target_key": "duty_solicitor",
             "status": "no-answer",

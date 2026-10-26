@@ -400,6 +400,11 @@ cost estimate in `conversations.estimated_cost`. The Home dashboard shows the me
 p50 response latency and splits cost into telephony (`twilio`) and AI (everything else); see
 [m1-architecture.md](m1-architecture.md#home-dashboard).
 
+## Tracing
+
+Optional Pipecat OpenTelemetry traces and conversation links are described in
+[quality.md](quality.md#tracing).
+
 ## Provider research (2026-10-17)
 
 The following are **public benchmarks and vendor list prices, not measurements from this

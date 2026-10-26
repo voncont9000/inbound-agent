@@ -142,6 +142,7 @@ class CallMetricsObserver(BaseObserver):
         self.number_holds: list[dict[str, Any]] = []
         self.tool_round_trip_ms: dict[str, list[float]] = {}
         self.transfer: dict[str, Any] | None = None
+        self.trace_id: str | None = None
         self.usage: dict[str, float | int] = {
             "stt_audio_seconds": 0,
             "tts_characters": 0,
@@ -297,6 +298,10 @@ class CallMetricsObserver(BaseObserver):
         self.transfer = dict(transfer)
         self._save()
 
+    def record_trace_id(self, trace_id: str) -> None:
+        self.trace_id = trace_id
+        self._save()
+
     def start_number_hold(self) -> dict[str, Any]:
         now = time.monotonic()
         self.latency.number_hold_started(now)
@@ -345,5 +350,7 @@ class CallMetricsObserver(BaseObserver):
         }
         if self.transfer is not None:
             metrics["transfer"] = self.transfer
+        if self.trace_id is not None:
+            metrics["trace_id"] = self.trace_id
         metrics["estimated_cost"] = calculate_cost(metrics, self.price_table)
         return metrics

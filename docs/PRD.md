@@ -280,7 +280,7 @@ urgency behavior is unchanged.
 - **Special-category and criminal-offence data** (UK GDPR Art. 9/10) is common in legal intake: field-level encryption for intake facts, role-based access within a tenant, and no use of LLM providers that train on customer data.
 - **Privacy/compliance:** UK GDPR / DPA 2018 (UK hosting, processor DPA, erasure and export per contact cascading through the context graph, retention settings). Ofcom rules for numbers. ICO registration. Recording consent. AI disclosure. WhatsApp Business policy and Google API user-data policy (needed for Gmail restricted-scope verification).
 - **Safety:** content moderation guardrails. Prompt-injection defence for email and WhatsApp content (treat inbound text as untrusted; tool calls need policy checks). No auto-send of payments, legal or medical commitments.
-- **Observability:** per-turn traces (STT, LLM, TTS timings, tool calls), run logs, cost per conversation.
+- **Observability:** per-turn traces (STT, LLM, TTS timings, tool calls), run logs, cost per conversation. OTel/Langfuse traces link from conversations; see [quality.md](quality.md#tracing).
 
 ## 9. Proposed architecture (v1)
 - **Backend:** Python 3.12 / FastAPI API plus workers, with PostgreSQL and pgvector for data, RAG, and the customer context graph (row-level security per tenant). Python reuses the Pydantic assistant configuration contracts extracted from the voice service and the existing post-call intake extraction pipeline. A Postgres-backed durable job queue supports asynchronous channel work.
