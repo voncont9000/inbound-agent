@@ -12,9 +12,12 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     EndWorkerFrame,
+    FunctionCallInProgressFrame,
+    FunctionCallsStartedFrame,
     InputAudioRawFrame,
     InterruptionFrame,
     LLMFullResponseEndFrame,
+    LLMFullResponseStartFrame,
     LLMRunFrame,
     LLMTextFrame,
     OutputAudioRawFrame,
@@ -61,6 +64,136 @@ class FastBotSpeechTracker(BOT_MODULE.BotSpeechTracker):
             marker_id,
             timeout=min(timeout, self.marker_timeout),
         )
+
+
+def _empty_reply_test_components(tmp_path, name, call_ended=None):
+    sink = LocalFilesCallSink(tmp_path, name)
+    metrics_observer = BOT_MODULE.CallMetricsObserver(sink)
+    llm = object()
+    queued_frames = []
+
+    async def queue_frame(frame) -> None:
+        queued_frames.append(frame)
+
+    observer = BOT_MODULE.EmptyReplyRetryObserver(
+        llm=llm,
+        queue_frame=queue_frame,
+        metrics_observer=metrics_observer,
+        call_ended=call_ended or (lambda: False),
+    )
+    return observer, llm, queued_frames, metrics_observer
+
+
+async def _push_llm_response(observer, llm, *frames) -> None:
+    await observer.on_push_frame(SimpleNamespace(frame=LLMFullResponseStartFrame(), source=llm))
+    for frame in frames:
+        await observer.on_push_frame(SimpleNamespace(frame=frame, source=llm))
+    await observer.on_push_frame(SimpleNamespace(frame=LLMFullResponseEndFrame(), source=llm))
+
+
+def test_empty_llm_reply_queues_retry_and_records_metric(tmp_path) -> None:
+    observer, llm, queued_frames, metrics = _empty_reply_test_components(tmp_path, "empty-reply")
+
+    asyncio.run(_push_llm_response(observer, llm))
+
+    assert len(queued_frames) == 1
+    assert isinstance(queued_frames[0], LLMRunFrame)
+    assert metrics.snapshot()["empty_llm_replies"] == 1
+
+
+def test_empty_llm_reply_does_not_retry_nonempty_text_or_function_calls(tmp_path) -> None:
+    async def run() -> None:
+        observer, llm, queued_frames, _ = _empty_reply_test_components(tmp_path, "nonempty-reply")
+        await _push_llm_response(observer, llm, LLMTextFrame(text="Hello"))
+        await _push_llm_response(
+            observer,
+            llm,
+            FunctionCallsStartedFrame(function_calls=[]),
+            FunctionCallInProgressFrame(
+                function_name="lookup",
+                tool_call_id="tool-1",
+                arguments={},
+            ),
+        )
+        assert queued_frames == []
+        observer.close()
+
+    asyncio.run(run())
+
+
+def test_empty_llm_reply_does_not_retry_after_interruption(tmp_path) -> None:
+    async def run() -> None:
+        observer, llm, queued_frames, _ = _empty_reply_test_components(
+            tmp_path, "interrupted-reply"
+        )
+        await observer.on_push_frame(SimpleNamespace(frame=LLMFullResponseStartFrame(), source=llm))
+        await observer.on_push_frame(SimpleNamespace(frame=InterruptionFrame(), source=object()))
+        await observer.on_push_frame(SimpleNamespace(frame=LLMFullResponseEndFrame(), source=llm))
+        assert queued_frames == []
+        observer.close()
+
+    asyncio.run(run())
+
+
+def test_empty_llm_reply_retries_are_capped_at_two(tmp_path) -> None:
+    async def run() -> None:
+        observer, llm, queued_frames, metrics = _empty_reply_test_components(tmp_path, "retry-cap")
+        for _ in range(3):
+            await _push_llm_response(observer, llm)
+        assert len(queued_frames) == 2
+        assert metrics.snapshot()["empty_llm_replies"] == 2
+        observer.close()
+
+    asyncio.run(run())
+
+
+def test_nonempty_llm_reply_resets_empty_reply_retry_limit(tmp_path) -> None:
+    async def run() -> None:
+        observer, llm, queued_frames, metrics = _empty_reply_test_components(
+            tmp_path, "retry-reset"
+        )
+        await _push_llm_response(observer, llm)
+        await _push_llm_response(observer, llm, LLMTextFrame(text="Recovered"))
+        await _push_llm_response(observer, llm)
+        assert len(queued_frames) == 2
+        assert metrics.snapshot()["empty_llm_replies"] == 2
+        observer.close()
+
+    asyncio.run(run())
+
+
+def test_empty_reply_observer_ignores_frames_from_other_sources(tmp_path) -> None:
+    async def run() -> None:
+        observer, _, queued_frames, metrics = _empty_reply_test_components(tmp_path, "other-source")
+        other_source = object()
+        for frame in (
+            LLMFullResponseStartFrame(),
+            LLMTextFrame(text="Not from the LLM"),
+            LLMFullResponseEndFrame(),
+        ):
+            await observer.on_push_frame(SimpleNamespace(frame=frame, source=other_source))
+        assert queued_frames == []
+        assert metrics.snapshot()["empty_llm_replies"] == 0
+        observer.close()
+
+    asyncio.run(run())
+
+
+def test_empty_reply_observer_stops_after_call_end_or_transfer(tmp_path) -> None:
+    async def run() -> None:
+        state = {"ended": False}
+        observer, llm, queued_frames, _ = _empty_reply_test_components(
+            tmp_path,
+            "ended-call",
+            call_ended=lambda: state["ended"],
+        )
+        await observer.on_push_frame(SimpleNamespace(frame=LLMFullResponseStartFrame(), source=llm))
+        state["ended"] = True
+        await observer.on_push_frame(SimpleNamespace(frame=LLMFullResponseEndFrame(), source=llm))
+        assert queued_frames == []
+        observer.close()
+
+    asyncio.run(run())
 
 
 def _transfer_handler(tmp_path, events, tracker):

@@ -51,6 +51,8 @@ Voice objective metrics are recorded when latency data is available: `response_p
 `response_p95_s`, `max_response_s`, `interruptions`, `turns`, `call_duration_s`, and `tts_chars`.
 These are derived from the conversation's voice latency summary, turn records, duration,
 interruption count, and TTS usage. Text conversations have `objective: null`.
+An empty LLM reply triggers up to two consecutive inference retries; any non-empty reply resets the
+retry limit. The call metrics snapshot records retry attempts in `empty_llm_replies`.
 
 ### Human review
 
