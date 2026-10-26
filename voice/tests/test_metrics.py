@@ -23,6 +23,7 @@ from inbound_voice.sinks import LocalFilesCallSink
 
 class RecordingTranscriptSink:
     def __init__(self) -> None:
+        self.call_id = "test-call"
         self.transcripts: list[tuple[str, str, str | None]] = []
 
     def append_transcript(self, role: str, text: str, timestamp: str | None = None) -> None:
@@ -314,6 +315,18 @@ def test_interruption_splits_assistant_transcript_rows() -> None:
         ("assistant", "Hello, you"),
         ("assistant", "are"),
     ]
+    assert observer.snapshot()["interruptions"] == 1
+
+
+def test_interruption_count_starts_at_zero_and_increments() -> None:
+    observer = CallMetricsObserver(RecordingTranscriptSink())
+
+    async def run() -> None:
+        await observer.on_push_frame(SimpleNamespace(frame=InterruptionFrame()))
+
+    assert observer.snapshot()["interruptions"] == 0
+    asyncio.run(run())
+    assert observer.snapshot()["interruptions"] == 1
 
 
 def test_final_caller_transcription_flushes_assistant_text_first() -> None:

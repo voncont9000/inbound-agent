@@ -86,6 +86,425 @@
         "title": "ActionRunSummary",
         "type": "object"
       },
+      "AdminConversationDetail": {
+        "properties": {
+          "assistant_id": {
+            "format": "uuid",
+            "title": "Assistant Id",
+            "type": "string"
+          },
+          "assistant_name": {
+            "title": "Assistant Name",
+            "type": "string"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Reason"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "intake": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake"
+          },
+          "is_test": {
+            "title": "Is Test",
+            "type": "boolean"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageResponse"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationScoreResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_name": {
+            "title": "Tenant Name",
+            "type": "string"
+          },
+          "trace_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Url"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "tenant_id",
+          "tenant_name",
+          "assistant_id",
+          "assistant_name",
+          "channel",
+          "status",
+          "started_at",
+          "ended_at",
+          "summary",
+          "end_reason",
+          "is_test",
+          "messages",
+          "intake",
+          "score",
+          "trace_url"
+        ],
+        "title": "AdminConversationDetail",
+        "type": "object"
+      },
+      "AdminConversationItem": {
+        "properties": {
+          "assistant_id": {
+            "format": "uuid",
+            "title": "Assistant Id",
+            "type": "string"
+          },
+          "assistant_name": {
+            "title": "Assistant Name",
+            "type": "string"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "is_test": {
+            "title": "Is Test",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "needs_review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs Review"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "overall": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_name": {
+            "title": "Tenant Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "tenant_id",
+          "tenant_name",
+          "assistant_id",
+          "assistant_name",
+          "channel",
+          "started_at",
+          "is_test",
+          "overall",
+          "needs_review",
+          "issues",
+          "objective"
+        ],
+        "title": "AdminConversationItem",
+        "type": "object"
+      },
+      "AdminConversationListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminConversationItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "AdminConversationListResponse",
+        "type": "object"
+      },
+      "AdminDaySummary": {
+        "properties": {
+          "avg_overall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Overall"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "needs_review": {
+            "title": "Needs Review",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "conversations",
+          "avg_overall",
+          "needs_review"
+        ],
+        "title": "AdminDaySummary",
+        "type": "object"
+      },
+      "AdminOverview": {
+        "properties": {
+          "avg_overall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Overall"
+          },
+          "by_day": {
+            "items": {
+              "$ref": "#/components/schemas/AdminDaySummary"
+            },
+            "title": "By Day",
+            "type": "array"
+          },
+          "by_tenant": {
+            "items": {
+              "$ref": "#/components/schemas/AdminTenantSummary"
+            },
+            "title": "By Tenant",
+            "type": "array"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "needs_review": {
+            "title": "Needs Review",
+            "type": "integer"
+          },
+          "response_p50_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response P50 S"
+          },
+          "response_p95_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response P95 S"
+          },
+          "scored": {
+            "title": "Scored",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "conversations",
+          "scored",
+          "needs_review",
+          "avg_overall",
+          "response_p50_s",
+          "response_p95_s",
+          "by_day",
+          "by_tenant"
+        ],
+        "title": "AdminOverview",
+        "type": "object"
+      },
+      "AdminTenantSummary": {
+        "properties": {
+          "avg_overall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Overall"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "needs_review": {
+            "title": "Needs Review",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_name": {
+            "title": "Tenant Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "tenant_name",
+          "conversations",
+          "avg_overall",
+          "needs_review"
+        ],
+        "title": "AdminTenantSummary",
+        "type": "object"
+      },
       "AppointmentType": {
         "additionalProperties": false,
         "properties": {
@@ -2482,6 +2901,112 @@
         "title": "ConversationReviewResponse",
         "type": "object"
       },
+      "ConversationScoreCheck": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed"
+          }
+        },
+        "required": [
+          "key",
+          "passed",
+          "note"
+        ],
+        "title": "ConversationScoreCheck",
+        "type": "object"
+      },
+      "ConversationScoreResponse": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationScoreCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "judge_model": {
+            "title": "Judge Model",
+            "type": "string"
+          },
+          "judge_version": {
+            "title": "Judge Version",
+            "type": "string"
+          },
+          "needs_review": {
+            "title": "Needs Review",
+            "type": "boolean"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "overall": {
+            "title": "Overall",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "judge_model",
+          "judge_version",
+          "overall",
+          "needs_review",
+          "checks",
+          "issues",
+          "objective",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConversationScoreResponse",
+        "type": "object"
+      },
       "ConversationSummary": {
         "properties": {
           "assistant_id": {
@@ -3176,6 +3701,324 @@
           }
         },
         "title": "EmailTriageConfig",
+        "type": "object"
+      },
+      "EvalCaseResponse": {
+        "properties": {
+          "assistant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant Id"
+          },
+          "caller_utterances": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Caller Utterances",
+            "type": "array"
+          },
+          "checks": {
+            "additionalProperties": true,
+            "title": "Checks",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source_conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Conversation Id"
+          }
+        },
+        "required": [
+          "id",
+          "source_conversation_id",
+          "name",
+          "assistant_id",
+          "caller_utterances",
+          "checks",
+          "created_at",
+          "enabled"
+        ],
+        "title": "EvalCaseResponse",
+        "type": "object"
+      },
+      "EvalRunCreate": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "git_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Sha"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/EvalRunResultCreate"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EvalRunSummaryData"
+          },
+          "trigger": {
+            "default": "manual",
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "started_at",
+          "summary"
+        ],
+        "title": "EvalRunCreate",
+        "type": "object"
+      },
+      "EvalRunCreated": {
+        "properties": {
+          "eval_run_id": {
+            "format": "uuid",
+            "title": "Eval Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eval_run_id"
+        ],
+        "title": "EvalRunCreated",
+        "type": "object"
+      },
+      "EvalRunResponse": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "git_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Sha"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "finished_at",
+          "git_sha",
+          "trigger",
+          "summary",
+          "results"
+        ],
+        "title": "EvalRunResponse",
+        "type": "object"
+      },
+      "EvalRunResultCreate": {
+        "properties": {
+          "eval_case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eval Case Id"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "passed"
+        ],
+        "title": "EvalRunResultCreate",
+        "type": "object"
+      },
+      "EvalRunSummary": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "git_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Sha"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "finished_at",
+          "git_sha",
+          "trigger",
+          "summary"
+        ],
+        "title": "EvalRunSummary",
+        "type": "object"
+      },
+      "EvalRunSummaryData": {
+        "properties": {
+          "cases": {
+            "title": "Cases",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cases",
+          "passed",
+          "failed"
+        ],
+        "title": "EvalRunSummaryData",
         "type": "object"
       },
       "FactResponse": {
@@ -5138,6 +5981,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_platform_admin": {
+            "default": false,
+            "title": "Is Platform Admin",
+            "type": "boolean"
           }
         },
         "required": [
@@ -5467,6 +6315,417 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/admin/conversations": {
+      "get": {
+        "operationId": "list_conversations_admin_conversations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "needs_review",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Needs Review"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assistant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assistant Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminConversationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Conversations",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/conversations/{conversation_id}": {
+      "get": {
+        "operationId": "conversation_detail_admin_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminConversationDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Conversation Detail",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/conversations/{conversation_id}/eval-case": {
+      "post": {
+        "operationId": "create_eval_case_admin_conversations__conversation_id__eval_case_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "title": "Response Create Eval Case Admin Conversations  Conversation Id  Eval Case Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Eval Case",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/conversations/{conversation_id}/rescore": {
+      "post": {
+        "operationId": "rescore_admin_conversations__conversation_id__rescore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Rescore Admin Conversations  Conversation Id  Rescore Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rescore",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/eval-cases": {
+      "get": {
+        "operationId": "list_eval_cases_admin_eval_cases_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvalCaseResponse"
+                  },
+                  "title": "Response List Eval Cases Admin Eval Cases Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Eval Cases",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/eval-runs": {
+      "get": {
+        "operationId": "list_eval_runs_admin_eval_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvalRunSummary"
+                  },
+                  "title": "Response List Eval Runs Admin Eval Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Eval Runs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/eval-runs/{eval_run_id}": {
+      "get": {
+        "operationId": "get_eval_run_admin_eval_runs__eval_run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eval_run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Eval Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Eval Run",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/overview": {
+      "get": {
+        "operationId": "overview_admin_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Overview",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/assistant-config/schema": {
       "get": {
         "operationId": "assistant_config_schema_assistant_config_schema_get",
@@ -8532,6 +9791,58 @@
         "summary": "Get Dashboard Summary",
         "tags": [
           "dashboard"
+        ]
+      }
+    },
+    "/internal/eval-runs": {
+      "post": {
+        "operationId": "create_eval_run_internal_eval_runs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Service-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Service-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvalRunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalRunCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Eval Run",
+        "tags": [
+          "internal evals"
         ]
       }
     },

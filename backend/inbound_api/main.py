@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from inbound_api.db import session_factory
 from inbound_api.routers import (
+    admin,
     assistant_setup,
     assistants,
     auth,
@@ -13,6 +14,7 @@ from inbound_api.routers import (
     conversations,
     dashboard,
     gmail,
+    internal_evals,
     internal_voice,
     knowledge,
     post_actions,
@@ -36,6 +38,7 @@ async def healthz() -> JSONResponse:
 
 
 for router in (
+    admin.router,
     auth.router,
     assistant_setup.router,
     assistants.router,
@@ -44,6 +47,7 @@ for router in (
     conversations.router,
     tasks.router,
     contacts.router,
+    internal_evals.router,
     internal_voice.router,
     webhooks.router,
     gmail.router,

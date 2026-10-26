@@ -272,6 +272,12 @@ urgency behavior is unchanged.
 
 **Later:** website chat widget, SMS, DTMF tones, background office sound, team invites.
 
+### 7.13 Quality review and evals
+
+Platform administrators can review vertical-neutral conversation quality scores, inspect flagged
+conversations, and manage evaluation cases and runs. See [quality review and evaluations](quality.md)
+for the rubric, data model, security boundary, and API.
+
 ## 8. Non-functional requirements
 - **Latency:** see metrics. Stream everything. Region-pinned processing (EU first).
 - **Reliability:** 99.9% call answer availability. If the AI pipeline fails, fall back to voicemail or transfer. Durable, idempotent processing for email and WhatsApp webhooks (retries, dedupe by message ID).

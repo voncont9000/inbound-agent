@@ -96,6 +96,14 @@ def test_all_feature_routers_are_mounted() -> None:
     paths = set(app.openapi()["paths"])
 
     assert {
+        "/admin/overview",
+        "/admin/conversations",
+        "/admin/conversations/{conversation_id}",
+        "/admin/conversations/{conversation_id}/rescore",
+        "/admin/conversations/{conversation_id}/eval-case",
+        "/admin/eval-cases",
+        "/admin/eval-runs",
+        "/admin/eval-runs/{eval_run_id}",
         "/auth/signup",
         "/auth/login",
         "/auth/logout",
@@ -135,6 +143,7 @@ def test_all_feature_routers_are_mounted() -> None:
         "/internal/voice/calls",
         "/internal/voice/calls/{conversation_id}/recording",
         "/internal/voice/calls/{conversation_id}/report",
+        "/internal/eval-runs",
     } <= paths
 
 

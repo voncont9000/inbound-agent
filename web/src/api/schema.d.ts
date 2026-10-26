@@ -4,6 +4,142 @@
  */
 
 export interface paths {
+    "/admin/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conversations */
+        get: operations["list_conversations_admin_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conversation Detail */
+        get: operations["conversation_detail_admin_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/conversations/{conversation_id}/eval-case": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Eval Case */
+        post: operations["create_eval_case_admin_conversations__conversation_id__eval_case_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/conversations/{conversation_id}/rescore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rescore */
+        post: operations["rescore_admin_conversations__conversation_id__rescore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/eval-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Eval Cases */
+        get: operations["list_eval_cases_admin_eval_cases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/eval-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Eval Runs */
+        get: operations["list_eval_runs_admin_eval_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/eval-runs/{eval_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Eval Run */
+        get: operations["get_eval_run_admin_eval_runs__eval_run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Overview */
+        get: operations["overview_admin_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistant-config/schema": {
         parameters: {
             query?: never;
@@ -666,6 +802,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/eval-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Eval Run */
+        post: operations["create_eval_run_internal_eval_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/voice/availability": {
         parameters: {
             query?: never;
@@ -1100,6 +1253,150 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** AdminConversationDetail */
+        AdminConversationDetail: {
+            /**
+             * Assistant Id
+             * Format: uuid
+             */
+            assistant_id: string;
+            /** Assistant Name */
+            assistant_name: string;
+            /** Channel */
+            channel: string;
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /** End Reason */
+            end_reason: string | null;
+            /** Ended At */
+            ended_at: string | null;
+            /** Intake */
+            intake: {
+                [key: string]: unknown;
+            } | null;
+            /** Is Test */
+            is_test: boolean;
+            /** Messages */
+            messages: components["schemas"]["MessageResponse"][];
+            score: components["schemas"]["ConversationScoreResponse"] | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string | null;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /** Tenant Name */
+            tenant_name: string;
+            /** Trace Url */
+            trace_url: string | null;
+        };
+        /** AdminConversationItem */
+        AdminConversationItem: {
+            /**
+             * Assistant Id
+             * Format: uuid
+             */
+            assistant_id: string;
+            /** Assistant Name */
+            assistant_name: string;
+            /** Channel */
+            channel: string;
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /** Is Test */
+            is_test: boolean;
+            /** Issues */
+            issues: string[];
+            /** Needs Review */
+            needs_review: boolean | null;
+            /** Objective */
+            objective: {
+                [key: string]: unknown;
+            } | null;
+            /** Overall */
+            overall: number | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /** Tenant Name */
+            tenant_name: string;
+        };
+        /** AdminConversationListResponse */
+        AdminConversationListResponse: {
+            /** Items */
+            items: components["schemas"]["AdminConversationItem"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** AdminDaySummary */
+        AdminDaySummary: {
+            /** Avg Overall */
+            avg_overall: number | null;
+            /** Conversations */
+            conversations: number;
+            /** Date */
+            date: string;
+            /** Needs Review */
+            needs_review: number;
+        };
+        /** AdminOverview */
+        AdminOverview: {
+            /** Avg Overall */
+            avg_overall: number | null;
+            /** By Day */
+            by_day: components["schemas"]["AdminDaySummary"][];
+            /** By Tenant */
+            by_tenant: components["schemas"]["AdminTenantSummary"][];
+            /** Conversations */
+            conversations: number;
+            /** Days */
+            days: number;
+            /** Needs Review */
+            needs_review: number;
+            /** Response P50 S */
+            response_p50_s: number | null;
+            /** Response P95 S */
+            response_p95_s: number | null;
+            /** Scored */
+            scored: number;
+        };
+        /** AdminTenantSummary */
+        AdminTenantSummary: {
+            /** Avg Overall */
+            avg_overall: number | null;
+            /** Conversations */
+            conversations: number;
+            /** Needs Review */
+            needs_review: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /** Tenant Name */
+            tenant_name: string;
         };
         /** AppointmentType */
         AppointmentType: {
@@ -2011,6 +2308,44 @@ export interface components {
             /** Resolved Value */
             resolved_value: unknown;
         };
+        /** ConversationScoreCheck */
+        ConversationScoreCheck: {
+            /** Key */
+            key: string;
+            /** Note */
+            note: string | null;
+            /** Passed */
+            passed: boolean | null;
+        };
+        /** ConversationScoreResponse */
+        ConversationScoreResponse: {
+            /** Checks */
+            checks: components["schemas"]["ConversationScoreCheck"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Issues */
+            issues: string[];
+            /** Judge Model */
+            judge_model: string;
+            /** Judge Version */
+            judge_version: string;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Objective */
+            objective: {
+                [key: string]: unknown;
+            } | null;
+            /** Overall */
+            overall: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** ConversationSummary */
         ConversationSummary: {
             /**
@@ -2311,6 +2646,133 @@ export interface components {
              * @default Unsolicited marketing, phishing, scams or automated bulk mail.
              */
             spam: string;
+        };
+        /** EvalCaseResponse */
+        EvalCaseResponse: {
+            /** Assistant Id */
+            assistant_id: string | null;
+            /** Caller Utterances */
+            caller_utterances: string[];
+            /** Checks */
+            checks: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Source Conversation Id */
+            source_conversation_id: string | null;
+        };
+        /** EvalRunCreate */
+        EvalRunCreate: {
+            /** Finished At */
+            finished_at?: string | null;
+            /** Git Sha */
+            git_sha?: string | null;
+            /** Results */
+            results?: components["schemas"]["EvalRunResultCreate"][];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            summary: components["schemas"]["EvalRunSummaryData"];
+            /**
+             * Trigger
+             * @default manual
+             */
+            trigger: string;
+        };
+        /** EvalRunCreated */
+        EvalRunCreated: {
+            /**
+             * Eval Run Id
+             * Format: uuid
+             */
+            eval_run_id: string;
+        };
+        /** EvalRunResponse */
+        EvalRunResponse: {
+            /** Finished At */
+            finished_at: string | null;
+            /** Git Sha */
+            git_sha: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Results */
+            results: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+            /** Trigger */
+            trigger: string;
+        };
+        /** EvalRunResultCreate */
+        EvalRunResultCreate: {
+            /** Eval Case Id */
+            eval_case_id?: string | null;
+            /** Failures */
+            failures?: string[];
+            /** Metrics */
+            metrics?: {
+                [key: string]: unknown;
+            };
+            /** Passed */
+            passed: boolean;
+        };
+        /** EvalRunSummary */
+        EvalRunSummary: {
+            /** Finished At */
+            finished_at: string | null;
+            /** Git Sha */
+            git_sha: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+            /** Trigger */
+            trigger: string;
+        };
+        /** EvalRunSummaryData */
+        EvalRunSummaryData: {
+            /** Cases */
+            cases: number;
+            /** Failed */
+            failed: number;
+            /** Passed */
+            passed: number;
         };
         /** FactResponse */
         FactResponse: {
@@ -3089,6 +3551,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Platform Admin
+             * @default false
+             */
+            is_platform_admin: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -3233,6 +3700,251 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_conversations_admin_conversations_get: {
+        parameters: {
+            query?: {
+                needs_review?: boolean | null;
+                tenant_id?: string | null;
+                assistant_id?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminConversationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    conversation_detail_admin_conversations__conversation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminConversationDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_eval_case_admin_conversations__conversation_id__eval_case_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rescore_admin_conversations__conversation_id__rescore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_eval_cases_admin_eval_cases_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalCaseResponse"][];
+                };
+            };
+        };
+    };
+    list_eval_runs_admin_eval_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_eval_run_admin_eval_runs__eval_run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eval_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    overview_admin_overview_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     assistant_config_schema_assistant_config_schema_get: {
         parameters: {
             query?: never;
@@ -4870,6 +5582,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_eval_run_internal_eval_runs_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Service-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvalRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunCreated"];
                 };
             };
             /** @description Validation Error */

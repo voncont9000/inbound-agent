@@ -11,6 +11,8 @@ from inbound_api.models import (
     ConversationStatus,
     Intake,
     IntakeVersion,
+    Job,
+    JobStatus,
     KnowledgeGap,
     Message,
     MessageRole,
@@ -18,6 +20,20 @@ from inbound_api.models import (
     TaskSource,
     TaskStatus,
 )
+
+
+async def enqueue_conversation_score(session: AsyncSession, conversation_id: UUID) -> None:
+    existing = await session.scalar(
+        select(Job.id)
+        .where(
+            Job.kind == "conversation_score",
+            Job.status == JobStatus.QUEUED,
+            Job.payload["conversation_id"].astext == str(conversation_id),
+        )
+        .limit(1)
+    )
+    if existing is None:
+        await enqueue(session, "conversation_score", {"conversation_id": str(conversation_id)})
 
 
 async def persist_voice_report(
@@ -118,6 +134,7 @@ async def persist_voice_report(
     conversation.estimated_cost = payload.estimated_cost
     await enqueue(session, "graph_ingest", {"conversation_id": str(conversation.id)})
     await enqueue(session, "post_actions_run", {"conversation_id": str(conversation.id)})
+    await enqueue_conversation_score(session, conversation.id)
 
 
 async def persist_extracted_results(
@@ -219,3 +236,4 @@ async def persist_extracted_results(
     conversation.summary = summary
     await enqueue(session, "graph_ingest", {"conversation_id": str(conversation.id)})
     await enqueue(session, "post_actions_run", {"conversation_id": str(conversation.id)})
+    await enqueue_conversation_score(session, conversation.id)

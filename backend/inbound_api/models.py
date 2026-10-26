@@ -506,6 +506,80 @@ class Conversation(UUIDPrimaryKeyMixin, TenantMixin, Base):
     estimated_cost: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
+class ConversationScore(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "conversation_scores"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    assistant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assistants.id", ondelete="CASCADE"), nullable=False
+    )
+    judge_model: Mapped[str] = mapped_column(Text, nullable=False)
+    judge_version: Mapped[str] = mapped_column(Text, nullable=False)
+    overall: Mapped[int] = mapped_column(Integer, nullable=False)
+    needs_review: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    checks: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default=sql_text("'[]'::jsonb")
+    )
+    issues: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=sql_text("'[]'::jsonb")
+    )
+    objective: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+
+class EvalCase(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "eval_cases"
+
+    source_conversation_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL")
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    assistant_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assistants.id", ondelete="SET NULL")
+    )
+    caller_utterances: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=sql_text("'[]'::jsonb")
+    )
+    checks: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=sql_text(
+            '\'{"transcript_checks":{},"assistant_checks":{},"intake_checks":{}}\'::jsonb'
+        ),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sql_text("true"))
+
+
+class EvalRun(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "eval_runs"
+
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    git_sha: Mapped[str | None] = mapped_column(Text)
+    trigger: Mapped[str] = mapped_column(Text, nullable=False, server_default=sql_text("'manual'"))
+    summary: Mapped[dict[str, int]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=sql_text('\'{"cases":0,"passed":0,"failed":0}\'::jsonb'),
+    )
+    results: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default=sql_text("'[]'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class CallRecording(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "call_recordings"
     __table_args__ = (

@@ -37,6 +37,10 @@ Tenant-scoped references use composite foreign keys on `(tenant_id, id)` so a ro
 
 `resolve_channel`, `lookup_user_memberships`, and `conversation_tenant` are owned by `inbound_lookup` (`NOLOGIN`, `NOBYPASSRLS`), which has `SELECT` access only to `channel_connections`, `memberships`, `users`, and `conversations`. Its `lookup_read` policies permit reads for that role while all tenant tables remain `FORCE ROW LEVEL SECURITY`. The application role can execute these functions but cannot read those tables across tenants directly. `claim_next_job` is owned by `inbound_job_claimer` (`NOLOGIN`, `NOBYPASSRLS`), which has only `SELECT` and `UPDATE` access to `jobs` through its `job_claim` policy.
 
+Platform-wide quality aggregates use the non-login `inbound_platform_reader` role through the
+`admin_conversation_facts` and `admin_conversation_list` security-definer functions; single
+conversations still resolve through `conversation_tenant` and load through `tenant_session`.
+
 Migrations use `MIGRATION_DATABASE_URL`. The API and workers use `DATABASE_URL`, which must point to the non-superuser application role so RLS remains enforced. In local development, the Compose `inbound_migrator` role is the database superuser used for migrations; no `SECURITY DEFINER` function is owned by the migrator. Production should use a dedicated non-superuser migration owner instead of a superuser.
 
 The Postgres-backed job queue is designed for worker claims using `FOR UPDATE SKIP LOCKED`.
@@ -130,7 +134,8 @@ from another tenant returns zeros.
 
 ## Jobs and worker
 
-Call reports, text extraction, and knowledge imports enqueue durable jobs inside their write transaction.
+Call reports, text extraction, quality scoring (`conversation_score`), and knowledge imports enqueue
+durable jobs inside their write transaction.
 The worker claims one job through the `claim_next_job` security-definer function using
 `FOR UPDATE SKIP LOCKED`. Each claim receives a lease token; a heartbeat extends the
 lease while the handler runs, and token-guarded updates prevent stale workers from

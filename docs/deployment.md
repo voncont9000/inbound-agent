@@ -156,6 +156,19 @@ expose database or Redis ports to the Internet.
   signs requests and blocks private destinations in production. Set `APP_BASE_URL` to the public
   HTTPS origin so action templates can include conversation links.
 
+## Quality review configuration
+
+The API and worker receive the quality-review settings from the production environment file:
+
+- `PLATFORM_ADMIN_EMAILS` is a comma-separated list of accounts allowed to access `/admin`.
+- `QUALITY_JUDGE_MODEL` selects the scoring model and defaults to `gemini-3.5-flash-lite`.
+- `GOOGLE_API_KEY` is required by the worker to run conversation scoring.
+- `LANGFUSE_HOST` is optional; when set, conversation details can link to traces that have a
+  `trace_id`.
+
+The values are wired into both the backend and worker Compose services. Review
+[quality.md](quality.md) for the admin API and scoring behavior.
+
 ## Backups and recovery
 
 `deploy/backup.sh` writes a custom-format database dump, role SQL (without passwords), uploads
