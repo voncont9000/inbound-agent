@@ -9,6 +9,96 @@
   gap: 0;
 }
 
+.reviewRow {
+  cursor: pointer;
+}
+
+.reviewCardHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.reviewTable {
+  table-layout: fixed;
+}
+
+.reviewTable th,
+.reviewTable td {
+  padding: 0.65rem 0.45rem;
+}
+
+.reviewTable th:nth-child(1) { width: 4%; }
+.reviewTable th:nth-child(2) { width: 12%; }
+.reviewTable th:nth-child(3) { width: 13%; }
+.reviewTable th:nth-child(4) { width: 9%; }
+.reviewTable th:nth-child(5) { width: 10%; }
+.reviewTable th:nth-child(6) { width: 7%; }
+.reviewTable th:nth-child(7) { width: 25%; }
+.reviewTable th:nth-child(8) { width: 20%; }
+
+.reviewTable td:nth-child(2),
+.reviewTable td:nth-child(3),
+.reviewTable td:nth-child(7) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.reviewTable td:nth-child(5) {
+  white-space: normal;
+}
+
+.reviewTable .rowActions {
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+}
+
+.reviewTable .rowActions > .button-sm {
+  height: 32px;
+  padding-inline: 0.45rem;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.reviewTable .channel-menu-wrap {
+  flex: 0 0 auto;
+}
+
+.mobileSelectAll {
+  display: none;
+  margin-bottom: var(--space-3);
+}
+
+.rowActionGroup {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bulkReviewBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
 .reviewCard {
   display: grid;
   gap: var(--space-2);
@@ -153,6 +243,10 @@
   display: block;
 }
 
+:global(.table-wrap).desktopList {
+  overflow-x: visible;
+}
+
 .mobileList {
   display: none;
 }
@@ -227,6 +321,14 @@
 
   .mobileList {
     display: grid;
+  }
+
+  .mobileSelectAll {
+    display: block;
+  }
+
+  .rowActions {
+    flex-wrap: wrap;
   }
 
   .workspaceDesktop,

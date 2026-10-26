@@ -163,6 +163,9 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
             "call_duration_s": 60.0,
             "tts_chars": 99,
         }
+        first_score.reviewed_at = datetime.now(UTC)
+        first_score.reviewed_by = UUID(account["user_id"])
+        await session.flush()
 
         second_result = await quality.conversation_score(
             session, {"conversation_id": str(conversation_id)}
@@ -180,6 +183,8 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
         assert rows[0].id == first_score_id
         assert rows[0].overall == 4
         assert rows[0].needs_review is True
+        assert rows[0].reviewed_at is None
+        assert rows[0].reviewed_by is None
         assert rows[0].checks[0]["passed"] is False
         assert rows[0].issues == ["A concrete issue."]
 

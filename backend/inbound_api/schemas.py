@@ -93,8 +93,18 @@ class AdminConversationItem(BaseModel):
     is_test: bool
     overall: int | None
     needs_review: bool | None
+    reviewed_at: datetime | None
     issues: list[str]
     objective: dict[str, Any] | None
+
+
+class AdminReviewRequest(BaseModel):
+    conversation_ids: list[UUID] = Field(min_length=1, max_length=100)
+    reviewed: bool
+
+
+class AdminReviewResponse(BaseModel):
+    updated: int
 
 
 class AdminConversationListResponse(BaseModel):
@@ -113,6 +123,7 @@ class ConversationScoreResponse(BaseModel):
     judge_version: str
     overall: int
     needs_review: bool
+    reviewed_at: datetime | None
     checks: list[ConversationScoreCheck]
     issues: list[str]
     objective: dict[str, Any] | None

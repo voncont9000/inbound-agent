@@ -525,6 +525,10 @@ class ConversationScore(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     judge_version: Mapped[str] = mapped_column(Text, nullable=False)
     overall: Mapped[int] = mapped_column(Integer, nullable=False)
     needs_review: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     checks: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default=sql_text("'[]'::jsonb")
     )

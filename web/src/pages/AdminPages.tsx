@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, NavLink, useParams, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type {
   AdminConversationItem,
   EvalCaseResponse,
@@ -15,12 +15,14 @@ import {
   listAdminConversations,
   listEvalCases,
   listEvalRuns,
+  reviewConversations,
   rescoreConversation,
 } from "../api/adminApi";
 import { Badge, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 import { AdminQualityChart } from "../components/AdminQualityChart";
 import dashboardStyles from "../components/Dashboard.module.css";
 import styles from "../components/Admin.module.css";
+import { MoreMenu } from "../components/MoreMenu";
 import { channelLabels } from "../lib/dashboard";
 import { transcriptRows } from "../lib/transcript";
 import {
@@ -100,9 +102,77 @@ function reviewText(item: AdminConversationItem) {
   return item.issues.length ? item.issues.join("; ") : "No issue notes";
 }
 
-function ReviewItem({ item }: { item: AdminConversationItem }) {
-  return <article className={styles.reviewCard}>
-    <Link to={`/admin/conversations/${item.conversation_id}`}>{item.assistant_name}</Link>
+function invalidateAdminQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["admin-overview"] }),
+    queryClient.invalidateQueries({ queryKey: ["admin-conversations"] }),
+    queryClient.invalidateQueries({ queryKey: ["admin-conversation"] }),
+  ]);
+}
+
+function isInteractiveTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest("a, button, input, select, textarea, [role='menu']"));
+}
+
+function RowActions({ item, reviewOnly, reviewPending, notice, onReview, onRescore, onMakeEvalCase }: {
+  item: AdminConversationItem;
+  reviewOnly: boolean;
+  reviewPending: boolean;
+  notice?: string;
+  onReview: (id: string, reviewed: boolean) => void;
+  onRescore: (id: string) => void;
+  onMakeEvalCase: (id: string) => void;
+}) {
+  return <div className={styles.rowActionGroup}>
+    <div className={styles.rowActions}>
+      <button
+        type="button"
+        className="button-secondary button-sm"
+        disabled={item.overall === null || reviewPending}
+        onClick={() => onReview(item.conversation_id, !item.reviewed_at)}
+      >{item.reviewed_at ? "Reopen" : "Mark reviewed"}</button>
+      <MoreMenu
+        label={item.assistant_name}
+        items={[
+          { label: "Rescore", onSelect: () => onRescore(item.conversation_id) },
+          { label: "Make eval case", onSelect: () => onMakeEvalCase(item.conversation_id) },
+        ]}
+      />
+    </div>
+    {notice && <span className="muted" role="status">
+      {notice}{notice === "Eval case created." && <> <Link to="/admin/evals">View evals</Link></>}
+    </span>}
+    {!reviewOnly && item.reviewed_at && <Badge>Reviewed</Badge>}
+  </div>;
+}
+
+function ReviewItem({ item, reviewOnly, selected, reviewPending, notice, onSelect, onReview, onRescore, onMakeEvalCase }: {
+  item: AdminConversationItem;
+  reviewOnly: boolean;
+  selected: boolean;
+  reviewPending: boolean;
+  notice?: string;
+  onSelect: (id: string) => void;
+  onReview: (id: string, reviewed: boolean) => void;
+  onRescore: (id: string) => void;
+  onMakeEvalCase: (id: string) => void;
+}) {
+  const navigate = useNavigate();
+  return <article
+    className={styles.reviewCard}
+    onClick={(event) => {
+      if (!isInteractiveTarget(event.target)) navigate(`/admin/conversations/${item.conversation_id}`);
+    }}
+  >
+    <div className={styles.reviewCardHeading}>
+      <input
+        type="checkbox"
+        aria-label={`Select ${item.assistant_name} conversation`}
+        checked={selected}
+        onChange={() => onSelect(item.conversation_id)}
+      />
+      <Link to={`/admin/conversations/${item.conversation_id}`}>{item.assistant_name}</Link>
+    </div>
     <div className={styles.reviewMeta}>
       <time dateTime={item.started_at}>{dateLabel(item.started_at)}</time>
       <span aria-hidden="true">·</span>
@@ -115,25 +185,90 @@ function ReviewItem({ item }: { item: AdminConversationItem }) {
       {item.is_test && <Badge>Test</Badge>}
     </div>
     <p className={styles.issueText}>{reviewText(item)}</p>
+    <RowActions
+      item={item}
+      reviewOnly={reviewOnly}
+      reviewPending={reviewPending}
+      notice={notice}
+      onReview={onReview}
+      onRescore={onRescore}
+      onMakeEvalCase={onMakeEvalCase}
+    />
   </article>;
 }
 
-function AdminConversationTable({ items }: { items: AdminConversationItem[] }) {
+function AdminConversationTable({ items, reviewOnly, selectedIds, reviewPendingIds, actionNotices, onSelect, onSelectAll, onReview, onRescore, onMakeEvalCase }: {
+  items: AdminConversationItem[];
+  reviewOnly: boolean;
+  selectedIds: Set<string>;
+  reviewPendingIds: Set<string>;
+  actionNotices: Record<string, string>;
+  onSelect: (id: string) => void;
+  onSelectAll: () => void;
+  onReview: (id: string, reviewed: boolean) => void;
+  onRescore: (id: string) => void;
+  onMakeEvalCase: (id: string) => void;
+}) {
+  const navigate = useNavigate();
+  const allSelected = items.length > 0 && items.every(({ conversation_id }) => selectedIds.has(conversation_id));
+  const selectAllInput = () => <input
+    type="checkbox"
+    aria-label="Select all conversations"
+    checked={allSelected}
+    onChange={onSelectAll}
+  />;
+  const selectAll = <label className={styles.selectAll}>
+    {selectAllInput()}
+    <span>Select all</span>
+  </label>;
   return <>
+    <div className={styles.mobileSelectAll}>{selectAll}</div>
     <div className={`table-wrap ${styles.desktopList}`}>
-      <table>
-        <thead><tr><th>Started</th><th>Workspace</th><th>Assistant</th><th>Channel</th><th>Score</th><th>Issues</th></tr></thead>
-        <tbody>{items.map((item) => <tr key={item.conversation_id}>
+      <table className={styles.reviewTable}>
+        <thead><tr><th>{selectAllInput()}</th><th>Started</th><th>Workspace</th><th>Assistant</th><th>Channel</th><th>Score</th><th>Issues</th><th>Actions</th></tr></thead>
+        <tbody>{items.map((item) => <tr
+          key={item.conversation_id}
+          className={styles.reviewRow}
+          onClick={(event) => {
+            if (!isInteractiveTarget(event.target)) navigate(`/admin/conversations/${item.conversation_id}`);
+          }}
+        >
+          <td><input
+            type="checkbox"
+            aria-label={`Select ${item.assistant_name} conversation`}
+            checked={selectedIds.has(item.conversation_id)}
+            onChange={() => onSelect(item.conversation_id)}
+          /></td>
           <td className="cell-muted">{dateLabel(item.started_at)}</td>
           <td>{item.tenant_name}</td>
           <td className="cell-primary"><Link to={`/admin/conversations/${item.conversation_id}`}>{item.assistant_name}</Link>{item.is_test && <> <Badge>Test</Badge></>}</td>
           <td>{channelLabel(item.channel)}</td>
           <td><ScoreBadge overall={item.overall} /></td>
           <td>{reviewText(item)}</td>
+          <td><RowActions
+            item={item}
+            reviewOnly={reviewOnly}
+            reviewPending={reviewPendingIds.has(item.conversation_id)}
+            notice={actionNotices[item.conversation_id]}
+            onReview={onReview}
+            onRescore={onRescore}
+            onMakeEvalCase={onMakeEvalCase}
+          /></td>
         </tr>)}</tbody>
       </table>
     </div>
-    <div className={styles.mobileList}>{items.map((item) => <ReviewItem key={item.conversation_id} item={item} />)}</div>
+    <div className={styles.mobileList}>{items.map((item) => <ReviewItem
+      key={item.conversation_id}
+      item={item}
+      reviewOnly={reviewOnly}
+      selected={selectedIds.has(item.conversation_id)}
+      reviewPending={reviewPendingIds.has(item.conversation_id)}
+      notice={actionNotices[item.conversation_id]}
+      onSelect={onSelect}
+      onReview={onReview}
+      onRescore={onRescore}
+      onMakeEvalCase={onMakeEvalCase}
+    />)}</div>
   </>;
 }
 
@@ -144,6 +279,9 @@ export function AdminOverviewPage() {
   const assistantId = searchParams.get("assistant") ?? "";
   const reviewOnly = searchParams.get("review") !== "all";
   const queryClient = useQueryClient();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [actionNotices, setActionNotices] = useState<Record<string, string>>({});
+  const [bulkNotice, setBulkNotice] = useState("");
   const overview = useQuery({ queryKey: ["admin-overview", days], queryFn: () => getAdminOverview(days) });
   const conversations = useInfiniteQuery({
     queryKey: ["admin-conversations", tenantId, assistantId, reviewOnly],
@@ -161,6 +299,41 @@ export function AdminOverviewPage() {
   const data = overview.data;
   const [assistantNames, setAssistantNames] = useState(() => new Map<string, string>());
   const [workspaceNames, setWorkspaceNames] = useState(() => new Map<string, string>());
+  const reviewMutation = useMutation({
+    mutationFn: ({ conversationIds, reviewed }: { conversationIds: string[]; reviewed: boolean }) =>
+      reviewConversations({ conversation_ids: conversationIds, reviewed }),
+    onSuccess: async (_response, variables) => {
+      setSelectedIds(new Set());
+      if (variables.conversationIds.length > 1) {
+        setBulkNotice(`${variables.conversationIds.length} conversations marked reviewed.`);
+      } else {
+        setActionNotices((previous) => ({
+          ...previous,
+          [variables.conversationIds[0]]: variables.reviewed ? "Marked reviewed" : "Review reopened",
+        }));
+      }
+      await invalidateAdminQueries(queryClient);
+    },
+  });
+  const rescore = useMutation({
+    mutationFn: rescoreConversation,
+    onSuccess: async (_response, id) => {
+      setActionNotices((previous) => ({ ...previous, [id]: "Rescore queued" }));
+      await invalidateAdminQueries(queryClient);
+    },
+    onError: (_error, id) => setActionNotices((previous) => ({ ...previous, [id]: "Rescore could not be queued." })),
+  });
+  const makeEvalCase = useMutation({
+    mutationFn: createEvalCase,
+    onSuccess: async (_response, id) => {
+      setActionNotices((previous) => ({ ...previous, [id]: "Eval case created." }));
+      await Promise.all([
+        invalidateAdminQueries(queryClient),
+        queryClient.invalidateQueries({ queryKey: ["admin-eval-cases"] }),
+      ]);
+    },
+    onError: (_error, id) => setActionNotices((previous) => ({ ...previous, [id]: "The eval case could not be created." })),
+  });
 
   useEffect(() => {
     setAssistantNames((previous) => mergeFilterNames(
@@ -180,10 +353,31 @@ export function AdminOverviewPage() {
   const workspaces = filterOptions(workspaceNames, tenantId, "Selected workspace");
 
   function update(values: Record<string, string | null>) {
+    setSelectedIds(new Set());
+    setBulkNotice("");
     updateParams(setSearchParams, searchParams, values);
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllSelected() {
+    const allSelected = items.length > 0 && items.every(({ conversation_id }) => selectedIds.has(conversation_id));
+    setSelectedIds(allSelected ? new Set() : new Set(items.map(({ conversation_id }) => conversation_id)));
+  }
+
+  function markReviewed(id: string, reviewed: boolean) {
+    reviewMutation.mutate({ conversationIds: [id], reviewed });
+  }
+
   const reviewPercent = data?.scored ? `${Math.round((data.needs_review / data.scored) * 100)}% of scored` : "—";
+  const reviewPendingIds = new Set(reviewMutation.isPending ? reviewMutation.variables?.conversationIds ?? [] : []);
 
   return <main className="page" id="main-content">
     <PageHeader title="Admin" lede="Quality across all workspaces." />
@@ -250,7 +444,30 @@ export function AdminOverviewPage() {
       {conversations.error && <ErrorState message="Conversations could not be loaded." onRetry={() => void conversations.refetch()} />}
       {!conversations.isLoading && !conversations.error && items.length === 0 && <EmptyState>No conversations match these filters.</EmptyState>}
       {items.length > 0 && <>
-        <AdminConversationTable items={items} />
+        {selectedIds.size > 0 && <div className={styles.bulkReviewBar}>
+          <span>{selectedIds.size} selected</span>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            className="button-primary button-sm"
+            onClick={() => reviewMutation.mutate({ conversationIds: [...selectedIds], reviewed: true })}
+            disabled={reviewMutation.isPending}
+          >Mark reviewed</button>
+        </div>}
+        {bulkNotice && <p className="muted" role="status">{bulkNotice}</p>}
+        {reviewMutation.error && <ErrorState message="The review status could not be updated." />}
+        <AdminConversationTable
+          items={items}
+          reviewOnly={reviewOnly}
+          selectedIds={selectedIds}
+          reviewPendingIds={reviewPendingIds}
+          actionNotices={actionNotices}
+          onSelect={toggleSelected}
+          onSelectAll={toggleAllSelected}
+          onReview={markReviewed}
+          onRescore={(id) => rescore.mutate(id)}
+          onMakeEvalCase={(id) => makeEvalCase.mutate(id)}
+        />
         {conversations.hasNextPage && <div className="button-row"><button type="button" className="button-secondary" onClick={() => void conversations.fetchNextPage()} disabled={conversations.isFetchingNextPage}>{conversations.isFetchingNextPage ? "Loading…" : "Load more"}</button></div>}
       </>}
     </section>
@@ -287,13 +504,26 @@ export function AdminConversationPage() {
   const detail = useQuery({ queryKey: ["admin-conversation", id], queryFn: () => getAdminConversation(id), enabled: Boolean(id) });
   const rescore = useMutation({
     mutationFn: () => rescoreConversation(id),
-    onSuccess: () => setNotice("Rescore queued"),
+    onSuccess: async () => {
+      setNotice("Rescore queued");
+      await invalidateAdminQueries(queryClient);
+    },
   });
   const makeEvalCase = useMutation({
     mutationFn: () => createEvalCase(id),
     onSuccess: async () => {
       setNotice("Eval case created.");
-      await queryClient.invalidateQueries({ queryKey: ["admin-eval-cases"] });
+      await Promise.all([
+        invalidateAdminQueries(queryClient),
+        queryClient.invalidateQueries({ queryKey: ["admin-eval-cases"] }),
+      ]);
+    },
+  });
+  const review = useMutation({
+    mutationFn: (reviewed: boolean) => reviewConversations({ conversation_ids: [id], reviewed }),
+    onSuccess: async (_response, reviewed) => {
+      setNotice(reviewed ? "Marked reviewed" : "Review reopened");
+      await invalidateAdminQueries(queryClient);
     },
   });
   const conversation = detail.data;
@@ -315,16 +545,23 @@ export function AdminConversationPage() {
       </div>
       <div className="button-row">
         <button type="button" className="button-secondary" onClick={() => { setNotice(""); rescore.mutate(); }} disabled={rescore.isPending}>{rescore.isPending ? "Queueing…" : "Rescore"}</button>
+        {conversation.score && <button
+          type="button"
+          className="button-secondary"
+          onClick={() => { setNotice(""); review.mutate(!conversation.score?.reviewed_at); }}
+          disabled={review.isPending}
+        >{conversation.score.reviewed_at ? "Reopen" : "Mark reviewed"}</button>}
         <button type="button" className="button-secondary" onClick={() => { setNotice(""); makeEvalCase.mutate(); }} disabled={makeEvalCase.isPending}>{makeEvalCase.isPending ? "Creating…" : "Make eval case"}</button>
         {conversation.trace_url && <a className="button-ghost" href={conversation.trace_url} target="_blank" rel="noreferrer">Open trace</a>}
       </div>
       {notice && <p className="muted" role="status">{notice}{notice === "Eval case created." && <> <Link to="/admin/evals">View evals</Link></>}</p>}
       {rescore.error && <ErrorState message="Rescore could not be queued." />}
       {makeEvalCase.error && <ErrorState message="The eval case could not be created." />}
+      {review.error && <ErrorState message="The review status could not be updated." />}
       <section className="panel">
         <h2>Quality score</h2>
         {conversation.score ? <>
-          <div className="row"><p className={styles.scoreValue}>{conversation.score.overall}<span className="muted"> / 5</span></p>{conversation.score.needs_review && <Badge tone="warning">Needs review</Badge>}</div>
+          <div className="row"><p className={styles.scoreValue}>{conversation.score.overall}<span className="muted"> / 5</span></p>{conversation.score.needs_review && <Badge tone="warning">Needs review</Badge>}{conversation.score.reviewed_at && <Badge>Reviewed {dateLabel(conversation.score.reviewed_at)}</Badge>}</div>
           <p className="muted">Judge {conversation.score.judge_model} · rubric {conversation.score.judge_version}</p>
           <h3 className={styles.qualitySectionHeading}>Checks</h3>
           <ul className={styles.checkList}>{conversation.score.checks.map((check) => <li key={check.key}>

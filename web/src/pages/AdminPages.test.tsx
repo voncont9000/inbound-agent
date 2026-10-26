@@ -17,6 +17,21 @@ function captureAdminRequests(path: string) {
   return requests;
 }
 
+async function needsReviewPanel() {
+  await screen.findByRole("checkbox", { name: "Needs review only" });
+  return Array.from(document.querySelectorAll<HTMLElement>("section.panel"))
+    .find((section) => section.querySelector("h2")?.textContent === "Needs review")!;
+}
+
+async function firstReviewRow(panel: HTMLElement) {
+  let row: HTMLTableRowElement | null = null;
+  await waitFor(() => {
+    row = panel.querySelector<HTMLTableRowElement>(".table-wrap tbody tr");
+    expect(row).toBeTruthy();
+  });
+  return row!;
+}
+
 afterEach(() => server.events.removeAllListeners());
 
 describe("platform admin pages", () => {
@@ -58,12 +73,11 @@ describe("platform admin pages", () => {
     const reviewToggle = await screen.findByRole("checkbox", { name: "Needs review only" });
     await waitFor(() => expect(requests.length).toBeGreaterThan(0));
     expect(requests[0].get("needs_review")).toBe("true");
-    const reviewPanel = Array.from(document.querySelectorAll<HTMLElement>("section.panel"))
-      .find((section) => section.querySelector("h2")?.textContent === "Needs review")!;
+    const reviewPanel = await needsReviewPanel();
     await waitFor(() => expect(reviewPanel.querySelector("article a")).toBeTruthy());
     const mobileCard = reviewPanel.querySelector("article")!;
     const mobileTitle = mobileCard.querySelector("a")!;
-    expect(mobileCard.firstElementChild).toBe(mobileTitle);
+    expect(mobileTitle.parentElement).toBe(mobileCard.firstElementChild);
     expect(mobileTitle.textContent).not.toMatch(/conversation/i);
     expect(reviewPanel.querySelector(".table-wrap a")?.textContent).not.toMatch(/conversation/i);
 
@@ -93,9 +107,91 @@ describe("platform admin pages", () => {
     await waitFor(() => expect(requests.at(-1)?.get("tenant_id")).toBe("71000000-0000-4000-8000-000000000002"));
     expect(requests.at(-1)?.get("needs_review")).toBe("true");
     await waitFor(() => expect(screen.queryByText("Conversations could not be loaded.")).not.toBeInTheDocument());
-    const reviewPanel = Array.from(document.querySelectorAll<HTMLElement>("section.panel"))
-      .find((section) => section.querySelector("h2")?.textContent === "Needs review")!;
+    const reviewPanel = await needsReviewPanel();
     await waitFor(() => expect(within(reviewPanel).getAllByRole("link", { name: "Jordan" }).length).toBeGreaterThan(0));
+  });
+
+  it("navigates from a row click but not from its checkbox or review button", async () => {
+    const user = userEvent.setup();
+    const firstApp = renderApp("/admin", { loggedIn: true });
+    const panel = await needsReviewPanel();
+    const firstRow = await firstReviewRow(panel);
+    const href = within(firstRow).getByRole("link").getAttribute("href")!;
+    await user.click(within(firstRow).getByText("Northstar Services"));
+    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(href));
+    firstApp.unmount();
+
+    renderApp("/admin", { loggedIn: true });
+    const reviewPanel = await needsReviewPanel();
+    const row = await firstReviewRow(reviewPanel);
+    await user.click(within(row).getByRole("checkbox"));
+    expect(screen.getByTestId("current-location")).toHaveTextContent("/admin");
+    await user.click(within(row).getByRole("button", { name: "Mark reviewed" }));
+    expect(screen.getByTestId("current-location")).toHaveTextContent("/admin");
+    await waitFor(() => expect(reviewPanel.querySelectorAll(".table-wrap tbody tr").length).toBeGreaterThan(0));
+  });
+
+  it("marks a review row reviewed and updates the mock overview count", async () => {
+    const before = adminOverview(7).needs_review;
+    const user = userEvent.setup();
+    renderApp("/admin", { loggedIn: true });
+    const panel = await needsReviewPanel();
+    const row = await firstReviewRow(panel);
+    const href = within(row).getByRole("link").getAttribute("href")!;
+    await user.click(within(row).getByRole("button", { name: "Mark reviewed" }));
+    await waitFor(() => expect(adminOverview(7).needs_review).toBe(before - 1));
+    await waitFor(() => expect(panel.querySelector(`.table-wrap a[href="${href}"]`)).not.toBeInTheDocument());
+  });
+
+  it("bulk reviews two selected rows", async () => {
+    const before = adminOverview(7).needs_review;
+    const user = userEvent.setup();
+    renderApp("/admin", { loggedIn: true });
+    const panel = await needsReviewPanel();
+    const rows = await waitFor(() => {
+      const result = Array.from(panel.querySelectorAll<HTMLTableRowElement>(".table-wrap tbody tr"));
+      expect(result.length).toBeGreaterThanOrEqual(2);
+      return result;
+    });
+    await user.click(within(rows[0]).getByRole("checkbox"));
+    await user.click(within(rows[1]).getByRole("checkbox"));
+    const bulkBar = screen.getByText("2 selected").parentElement!;
+    expect(within(bulkBar).getByRole("button", { name: "Mark reviewed" })).toBeInTheDocument();
+    await user.click(within(bulkBar).getByRole("button", { name: "Mark reviewed" }));
+    await waitFor(() => expect(adminOverview(7).needs_review).toBe(before - 2));
+    expect(await screen.findByText("2 conversations marked reviewed.")).toBeInTheDocument();
+  });
+
+  it("reopens a reviewed row and shows a Reviewed badge outside the review-only list", async () => {
+    const user = userEvent.setup();
+    renderApp("/admin", { loggedIn: true });
+    await user.click(await screen.findByRole("checkbox", { name: "Needs review only" }));
+    const panel = await needsReviewPanel();
+    const row = await firstReviewRow(panel);
+    await user.click(within(row).getByRole("button", { name: "Mark reviewed" }));
+    const reopenedRow = await waitFor(() => {
+      const current = Array.from(panel.querySelectorAll<HTMLTableRowElement>(".table-wrap tbody tr"))
+        .find((candidate) => candidate === row);
+      expect(current).toBeTruthy();
+      return current!;
+    });
+    expect(within(reopenedRow).getByText("Reviewed")).toBeInTheDocument();
+    await user.click(within(reopenedRow).getByRole("button", { name: "Reopen" }));
+    await waitFor(() => expect(within(reopenedRow).getByRole("button", { name: "Mark reviewed" })).toBeInTheDocument());
+    expect(within(reopenedRow).queryByText("Reviewed")).not.toBeInTheDocument();
+  });
+
+  it("runs row menu rescore and eval-case actions with notices", async () => {
+    const user = userEvent.setup();
+    renderApp("/admin", { loggedIn: true });
+    const panel = await needsReviewPanel();
+    const row = await firstReviewRow(panel);
+    await user.click(within(row).getByRole("button", { name: /More options for/ }));
+    await user.click(within(row).getByRole("menuitem", { name: "Rescore" }));
+    expect(await within(row).findByText("Rescore queued")).toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: /More options for/ }));
+    await user.click(within(row).getByRole("menuitem", { name: "Make eval case" }));
+    expect(await within(row).findByText("Eval case created.")).toBeInTheDocument();
   });
 
   it("keeps the selected assistant after the review filter returns no results", async () => {
@@ -221,6 +317,16 @@ describe("platform admin pages", () => {
     expect(screen.getByRole("link", { name: "View evals" })).toHaveAttribute("href", "/admin/evals");
     expect(requests).toContain(`POST /api/admin/conversations/${adminConversationDetails[0].conversation_id}/rescore`);
     expect(requests).toContain(`POST /api/admin/conversations/${adminConversationDetails[0].conversation_id}/eval-case`);
+  });
+
+  it("marks a detail reviewed and reopens it", async () => {
+    const user = userEvent.setup();
+    renderApp(`/admin/conversations/${adminConversationDetails[0].conversation_id}`, { loggedIn: true });
+    await user.click(await screen.findByRole("button", { name: "Mark reviewed" }));
+    expect(await screen.findByText(/^Reviewed /)).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Reopen" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Mark reviewed" })).toBeInTheDocument());
+    expect(screen.queryByText(/^Reviewed /)).not.toBeInTheDocument();
   });
 
   it("lists eval runs and cases and expands failed run results", async () => {

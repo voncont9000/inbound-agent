@@ -6,6 +6,7 @@ import { ChannelIcon } from "../components/ChannelIcon";
 import { ChannelPicker } from "../components/ChannelPicker";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmailIncludeFilters } from "../components/EmailIncludeFilters";
+import { MoreMenu } from "../components/MoreMenu";
 import { useGmailMode, useGoogleOAuth } from "../components/channelApi";
 import { Badge, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/States";
 import { channelLabel, channelStatusTone } from "../lib/channelConnections";
@@ -27,48 +28,16 @@ function ChannelMenu({ channel, filtersOpen, onToggleFilters, onRemove }: {
   onToggleFilters: () => void;
   onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const menuId = useId();
-  const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
-
-  return <div className="channel-menu-wrap" ref={menuRef}>
-    <button
-      ref={triggerRef}
-      type="button"
-      className="button-ghost button-sm channel-menu-trigger"
-      aria-label={`More options for ${channel.external_id}`}
-      aria-haspopup="menu"
-      aria-expanded={open}
-      aria-controls={menuId}
-      onClick={() => setOpen((value) => !value)}
-    >⋯</button>
-    {open && <div className="channel-row-menu" role="menu" id={menuId}>
-      {channel.kind === "gmail" && <button type="button" role="menuitem" onClick={() => { setOpen(false); onToggleFilters(); }}>
-        {filtersOpen ? "Hide email filters" : "Email filters"}
-      </button>}
-      <button type="button" role="menuitem" onClick={() => { setOpen(false); onRemove(); }}>Remove</button>
-    </div>}
-  </div>;
+  return <MoreMenu
+    label={channel.external_id}
+    items={[
+      ...(channel.kind === "gmail" ? [{
+        label: filtersOpen ? "Hide email filters" : "Email filters",
+        onSelect: onToggleFilters,
+      }] : []),
+      { label: "Remove", onSelect: onRemove },
+    ]}
+  />;
 }
 
 export function ChannelsPage() {

@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/conversations/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Conversations */
+        post: operations["review_conversations_admin_conversations_review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -1347,6 +1364,8 @@ export interface components {
             } | null;
             /** Overall */
             overall: number | null;
+            /** Reviewed At */
+            reviewed_at: string | null;
             /**
              * Started At
              * Format: date-time
@@ -1398,6 +1417,18 @@ export interface components {
             response_p95_s: number | null;
             /** Scored */
             scored: number;
+        };
+        /** AdminReviewRequest */
+        AdminReviewRequest: {
+            /** Conversation Ids */
+            conversation_ids: string[];
+            /** Reviewed */
+            reviewed: boolean;
+        };
+        /** AdminReviewResponse */
+        AdminReviewResponse: {
+            /** Updated */
+            updated: number;
         };
         /** AdminTenantSummary */
         AdminTenantSummary: {
@@ -2357,6 +2388,8 @@ export interface components {
             } | null;
             /** Overall */
             overall: number;
+            /** Reviewed At */
+            reviewed_at: string | null;
             /**
              * Updated At
              * Format: date-time
@@ -3777,6 +3810,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminConversationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_conversations_admin_conversations_review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewResponse"];
                 };
             };
             /** @description Validation Error */
