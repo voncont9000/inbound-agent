@@ -11,8 +11,11 @@ import re
 import shutil
 import struct
 import subprocess
+import time
 import wave
 from collections.abc import Mapping
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +30,10 @@ AUDIO_DIR = Path(__file__).with_name("audio")
 SPEECHIFY_URL = "https://api.speechify.ai/v1/audio/speech"
 WEBRTC_SAMPLE_RATE = 48_000
 PAUSE_MARKER = re.compile(r"\s*\|\s*pause\s+(\d+(?:\.\d+)?)\s*\|\s*", re.IGNORECASE)
+SPEECHIFY_REQUEST_INTERVAL_SECONDS = 1.1
+SPEECHIFY_RETRY_BACKOFFS = (2, 4, 8, 16)
+_speechify_request_lock = asyncio.Lock()
+_last_speechify_request_started: float | None = None
 
 
 def load_scenarios(path: str | Path = SCENARIOS_PATH) -> dict[str, Any]:
@@ -189,6 +196,34 @@ def phone_band_from_wav(wav_bytes: bytes) -> bytes:
     return output.getvalue()
 
 
+async def _wait_for_speechify_slot() -> None:
+    global _last_speechify_request_started
+
+    async with _speechify_request_lock:
+        now = time.monotonic()
+        if _last_speechify_request_started is not None:
+            delay = SPEECHIFY_REQUEST_INTERVAL_SECONDS - (now - _last_speechify_request_started)
+            if delay > 0:
+                await asyncio.sleep(delay)
+        _last_speechify_request_started = time.monotonic()
+
+
+def _retry_delay(retry_after: str | None, fallback: float) -> float:
+    if not retry_after:
+        return fallback
+    try:
+        delay = float(retry_after)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(retry_after)
+        except (TypeError, ValueError, OverflowError):
+            return fallback
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
+    return max(0.0, delay) if math.isfinite(delay) else fallback
+
+
 async def _synthesize_utterance(
     session: aiohttp.ClientSession,
     api_key: str,
@@ -196,20 +231,35 @@ async def _synthesize_utterance(
     caller_voice: str,
     audio_format: str = "mp3",
 ) -> bytes:
-    async with session.post(
-        SPEECHIFY_URL,
-        headers={"Authorization": f"Bearer {api_key}"},
-        json={
-            "input": text,
-            "voice_id": caller_voice,
-            "model": "simba-3.2",
-            "audio_format": audio_format,
-        },
-    ) as response:
-        if response.status >= 400:
-            body = await response.text()
-            raise RuntimeError(f"Speechify synthesis failed ({response.status}): {body}")
-        payload = await response.json()
+    payload: Any = None
+    for retry_number in range(len(SPEECHIFY_RETRY_BACKOFFS) + 1):
+        await _wait_for_speechify_slot()
+        async with session.post(
+            SPEECHIFY_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "input": text,
+                "voice_id": caller_voice,
+                "model": "simba-3.2",
+                "audio_format": audio_format,
+            },
+        ) as response:
+            if response.status == 429:
+                body = await response.text()
+                if retry_number == len(SPEECHIFY_RETRY_BACKOFFS):
+                    raise RuntimeError(f"Speechify synthesis failed ({response.status}): {body}")
+                retry_after = response.headers.get("Retry-After")
+                delay = _retry_delay(
+                    retry_after,
+                    SPEECHIFY_RETRY_BACKOFFS[retry_number],
+                )
+            elif response.status >= 400:
+                body = await response.text()
+                raise RuntimeError(f"Speechify synthesis failed ({response.status}): {body}")
+            else:
+                payload = await response.json()
+                break
+        await asyncio.sleep(delay)
     try:
         audio = base64.b64decode(payload["audio_data"], validate=True)
     except (KeyError, ValueError, TypeError) as error:

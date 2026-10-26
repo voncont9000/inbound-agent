@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import socket
@@ -11,8 +12,10 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from test_api_client import _route_response
 
+import eval.run_cases as run_cases_module
 from eval.run_cases import (
     _git_sha,
+    _run,
     build_parser,
     case_failures,
     case_metrics,
@@ -192,6 +195,76 @@ async def test_run_cases_skips_invalid_cases_and_stops_after_provider_error() ->
     assert result["results"][0]["failures"] == ["no caller utterances"]
     assert result["results"][2]["failures"] == ["provider error: HTTP 401 provider unauthorized"]
     assert result["results"][3]["failures"] == ["not run: provider error"]
+
+
+@pytest.mark.asyncio
+async def test_run_cases_executes_cases_one_at_a_time() -> None:
+    active = 0
+    maximum_active = 0
+
+    async def run_one(*_args):
+        nonlocal active, maximum_active
+        active += 1
+        maximum_active = max(maximum_active, active)
+        await asyncio.sleep(0)
+        active -= 1
+        return {"transcript_checks": {}, "assistant_checks": {}, "intake_checks": {}}
+
+    result = await run_cases([_case(), _case(), _case()], run_case=run_one)
+
+    assert maximum_active == 1
+    assert result["summary"] == {"cases": 3, "passed": 3, "failed": 0}
+
+
+@pytest.mark.asyncio
+async def test_execution_failure_posts_a_failed_run_with_every_case_marked_failed(
+    monkeypatch, tmp_path: Path
+) -> None:
+    cases = [_case(), _case()]
+    settings = ApiSettings("http://api.example.test", "token")
+    posted = []
+
+    monkeypatch.setattr(run_cases_module, "api_settings_from_env", lambda _env: settings)
+
+    async def fetch_cases(_settings):
+        return cases
+
+    async def fail_execution(*_args, **_kwargs):
+        raise RuntimeError("Speechify synthesis failed (429): rate limited")
+
+    async def post_failed_run(_settings, payload):
+        posted.append(payload)
+        return {"eval_run_id": str(uuid4())}
+
+    monkeypatch.setattr(run_cases_module, "fetch_cases", fetch_cases)
+    monkeypatch.setattr(run_cases_module, "_run_live_cases", fail_execution)
+    monkeypatch.setattr(run_cases_module, "post_run", post_failed_run)
+    monkeypatch.setattr(run_cases_module, "_results_directory", lambda: tmp_path)
+    arguments = argparse.Namespace(
+        list=False,
+        case_ids=None,
+        trigger="deploy",
+        stt="assemblyai",
+        tts="speechify",
+        llm="google",
+        port=7871,
+        no_post=False,
+    )
+
+    exit_code = await _run(arguments)
+
+    assert exit_code == 2
+    assert len(posted) == 1
+    assert posted[0]["summary"] == {"cases": 2, "passed": 0, "failed": 2}
+    assert [result["eval_case_id"] for result in posted[0]["results"]] == [
+        case["id"] for case in cases
+    ]
+    assert all(not result["passed"] for result in posted[0]["results"])
+    assert all(
+        "Speechify synthesis failed" in result["failures"][0] for result in posted[0]["results"]
+    )
+    saved_payload = json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))
+    assert saved_payload == posted[0]
 
 
 def test_cli_defaults_follow_environment(monkeypatch) -> None:

@@ -98,6 +98,10 @@ evaluation results. Both endpoints require the voice service token.
 Regression evals run enabled scripted cases through the phone harness, score the resulting
 transcript and intake data, and store a summary for comparison over time. Provider calls use the
 selected production STT, TTS, and LLM providers, so a run can incur provider usage charges.
+Production sets `RUN_EVALS_AFTER_DEPLOY=1`, so evals run after each deployment's health check;
+failures warn without failing the deployment. Cases run one at a time. Caller-audio requests are
+throttled to respect Speechify's 1 request-per-second plan limit, and synthesized utterances are
+cached on disk. Execution failures are also posted as failed eval runs with the error on each case.
 
 The `eval_cases` and `eval_runs` tables are owned by the conversation-quality migration (`0180`).
 Cases store a name, optional source conversation and assistant IDs, caller utterances, named checks,
