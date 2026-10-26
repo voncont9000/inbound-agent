@@ -127,7 +127,7 @@ async def test_conversation_score_upserts_and_sets_review_and_objective(
         assert first_score is not None
         first_score_id = first_score.id
         assert first_score.judge_model == "test-judge-model"
-        assert first_score.judge_version == "v1"
+        assert first_score.judge_version == "v2"
         assert first_score.objective == {
             "response_p50_s": 1.2,
             "response_p95_s": 2.4,
