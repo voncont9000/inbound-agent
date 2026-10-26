@@ -18,6 +18,23 @@ application remains on `https://agent.vinci-labs.tech`.
 - `site/public/` contains static public files and `site/src/assets/` contains the
   Yelvo logo SVGs.
 
+## Home page sections and motion
+
+The home page follows this order: sticky header, hero (website box → sign-up),
+live call demo, "Live in minutes" steps, use-case tabs, features grid,
+integrations marquee, FAQ accordion, final CTA and footer. Each section lives in
+`site/src/sections/`.
+
+Motion uses CSS keyframes/transitions plus the hooks in `site/src/hooks/motion.ts`
+(no animation library). `useReveal` adds the hidden `reveal-pending` class only
+after hydration and only for content below the fold, so prerendered HTML is always
+visible. `useInView` starts the call demo when it scrolls into view and pauses it
+off-screen or in a hidden tab. Under `prefers-reduced-motion: reduce` reveals are
+skipped, loops and the marquee stop, and the call demo shows its finished state.
+
+The hero form sends visitors to `${VITE_APP_URL}/signup?website=<encoded value>`
+(plain `/signup` when empty), built by `site/src/signup.ts`.
+
 ## Local development and build
 
 Load the repository's Node version first, then run:

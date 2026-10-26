@@ -1,6 +1,8 @@
 import { readFile, access } from "node:fs/promises";
 import { resolve } from "node:path";
 
+const APP_URL = (process.env.VITE_APP_URL ?? "https://agent.vinci-labs.tech").replace(/\/$/, "");
+
 async function check() {
   const heroSource = await readFile(resolve("src/content/hero.ts"), "utf8");
   const heroMatch = heroSource.match(/HERO_HEADLINE\s*=\s*"([^"]+)"/);
@@ -21,9 +23,9 @@ async function check() {
     'href="#use-cases"',
     'href="#integrations"',
     'href="#faq"',
-    'href="/help"',
-    'href="/login"',
-    'href="/signup"',
+    `href="${APP_URL}/help"`,
+    `href="${APP_URL}/login"`,
+    `href="${APP_URL}/signup"`,
   ]) {
     if (!homepage.includes(href)) throw new Error(`dist/index.html is missing nav link ${href}`);
   }
