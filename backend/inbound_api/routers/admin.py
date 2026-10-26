@@ -53,9 +53,17 @@ def _mean(values: list[int | float]) -> float | None:
     return round(sum(values) / len(values), 2) if values else None
 
 
-def eval_intake_checks(fields: dict[str, Any], caller_numbers: set[str]) -> dict[str, str]:
-    caller_digits = {re.sub(r"\D", "", number) for number in caller_numbers}
-    caller_digits.discard("")
+def speakable_digits(text: str) -> str:
+    return re.sub(
+        r"(?<![£$€\d,.])\d{3,}(?![,.]?\d)",
+        lambda match: " ".join(match.group(0)),
+        text,
+    )
+
+
+def eval_intake_checks(fields: dict[str, Any], caller_text: str) -> dict[str, str]:
+    collapsed_caller_text = " ".join(caller_text.split()).casefold()
+    caller_digits = re.sub(r"\D", "", caller_text)
     checks = {}
     for name, field_value in fields.items():
         value = field_value.get("value") if isinstance(field_value, dict) else field_value
@@ -64,10 +72,17 @@ def eval_intake_checks(fields: dict[str, Any], caller_numbers: set[str]) -> dict
         value = str(value).strip()
         if not value:
             continue
-        digits = re.sub(r"\D", "", value)
-        if digits and digits in caller_digits:
+        if len(value.split()) > 4:
+            checks[name] = r"\S"
             continue
-        checks[name] = r"\S" if len(value.split()) > 4 else "(?i)^" + re.escape(value) + "$"
+        value_digits = re.sub(r"\D", "", value)
+        if len(value_digits) >= 7:
+            caller_match = value_digits[-9:]
+            if caller_match not in caller_digits:
+                continue
+        elif " ".join(value.split()).casefold() not in collapsed_caller_text:
+            continue
+        checks[name] = "(?i)^" + re.escape(value) + "$"
     return checks
 
 
@@ -336,19 +351,22 @@ async def create_eval_case(conversation_id: UUID) -> dict[str, UUID]:
     )
     if assistant is None:
         raise HTTPException(status_code=404, detail="Not Found")
-    utterances = [
-        message.text
-        for message in messages
-        if message.role == MessageRole.CALLER and message.text.strip()
-    ]
+    utterances = []
+    caller_parts = []
+    for message in messages:
+        if message.role == MessageRole.CALLER:
+            part = message.text.strip()
+            if part:
+                caller_parts.append(part)
+        elif caller_parts:
+            utterances.append(speakable_digits(" ".join(caller_parts)))
+            caller_parts = []
+    if caller_parts:
+        utterances.append(speakable_digits(" ".join(caller_parts)))
     merged = intake.data if intake is not None and isinstance(intake.data, dict) else {}
     fields = merged.get("fields", {})
-    metrics = conversation.metrics if isinstance(conversation.metrics, dict) else {}
-    from_number = metrics.get("from_number")
-    caller_numbers = (
-        {from_number} if isinstance(from_number, str) and from_number.strip() else set()
-    )
-    intake_checks = eval_intake_checks(fields, caller_numbers) if isinstance(fields, dict) else {}
+    caller_text = " ".join(utterances)
+    intake_checks = eval_intake_checks(fields, caller_text) if isinstance(fields, dict) else {}
     checks = {
         "transcript_checks": {},
         "assistant_checks": {},
