@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from inbound_core.config import AssistantConfig
+from inbound_core.languages import DEFAULT_RECORDING_NOTICE, LOCALES
 from inbound_core.prompts import render_business_context
 from inbound_core.quality import (
     JUDGE_VERSION,
@@ -11,6 +12,7 @@ from inbound_core.quality import (
     judge_conversation,
     needs_review,
     objective_metrics,
+    split_platform_notices,
 )
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -75,12 +77,23 @@ async def conversation_score(
     )
     try:
         config = AssistantConfig.model_validate(assistant.config)
-        instructions = render_business_context(
-            config,
-            channel="phone" if conversation.channel == ConversationChannel.PHONE else "text",
-        )
     except (ValidationError, ValueError, TypeError):
+        config = None
         instructions = json.dumps(assistant.config, ensure_ascii=False, default=str)
+    else:
+        try:
+            instructions = render_business_context(
+                config,
+                channel="phone" if conversation.channel == ConversationChannel.PHONE else "text",
+            )
+        except (ValidationError, ValueError, TypeError):
+            instructions = json.dumps(assistant.config, ensure_ascii=False, default=str)
+
+    notices = {DEFAULT_RECORDING_NOTICE}
+    notices.update(locale.recording_notice for locale in LOCALES.values())
+    if config is not None:
+        notices.add(config.recording.consent_message)
+    transcript_rows = split_platform_notices(transcript_rows, notices)
 
     intake_data = merged_intake.data if merged_intake is not None else None
     task_rows = [
