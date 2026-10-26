@@ -290,8 +290,9 @@ Signup uses two steps: account credentials, then the person's name and business 
 URL supplied by a marketing handoff prefills the optional website field and suggests an editable
 business name from the hostname. After account creation, a supplied website opens assistant setup
 and starts the existing website-draft flow; its generated sections still require review and
-acceptance. Without a website, setup opens without automatically drafting from one. A safe `next`
-path takes precedence over the setup destination. The privacy-policy base URL is configurable with
+acceptance. The setup page prefills the business name from the workspace name, falling back to the
+website. Without a website, setup opens without automatically drafting from one. A safe `next` path
+takes precedence over the setup destination. The privacy-policy base URL is configurable with
 `VITE_SITE_URL` and defaults to the product site.
 
 ## 8. Non-functional requirements

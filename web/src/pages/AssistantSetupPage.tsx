@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
+import { useAuth } from "../auth/AuthProvider";
 import { ErrorState, LoadingState } from "../components/States";
 import { DraftSectionCard, type DraftSectionStatus } from "../components/setup/DraftSectionCard";
 import { DraftSectionEditor, DraftSectionPreview, type DraftSectionName } from "../components/setup/DraftSectionEditor";
 import { TemplatePicker } from "../components/setup/TemplatePicker";
 import { settingsTabPath } from "../lib/settingsTabs";
-import { normalizeWebsiteUrl } from "../lib/url";
+import { businessNameFromWebsite, normalizeWebsiteUrl } from "../lib/url";
 
 type SetupStep = "form" | "waiting" | "review";
 type DraftJobResult = { draft: Schemas["SetupDraft"]; warnings?: string[] };
@@ -31,9 +32,11 @@ const initialStatuses: Record<DraftSectionName, DraftSectionStatus> = {
 export function AssistantSetupPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { tenant, loading: authLoading } = useAuth();
   const queryWebsite = new URLSearchParams(location.search).get("website") ?? "";
   const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => unwrap(api.GET("/templates")) });
-  const [businessName, setBusinessName] = useState("");
+  const [businessName, setBusinessName] = useState(() => businessNameFromWebsite(queryWebsite));
+  const [businessNameEdited, setBusinessNameEdited] = useState(false);
   const [assistantName, setAssistantName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState(queryWebsite);
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -61,13 +64,14 @@ export function AssistantSetupPage() {
   const startDraftMutation = startDraft.mutate;
   const readWebsite = useCallback((website: string) => {
     const normalizedWebsiteUrl = normalizeWebsiteUrl(website);
-    if (!normalizedWebsiteUrl || !selectedTemplate) return;
+    const name = businessName.trim() || tenant?.name?.trim() || businessNameFromWebsite(website);
+    if (!normalizedWebsiteUrl || !selectedTemplate || !name) return;
     startDraftMutation({
-      business_name: businessName.trim(),
+      business_name: name,
       website_url: normalizedWebsiteUrl,
       template: selectedTemplate,
     });
-  }, [businessName, selectedTemplate, startDraftMutation]);
+  }, [businessName, selectedTemplate, startDraftMutation, tenant?.name]);
   const jobQuery = useQuery({
     queryKey: ["assistant-setup-draft", jobId],
     queryFn: () => unwrap(api.GET("/jobs/{job_id}", { params: { path: { job_id: jobId } } })),
@@ -99,10 +103,18 @@ export function AssistantSetupPage() {
   }, [selectedTemplate, templatesQuery.data]);
 
   useEffect(() => {
-    if (!queryWebsite || !selectedTemplate || autoReadStarted.current) return;
+    const tenantName = tenant?.name?.trim();
+    if (!tenantName || businessNameEdited) return;
+    setBusinessName(tenantName);
+  }, [businessNameEdited, tenant?.name]);
+
+  useEffect(() => {
+    if (authLoading || !queryWebsite || !selectedTemplate || autoReadStarted.current) return;
+    const tenantName = tenant?.name?.trim();
+    if (tenantName && !businessNameEdited && businessName.trim() !== tenantName) return;
     autoReadStarted.current = true;
     readWebsite(queryWebsite);
-  }, [queryWebsite, readWebsite, selectedTemplate]);
+  }, [authLoading, businessName, businessNameEdited, queryWebsite, readWebsite, selectedTemplate, tenant?.name]);
 
   function makeCompletion(accepted: Schemas["SetupDraft"]) {
     const name = assistantName.trim() || businessName.trim();
@@ -185,7 +197,10 @@ export function AssistantSetupPage() {
       <form className="stack" onSubmit={submit}>
         <div className="field">
           <label htmlFor="setup-business-name">Business name</label>
-          <input id="setup-business-name" required value={businessName} onChange={(event) => setBusinessName(event.target.value)} />
+          <input id="setup-business-name" required value={businessName} onChange={(event) => {
+            setBusinessName(event.target.value);
+            setBusinessNameEdited(true);
+          }} />
         </div>
         <div className="field">
           <label htmlFor="setup-assistant-name">Assistant name</label>

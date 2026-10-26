@@ -2,22 +2,67 @@ import { http, HttpResponse } from "msw";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { mockDb } from "../mocks/db";
+import { mockDb, templates } from "../mocks/db";
 import { server } from "../mocks/server";
 import { renderApp } from "../test/renderApp";
 
 describe("website-based assistant setup", () => {
   it("prefills and automatically reads a query website once in StrictMode", async () => {
-    renderApp("/assistants/new?website=smith-dental.co.uk", { loggedIn: true, strictMode: true });
+    mockDb.memberships[0].name = "Smith Dental";
+    let releaseTemplates = () => {};
+    const templateGate = new Promise<void>((resolve) => {
+      releaseTemplates = resolve;
+    });
+    server.use(
+      http.get("*/api/templates", async () => {
+        await templateGate;
+        return HttpResponse.json(templates);
+      }),
+    );
+    renderApp("/assistants/new?website=https%3A%2F%2Fsmith-dental.co.uk", { loggedIn: true, strictMode: true });
+
+    try {
+      await waitFor(() => expect(screen.getByLabelText("Business name")).toHaveValue("Smith Dental"));
+      expect(mockDb.setupDraftRequests).toHaveLength(0);
+    } finally {
+      releaseTemplates();
+    }
+    await screen.findByRole("heading", { name: "Choose what to include" });
+    expect(mockDb.setupDraftRequests).toHaveLength(1);
+    expect(mockDb.setupDraftRequests[0].business_name).toBe("Smith Dental");
+    expect(mockDb.setupDraftRequests[0].website_url).toBe("https://smith-dental.co.uk");
+  });
+
+  it("uses the website-derived business name when the tenant has no name", async () => {
+    mockDb.memberships[0].name = "";
+    renderApp("/assistants/new?website=https%3A%2F%2Fsmith-dental.co.uk", { loggedIn: true, strictMode: true });
 
     await screen.findByRole("heading", { name: "Choose what to include" });
     expect(mockDb.setupDraftRequests).toHaveLength(1);
-    expect(mockDb.setupDraftRequests[0].website_url).toBe("https://smith-dental.co.uk");
+    expect(mockDb.setupDraftRequests[0].business_name).toBe("Smith Dental");
   });
 
   it("does not automatically read a website when the query parameter is absent", async () => {
     renderApp("/assistants/new", { loggedIn: true, strictMode: true });
     await waitFor(() => expect(screen.getByRole("radio", { name: /Blank/ })).toBeChecked());
+    expect(mockDb.setupDraftRequests).toHaveLength(0);
+  });
+
+  it("mirrors the backend validation for an empty draft business name", async () => {
+    const response = await fetch("http://localhost/api/assistant-setup/drafts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        business_name: "  ",
+        website_url: "https://example.co.uk",
+        template: "blank",
+      }),
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      detail: [{ loc: ["body", "business_name"], type: "string_too_short" }],
+    });
     expect(mockDb.setupDraftRequests).toHaveLength(0);
   });
 
