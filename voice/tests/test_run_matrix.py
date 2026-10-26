@@ -2,7 +2,12 @@ import inspect
 from pathlib import Path
 
 from bot import SMART_TURN_STOP_DEFAULT_SECS
-from eval.run_matrix import _fake_api_digest, build_parser, run_matrix
+from eval.run_matrix import (
+    _fake_api_digest,
+    build_parser,
+    build_runner_command,
+    run_matrix,
+)
 from inbound_voice.config import load_assistant_config
 
 ASSISTANT_PATH = Path(__file__).parents[1] / "config" / "assistants" / "demo_firm.yaml"
@@ -58,3 +63,19 @@ def test_matrix_parser_accepts_twilio_transport_and_fake_api() -> None:
 
     assert arguments.transport == "twilio"
     assert arguments.fake_api is True
+
+
+def test_runner_command_builder_preserves_defaults_and_custom_phone_port() -> None:
+    assert build_runner_command("twilio") == [
+        "uv",
+        "run",
+        "phone_server.py",
+        "--port",
+        "7861",
+    ]
+    assert build_runner_command(
+        "twilio",
+        port=7871,
+        python_command=("/usr/bin/python3",),
+    ) == ["/usr/bin/python3", "phone_server.py", "--port", "7871"]
+    assert build_runner_command("webrtc") == ["uv", "run", "bot.py"]

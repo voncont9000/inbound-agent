@@ -133,6 +133,10 @@ without rebuilding. Caddy obtains and renews public certificates automatically; 
 `docker compose ... logs --tail=100 caddy backend worker phone webcall` if startup fails. Do not
 expose database or Redis ports to the Internet.
 
+An optional, non-blocking post-deploy regression-eval hook is controlled by
+`RUN_EVALS_AFTER_DEPLOY`; configuration and its provider-cost/isolation notes are in
+[quality.md](quality.md).
+
 ### Provider setup
 
 - **WhatsApp:** configure the Meta callback at `https://$DOMAIN/webhooks/whatsapp`, set the verify

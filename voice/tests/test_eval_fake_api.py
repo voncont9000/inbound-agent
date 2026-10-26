@@ -110,3 +110,32 @@ async def test_prior_booking_is_busy_for_later_availability_and_booking() -> Non
 
     assert second.status_code == 200, second.text
     assert second.json()["status"] == "booked"
+
+
+@pytest.mark.asyncio
+async def test_fake_route_requires_token_and_replaces_route() -> None:
+    app = _fake_app()
+    route = _route_response().model_copy(update={"booking_available": True})
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://fake"
+    ) as client:
+        rejected = await client.post("/_fake/route", json=route.model_dump(mode="json"))
+        response = await client.post(
+            "/_fake/route",
+            json=route.model_dump(mode="json"),
+            headers={"X-Service-Token": SERVICE_TOKEN},
+        )
+        routed = await client.get(
+            "/internal/voice/route",
+            params={"to": TO_NUMBER},
+            headers={"X-Service-Token": SERVICE_TOKEN},
+        )
+
+    assert rejected.status_code == 401
+    assert response.status_code == 200
+    assert routed.status_code == 200
+    assert routed.json()["assistant_id"] == str(route.assistant_id)
+    assert routed.json()["booking_available"] == (
+        route.config.booking is not None
+        and {"check_availability", "book_appointment"} <= set(route.config.live_actions)
+    )

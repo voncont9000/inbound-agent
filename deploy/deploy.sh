@@ -79,4 +79,11 @@ if [[ "$DOMAIN" == "localhost" || "$DOMAIN" == *.localhost ]]; then
 fi
 curl "${curl_args[@]}" "https://${DOMAIN}/api/healthz"
 printf '\n'
+if [[ "${RUN_EVALS_AFTER_DEPLOY:-$(read_env_value RUN_EVALS_AFTER_DEPLOY || true)}" == "1" ]]; then
+  compose exec -T \
+    -e EVAL_TRIGGER=deploy \
+    -e GIT_SHA="${GIT_SHA:-$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)}" \
+    phone python -m eval.run_cases \
+    || printf 'Regression evals reported failures (see /admin/evals).\n' >&2
+fi
 docker image prune -f

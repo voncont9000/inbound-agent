@@ -12,7 +12,7 @@ import signal
 import socket
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -111,6 +111,20 @@ def _configure_caller_id_override(process_env: dict[str, str], caller_id: str | 
         process_env["CALLER_ID_OVERRIDE"] = caller_id
 
 
+def build_runner_command(
+    transport: str,
+    *,
+    port: int = 7861,
+    python_command: Sequence[str] | None = None,
+) -> list[str]:
+    command_prefix = list(python_command or ("uv", "run"))
+    if transport == "twilio":
+        return [*command_prefix, "phone_server.py", "--port", str(port)]
+    if transport == "webrtc":
+        return [*command_prefix, "bot.py"]
+    raise ValueError("transport must be 'webrtc' or 'twilio'")
+
+
 async def _start_runner(
     stt: str,
     tts: str,
@@ -125,6 +139,9 @@ async def _start_runner(
     service_token: str | None = None,
     assistant_path: str | None = None,
     twilio_fake_log_path: str | None = None,
+    phone_port: int = 7861,
+    python_command: Sequence[str] | None = None,
+    extra_env: Mapping[str, str] | None = None,
 ) -> tuple[asyncio.subprocess.Process, asyncio.Task[None], list[str]]:
     process_env = os.environ.copy()
     process_env["STT_PROVIDER"] = stt
@@ -148,11 +165,13 @@ async def _start_runner(
         process_env["TWILIO_CALL_CONTROL"] = "fake"
         if twilio_fake_log_path:
             process_env["TWILIO_FAKE_CALL_LOG"] = twilio_fake_log_path
-        command = ["uv", "run", "phone_server.py", "--port", "7861"]
-        readiness_url, readiness_path = PHONE_SERVER_URL, "/healthz"
+        command = build_runner_command(transport, port=phone_port, python_command=python_command)
+        readiness_url, readiness_path = f"http://127.0.0.1:{phone_port}", "/healthz"
     else:
-        command = ["uv", "run", "bot.py"]
+        command = build_runner_command(transport, port=phone_port, python_command=python_command)
         readiness_url, readiness_path = RUNNER_URL, "/client/"
+    if extra_env:
+        process_env.update(extra_env)
     process = await asyncio.create_subprocess_exec(
         *command,
         cwd=VOICE_ROOT,
@@ -222,12 +241,13 @@ async def _wait_for_http(
 async def _running_fake_api(
     to_number: str = FAKE_API_TO_NUMBER,
     knowledge_digest_path: str | None = None,
+    route_response: RouteResponse | None = None,
 ):
     with socket.socket() as server_socket:
         server_socket.bind(("127.0.0.1", 0))
         port = server_socket.getsockname()[1]
     assistant = load_assistant_config(VOICE_ROOT / "config" / "assistants" / "demo_firm.yaml")
-    route_response = RouteResponse(
+    route_response = route_response or RouteResponse(
         tenant_id=UUID("10000000-0000-0000-0000-000000000001"),
         assistant_id=UUID("20000000-0000-0000-0000-000000000002"),
         config=assistant,
