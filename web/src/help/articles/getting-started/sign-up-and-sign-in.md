@@ -10,9 +10,11 @@ Your account gives you access to a workspace, where assistants and conversations
 
 ## Create your account
 
-1. Open `/signup` and enter `Email address`, `Password` (at least 12 characters), `Your name` and `Workspace name`.
-2. Select `Create account` to create your account and workspace.
-3. To return later, open `/login`, enter `Email address` and `Password`, then select `Sign in`.
+1. Open `/signup`, enter your email address and a password of at least 12 characters, then select `Continue`.
+2. On `About your business`, enter your name and business name. The business name is editable. A website is optional.
+3. If you arrived from a site that supplied a website, check the prefilled website and business name, then edit them if needed.
+4. Select `Create account`. When a website is present, assistant setup opens and starts reading it; review the drafted sections before accepting them. Without a website, choose a template and continue setup.
+5. To return later, open `/login`, enter your email address and password, then select `Sign in`.
 
 ## Switch workspaces
 

@@ -284,6 +284,16 @@ for the rubric, data model, security boundary, and API.
 
 - FR-Q1: Maintain enabled, scripted regression cases with ordered caller utterances and configurable checks; run them through the voice harness, retain scored results, and identify provider failures without creating real conversations or actions. See [quality.md](./quality.md).
 
+### 7.14 Account onboarding
+
+Signup uses two steps: account credentials, then the person's name and business details. A website
+URL supplied by a marketing handoff prefills the optional website field and suggests an editable
+business name from the hostname. After account creation, a supplied website opens assistant setup
+and starts the existing website-draft flow; its generated sections still require review and
+acceptance. Without a website, setup opens without automatically drafting from one. A safe `next`
+path takes precedence over the setup destination. The privacy-policy base URL is configurable with
+`VITE_SITE_URL` and defaults to the product site.
+
 ## 8. Non-functional requirements
 - **Latency:** see metrics. Stream everything. Region-pinned processing (EU first).
 - **Reliability:** 99.9% call answer availability. If the AI pipeline fails, fall back to voicemail or transfer. Durable, idempotent processing for email and WhatsApp webhooks (retries, dedupe by message ID).
