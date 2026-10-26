@@ -116,8 +116,10 @@ per-case results. The internal service contract is:
 
 Both endpoints require the `X-Service-Token` voice service token. Case creation is an admin
 workflow: retain caller messages as `caller_utterances` in their original order, and create
-`intake_checks` from final intake values using regex-escaped literal patterns. Cases without an
-assistant can use the harness's default test route.
+`intake_checks` with escaped, case-insensitive exact patterns for values of up to four words and
+`\S` for longer values. Empty values and values whose digits match the source caller ID are omitted,
+since the eval runner replaces that ID. Cases without an assistant can use the harness's default
+test route.
 
 Inside the production phone container:
 

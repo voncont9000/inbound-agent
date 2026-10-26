@@ -5,7 +5,29 @@ from uuid import UUID, uuid4
 import psycopg
 from httpx import AsyncClient
 
+from inbound_api.routers.admin import eval_intake_checks
 from inbound_api.settings import get_settings
+
+
+def test_eval_intake_checks_omits_caller_id_and_handles_value_lengths() -> None:
+    assert eval_intake_checks(
+        {
+            "caller_phone": {"value": "+44 7716 131661"},
+            "domestic_phone": {"value": "07716 131661"},
+            "spoken_phone": {"value": "020 7946 0123"},
+            "reason": {"value": "Looking to buy a property around £500,000 and ask about viewings"},
+            "name": {"value": "Alice Smith"},
+            "empty": {"value": ""},
+            "blank": {"value": "   "},
+            "missing": {"value": None},
+        },
+        {"+447716131661"},
+    ) == {
+        "domestic_phone": r"(?i)^07716\ 131661$",
+        "spoken_phone": r"(?i)^020\ 7946\ 0123$",
+        "reason": r"\S",
+        "name": r"(?i)^Alice\ Smith$",
+    }
 
 
 def _seed_conversations(owner_database_url: str, tenant_pair: dict) -> dict[str, UUID]:
@@ -35,7 +57,13 @@ def _seed_conversations(owner_database_url: str, tenant_pair: dict) -> dict[str,
                     now - timedelta(hours=5 - index),
                     now - timedelta(hours=4 - index),
                     "Quality conversation",
-                    json.dumps({"test_call": index == 0, "trace_id": "trace-example"})
+                    json.dumps(
+                        {
+                            "test_call": index == 0,
+                            "trace_id": "trace-example",
+                            "from_number": "+447716131661",
+                        }
+                    )
                     if index == 0
                     else "{}",
                 ),
@@ -95,7 +123,17 @@ def _seed_conversations(owner_database_url: str, tenant_pair: dict) -> dict[str,
                         "fields": {
                             "email": {"value": "a+b@example.test", "confidence": 0.9},
                             "plain": "A.B",
+                            "caller_phone": {"value": "+44 7716 131661"},
+                            "spoken_phone": {"value": "020 7946 0123"},
+                            "reason": {
+                                "value": (
+                                    "Looking to buy a property around £500,000 "
+                                    "and ask about viewings"
+                                )
+                            },
+                            "name": {"value": "Alice Smith"},
                             "empty": {"value": ""},
+                            "missing": {"value": None},
                         },
                     }
                 ),
@@ -257,6 +295,9 @@ async def test_admin_routes_overview_filters_details_and_eval_round_trip(
     assert created_case["checks"]["intake_checks"] == {
         "email": r"(?i)^a\+b@example\.test$",
         "plain": r"(?i)^A\.B$",
+        "spoken_phone": r"(?i)^020\ 7946\ 0123$",
+        "reason": r"\S",
+        "name": r"(?i)^Alice\ Smith$",
     }
 
     run_payload = {

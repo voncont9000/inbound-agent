@@ -53,6 +53,24 @@ def _mean(values: list[int | float]) -> float | None:
     return round(sum(values) / len(values), 2) if values else None
 
 
+def eval_intake_checks(fields: dict[str, Any], caller_numbers: set[str]) -> dict[str, str]:
+    caller_digits = {re.sub(r"\D", "", number) for number in caller_numbers}
+    caller_digits.discard("")
+    checks = {}
+    for name, field_value in fields.items():
+        value = field_value.get("value") if isinstance(field_value, dict) else field_value
+        if value is None:
+            continue
+        value = str(value).strip()
+        if not value:
+            continue
+        digits = re.sub(r"\D", "", value)
+        if digits and digits in caller_digits:
+            continue
+        checks[name] = r"\S" if len(value.split()) > 4 else "(?i)^" + re.escape(value) + "$"
+    return checks
+
+
 @router.get("/overview", response_model=AdminOverview)
 async def overview(days: int = Query(default=7, ge=1, le=90)) -> AdminOverview:
     now = datetime.now(UTC)
@@ -325,12 +343,12 @@ async def create_eval_case(conversation_id: UUID) -> dict[str, UUID]:
     ]
     merged = intake.data if intake is not None and isinstance(intake.data, dict) else {}
     fields = merged.get("fields", {})
-    intake_checks = {}
-    if isinstance(fields, dict):
-        for name, field_value in fields.items():
-            value = field_value.get("value") if isinstance(field_value, dict) else field_value
-            if value is not None and value != "":
-                intake_checks[name] = "(?i)^" + re.escape(str(value)) + "$"
+    metrics = conversation.metrics if isinstance(conversation.metrics, dict) else {}
+    from_number = metrics.get("from_number")
+    caller_numbers = (
+        {from_number} if isinstance(from_number, str) and from_number.strip() else set()
+    )
+    intake_checks = eval_intake_checks(fields, caller_numbers) if isinstance(fields, dict) else {}
     checks = {
         "transcript_checks": {},
         "assistant_checks": {},
