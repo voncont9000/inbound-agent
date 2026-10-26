@@ -7,6 +7,20 @@ import { server } from "../mocks/server";
 import { renderApp } from "../test/renderApp";
 
 describe("website-based assistant setup", () => {
+  it("prefills and automatically reads a query website once in StrictMode", async () => {
+    renderApp("/assistants/new?website=smith-dental.co.uk", { loggedIn: true, strictMode: true });
+
+    await screen.findByRole("heading", { name: "Choose what to include" });
+    expect(mockDb.setupDraftRequests).toHaveLength(1);
+    expect(mockDb.setupDraftRequests[0].website_url).toBe("https://smith-dental.co.uk");
+  });
+
+  it("does not automatically read a website when the query parameter is absent", async () => {
+    renderApp("/assistants/new", { loggedIn: true, strictMode: true });
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Blank/ })).toBeChecked());
+    expect(mockDb.setupDraftRequests).toHaveLength(0);
+  });
+
   it("submits only accepted sections and includes edited values", async () => {
     const user = userEvent.setup();
     renderApp("/assistants/new", { loggedIn: true });

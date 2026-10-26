@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { ErrorState, LoadingState } from "../components/States";
 import { DraftSectionCard, type DraftSectionStatus } from "../components/setup/DraftSectionCard";
@@ -29,14 +29,17 @@ const initialStatuses: Record<DraftSectionName, DraftSectionStatus> = {
 };
 
 export function AssistantSetupPage() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const queryWebsite = new URLSearchParams(location.search).get("website") ?? "";
   const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: () => unwrap(api.GET("/templates")) });
   const [businessName, setBusinessName] = useState("");
   const [assistantName, setAssistantName] = useState("");
-  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState(queryWebsite);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [step, setStep] = useState<SetupStep>("form");
   const [jobId, setJobId] = useState("");
+  const autoReadStarted = useRef(false);
   const [draft, setDraft] = useState<Schemas["SetupDraft"] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [statuses, setStatuses] = useState(initialStatuses);
@@ -55,6 +58,16 @@ export function AssistantSetupPage() {
     },
     onError: () => setStep("waiting"),
   });
+  const startDraftMutation = startDraft.mutate;
+  const readWebsite = useCallback((website: string) => {
+    const normalizedWebsiteUrl = normalizeWebsiteUrl(website);
+    if (!normalizedWebsiteUrl || !selectedTemplate) return;
+    startDraftMutation({
+      business_name: businessName.trim(),
+      website_url: normalizedWebsiteUrl,
+      template: selectedTemplate,
+    });
+  }, [businessName, selectedTemplate, startDraftMutation]);
   const jobQuery = useQuery({
     queryKey: ["assistant-setup-draft", jobId],
     queryFn: () => unwrap(api.GET("/jobs/{job_id}", { params: { path: { job_id: jobId } } })),
@@ -85,6 +98,12 @@ export function AssistantSetupPage() {
     }
   }, [selectedTemplate, templatesQuery.data]);
 
+  useEffect(() => {
+    if (!queryWebsite || !selectedTemplate || autoReadStarted.current) return;
+    autoReadStarted.current = true;
+    readWebsite(queryWebsite);
+  }, [queryWebsite, readWebsite, selectedTemplate]);
+
   function makeCompletion(accepted: Schemas["SetupDraft"]) {
     const name = assistantName.trim() || businessName.trim();
     const normalizedWebsiteUrl = normalizeWebsiteUrl(websiteUrl);
@@ -103,11 +122,7 @@ export function AssistantSetupPage() {
     if (!selectedTemplate) return;
     const normalizedWebsiteUrl = normalizeWebsiteUrl(websiteUrl);
     if (normalizedWebsiteUrl) {
-      startDraft.mutate({
-        business_name: businessName.trim(),
-        website_url: normalizedWebsiteUrl,
-        template: selectedTemplate,
-      });
+      readWebsite(websiteUrl);
     } else {
       makeCompletion({});
     }
