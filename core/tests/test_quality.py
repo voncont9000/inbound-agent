@@ -17,10 +17,10 @@ from inbound_core.quality import (
 )
 
 
-def test_rubric_matches_v1_golden() -> None:
-    golden = Path(__file__).with_name("golden") / "quality_rubric_v1.txt"
+def test_rubric_matches_v2_golden() -> None:
+    golden = Path(__file__).with_name("golden") / "quality_rubric_v2.txt"
 
-    assert JUDGE_VERSION == "v1"
+    assert JUDGE_VERSION == "v2"
     assert RUBRIC_PROMPT == golden.read_text(encoding="utf-8").rstrip("\n")
 
 

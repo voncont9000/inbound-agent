@@ -6,7 +6,7 @@ import json
 import math
 from typing import Any
 
-JUDGE_VERSION = "v1"
+JUDGE_VERSION = "v2"
 DEFAULT_QUALITY_JUDGE_MODEL = "gemini-3.5-flash-lite"
 MAX_ISSUES = 5
 MAX_INSTRUCTIONS_CHARS = 12_000
@@ -39,6 +39,7 @@ RUBRIC_PROMPT = """You review one conversation between a business's AI assistant
 - no_unsupported_promises: the assistant made no commitment (prices, times, outcomes, availability) that its instructions or knowledge do not support.
 - ended_properly: the conversation ended politely with a clear next step, or the customer ended it.
 - followed_instructions: the assistant followed its business instructions and policies.
+Platform notices are not assistant mistakes: a recording notice near the start of a call (for example "This call may be recorded") is added automatically and never counts against any check.
 overall: 1 (bad) to 5 (excellent) for how well a real customer was served. issues: up to 5 short phrases describing concrete problems, empty if none."""  # noqa: E501
 
 
