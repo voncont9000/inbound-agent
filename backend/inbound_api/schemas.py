@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -30,6 +32,141 @@ class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     display_name: str
+    is_platform_admin: bool = False
+
+
+class AdminDaySummary(BaseModel):
+    date: str
+    conversations: int
+    avg_overall: float | None
+    needs_review: int
+
+
+class AdminTenantSummary(BaseModel):
+    tenant_id: UUID
+    tenant_name: str
+    conversations: int
+    avg_overall: float | None
+    needs_review: int
+
+
+class AdminOverview(BaseModel):
+    days: int
+    conversations: int
+    scored: int
+    needs_review: int
+    avg_overall: float | None
+    response_p50_s: float | None
+    response_p95_s: float | None
+    by_day: list[AdminDaySummary]
+    by_tenant: list[AdminTenantSummary]
+
+
+class AdminConversationItem(BaseModel):
+    conversation_id: UUID
+    tenant_id: UUID
+    tenant_name: str
+    assistant_id: UUID
+    assistant_name: str
+    channel: str
+    started_at: datetime
+    is_test: bool
+    overall: int | None
+    needs_review: bool | None
+    issues: list[str]
+    objective: dict[str, Any] | None
+
+
+class AdminConversationListResponse(BaseModel):
+    items: list[AdminConversationItem]
+    next_cursor: str | None
+
+
+class ConversationScoreCheck(BaseModel):
+    key: str
+    passed: bool | None
+    note: str | None
+
+
+class ConversationScoreResponse(BaseModel):
+    judge_model: str
+    judge_version: str
+    overall: int
+    needs_review: bool
+    checks: list[ConversationScoreCheck]
+    issues: list[str]
+    objective: dict[str, Any] | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminConversationDetail(BaseModel):
+    conversation_id: UUID
+    tenant_id: UUID
+    tenant_name: str
+    assistant_id: UUID
+    assistant_name: str
+    channel: str
+    status: str
+    started_at: datetime
+    ended_at: datetime | None
+    summary: str | None
+    end_reason: str | None
+    is_test: bool
+    messages: list[MessageResponse]
+    intake: dict[str, Any] | None
+    score: ConversationScoreResponse | None
+    trace_url: str | None
+
+
+class EvalCaseResponse(BaseModel):
+    id: UUID
+    source_conversation_id: UUID | None
+    name: str
+    assistant_id: UUID | None
+    caller_utterances: list[str]
+    checks: dict[str, Any]
+    created_at: datetime
+    enabled: bool
+
+
+class EvalRunSummaryData(BaseModel):
+    cases: int
+    passed: int
+    failed: int
+
+
+class EvalRunResultCreate(BaseModel):
+    eval_case_id: UUID | None = None
+    passed: bool
+    failures: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class EvalRunCreate(BaseModel):
+    started_at: datetime
+    finished_at: datetime | None = None
+    git_sha: str | None = None
+    trigger: str = "manual"
+    summary: EvalRunSummaryData
+    results: list[EvalRunResultCreate] = Field(default_factory=list)
+
+
+class EvalRunSummary(BaseModel):
+    id: UUID
+    started_at: datetime
+    finished_at: datetime | None
+    git_sha: str | None
+    trigger: str
+    summary: dict[str, Any]
+
+
+class EvalRunResponse(EvalRunSummary):
+    results: list[dict[str, Any]]
+
+
+class EvalRunCreated(BaseModel):
+    eval_run_id: UUID
 
 
 class TenantResponse(BaseModel):

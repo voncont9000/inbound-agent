@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_VOICE_SERVICE_TOKEN = "dev-only-voice-service-token"
@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     recording_max_bytes: int = 200 * 1024 * 1024
     templates_dir: Path = Path(__file__).resolve().parents[2] / "voice" / "config" / "templates"
     google_api_key: str | None = None
+    platform_admin_emails: Annotated[list[str], NoDecode] = []
+    quality_judge_model: str = "gemini-3.5-flash-lite"
+    langfuse_host: str | None = None
     knowledge_model: str = "gemini-3.8-flash"
     knowledge_max_pages: int = 50
     knowledge_request_delay: float = 0.5
@@ -76,6 +79,24 @@ class Settings(BaseSettings):
     job_retry_base_seconds: float = 10
     job_lease_seconds: int = 900
     worker_poll_seconds: float = 1.0
+
+    @field_validator("platform_admin_emails", mode="before")
+    @classmethod
+    def parse_platform_admin_emails(cls, value: str | list[str] | None) -> list[str]:
+        if value is None:
+            return []
+        entries = value.split(",") if isinstance(value, str) else value
+        return [email.strip().lower() for email in entries if email.strip()]
+
+    @field_validator("langfuse_host", mode="before")
+    @classmethod
+    def normalize_langfuse_host(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().rstrip("/") or None
+
+    def is_platform_admin(self, email: str) -> bool:
+        return email.strip().lower() in self.platform_admin_emails
 
     @field_validator("upload_dir", mode="before")
     @classmethod

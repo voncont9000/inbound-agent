@@ -134,6 +134,7 @@ async def signup(
             "id": result_user.id,
             "email": result_user.email,
             "display_name": result_user.display_name,
+            "is_platform_admin": get_settings().is_platform_admin(result_user.email),
         },
         tenants=[{"id": tenant_id, "name": payload.tenant_name, "role": "owner"}],
         access_token=token,
@@ -159,7 +160,12 @@ async def login(
     await session.commit()
     _set_session_cookie(response, token)
     return AuthResponse(
-        user={"id": user.id, "email": user.email, "display_name": user.display_name},
+        user={
+            "id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "is_platform_admin": get_settings().is_platform_admin(user.email),
+        },
         tenants=tenants,
         access_token=token,
     )
@@ -195,6 +201,7 @@ async def me(ctx: TenantContext = _current_tenant_dependency) -> MeResponse:
             "id": ctx.user.id,
             "email": ctx.user.email,
             "display_name": ctx.user.display_name,
+            "is_platform_admin": get_settings().is_platform_admin(ctx.user.email),
         },
         tenant={"id": ctx.tenant_id, "name": tenant.name, "role": ctx.role.value},
         memberships=memberships,

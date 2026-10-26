@@ -81,6 +81,12 @@ async def current_user(request: Request, session: AsyncSession = _DB_SESSION_DEP
 _CURRENT_USER_DEPENDENCY = Depends(current_user)
 
 
+async def require_platform_admin(user: User = _CURRENT_USER_DEPENDENCY) -> User:
+    if not get_settings().is_platform_admin(user.email):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return user
+
+
 async def _memberships(session: AsyncSession, email: str) -> list[tuple[UUID, MembershipRole]]:
     result = await session.execute(
         text("SELECT tenant_id, role FROM lookup_user_memberships(CAST(:email AS citext))"),

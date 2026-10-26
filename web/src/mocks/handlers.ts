@@ -383,7 +383,12 @@ export const handlers = [
     };
     mockDb.tenants.push(fixture);
     mockDb.memberships.push(tenant);
-    mockDb.user = { id: authUser.id, email: body.email, display_name: body.display_name };
+    mockDb.user = {
+      id: authUser.id,
+      email: body.email,
+      display_name: body.display_name,
+      is_platform_admin: false,
+    };
     mockDb.loggedIn = true;
     if (typeof localStorage !== "undefined") localStorage.setItem("inbound.mock.session", "1");
     return HttpResponse.json<Schemas["AuthResponse"]>({ user: mockDb.user, tenants: mockDb.memberships, access_token: "mock-token" }, { status: 201 });

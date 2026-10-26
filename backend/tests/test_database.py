@@ -68,6 +68,8 @@ def test_security_definer_functions_have_non_bypass_owners() -> None:
         """,
     )
     assert functions == [
+        ("admin_conversation_facts", "inbound_platform_reader", False, False),
+        ("admin_conversation_list", "inbound_platform_reader", False, False),
         ("claim_next_job", "inbound_job_claimer", False, False),
         ("conversation_tenant", "inbound_lookup", False, False),
         ("gmail_route", "inbound_lookup", False, False),
@@ -75,6 +77,54 @@ def test_security_definer_functions_have_non_bypass_owners() -> None:
         ("resolve_channel", "inbound_lookup", False, False),
         ("whatsapp_route", "inbound_lookup", False, False),
     ]
+
+
+def test_conversation_scores_are_tenant_isolated_and_admin_facts_are_cross_tenant() -> None:
+    tenant_ids = [uuid4(), uuid4()]
+    assistant_ids = [uuid4(), uuid4()]
+    conversation_ids = [uuid4(), uuid4()]
+    with psycopg.connect(OWNER_DATABASE_URL) as connection:
+        for index, tenant_id in enumerate(tenant_ids):
+            connection.execute(
+                "INSERT INTO tenants (id, name) VALUES (%s, %s)",
+                (tenant_id, f"Quality tenant {index}"),
+            )
+            connection.execute(
+                "INSERT INTO assistants (id, tenant_id, name, config) VALUES (%s, %s, %s, '{}')",
+                (assistant_ids[index], tenant_id, f"Quality assistant {index}"),
+            )
+            connection.execute(
+                "INSERT INTO conversations "
+                "(id, tenant_id, assistant_id, channel, external_ref, status, started_at) "
+                "VALUES (%s, %s, %s, 'phone', %s, 'completed', now())",
+                (
+                    conversation_ids[index],
+                    tenant_id,
+                    assistant_ids[index],
+                    str(conversation_ids[index]),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO conversation_scores "
+                "(tenant_id, conversation_id, assistant_id, judge_model, judge_version, "
+                "overall, needs_review) "
+                "VALUES (%s, %s, %s, 'test-model', 'v1', 4, false)",
+                (tenant_id, conversation_ids[index], assistant_ids[index]),
+            )
+    try:
+        with psycopg.connect(APP_DATABASE_URL) as connection, connection.transaction():
+            _set_tenant(connection, tenant_ids[0])
+            assert connection.execute(
+                "SELECT conversation_id FROM conversation_scores"
+            ).fetchall() == [(conversation_ids[0],)]
+            visible_facts = connection.execute(
+                "SELECT conversation_id FROM admin_conversation_facts(now() - interval '1 hour')"
+            ).fetchall()
+            assert {row[0] for row in visible_facts} >= set(conversation_ids)
+    finally:
+        with psycopg.connect(OWNER_DATABASE_URL) as connection:
+            for tenant_id in tenant_ids:
+                connection.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
 
 
 def test_tenant_rls_hides_and_blocks_updates_without_matching_tenant() -> None:

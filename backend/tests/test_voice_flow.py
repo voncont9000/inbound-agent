@@ -304,6 +304,15 @@ async def test_voice_call_report_review_and_job_are_idempotent(tenant_pair) -> N
             )
         )
         assert len(graph_jobs) == 1
+        quality_jobs = list(
+            await session.scalars(
+                select(Job).where(
+                    Job.kind == "conversation_score",
+                    Job.payload["conversation_id"].astext == conversation_id,
+                )
+            )
+        )
+        assert len(quality_jobs) == 1
         job_id = graph_jobs[0].id
         message_count = await session.scalar(
             select(func.count())

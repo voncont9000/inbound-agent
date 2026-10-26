@@ -143,6 +143,7 @@ class CallMetricsObserver(BaseObserver):
         self.tool_round_trip_ms: dict[str, list[float]] = {}
         self.transfer: dict[str, Any] | None = None
         self.trace_id: str | None = None
+        self.interruptions = 0
         self.usage: dict[str, float | int] = {
             "stt_audio_seconds": 0,
             "tts_characters": 0,
@@ -187,6 +188,7 @@ class CallMetricsObserver(BaseObserver):
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self.flush_assistant_transcript()
         elif isinstance(frame, InterruptionFrame):
+            self.interruptions += 1
             self.flush_assistant_transcript()
             self.latency.interrupted()
         elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
@@ -334,6 +336,7 @@ class CallMetricsObserver(BaseObserver):
             "turns": self.latency.turns,
             "turn_latency_summary": self.latency.summary(),
             "turn_end_latency_summary": self.latency.turn_end_summary(),
+            "interruptions": self.interruptions,
             "number_holds": self.number_holds,
             "service_metrics": self.service_metrics,
             "usage": self.usage,

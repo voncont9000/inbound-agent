@@ -45,6 +45,7 @@ from inbound_api.services import assistant_setup as _assistant_setup  # noqa: F4
 from inbound_api.services import files_cleanup as _files_cleanup  # noqa: F401
 from inbound_api.services import gmail_jobs as _gmail_jobs  # noqa: F401
 from inbound_api.services import knowledge_import as knowledge_import_service  # noqa: F401
+from inbound_api.services import quality as _quality  # noqa: F401
 from inbound_api.services import recordings as _recordings  # noqa: F401
 from inbound_api.services.assistant_context import load_assistant_route
 from inbound_api.services.booking import book_slot, booking_context, fetch_busy

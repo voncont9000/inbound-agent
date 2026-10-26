@@ -95,6 +95,24 @@ def test_speechify_api_key_is_optional_and_secret() -> None:
     assert "test-key" not in str(configured.speechify_api_key)
 
 
+def test_platform_admin_emails_parse_and_match_case_insensitively(monkeypatch) -> None:
+    monkeypatch.setenv("PLATFORM_ADMIN_EMAILS", " Admin@Example.com, ,second@example.com ")
+    settings = Settings(_env_file=None)
+
+    assert settings.platform_admin_emails == ["admin@example.com", "second@example.com"]
+    assert settings.is_platform_admin("ADMIN@example.com")
+    assert not settings.is_platform_admin("other@example.com")
+
+
+def test_quality_judge_model_and_langfuse_host_settings() -> None:
+    defaults = Settings(_env_file=None)
+    configured = Settings(_env_file=None, langfuse_host=" https://traces.example/ ")
+
+    assert defaults.quality_judge_model == "gemini-3.5-flash-lite"
+    assert defaults.langfuse_host is None
+    assert configured.langfuse_host == "https://traces.example"
+
+
 def _valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",
