@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-
 from conftest import create_conversation
+
 from inbound_api.settings import get_settings
 
 
