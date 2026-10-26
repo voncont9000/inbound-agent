@@ -23,9 +23,14 @@ from pipecat.frames.frames import (
     BotStoppedSpeakingFrame,
     ControlFrame,
     EndWorkerFrame,
+    FunctionCallInProgressFrame,
     FunctionCallResultProperties,
+    FunctionCallsStartedFrame,
     InterruptionFrame,
+    LLMFullResponseEndFrame,
+    LLMFullResponseStartFrame,
     LLMRunFrame,
+    LLMTextFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
     TTSTextFrame,
@@ -462,6 +467,77 @@ class IdleHangupObserver(BaseObserver):
         self.pending = None
         self._phase = queued_phase
         await self.queue_frame(TTSSpeakFrame(text))
+
+
+class EmptyReplyRetryObserver(BaseObserver):
+    MAX_CONSECUTIVE_RETRIES = 2
+
+    def __init__(
+        self,
+        *,
+        llm: Any,
+        queue_frame: Any,
+        metrics_observer: CallMetricsObserver,
+        call_ended: Any,
+    ) -> None:
+        super().__init__(observe_every_push=False)
+        self.llm = llm
+        self.queue_frame = queue_frame
+        self.metrics_observer = metrics_observer
+        self.call_ended = call_ended
+        self.ended = False
+        self.response_active = False
+        self.response_nonempty = False
+        self.response_interrupted = False
+        self.consecutive_retries = 0
+
+    async def on_push_frame(self, data: Any) -> None:
+        frame = data.frame
+        if isinstance(frame, EndWorkerFrame):
+            self.ended = True
+            self.response_active = False
+            return
+        if isinstance(frame, (InterruptionFrame, UserStartedSpeakingFrame)):
+            if self.response_active:
+                self.response_interrupted = True
+            return
+        if data.source is not self.llm:
+            return
+        if self.ended or self.call_ended():
+            self.response_active = False
+            return
+        if isinstance(frame, LLMFullResponseStartFrame):
+            self.response_active = True
+            self.response_nonempty = False
+            self.response_interrupted = False
+        elif not self.response_active:
+            return
+        elif isinstance(frame, LLMTextFrame):
+            if frame.text.strip():
+                self.response_nonempty = True
+        elif isinstance(frame, (FunctionCallsStartedFrame, FunctionCallInProgressFrame)):
+            self.response_nonempty = True
+        elif isinstance(frame, LLMFullResponseEndFrame):
+            self.response_active = False
+            if self.response_nonempty:
+                self.consecutive_retries = 0
+                return
+            if self.response_interrupted or (
+                self.consecutive_retries >= self.MAX_CONSECUTIVE_RETRIES
+            ):
+                return
+            self.consecutive_retries += 1
+            self.metrics_observer.record_empty_llm_reply()
+            logger.warning(
+                "LLM returned an empty reply; retrying inference ({}/{}).",
+                self.consecutive_retries,
+                self.MAX_CONSECUTIVE_RETRIES,
+            )
+            await self.queue_frame(LLMRunFrame())
+
+    def close(self) -> None:
+        self.ended = True
+        self.response_active = False
 
 
 class IncompletePhoneNumberTurnStopStrategy(TurnAnalyzerUserTurnStopStrategy):
@@ -936,6 +1012,16 @@ async def run_bot(
             await task.queue_frame(frame)
 
         goodbye_hangup = GoodbyeDetectedHangup(sink, call_tools, push_end_worker)
+        empty_reply_retry = EmptyReplyRetryObserver(
+            llm=llm,
+            queue_frame=queue_frame,
+            metrics_observer=metrics_observer,
+            call_ended=lambda: (
+                call_tools.end_call_requested
+                or call_tools.transfer_request is not None
+                or goodbye_hangup.pending is not None
+            ),
+        )
         idle_hangup = IdleHangupObserver(
             sink,
             queue_frame,
@@ -963,6 +1049,7 @@ async def run_bot(
         )
         observers = [
             metrics_observer,
+            empty_reply_retry,
             goodbye_hangup,
             idle_hangup,
             max_call_observer,

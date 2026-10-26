@@ -144,6 +144,7 @@ class CallMetricsObserver(BaseObserver):
         self.transfer: dict[str, Any] | None = None
         self.trace_id: str | None = None
         self.interruptions = 0
+        self.empty_llm_replies = 0
         self.usage: dict[str, float | int] = {
             "stt_audio_seconds": 0,
             "tts_characters": 0,
@@ -304,6 +305,10 @@ class CallMetricsObserver(BaseObserver):
         self.trace_id = trace_id
         self._save()
 
+    def record_empty_llm_reply(self) -> None:
+        self.empty_llm_replies += 1
+        self._save()
+
     def start_number_hold(self) -> dict[str, Any]:
         now = time.monotonic()
         self.latency.number_hold_started(now)
@@ -337,6 +342,7 @@ class CallMetricsObserver(BaseObserver):
             "turn_latency_summary": self.latency.summary(),
             "turn_end_latency_summary": self.latency.turn_end_summary(),
             "interruptions": self.interruptions,
+            "empty_llm_replies": self.empty_llm_replies,
             "number_holds": self.number_holds,
             "service_metrics": self.service_metrics,
             "usage": self.usage,
