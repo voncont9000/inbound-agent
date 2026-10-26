@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -17,6 +18,7 @@ from inbound_voice.metrics import (
     summarize_turn_end_latencies,
     summarize_turn_latencies,
 )
+from inbound_voice.sinks import LocalFilesCallSink
 
 
 class RecordingTranscriptSink:
@@ -377,3 +379,15 @@ def test_explicit_assistant_flush_writes_remaining_text_and_skips_empty() -> Non
     asyncio.run(run())
 
     assert [(role, text) for role, text, _ in sink.transcripts] == [("assistant", "One more word")]
+
+
+def test_trace_id_is_saved_to_metrics_json(tmp_path) -> None:
+    sink = LocalFilesCallSink(tmp_path, "trace-call")
+    observer = CallMetricsObserver(sink)
+
+    assert "trace_id" not in observer.snapshot()
+    observer.record_trace_id("0123456789abcdef0123456789abcdef")
+
+    assert observer.snapshot()["trace_id"] == "0123456789abcdef0123456789abcdef"
+    metrics = json.loads((sink.directory / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["trace_id"] == "0123456789abcdef0123456789abcdef"

@@ -98,6 +98,7 @@ from inbound_voice.recording import (
 )
 from inbound_voice.sinks import LocalFilesCallSink
 from inbound_voice.tools import CallTools, tool_specs
+from inbound_voice.tracing import CallTraceObserver, call_span_attributes, configure_tracing
 from inbound_voice.transfer import CallTransfer, SimulatedCallTransfer, TransferStart
 from inbound_voice.turns import incomplete_phone_number
 
@@ -766,6 +767,7 @@ async def run_bot(
     call_id: str | None = None,
     call_transfer: CallTransfer | None = None,
 ) -> None:
+    tracing = configure_tracing(os.environ)
     if prepared is None:
         prepared = PreparedCall(
             assistant=load_assistant_config(
@@ -835,6 +837,7 @@ async def run_bot(
             "llm_model": providers.llm_model,
         },
     )
+    trace_observer = CallTraceObserver(metrics_observer.record_trace_id) if tracing else None
     start_call_task: asyncio.Task[uuid.UUID | None] | None = None
 
     async def conversation_id_getter() -> uuid.UUID | None:
@@ -958,6 +961,24 @@ async def run_bot(
             call_tools=call_tools,
             sink=sink,
         )
+        observers = [
+            metrics_observer,
+            goodbye_hangup,
+            idle_hangup,
+            max_call_observer,
+            speech_tracker,
+        ]
+        task_options: dict[str, Any] = {"enable_tracing": tracing}
+        if tracing:
+            assert trace_observer is not None
+            observers.append(trace_observer)
+            task_options.update(
+                conversation_id=external_call_id,
+                additional_span_attributes=call_span_attributes(
+                    channel="phone" if telephony else "web",
+                    route=prepared.route,
+                ),
+            )
         task = PipelineTask(
             pipeline,
             params=PipelineParams(
@@ -966,14 +987,11 @@ async def run_bot(
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[
-                metrics_observer,
-                goodbye_hangup,
-                idle_hangup,
-                max_call_observer,
-                speech_tracker,
-            ],
+            observers=observers,
+            **task_options,
         )
+        if trace_observer is not None:
+            trace_observer.task = task
         if prepared.api is not None and prepared.call_start is not None:
 
             async def start_call_safely() -> uuid.UUID | None:
@@ -984,6 +1002,20 @@ async def run_bot(
                     return None
 
             start_call_task = asyncio.create_task(start_call_safely())
+            if trace_observer is not None:
+
+                def record_started_conversation(
+                    completed_task: asyncio.Task[uuid.UUID | None],
+                ) -> None:
+                    if completed_task.cancelled():
+                        return
+                    if completed_task.exception() is not None:
+                        return
+                    conversation_id = completed_task.result()
+                    if isinstance(conversation_id, uuid.UUID):
+                        trace_observer.set_conversation_id(conversation_id)
+
+                start_call_task.add_done_callback(record_started_conversation)
 
         @transport.event_handler("on_client_connected")
         async def on_client_connected(_transport: object, _client: object) -> None:

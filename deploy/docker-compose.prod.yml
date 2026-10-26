@@ -83,6 +83,7 @@ services:
       - "*"
     environment:
       APP_ENV: ${APP_ENV:-production}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       DATABASE_URL: postgresql+psycopg://inbound_app_login:${INBOUND_APP_PASSWORD}@db:5432/inbound
       VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
       WEB_CALL_BASE_URL: https://${DOMAIN:?Set DOMAIN}/call/
@@ -154,6 +155,7 @@ services:
     command: ["python", "-m", "inbound_api.worker"]
     environment:
       APP_ENV: ${APP_ENV:-production}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       DATABASE_URL: postgresql+psycopg://inbound_app_login:${INBOUND_APP_PASSWORD}@db:5432/inbound
       VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
       WHATSAPP_MODE: ${WHATSAPP_MODE:-off}
@@ -226,6 +228,9 @@ services:
       VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:?Set VOICE_SERVICE_TOKEN}
       REDIS_URL: redis://redis:6379/0
       VOICE_SPOOL_DIR: /app/voice/spool
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
