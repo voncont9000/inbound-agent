@@ -319,6 +319,7 @@ services:
     logging: *default-logging
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN}
+      SITE_DOMAIN: ${SITE_DOMAIN:-yelvo.vinci-labs.tech}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
     ports:
       - "80:80"

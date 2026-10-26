@@ -13,4 +13,6 @@ __pycache__/
 htmlcov/
 node_modules/
 web/dist/
+site/dist/
+site/dist-ssr/
 *.tsbuildinfo
