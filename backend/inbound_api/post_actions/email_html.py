@@ -8,7 +8,7 @@ _URL = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 _DETAIL_LINE = re.compile(r"^([^:\n]{1,40}): (.+)$")
 
 
-def render_email_html(*, body_text: str, business_name: str) -> str:
+def render_email_html(*, body_text: str, business_name: str, footer_label: str = "Sent by") -> str:
     paragraphs = [
         paragraph for paragraph in re.split(r"\n[ \t]*\n", body_text.strip()) if paragraph.strip()
     ]
@@ -56,6 +56,7 @@ def render_email_html(*, body_text: str, business_name: str) -> str:
 
     content = "".join(rendered_paragraphs)
     escaped_business_name = escape(business_name)
+    escaped_footer_label = escape(footer_label)
     return (
         '<!doctype html><html><body style="margin:0;padding:24px 12px;'
         "background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,"
@@ -69,7 +70,7 @@ def render_email_html(*, body_text: str, business_name: str) -> str:
         f"{escaped_business_name}</div>"
         f"{content}"
         '<div style="padding-top:8px;border-top:1px solid #e5e7eb;color:#6b7280;'
-        'font-size:12px">Sent by '
+        f'font-size:12px">{escaped_footer_label} '
         f"{escaped_business_name}</div>"
         "</td></tr></table></td></tr></table></body></html>"
     )

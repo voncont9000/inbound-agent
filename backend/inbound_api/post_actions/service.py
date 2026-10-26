@@ -13,6 +13,7 @@ from inbound_core.config import (
     SheetsRowAction,
     WebhookAction,
 )
+from inbound_core.languages import LOCALES
 from inbound_core.post_actions import (
     derive_events,
     format_value,
@@ -55,6 +56,7 @@ from inbound_api.post_actions.providers import (
     sign_webhook,
     webhook_sender_from_settings,
 )
+from inbound_api.post_actions.translation import translate_email
 from inbound_api.settings import Settings, get_settings
 
 LOGGER = logging.getLogger(__name__)
@@ -188,6 +190,7 @@ async def execute_conversation_action(
         output = await _dispatch_action(
             session,
             assistant=assistant,
+            config=config,
             action=action,
             context=context,
             settings=settings,
@@ -333,6 +336,7 @@ async def build_action_context(
         "service_key": service_key,
         "summary": conversation.summary or "",
         "customer_recap": recap if isinstance(recap, str) else "",
+        "conversation_language": (conversation.metrics or {}).get("conversation_language"),
         "next_step": next_step,
         "urgency": "urgent" if "urgent" in (events or []) else "normal",
         "urgency_reasons": format_value((conversation.metrics or {}).get("urgency_reasons", [])),
@@ -364,6 +368,7 @@ async def _dispatch_action(
     session: AsyncSession,
     *,
     assistant: Assistant,
+    config: AssistantConfig,
     action,
     context: dict[str, Any],
     settings: Settings,
@@ -381,18 +386,52 @@ async def _dispatch_action(
         except ValidationError as error:
             raise ActionSkipped("The known customer email address is invalid") from error
         sender = email_sender or email_sender_from_settings(session, settings=settings)
+        subject = render_subject(action.subject_template, context)
         text = render_email_body(action.body_template, context)
-        return await sender.send(
+        footer_label = "Sent by"
+        if not action.translate_to_customer_language:
+            translation_output = {"translation": "skipped"}
+        else:
+            conversation_language = context.get("conversation_language")
+            target_language = (
+                conversation_language.strip()
+                if isinstance(conversation_language, str) and conversation_language.strip()
+                else (LOCALES[config.language].prompt_name if config.language != "multi" else None)
+            )
+            if target_language is None:
+                translation_output = {"translation": "skipped"}
+            else:
+                try:
+                    translated = await translate_email(
+                        subject=subject,
+                        body=text,
+                        footer_label=footer_label,
+                        target_language=target_language,
+                        settings=settings,
+                    )
+                except Exception:
+                    LOGGER.warning("Customer email translation failed")
+                    translated = None
+                if translated is None:
+                    translation_output = {"translation": "failed"}
+                else:
+                    subject = translated.subject
+                    text = translated.body
+                    footer_label = translated.footer_label
+                    translation_output = {"translated_to": target_language}
+        output = await sender.send(
             assistant_id=assistant.id,
             tenant_id=assistant.tenant_id,
             to=[recipient],
-            subject=render_action_subject(action.subject_template, context),
+            subject=render_action_subject(subject, context),
             body=text,
             html=render_email_html(
                 body_text=text,
                 business_name=str(context.get("business_name", "")),
+                footer_label=footer_label,
             ),
         )
+        return {**output, **translation_output}
     if isinstance(action, NotifyStaffAction):
         sender = email_sender or email_sender_from_settings(session, settings=settings)
         text = render_email_body(action.body_template, context)

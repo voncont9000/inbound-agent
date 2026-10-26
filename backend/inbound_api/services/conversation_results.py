@@ -126,10 +126,16 @@ async def persist_voice_report(
         if isinstance(payload.post_call_intake, dict)
         else None
     )
+    conversation_language = (
+        payload.post_call_intake.get("conversation_language")
+        if isinstance(payload.post_call_intake, dict)
+        else None
+    )
     conversation.metrics = {
         **(conversation.metrics or {}),
         **payload.metrics,
         "customer_recap": recap,
+        "conversation_language": conversation_language,
     }
     conversation.estimated_cost = payload.estimated_cost
     await enqueue(session, "graph_ingest", {"conversation_id": str(conversation.id)})
@@ -172,6 +178,7 @@ async def persist_extracted_results(
     conversation.metrics = {
         **(conversation.metrics or {}),
         "customer_recap": post_call_intake.get("customer_recap"),
+        "conversation_language": post_call_intake.get("conversation_language"),
     }
     await session.execute(
         delete(Task).where(

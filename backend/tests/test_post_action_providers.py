@@ -228,6 +228,16 @@ def test_email_html_renders_single_detail_line_as_bold_label_paragraph():
     assert "<tbody>" not in rendered
 
 
+def test_email_html_escapes_custom_footer_label():
+    rendered = render_email_html(
+        body_text="Hello",
+        business_name="Example",
+        footer_label="Envoyé par <Example>",
+    )
+
+    assert "Envoyé par &lt;Example&gt; Example" in rendered
+
+
 @pytest.mark.asyncio
 async def test_sheets_writer_headers_append_and_quotes_sheet_name(monkeypatch):
     import inbound_api.post_actions.providers as providers

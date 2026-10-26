@@ -9,6 +9,7 @@ import pytest
 from inbound_core.config import AssistantConfig, OfficeHours, RulesConfig, SentenceUrgencyRule
 from inbound_core.extraction import (
     EMPTY_FOLLOW_UP,
+    _conversation_language,
     _customer_recap,
     _extraction_prompt,
     _extraction_schema,
@@ -74,6 +75,7 @@ class _Models:
             },
             "summary": "The customer asked a general question.",
             "complaint": {"made": False, "summary": None},
+            "conversation_language": "Italian",
             "unanswered_questions": [],
         }
         return SimpleNamespace(
@@ -108,6 +110,17 @@ def test_customer_recap_strips_caps_and_maps_empty_values_to_none() -> None:
     assert _customer_recap("   ") is None
     assert _customer_recap(None) is None
     assert _customer_recap("x" * 700) == "x" * 600
+
+
+def test_conversation_language_is_trimmed_and_sanitized() -> None:
+    assert _conversation_language("  Italian  ") == "Italian"
+    assert _conversation_language("French (Canadian)") == "French (Canadian)"
+    assert _conversation_language("English-UK") == "English-UK"
+    assert _conversation_language(" ") is None
+    assert _conversation_language("Italian!") is None
+    assert _conversation_language("English\tUK") is None
+    assert _conversation_language("a" * 41) is None
+    assert _conversation_language(None) is None
 
 
 def test_follow_up_extraction_creates_one_generic_staff_task() -> None:
@@ -275,6 +288,7 @@ def test_extraction_uses_injected_client_and_message_thread_wording() -> None:
 
     assert result["status"] == "completed"
     assert result["fields"]["caller_name"]["value"] == "Alex Smith"
+    assert result["conversation_language"] == "Italian"
     assert "this message thread" in models.arguments["contents"]
     assert "Conversation start:" in models.arguments["contents"]
     assert "customer's messages" in models.arguments["contents"]

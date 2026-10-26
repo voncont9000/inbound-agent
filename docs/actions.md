@@ -27,6 +27,7 @@ post_actions:
       events: [conversation_completed]
     subject_template: "Thanks for contacting {{business_name}}"
     body_template: "Hello {{contact.name}}, we will be in touch."
+    translate_to_customer_language: true
 ```
 
 Action keys are unique within an assistant. Trigger event lists are required and deduplicated.
@@ -87,6 +88,13 @@ layout uses a centered 600px card, a business-name header, paragraphs, and inlin
 formatted as `Label: value` render as a two-column details table; HTTP(S) URLs are linked, and a
 conversation link on its own paragraph becomes an “Open conversation” button. No external fonts
 or images are loaded.
+
+Customer email actions translate the rendered subject and body into the main language the customer
+used, falling back to the assistant's configured language when it is not `multi`. Translation is
+enabled by default with `translate_to_customer_language`; disabling it sends the original template.
+If the language is unclear or translation fails, the original content is sent. Names, numbers, and
+links are kept unchanged, and the HTML footer label is translated with the email. This uses one
+Gemini Flash-Lite call per customer email, typically about 1–2k tokens.
 
 Substituted Google Sheets cell values that begin with spreadsheet formula characters are
 escaped before being written.

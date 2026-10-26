@@ -430,6 +430,22 @@ export function PostActionsEditor({
               </label>
               <TemplateInput id={`post-action-subject-${index}`} label="Subject template" ariaLabel={`Subject template ${index + 1}`} value={action.subject_template} variables={variableOptions} firstField={action.kind === "email_customer"} onChange={(value) => setAction(index, (current) => current.kind === "email_customer" || current.kind === "notify_staff" ? { ...current, subject_template: value } : current)} />
               <TemplateInput id={`post-action-body-${index}`} label="Body template" ariaLabel={`Body template ${index + 1}`} value={action.body_template} variables={variableOptions} multiline onChange={(value) => setAction(index, (current) => current.kind === "email_customer" || current.kind === "notify_staff" ? { ...current, body_template: value } : current)} />
+              {action.kind === "email_customer" && <div className="field">
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    aria-label="Send in the customer's language"
+                    checked={action.translate_to_customer_language ?? true}
+                    onChange={(event) => setAction(index, (current) =>
+                      current.kind === "email_customer"
+                        ? { ...current, translate_to_customer_language: event.target.checked }
+                        : current,
+                    )}
+                  />
+                  <span>Send in the customer's language</span>
+                </label>
+                <span className="help">Translated automatically into the language the customer used. Names, numbers and links stay unchanged.</span>
+              </div>}
               <div className="button-row">
                 <button type="button" disabled={previewEmail.isPending} onClick={() => previewEmail.mutate({
                   subject_template: action.subject_template,

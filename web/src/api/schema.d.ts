@@ -2646,6 +2646,11 @@ export interface components {
             kind: "email_customer";
             /** Subject Template */
             subject_template: string;
+            /**
+             * Translate To Customer Language
+             * @default true
+             */
+            translate_to_customer_language: boolean;
             trigger: components["schemas"]["PostActionTrigger"];
         };
         /** EmailIncludeRule */
