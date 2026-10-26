@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, useParams, useSearchParams } from "react-router-dom";
 import type {
@@ -50,6 +50,23 @@ function updateParams(setSearchParams: (params: URLSearchParams, options?: { rep
     else next.delete(key);
   }
   setSearchParams(next, { replace: true });
+}
+
+function mergeFilterNames(previous: Map<string, string>, entries: readonly (readonly [string, string])[]) {
+  let next: Map<string, string> | undefined;
+  for (const [id, name] of entries) {
+    if (previous.get(id) !== name) {
+      next ??= new Map(previous);
+      next.set(id, name);
+    }
+  }
+  return next ?? previous;
+}
+
+function filterOptions(names: Map<string, string>, selectedId: string, fallback: string) {
+  const options = [...names.entries()];
+  if (selectedId && !names.has(selectedId)) options.push([selectedId, fallback]);
+  return options.sort(([, first], [, second]) => first.localeCompare(second));
 }
 
 function stat(label: string, value: string, detail?: string) {
@@ -141,8 +158,26 @@ export function AdminOverviewPage() {
     getNextPageParam: (lastPage) => lastPage.next_cursor,
   });
   const items = useMemo(() => conversations.data?.pages.flatMap(({ items: pageItems }) => pageItems) ?? [], [conversations.data]);
-  const assistants = [...new Map(items.map(({ assistant_id, assistant_name }) => [assistant_id, assistant_name])).entries()];
   const data = overview.data;
+  const [assistantNames, setAssistantNames] = useState(() => new Map<string, string>());
+  const [workspaceNames, setWorkspaceNames] = useState(() => new Map<string, string>());
+
+  useEffect(() => {
+    setAssistantNames((previous) => mergeFilterNames(
+      previous,
+      items.map(({ assistant_id, assistant_name }) => [assistant_id, assistant_name] as const),
+    ));
+  }, [items]);
+
+  useEffect(() => {
+    setWorkspaceNames((previous) => mergeFilterNames(previous, [
+      ...(data?.by_tenant ?? []).map(({ tenant_id, tenant_name }) => [tenant_id, tenant_name] as const),
+      ...items.map(({ tenant_id, tenant_name }) => [tenant_id, tenant_name] as const),
+    ]));
+  }, [data?.by_tenant, items]);
+
+  const assistants = filterOptions(assistantNames, assistantId, "Selected assistant");
+  const workspaces = filterOptions(workspaceNames, tenantId, "Selected workspace");
 
   function update(values: Record<string, string | null>) {
     updateParams(setSearchParams, searchParams, values);
@@ -200,7 +235,7 @@ export function AdminOverviewPage() {
         <div className="field"><label htmlFor="admin-workspace">Workspace</label>
           <select id="admin-workspace" value={tenantId} onChange={(event) => update({ tenant: event.target.value || null })}>
             <option value="">All workspaces</option>
-            {data?.by_tenant.map(({ tenant_id, tenant_name }) => <option key={tenant_id} value={tenant_id}>{tenant_name}</option>)}
+            {workspaces.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
         </div>
         <div className="field"><label htmlFor="admin-assistant">Assistant</label>

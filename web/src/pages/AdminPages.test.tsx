@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { adminConversationDetails } from "../mocks/admin";
+import { adminConversationDetails, adminOverview } from "../mocks/admin";
 import { server } from "../mocks/server";
 import { setMockPlatformAdmin } from "../mocks/db";
 import { renderApp } from "../test/renderApp";
@@ -96,6 +96,70 @@ describe("platform admin pages", () => {
     const reviewPanel = Array.from(document.querySelectorAll<HTMLElement>("section.panel"))
       .find((section) => section.querySelector("h2")?.textContent === "Needs review")!;
     await waitFor(() => expect(within(reviewPanel).getAllByRole("link", { name: "Jordan" }).length).toBeGreaterThan(0));
+  });
+
+  it("keeps the selected assistant after the review filter returns no results", async () => {
+    const requests = captureAdminRequests("/api/admin/conversations");
+    const user = userEvent.setup();
+    const fieldworkId = "71000000-0000-4000-8000-000000000002";
+    const morganId = "72000000-0000-4000-8000-000000000002";
+    renderApp("/admin", { loggedIn: true });
+
+    const reviewToggle = await screen.findByRole("checkbox", { name: "Needs review only" });
+    const workspace = screen.getByLabelText("Workspace", { selector: "#admin-workspace" });
+    await screen.findByRole("option", { name: "Fieldwork Studio" });
+    await user.selectOptions(workspace, fieldworkId);
+    await waitFor(() => expect(requests.at(-1)?.get("tenant_id")).toBe(fieldworkId));
+
+    await user.click(reviewToggle);
+    await waitFor(() => expect(requests.at(-1)?.has("needs_review")).toBe(false));
+    const assistant = await screen.findByLabelText("Assistant", { selector: "#admin-assistant" });
+    await user.selectOptions(assistant, morganId);
+    await waitFor(() => expect(requests.at(-1)?.get("assistant_id")).toBe(morganId));
+
+    await user.click(reviewToggle);
+    expect(await screen.findByText("No conversations match these filters.")).toBeInTheDocument();
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`tenant=${fieldworkId}`);
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`assistant=${morganId}`);
+    expect(assistant).toHaveValue(morganId);
+    expect((assistant as HTMLSelectElement).selectedOptions[0]?.textContent).toBe("Morgan");
+  });
+
+  it("shows a selected assistant option for an unknown assistant in the URL", async () => {
+    const unknownAssistantId = "72000000-0000-4000-8000-000000000099";
+    renderApp(`/admin?assistant=${unknownAssistantId}`, { loggedIn: true });
+
+    const assistant = await screen.findByLabelText("Assistant", { selector: "#admin-assistant" });
+    const selectedOption = await screen.findByRole("option", { name: "Selected assistant" });
+    expect(assistant).toHaveValue(unknownAssistantId);
+    expect(selectedOption).toHaveAttribute("value", unknownAssistantId);
+  });
+
+  it("keeps the selected workspace when a range no longer includes it", async () => {
+    const fieldworkId = "71000000-0000-4000-8000-000000000002";
+    server.use(
+      http.get("*/api/admin/overview", ({ request }) => {
+        const days = Number(new URL(request.url).searchParams.get("days"));
+        const overview = adminOverview(days);
+        return HttpResponse.json({
+          ...overview,
+          by_tenant: days === 30 ? overview.by_tenant.filter(({ tenant_id }) => tenant_id !== fieldworkId) : overview.by_tenant,
+        });
+      }),
+      http.get("*/api/admin/conversations", () => HttpResponse.json({ items: [], next_cursor: null })),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin", { loggedIn: true });
+
+    await screen.findByRole("option", { name: "Fieldwork Studio" });
+    const workspace = screen.getByLabelText("Workspace", { selector: "#admin-workspace" });
+    await user.selectOptions(workspace, fieldworkId);
+    expect(await screen.findByText("No conversations match these filters.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "30 days" }));
+    expect(await screen.findByRole("img", { name: /across 30 days/ })).toBeInTheDocument();
+
+    expect(workspace).toHaveValue(fieldworkId);
+    expect((workspace as HTMLSelectElement).selectedOptions[0]?.textContent).toBe("Fieldwork Studio");
   });
 
   it("renders conversation checks, notes, issues, objective metrics, transcript, and trace link", async () => {
