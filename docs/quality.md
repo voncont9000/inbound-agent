@@ -12,7 +12,7 @@ Pipecat exports conversation → turn → STT/LLM/TTS spans. Conversation spans 
 Email addresses and phone-like numbers in exported span attributes are redacted on a best-effort
 basis; spelled-out words are not detected. The conversation trace ID is stored in
 `conversations.metrics["trace_id"]`. When `LANGFUSE_HOST` is set, the backend builds
-`trace_url = f"{LANGFUSE_HOST}/trace/{trace_id}` for the admin view.
+`trace_url = f"{LANGFUSE_HOST}/trace/{trace_id}"` for the admin view.
 
 ## Conversation quality review and evaluations
 
