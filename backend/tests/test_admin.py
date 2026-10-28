@@ -1,11 +1,17 @@
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import psycopg
 from httpx import AsyncClient
 
-from inbound_api.routers.admin import eval_intake_checks, speakable_digits
+from inbound_api.routers.admin import (
+    EMAIL_SHAPE_CHECK,
+    PHONE_SHAPE_CHECK,
+    eval_intake_checks,
+    speakable_digits,
+)
 from inbound_api.settings import get_settings
 
 
@@ -27,6 +33,7 @@ def test_eval_intake_checks_only_keeps_values_said_by_caller() -> None:
             "phone_said": {"value": "+447716131661"},
             "phone_not_said": {"value": "+442071234567"},
             "email_said": {"value": "a+b@example.test"},
+            "email_not_said": {"value": "vincent@example.test"},
             "reason": {"value": "Looking to buy a property around £500,000"},
             "blank": {"value": "   "},
             "missing": {"value": None},
@@ -34,10 +41,21 @@ def test_eval_intake_checks_only_keeps_values_said_by_caller() -> None:
         "Hello,   Alice Smith. My number is 0 7 7 1 6 1 3 1 6 6 1. My email is a+b@example.test.",
     ) == {
         "name_said": r"(?i)^Alice\ Smith$",
-        "phone_said": r"(?i)^\+447716131661$",
-        "email_said": r"(?i)^a\+b@example\.test$",
+        "phone_said": PHONE_SHAPE_CHECK,
+        "email_said": EMAIL_SHAPE_CHECK,
         "reason": r"\S",
     }
+
+
+def test_contact_shape_checks_match_expected_values() -> None:
+    assert re.search(EMAIL_SHAPE_CHECK, "orpitz.vincent@gmail.com", re.IGNORECASE) is not None
+    assert re.search(EMAIL_SHAPE_CHECK, "", re.IGNORECASE) is None
+    assert re.search(EMAIL_SHAPE_CHECK, "no email", re.IGNORECASE) is None
+
+    assert re.search(PHONE_SHAPE_CHECK, "+441316641", re.IGNORECASE) is not None
+    assert re.search(PHONE_SHAPE_CHECK, "077 1600 3160", re.IGNORECASE) is not None
+    assert re.search(PHONE_SHAPE_CHECK, "call me later", re.IGNORECASE) is None
+    assert re.search(PHONE_SHAPE_CHECK, "123", re.IGNORECASE) is None
 
 
 def _seed_conversations(owner_database_url: str, tenant_pair: dict) -> dict[str, UUID]:
@@ -306,8 +324,8 @@ async def test_admin_routes_overview_filters_details_and_eval_round_trip(
         "My name is Alice Smith and my email is a+b@example.test.",
     ]
     assert created_case["checks"]["intake_checks"] == {
-        "email": r"(?i)^a\+b@example\.test$",
-        "caller_phone": r"(?i)^\+44\ 7716\ 131661$",
+        "email": EMAIL_SHAPE_CHECK,
+        "caller_phone": PHONE_SHAPE_CHECK,
         "reason": r"\S",
         "name": r"(?i)^Alice\ Smith$",
     }

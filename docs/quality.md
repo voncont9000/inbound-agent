@@ -119,10 +119,10 @@ per-case results. The internal service contract is:
 Both endpoints require the `X-Service-Token` voice service token. Case creation is an admin
 workflow: consecutive caller-message fragments are joined into one utterance, and digit runs of at
 least three digits are spaced for clear speech while amounts and grouped numbers are preserved.
-`intake_checks` use escaped, case-insensitive exact patterns: values over four words require `\S`,
-while shorter values are included only when the caller says them (phone values are matched by their
-last nine digits). Empty values are omitted. Cases without an assistant can use the harness's default
-test route.
+`intake_checks` omit blank values and use `\S` for values over four words. Short values must be said
+by the caller; phone values are retained only when their last nine digits appear in caller text.
+Retained emails and phones use valid-looking shape patterns, while other short values use
+case-insensitive exact patterns. Cases without an assistant can use the harness's default test route.
 
 Inside the production phone container:
 

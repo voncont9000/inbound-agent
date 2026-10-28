@@ -48,6 +48,9 @@ router = APIRouter(
     dependencies=[Depends(require_platform_admin)],
 )
 
+EMAIL_SHAPE_CHECK = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+PHONE_SHAPE_CHECK = r"^\+?[\d\s().-]{7,}$"
+
 
 def _mean(values: list[int | float]) -> float | None:
     return round(sum(values) / len(values), 2) if values else None
@@ -80,9 +83,15 @@ def eval_intake_checks(fields: dict[str, Any], caller_text: str) -> dict[str, st
             caller_match = value_digits[-9:]
             if caller_match not in caller_digits:
                 continue
-        elif " ".join(value.split()).casefold() not in collapsed_caller_text:
+            checks[name] = PHONE_SHAPE_CHECK
             continue
-        checks[name] = "(?i)^" + re.escape(value) + "$"
+        if " ".join(value.split()).casefold() not in collapsed_caller_text:
+            continue
+        checks[name] = (
+            EMAIL_SHAPE_CHECK
+            if "@" in value and re.fullmatch(EMAIL_SHAPE_CHECK, value)
+            else "(?i)^" + re.escape(value) + "$"
+        )
     return checks
 
 
