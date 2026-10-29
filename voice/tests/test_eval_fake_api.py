@@ -139,3 +139,37 @@ async def test_fake_route_requires_token_and_replaces_route() -> None:
         route.config.booking is not None
         and {"check_availability", "book_appointment"} <= set(route.config.live_actions)
     )
+
+
+@pytest.mark.asyncio
+async def test_recording_upload_is_token_protected_and_counted() -> None:
+    app = _fake_app()
+    conversation_id = uuid4()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://fake"
+    ) as client:
+        rejected = await client.post(
+            f"/internal/voice/calls/{conversation_id}/recording",
+            content=b"recording-data",
+        )
+        response = await client.post(
+            f"/internal/voice/calls/{conversation_id}/recording?duration_seconds=12.5",
+            content=b"recording-data",
+            headers={"X-Service-Token": SERVICE_TOKEN},
+        )
+        state = await client.get(
+            "/_fake/state",
+            headers={"X-Service-Token": SERVICE_TOKEN},
+        )
+
+    assert rejected.status_code == 401
+    assert response.status_code == 202
+    assert response.json() == {"accepted": True}
+    assert state.json()["recording_count"] == 1
+    assert state.json()["recordings"] == [
+        {
+            "conversation_id": str(conversation_id),
+            "bytes": len(b"recording-data"),
+            "duration_seconds": 12.5,
+        }
+    ]

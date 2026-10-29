@@ -67,7 +67,13 @@ async def test_fake_api_state_reads_response_from_live_server() -> None:
                 await asyncio.sleep(0.01)
 
         state = await _fake_api_state(f"http://127.0.0.1:{port}")
-        assert state == {"calls": [], "reports": [], "bookings": []}
+        assert state == {
+            "calls": [],
+            "reports": [],
+            "bookings": [],
+            "recordings": [],
+            "recording_count": 0,
+        }
     finally:
         server.should_exit = True
         await server_task
