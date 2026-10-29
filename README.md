@@ -2,6 +2,7 @@
 A personalised, vertical-agnostic AI agent that takes customer inquiries via phone (speech-to-text / text-to-speech), draft-only Gmail, and WhatsApp. Voice assistants support per-assistant call settings and opt-in recordings with configurable retention.
 
 ## Docs
+- **[Handover](docs/HANDOVER.md)**: current live state, deploy, known gaps and next steps (start here); agent conventions in [AGENTS.md](AGENTS.md)
 - [Product requirements (PRD)](docs/PRD.md)
 - [Customer context graph](docs/context-graph.md): research and design for linking interactions across channels
 - [M1 architecture and agent seams](docs/m1-architecture.md), including the [home dashboard metric definitions](docs/m1-architecture.md#home-dashboard)
