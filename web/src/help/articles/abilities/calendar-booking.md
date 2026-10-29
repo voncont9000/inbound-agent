@@ -13,7 +13,7 @@ Appointment booking uses Google Calendar. The assistant offers configured appoin
 1. Open the assistant's settings and select **Abilities**.
 2. Enable appointment booking and add the appointment types your team offers.
 3. Review each type's duration and when it should be used.
-4. Connect Google Calendar from the **Calendar booking** card.
+4. Connect Google Calendar from the **Calendar booking** card. Connecting saves your settings first and returns you to **Abilities**.
 
 ## Enable live booking
 

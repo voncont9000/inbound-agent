@@ -373,8 +373,9 @@ export function AssistantSettingsPage() {
     setSaveMessage("");
   };
 
-  function saveConfig() {
-    if (!config) return;
+  async function saveDraft(): Promise<boolean> {
+    if (!config) return false;
+    if (!isDirty) return true;
     const payloadConfig = prepareConfigForSave(config);
     const validation = validateAssistantConfig(payloadConfig);
     setErrors(validation);
@@ -382,9 +383,14 @@ export function AssistantSettingsPage() {
     if (Object.keys(validation).length) {
       showTabWithErrors(validation);
       window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
-      return;
+      return false;
     }
-    save.mutate({ name: assistantName, template: baseline.template, config: payloadConfig });
+    try {
+      await save.mutateAsync({ name: assistantName, template: baseline.template, config: payloadConfig });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   const fieldErrors = Object.entries(allErrors).filter(([path]) => path !== "_form");
@@ -404,7 +410,7 @@ export function AssistantSettingsPage() {
       </nav>
       <div className="settings-save" title="One save covers every tab.">
         <span className={isDirty ? "dirty-indicator" : "muted"} aria-live="polite" role="status">{saveMessage || (isDirty ? "Unsaved changes" : "All changes saved")}</span>
-        <button type="button" className="button-primary" onClick={saveConfig} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</button>
+        <button type="button" className="button-primary" onClick={() => { void saveDraft(); }} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</button>
         <HelpLink to={settingsTabHelp[activeTab]} />
       </div>
     </div>
@@ -418,6 +424,7 @@ export function AssistantSettingsPage() {
         config={config}
         saved={baseline.config}
         update={update}
+        saveDraft={saveDraft}
         errors={allErrors}
         clearFieldError={clearFieldError}
         schema={schemaQuery.data}

@@ -90,14 +90,14 @@ export function AbilitiesTab(props: SettingsTabProps) {
       setActionsOpen(false);
       update((draft) => { draft.post_actions = []; });
     }}>
-      <PostActionsEditor assistantId={props.assistantId} config={config} update={update} />
+      <PostActionsEditor assistantId={props.assistantId} config={config} update={update} saveDraft={props.saveDraft} />
       </AbilityCard></div>
       <div id="ability-panel-readback" hidden={openAbility !== "readback"}><ReadbackCard {...props} /></div>
     </div>
   </>;
 }
 
-function BookingCard({ assistantId, config, saved, update, errors }: SettingsTabProps) {
+function BookingCard({ assistantId, config, saved, update, saveDraft, errors }: SettingsTabProps) {
   const booking = config.booking;
   const savedKeys = (saved.booking?.appointment_types ?? []).map(({ key }) => key);
   const missingActions = booking && BOOKING_ACTIONS.some((action) => !config.live_actions.includes(action));
@@ -117,7 +117,7 @@ function BookingCard({ assistantId, config, saved, update, errors }: SettingsTab
     });
   }} status={missingActions ? <div className="help" role="note">Live booking also needs the availability and booking actions. <button type="button" className="button-link" onClick={() => update((draft) => { draft.live_actions = withActions(draft.live_actions, BOOKING_ACTIONS, true); })}>Turn them on</button></div> : undefined}>
     {booking && <>
-      <CalendarConnection assistantId={assistantId} />
+      <CalendarConnection assistantId={assistantId} saveDraft={saveDraft} />
       <h3>Appointment types</h3>
       {booking.appointment_types.map((appointment, index) => {
         const base = `booking.appointment_types.${index}`;
