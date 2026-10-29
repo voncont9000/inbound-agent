@@ -15,11 +15,11 @@ Services describe the work the assistant can discuss. Intake fields define the d
 3. Add or review the services offered by your organisation.
 4. Add the intake fields you need and mark required fields where appropriate.
 5. Mark important fields as critical if callers should confirm them.
-6. Choose **Save changes**.
+6. Settings save automatically as you edit.
 
 ## Review readback
 
-1. Open the assistant's settings and select **Abilities** › **Readback**.
+1. Open the assistant's settings and select **Advanced** › **Readback**.
 2. Choose whether to read back email addresses or fields marked critical.
 3. Use **Record the caller's confirmation during the call** if the assistant should save the caller's confirmation.
 4. Test a conversation and confirm that the assistant checks the important details.

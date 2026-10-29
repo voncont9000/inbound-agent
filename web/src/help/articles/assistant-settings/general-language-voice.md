@@ -13,9 +13,8 @@ The General tab contains the assistant's basic identity and spoken style. Choose
 1. Open the assistant's settings and select **General**.
 2. Set the assistant name and business name.
 3. Choose the language and select a voice. The picker starts with recommended voices; use search and the available gender or accent filters, or choose **Show all voices** to browse the catalogue.
-4. If you changed the language, use **Translate them to …** beneath the language selector to translate the greeting and call messages in your current draft. Review the result; it is not saved until you choose **Save changes**.
+4. If you changed the language, use **Translate them to …** beneath the language selector to translate the greeting and call messages. Review the result; it saves automatically with the rest of your settings.
 5. Review the greeting and **General** › **Instructions**. This section contains the **Custom prompt** and structured services and intake fields, prices, and contact details.
-6. Choose **Save changes**.
 
 ## Check how it sounds
 

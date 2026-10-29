@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { AssistantConfig } from "../../lib/config";
-import { enumAt } from "../../lib/configSchema";
 import { followLabel, keyFromLabel } from "../../lib/keys";
 import { CalendarConnection } from "../ChannelConnections";
 import { PostActionsEditor } from "../PostActionsEditor";
@@ -59,7 +58,6 @@ export function AbilitiesTab(props: SettingsTabProps) {
     { id: "booking", title: "Calendar booking", enabled: Boolean(config.booking), path: "M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2z" },
     { id: "forwarding", title: "Call forwarding", enabled: config.live_actions.includes("transfer_call"), path: "M5 12h14m-6-6 6 6-6 6M4 5v14" },
     { id: "post-actions", title: "After-conversation actions", enabled: postActionsOn, path: "M4 5h16M4 12h16M4 19h10m2-2 2 2 4-4" },
-    { id: "readback", title: "Readback", enabled: config.readback !== "off", path: "M4 7h16M4 12h10m-10 5h8m4-2 2 2 4-4" },
   ];
   return <>
     <p className="help abilities-intro">Turn on what this assistant may do. Everything stays off until you switch it on, and the assistant never offers an ability that is off. Each ability keeps all of its options in its own card.</p>
@@ -92,7 +90,6 @@ export function AbilitiesTab(props: SettingsTabProps) {
     }}>
       <PostActionsEditor assistantId={props.assistantId} config={config} update={update} saveDraft={props.saveDraft} />
       </AbilityCard></div>
-      <div id="ability-panel-readback" hidden={openAbility !== "readback"}><ReadbackCard {...props} /></div>
     </div>
   </>;
 }
@@ -191,24 +188,5 @@ function ForwardingCard({ config, saved, update, errors }: SettingsTabProps) {
         <Field path="transfer_handoff_message" label="Handoff message">{(fieldId) => <textarea id={fieldId} value={config.transfer_handoff_message} onChange={(event) => update((draft) => { draft.transfer_handoff_message = event.target.value; })} />}</Field>
         <Field path="transfer_failed_message" label="Message when nobody answers">{(fieldId) => <textarea id={fieldId} value={config.transfer_failed_message} onChange={(event) => update((draft) => { draft.transfer_failed_message = event.target.value; })} />}</Field>
     </MoreOptions>
-  </AbilityCard>;
-}
-
-const readbackHelp: Record<string, string> = {
-  email: "Read email addresses back letter by letter so the caller can confirm them.",
-  critical: "Read back every field marked critical (for example name, phone, email or key dates) and ask the caller to confirm.",
-};
-
-function ReadbackCard({ config, update, schema }: SettingsTabProps) {
-  const modes = useMemo(() => enumAt(schema, ["properties", "readback", "enum"], ["off", "email", "critical"]).filter((mode) => mode !== "off"), [schema]);
-  return <AbilityCard id="readback" title="Readback" description="Read important details back to the caller so they can confirm them." enabled={config.readback !== "off"} onToggle={(enabled) => update((draft) => {
-    draft.readback = enabled ? "critical" : "off";
-    if (!enabled) draft.live_actions = withActions(draft.live_actions, ["confirm_critical_fields"], false);
-  })}>
-    <fieldset className="stack readback-modes"><legend>What to read back</legend>
-      {modes.map((mode) => <label key={mode} className="radio-row"><input type="radio" name="readback" value={mode} checked={config.readback === mode} onChange={() => update((draft) => { draft.readback = mode as AssistantConfig["readback"]; })} /><span>{readbackHelp[mode] ?? mode}</span></label>)}
-    </fieldset>
-    <label className="check-row"><input type="checkbox" checked={config.live_actions.includes("confirm_critical_fields")} onChange={(event) => update((draft) => { draft.live_actions = withActions(draft.live_actions, ["confirm_critical_fields"], event.target.checked); })} />Record the caller&apos;s confirmation during the call (adds a live action)</label>
-    <p className="help">Mark which intake fields are critical under General › Services and intake fields.</p>
   </AbilityCard>;
 }

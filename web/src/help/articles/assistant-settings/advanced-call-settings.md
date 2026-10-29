@@ -18,12 +18,12 @@ Advanced settings cover call behaviour and technical options with template defau
 ## Review extra live actions
 
 1. Check which extra **Live actions** are enabled, such as flagging urgency, requesting a callback, logging a complaint or ending the call.
-2. Booking, forwarding and readback actions are controlled from their cards under **Abilities**, not from this list.
-3. Choose **Save changes** and test a representative call.
+2. Booking and forwarding actions are controlled from their cards under **Abilities**; Readback is configured below this list.
+3. Settings save automatically. Test a representative call.
 
 ## Find other ability settings
 
-Readback and caller confirmation are under **Abilities** › **Readback**. Appointment types and booking timing and messages are under **Abilities** › **Calendar booking**. Transfer targets and forwarding messages are under **Abilities** › **Call forwarding**. Keyword and date urgency rules are under **Rules**.
+Readback and caller confirmation are under **Advanced** › **Readback**. Appointment types and booking timing and messages are under **Abilities** › **Calendar booking**. Transfer targets and forwarding messages are under **Abilities** › **Call forwarding**. Keyword and date urgency rules are under **Rules**.
 
 ### Good to know
 

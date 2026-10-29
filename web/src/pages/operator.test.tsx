@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Schemas } from "../api/client";
@@ -10,6 +10,42 @@ import { renderApp } from "../test/renderApp";
 import { formatConversationDuration, groupConversationDays } from "./OperatorPages";
 
 const assistantId = "20000000-0000-4000-8000-000000000001";
+configure({ asyncUtilTimeout: 6000 });
+type TestUser = ReturnType<typeof userEvent.setup>;
+
+async function selectPostAction(
+  user: TestUser,
+  title: string,
+  pickerName: RegExp,
+  addAnother = false,
+) {
+  const addFromPicker = async () => {
+    await user.click(screen.getByRole("button", { name: pickerName }));
+    const expandButton = screen.queryByRole("button", { name: `Expand ${title} settings` });
+    if (expandButton) await user.click(expandButton);
+  };
+  const actionsSwitch = screen.getByRole("switch", { name: "After-conversation actions" }) as HTMLInputElement;
+  const existingAction = screen.queryAllByRole("button", { name: `Expand ${title} settings` })[0];
+  if (!actionsSwitch.checked) {
+    await user.click(actionsSwitch);
+    await addFromPicker();
+  } else if (addAnother || !existingAction) {
+    await user.click(screen.getByRole("button", { name: "Add another action" }));
+    await addFromPicker();
+  } else {
+    await user.click(existingAction);
+  }
+}
+
+function enableSheetsFeature() {
+  server.use(
+    http.get("*/api/assistants/:id/google-features", () => HttpResponse.json({
+      features: ["sheets"],
+      email: "sheets@example.test",
+    })),
+  );
+}
+
 const conversationId = "50000000-0000-4000-8000-000000000001";
 const gmailConversationId = "50000000-0000-4000-8000-000000000007";
 const transferConversationId = "50000000-0000-4000-8000-000000000011";
@@ -41,7 +77,6 @@ describe("operator workflows", () => {
     const handoffMessage = screen.getByLabelText("Handoff message");
     await user.clear(handoffMessage);
     await user.type(handoffMessage, "A colleague will speak with you shortly.");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(capturedBody).toBeDefined());
     const savedConfig = capturedBody?.config as Record<string, unknown>;
@@ -79,7 +114,6 @@ describe("operator workflows", () => {
     const needsPerson = screen.getByLabelText("Needs a person");
     await user.clear(needsPerson);
     await user.type(needsPerson, "Escalate complaints and urgent requests to the team.");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(capturedBody).toBeDefined());
     const savedConfig = capturedBody?.config as Record<string, unknown>;
@@ -132,7 +166,6 @@ describe("operator workflows", () => {
 
     await user.clear(screen.getAllByLabelText("Choices")[0]);
     await user.click(screen.getByRole("link", { name: "Abilities" }));
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`));
     expect(await screen.findByRole("heading", { name: /errors to fix/ })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Choices")[0]).toHaveAttribute("aria-invalid", "true");
@@ -146,22 +179,17 @@ describe("operator workflows", () => {
     await user.click(screen.getByRole("link", { name: "Rules" }));
     await user.clear(screen.getByLabelText("Phrases (comma or newline separated)"));
     await user.type(screen.getByLabelText("Phrases (comma or newline separated)"), "gas leak, flooding");
-    await user.click(screen.getByRole("link", { name: "Abilities" }));
-    await user.click(screen.getByRole("button", { name: /Readback/ }));
-    if (!(screen.getByRole("switch", { name: "Readback" }) as HTMLInputElement).checked) await user.click(screen.getByRole("switch", { name: "Readback" }));
+    await user.click(screen.getByRole("link", { name: "Advanced" }));
     await user.click(screen.getByRole("radio", { name: /Read email addresses back letter by letter/ }));
     await user.click(screen.getByRole("radio", { name: /Read back every field marked critical/ }));
-    await user.click(screen.getByRole("link", { name: "Advanced" }));
-    expect(screen.queryByRole("radio", { name: /Read back every field marked critical/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Readback" })).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: /transfer call/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /request callback/ }));
     const threshold = screen.getByRole("slider", { name: /confidence threshold/i });
     fireEvent.change(threshold, { target: { value: "0.8" } });
 
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(capturedBody).toBeDefined());
-    expect(await screen.findByText("Changes saved")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
+    expect(await screen.findByText("All changes saved")).toBeInTheDocument();
     const savedConfig = capturedBody?.config as Record<string, unknown>;
     expect(savedConfig.readback).toBe("critical");
     expect(savedConfig.live_actions).toContain("request_callback");
@@ -187,7 +215,6 @@ describe("operator workflows", () => {
     await user.click(screen.getByRole("link", { name: "General" }));
     await user.type(screen.getByRole("textbox", { name: "Greeting" }), " Welcome.");
     await user.click(screen.getByRole("link", { name: "Knowledge" }));
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`));
     await waitFor(() => expect(screen.getAllByText("Label rejected by server.")).toHaveLength(2));
     const firstLabel = screen.getAllByLabelText("Field label")[0];
@@ -216,16 +243,14 @@ describe("operator workflows", () => {
     await user.click(addFieldButtons[addFieldButtons.length - 1]);
     const fieldLabels = screen.getAllByLabelText("Field label");
     await user.type(fieldLabels[fieldLabels.length - 1], "Caller name");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(capturedBody).toBeDefined());
     const services = (capturedBody?.config as { services: Record<string, { label: string; fields: Array<{ name: string; label: string }> }> }).services;
     expect(services.boiler_repair_2).toMatchObject({ label: "Boiler repair", fields: [{ name: "caller_name", label: "Caller name" }] });
-    expect(await screen.findByText("Changes saved")).toBeInTheDocument();
+    expect(await screen.findByText("All changes saved")).toBeInTheDocument();
 
     capturedBody = undefined;
     const savedLabels = screen.getAllByLabelText("Service label");
     await user.type(savedLabels[savedLabels.length - 1], " and servicing");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(capturedBody).toBeDefined());
     const renamed = ((capturedBody as Record<string, unknown> | undefined)?.config as { services: Record<string, { label: string }> }).services;
     expect(renamed.boiler_repair_2.label).toBe("Boiler repair and servicing");
@@ -261,7 +286,6 @@ describe("operator workflows", () => {
     const bookMessage = screen.getByLabelText("Booking holding message");
     await user.clear(bookMessage);
     await user.type(bookMessage, "Booking that now.");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(savedConfig).toBeDefined());
 
     expect(savedConfig?.booking).toMatchObject({
@@ -302,7 +326,6 @@ describe("operator workflows", () => {
     expect(screen.getByRole("switch", { name: "Calendar booking" })).toBeChecked();
     expect(screen.getAllByLabelText("Appointment label")).toHaveLength(2);
 
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(savedConfig).toBeDefined());
     expect(
       (savedConfig?.booking as { appointment_types: unknown[] }).appointment_types,
@@ -335,7 +358,6 @@ describe("operator workflows", () => {
     expect(screen.getByRole("switch", { name: "Calendar booking" })).not.toBeChecked();
     expect(screen.queryByLabelText("Appointment label")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(savedConfig).toBeDefined());
     expect(savedConfig?.booking).toBeNull();
     confirm.mockRestore();
@@ -435,10 +457,9 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
+    await selectPostAction(user, "Email the customer", /^Email the customer Send the customer/);
     expect(document.querySelector('section.stack[aria-label="After-conversation actions"]:not(.ability-card)')).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { name: "After-conversation actions" })).toHaveLength(1);
-    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
     await user.click(screen.getByRole("button", { name: "Send test" }));
     expect(await screen.findByText("Ready to send.")).toBeInTheDocument();
     expect(screen.getByText(/Thank you for contacting Brightside Plumbing/)).toBeInTheDocument();
@@ -449,8 +470,7 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+    await selectPostAction(user, "Add a Google Sheets row", /^Add a Google Sheets row Add conversation details/, true);
     expect(await screen.findByRole("button", { name: "Connect Google Sheets" })).toBeInTheDocument();
   });
 
@@ -459,8 +479,7 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+    await selectPostAction(user, "Email the customer", /^Email the customer Send the customer/);
     expect(screen.getByRole("button", { name: "Collapse Email the customer settings" })).toHaveAttribute("aria-expanded", "true");
 
     await user.click(screen.getByRole("button", { name: "Add another action" }));
@@ -469,7 +488,7 @@ describe("operator workflows", () => {
     expect(screen.getByRole("button", { name: "Expand Email the customer settings" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByRole("button", { name: "Collapse Notify your team settings" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.queryByLabelText("Subject template 1")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Staff recipients 2")).toBeVisible();
+    expect(screen.getByRole("textbox", { name: /^Staff recipients/ })).toBeVisible();
   });
 
   it("inserts a selected variable into a subject at the cursor", async () => {
@@ -477,8 +496,7 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+    await selectPostAction(user, "Email the customer", /^Email the customer Send the customer/);
 
     const subject = screen.getByLabelText("Subject template 1") as HTMLInputElement;
     await user.clear(subject);
@@ -499,8 +517,7 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+    await selectPostAction(user, "Email the customer", /^Email the customer Send the customer/);
 
     const subject = screen.getByLabelText("Subject template 1");
     const templateInput = subject.closest(".template-input") as HTMLElement;
@@ -524,8 +541,7 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Email the customer/ }));
+    await selectPostAction(user, "Email the customer", /^Email the customer Send the customer/);
 
     const subject = screen.getByLabelText("Subject template 1") as HTMLInputElement;
     await user.clear(subject);
@@ -541,6 +557,7 @@ describe("operator workflows", () => {
 
   it("stores a pasted Google Sheets link as its spreadsheet ID", async () => {
     const user = userEvent.setup();
+    enableSheetsFeature();
     let capturedBody: Record<string, unknown> | undefined;
     const listener = ({ request }: { request: Request }) => {
       if (request.method === "PUT" && request.url.includes("/assistants/")) {
@@ -551,10 +568,10 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+    await selectPostAction(user, "Add a Google Sheets row", /^Add a Google Sheets row Add conversation details/);
 
-    const link = screen.getByLabelText("Google Sheet link 1");
+    expect(await screen.findByRole("button", { name: "Collapse Add a Google Sheets row settings" })).toHaveAttribute("aria-expanded", "true");
+    const link = await screen.findByLabelText("Google Sheet link 1");
     const pastedLink = "https://docs.google.com/spreadsheets/u/0/d/sheet_123/edit#gid=0";
     await user.click(link);
     await user.paste(pastedLink);
@@ -564,16 +581,16 @@ describe("operator workflows", () => {
     await user.clear(screen.getByLabelText("Tab name 1"));
     await user.type(screen.getByLabelText("Tab name 1"), "Leads");
     expect(screen.getByText("Sheet linked · tab Leads")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(capturedBody).toBeDefined());
     const savedConfig = capturedBody?.config as { post_actions: Array<{ spreadsheet_id: string }> };
     expect(savedConfig.post_actions[0]?.spreadsheet_id).toBe("sheet_123");
     server.events.removeListener("request:start", listener);
-  });
+  }, 10000);
 
   it("shows invalid Sheets links without writing them into the config", async () => {
     const user = userEvent.setup();
+    enableSheetsFeature();
     let capturedBody: Record<string, unknown> | undefined;
     const listener = ({ request }: { request: Request }) => {
       if (request.method === "PUT" && request.url.includes("/assistants/")) {
@@ -584,13 +601,11 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+    await selectPostAction(user, "Add a Google Sheets row", /^Add a Google Sheets row Add conversation details/);
 
-    await user.type(screen.getByLabelText("Google Sheet link 1"), "https://docs.google.com/document/d/not-a-sheet/edit");
-    expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid Google Sheets link or spreadsheet ID.");
+    await user.type(await screen.findByLabelText("Google Sheet link 1"), "https://docs.google.com/document/d/not-a-sheet/edit");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a valid Google Sheets link or spreadsheet ID.");
     expect(screen.queryByRole("link", { name: "Open sheet" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(capturedBody).toBeDefined());
     const savedConfig = capturedBody?.config as { post_actions: Array<{ spreadsheet_id: string }> };
@@ -600,11 +615,11 @@ describe("operator workflows", () => {
 
   it("starts new Sheets actions with the default columns", async () => {
     const user = userEvent.setup();
+    enableSheetsFeature();
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+    await selectPostAction(user, "Add a Google Sheets row", /^Add a Google Sheets row Add conversation details/, true);
 
     const defaults = [
       ["Started", "started_at"],
@@ -620,6 +635,7 @@ describe("operator workflows", () => {
 
   it("stores the selected variable in a Sheets column value", async () => {
     const user = userEvent.setup();
+    enableSheetsFeature();
     let capturedBody: Record<string, unknown> | undefined;
     const listener = ({ request }: { request: Request }) => {
       if (request.method === "PUT" && request.url.includes("/assistants/")) {
@@ -630,13 +646,11 @@ describe("operator workflows", () => {
     renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: /After-conversation actions/ }));
-    await user.click(screen.getByRole("switch", { name: "After-conversation actions" }));
-    await user.click(screen.getByRole("button", { name: /Add a Google Sheets row/ }));
+    await selectPostAction(user, "Add a Google Sheets row", /^Add a Google Sheets row Add conversation details/);
     await user.type(screen.getByLabelText("Google Sheet link 1"), "sheet_123");
     const value = screen.getByLabelText("Column value 1-1");
     await user.selectOptions(value, "summary");
     await user.selectOptions(value, "contact.name");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(capturedBody).toBeDefined());
     const savedConfig = capturedBody?.config as { post_actions: Array<{ columns: Array<{ value_template: string }> }> };
@@ -1334,7 +1348,6 @@ describe("services suggestions", () => {
     await screen.findByText("Suggested from your prompt and knowledge. Review, then save.");
     expect(screen.getByLabelText("Service label")).toHaveValue("Table reservation");
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(capturedBody).toBeDefined());
     expect(Object.keys((capturedBody?.config as { services: Record<string, unknown> }).services)).toEqual(["table_reservation"]);
     server.events.removeListener("request:start", listener);

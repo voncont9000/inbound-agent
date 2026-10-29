@@ -61,7 +61,7 @@ export function KnowledgeSources({ assistantId, maxChars }: { assistantId: strin
   });
   return <>
     <section className="panel stack" aria-labelledby="knowledge-sources-heading"><h2 id="knowledge-sources-heading">Knowledge sources</h2>
-      <p className="help">Websites and documents are added immediately; they do not need the Save button.</p>
+      <p className="help">Websites and documents are added immediately.</p>
       {sourcesQuery.isLoading && <LoadingState />}
       {sourcesQuery.data?.items.map((source) => <div className="list-row" key={source.id}><div><strong>{source.kind}</strong> · {source.uri}<br /><span className="muted">{source.fetched_at ? `Fetched ${formatDate(source.fetched_at)}` : "Not imported yet"}</span></div><Badge tone={source.status === "succeeded" ? "success" : "warning"}>{source.status}</Badge></div>)}
       {!sourcesQuery.isLoading && !sourcesQuery.data?.items.length && <EmptyState>No knowledge sources yet.</EmptyState>}

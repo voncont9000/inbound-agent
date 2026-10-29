@@ -29,7 +29,7 @@ describe("settings tabs", () => {
     expect(tabForPath("urgency_rules.1.field")).toBe("rules");
     expect(tabForPath("urgency_rules.0.text")).toBe("rules");
     expect(tabForPath("price_list.0.price")).toBe("general");
-    expect(tabForPath("readback")).toBe("abilities");
+    expect(tabForPath("readback")).toBe("advanced");
     expect(tabForPath("transfer_handoff_message")).toBe("abilities");
     expect(tabForPath("live_actions")).toBe("advanced");
     expect(tabForPath("email_triage.enquiry")).toBe("channels");

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, NavLink, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, NavLink, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, unwrap, unwrapNoContent, type Schemas } from "../api/client";
 import { ApiError, errorMessage, fieldErrorsFrom422 } from "../api/errors";
 import { useAuth } from "../auth/AuthProvider";
@@ -311,58 +311,263 @@ export function AssistantSettingsRedirect({ tab = "general" }: { tab?: SettingsT
   return <Navigate to={settingsTabPath(id, tab)} replace />;
 }
 
+type AssistantSettingsDraft = { config: AssistantConfig; name: string };
+type SettingsSaveStatus = "saved" | "dirty" | "saving" | "invalid" | "retrying" | "failed";
+
+function draftsEqual(first: AssistantSettingsDraft, second: AssistantSettingsDraft) {
+  return first.name === second.name && JSON.stringify(first.config) === JSON.stringify(second.config);
+}
+
+function draftIsDirty(draft: AssistantSettingsDraft, baseline: { config: AssistantConfig; name: string }) {
+  return JSON.stringify(draft.config) !== JSON.stringify(baseline.config) || draft.name !== baseline.name;
+}
+
+function isRetryableSaveError(error: unknown) {
+  return !(error instanceof ApiError) || error.status >= 500;
+}
+
 export function AssistantSettingsPage() {
   const { id = "", tab } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const assistantQuery = useQuery({ queryKey: ["assistant", id], queryFn: () => unwrap(api.GET("/assistants/{assistant_id}", { params: { path: { assistant_id: id } } })) });
   const schemaQuery = useQuery({ queryKey: ["assistant-config-schema"], queryFn: () => unwrap(api.GET("/assistant-config/schema")) });
   const [config, setConfig] = useState<AssistantConfig | null>(null);
   const [assistantName, setAssistantName] = useState("");
+  const [baseline, setBaseline] = useState<typeof assistantQuery.data>(undefined);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saveMessage, setSaveMessage] = useState("");
+  const [saveStatus, setSaveStatus] = useState<SettingsSaveStatus>("saved");
+  const [hasPendingSave, setHasPendingSave] = useState(false);
+  const baselineRef = useRef<typeof assistantQuery.data>(undefined);
+  const draftRef = useRef<AssistantSettingsDraft | null>(null);
+  const loadedAssistantIdRef = useRef<string | null>(null);
+  const mountedRef = useRef(false);
+  const debounceTimerRef = useRef<number | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
+  const autosaveAfterFlightRef = useRef(false);
+  const saveCurrentRef = useRef<(attempt?: number) => Promise<boolean>>(async () => false);
+  const flushPendingRef = useRef<() => void>(() => {});
   const activeTab: SettingsTabId = isSettingsTab(tab) ? tab : "general";
-  useEffect(() => {
-    if (!assistantQuery.data) return;
-    setConfig(structuredClone(assistantQuery.data.config));
-    setAssistantName(assistantQuery.data.name);
-  }, [assistantQuery.data]);
   const showTabWithErrors = (found: Record<string, string>) => {
     const paths = Object.keys(found).filter((path) => path !== "_form");
     if (paths.length && !paths.some((path) => tabForPath(path) === activeTab)) navigate(settingsTabPath(id, tabForPath(paths[0])));
   };
 
   const save = useMutation({
-    mutationFn: (payload: Schemas["AssistantUpdate"]) => unwrap(api.PUT("/assistants/{assistant_id}", { params: { path: { assistant_id: id } }, body: payload })),
-    onSuccess: async (assistant) => {
-      setConfig(structuredClone(assistant.config));
-      setAssistantName(assistant.name);
-      setErrors({});
-      setSaveMessage("Changes saved");
-      await queryClient.invalidateQueries({ queryKey: ["assistant", id] });
+    mutationFn: ({ payload }: { payload: Schemas["AssistantUpdate"]; sentDraft: AssistantSettingsDraft; attempt: number }) => unwrap(api.PUT("/assistants/{assistant_id}", { params: { path: { assistant_id: id } }, body: payload })),
+    onSuccess: (assistant, { sentDraft }) => {
+      baselineRef.current = assistant;
+      queryClient.setQueryData(["assistant", id], assistant);
+      const unchanged = draftRef.current !== null && draftsEqual(draftRef.current, sentDraft);
+      if (mountedRef.current) {
+        setBaseline(assistant);
+        if (unchanged) {
+          const savedDraft = { config: structuredClone(assistant.config), name: assistant.name };
+          draftRef.current = savedDraft;
+          setConfig(savedDraft.config);
+          setAssistantName(savedDraft.name);
+          setErrors({});
+          setSaveStatus("saved");
+        } else {
+          setSaveStatus("dirty");
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ["assistant", id] });
     },
-    onError: (caught) => {
+    onError: (caught, { attempt }) => {
+      if (!mountedRef.current) return;
       if (caught instanceof ApiError && caught.status === 422) {
         const found = fieldErrorsFrom422(caught.body);
         setErrors(found);
+        setSaveStatus("invalid");
+        setHasPendingSave(false);
         showTabWithErrors(found);
-      } else setErrors({ _form: caught instanceof Error ? caught.message : "Unable to save changes." });
+        window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
+      } else if (attempt === 0 && isRetryableSaveError(caught)) {
+        setSaveStatus("retrying");
+        setHasPendingSave(true);
+        if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = window.setTimeout(() => {
+          retryTimerRef.current = null;
+          void saveCurrentRef.current(1);
+        }, 3000);
+      } else {
+        setSaveStatus("failed");
+        setHasPendingSave(true);
+      }
     },
   });
-  if (!isSettingsTab(tab)) return <Navigate to={settingsTabPath(id)} replace />;
-  if (assistantQuery.error) return <main className="page" id="main-content"><ErrorState message="Assistant settings could not be loaded." /></main>;
-  if (assistantQuery.isLoading || !config) return <main className="page" id="main-content"><LoadingState /></main>;
-  const baseline = assistantQuery.data!;
-  const allErrors = { ...validateAssistantConfig(config), ...errors };
-  const isDirty = JSON.stringify(config) !== JSON.stringify(baseline.config) || assistantName !== baseline.name;
-  const update = (change: (draft: AssistantConfig) => void) => {
-    setConfig((current) => {
-      if (!current) return current;
-      const draft = structuredClone(current);
-      change(draft);
-      return draft;
+
+  const setPendingSave = (pending: boolean) => {
+    if (mountedRef.current) setHasPendingSave(pending);
+  };
+  const clearDebounceTimer = () => {
+    if (debounceTimerRef.current === null) return;
+    window.clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = null;
+  };
+  const clearRetryTimer = () => {
+    if (retryTimerRef.current === null) return;
+    window.clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
+  };
+  const currentDraftIsDirty = () => {
+    const draft = draftRef.current;
+    const currentBaseline = baselineRef.current;
+    return Boolean(draft && currentBaseline && draftIsDirty(draft, currentBaseline));
+  };
+
+  useEffect(() => {
+    if (!assistantQuery.data) return;
+    if (loadedAssistantIdRef.current !== id) {
+      loadedAssistantIdRef.current = id;
+      baselineRef.current = assistantQuery.data;
+      const loadedDraft = { config: structuredClone(assistantQuery.data.config), name: assistantQuery.data.name };
+      draftRef.current = loadedDraft;
+      setBaseline(assistantQuery.data);
+      setConfig(loadedDraft.config);
+      setAssistantName(loadedDraft.name);
+      setErrors({});
+      setSaveStatus("saved");
+      setHasPendingSave(false);
+    } else {
+      baselineRef.current = assistantQuery.data;
+      setBaseline(assistantQuery.data);
+    }
+  }, [assistantQuery.data, id]);
+
+  const runSave = async (attempt = 0): Promise<boolean> => {
+    if (savePromiseRef.current) {
+      autosaveAfterFlightRef.current = true;
+      return savePromiseRef.current;
+    }
+    const currentBaseline = baselineRef.current;
+    const currentDraft = draftRef.current;
+    if (!currentBaseline || !currentDraft) return false;
+    if (!draftIsDirty(currentDraft, currentBaseline)) {
+      setSaveStatus("saved");
+      setPendingSave(false);
+      return true;
+    }
+
+    const payloadConfig = prepareConfigForSave(currentDraft.config);
+    const validation = validateAssistantConfig(payloadConfig);
+    if (Object.keys(validation).length) {
+      if (mountedRef.current) {
+        setErrors(validation);
+        setSaveStatus("invalid");
+        setHasPendingSave(false);
+        showTabWithErrors(validation);
+        window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
+      }
+      return false;
+    }
+
+    const sentDraft = { config: structuredClone(currentDraft.config), name: currentDraft.name };
+    if (mountedRef.current) {
+      setErrors({});
+      setSaveStatus("saving");
+      setHasPendingSave(true);
+    }
+    const request = {
+      payload: { name: currentDraft.name, template: currentBaseline.template, config: payloadConfig },
+      sentDraft,
+      attempt,
+    };
+    const pending = save.mutateAsync(request).then(() => true).catch(() => false).finally(() => {
+      savePromiseRef.current = null;
+      if (autosaveAfterFlightRef.current) {
+        autosaveAfterFlightRef.current = false;
+        clearRetryTimer();
+        if (currentDraftIsDirty()) void saveCurrentRef.current(0);
+        else if (mountedRef.current) {
+          setSaveStatus("saved");
+          setHasPendingSave(false);
+        }
+        return;
+      }
+      if (!mountedRef.current) return;
+      if (retryTimerRef.current !== null || debounceTimerRef.current !== null) return;
+      if (!currentDraftIsDirty()) {
+        setSaveStatus("saved");
+        setHasPendingSave(false);
+      }
     });
-    setSaveMessage("");
+    savePromiseRef.current = pending;
+    return pending;
+  };
+  saveCurrentRef.current = runSave;
+
+  const scheduleAutosave = () => {
+    clearDebounceTimer();
+    clearRetryTimer();
+    if (!currentDraftIsDirty() && !savePromiseRef.current) {
+      setSaveStatus("saved");
+      setPendingSave(false);
+      return;
+    }
+    setSaveStatus("dirty");
+    setPendingSave(true);
+    debounceTimerRef.current = window.setTimeout(() => {
+      debounceTimerRef.current = null;
+      if (savePromiseRef.current) {
+        autosaveAfterFlightRef.current = true;
+        return;
+      }
+      void saveCurrentRef.current(0);
+    }, 1200);
+  };
+  const flushPendingSave = () => {
+    if (debounceTimerRef.current === null) return;
+    clearDebounceTimer();
+    void saveCurrentRef.current(0);
+  };
+  flushPendingRef.current = flushPendingSave;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (debounceTimerRef.current !== null) {
+        clearDebounceTimer();
+        void saveCurrentRef.current(0);
+      }
+      clearRetryTimer();
+    };
+  }, []);
+
+  const previousPathRef = useRef(location.pathname);
+  useEffect(() => {
+    if (previousPathRef.current === location.pathname) return;
+    previousPathRef.current = location.pathname;
+    flushPendingRef.current();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!hasPendingSave) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasPendingSave]);
+
+  const update = (change: (draft: AssistantConfig) => void) => {
+    const current = draftRef.current?.config ?? config;
+    if (!current) return;
+    const draft = structuredClone(current);
+    change(draft);
+    if (draftRef.current) draftRef.current = { ...draftRef.current, config: draft };
+    setConfig(draft);
+    scheduleAutosave();
+  };
+  const changeAssistantName = (name: string) => {
+    setAssistantName(name);
+    if (draftRef.current) draftRef.current = { ...draftRef.current, name };
+    scheduleAutosave();
   };
   const clearFieldError = (path: string) => {
     setErrors((current) => {
@@ -370,47 +575,55 @@ export function AssistantSettingsPage() {
       delete next[path];
       return next;
     });
-    setSaveMessage("");
   };
 
   async function saveDraft(): Promise<boolean> {
-    if (!config) return false;
-    if (!isDirty) return true;
-    const payloadConfig = prepareConfigForSave(config);
-    const validation = validateAssistantConfig(payloadConfig);
-    setErrors(validation);
-    setSaveMessage("");
-    if (Object.keys(validation).length) {
-      showTabWithErrors(validation);
-      window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
-      return false;
+    clearDebounceTimer();
+    clearRetryTimer();
+    if (savePromiseRef.current) {
+      const saved = await savePromiseRef.current;
+      if (!saved) return false;
     }
-    try {
-      await save.mutateAsync({ name: assistantName, template: baseline.template, config: payloadConfig });
+    clearDebounceTimer();
+    if (!currentDraftIsDirty()) {
+      setSaveStatus("saved");
+      setPendingSave(false);
       return true;
-    } catch {
-      return false;
     }
+    return saveCurrentRef.current(0);
   }
 
+  if (!isSettingsTab(tab)) return <Navigate to={settingsTabPath(id)} replace />;
+  if (assistantQuery.error) return <main className="page" id="main-content"><ErrorState message="Assistant settings could not be loaded." /></main>;
+  if (assistantQuery.isLoading || !config || !baseline || baseline.id !== id) return <main className="page" id="main-content"><LoadingState /></main>;
+  const allErrors = { ...validateAssistantConfig(config), ...errors };
+  const isDirty = JSON.stringify(config) !== JSON.stringify(baseline.config) || assistantName !== baseline.name;
   const fieldErrors = Object.entries(allErrors).filter(([path]) => path !== "_form");
   const errorCount = (tabId: SettingsTabId) => fieldErrors.filter(([path]) => tabForPath(path) === tabId).length;
   const tabErrors = Object.fromEntries(fieldErrors.filter(([path]) => tabForPath(path) === activeTab));
   const otherTabsWithErrors = settingsTabs.filter(({ id: tabId }) => tabId !== activeTab && errorCount(tabId) > 0);
+  const saveStatusText: Record<SettingsSaveStatus, string> = {
+    saved: "All changes saved",
+    dirty: "Unsaved changes",
+    saving: "Saving…",
+    invalid: "Not saved: fix the highlighted fields",
+    retrying: "Couldn't save. Retrying…",
+    failed: "Couldn't save",
+  };
   return <main className="page" id="main-content">
     <div className="settings-header">
       <div className="page-header-text"><h1>{baseline.name}</h1></div>
       <AssistantSwitcher assistantId={id} assistantName={baseline.name} activeTab={activeTab} />
     </div>
-    <div className="settings-tab-row save-bar" role="region" aria-label="Settings sections and save">
+    <div className="settings-tab-row save-bar" role="region" aria-label="Settings sections and save status">
       <nav className="settings-tabs" aria-label="Settings sections">
         {settingsTabs.map(({ id: tabId, label }) => <NavLink key={tabId} to={settingsTabPath(id, tabId)} aria-current={tabId === activeTab ? "page" : undefined}>
           {label}{errorCount(tabId) > 0 && <Badge tone="warning">{`${errorCount(tabId)} to fix`}</Badge>}
         </NavLink>)}
       </nav>
-      <div className="settings-save" title="One save covers every tab.">
-        <span className={isDirty ? "dirty-indicator" : "muted"} aria-live="polite" role="status">{saveMessage || (isDirty ? "Unsaved changes" : "All changes saved")}</span>
-        <button type="button" className="button-primary" onClick={() => { void saveDraft(); }} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</button>
+      <div className="settings-save">
+        <span className={isDirty || saveStatus === "failed" ? "dirty-indicator" : "muted"} aria-live="polite" role="status">{saveStatusText[saveStatus]}</span>
+        {saveStatus === "failed" && <button type="button" className="button-link" onClick={() => { clearRetryTimer(); void saveCurrentRef.current(0); }}>Retry</button>}
         <HelpLink to={settingsTabHelp[activeTab]} />
       </div>
     </div>
@@ -429,7 +642,7 @@ export function AssistantSettingsPage() {
         clearFieldError={clearFieldError}
         schema={schemaQuery.data}
         assistantName={assistantName}
-        setAssistantName={(name) => { setAssistantName(name); setSaveMessage(""); }}
+        setAssistantName={changeAssistantName}
       />
     </div>
   </main>;

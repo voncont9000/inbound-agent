@@ -40,9 +40,10 @@ export function tabForPath(path: string): SettingsTabId {
     case "transfer_targets":
     case "transfer_handoff_message":
     case "transfer_failed_message":
-    case "readback":
     case "post_actions":
       return "abilities";
+    case "readback":
+      return "advanced";
     case "email_triage":
       return "channels";
     case "live_actions":

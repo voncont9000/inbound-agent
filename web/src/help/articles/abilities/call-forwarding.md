@@ -14,7 +14,7 @@ Call forwarding transfers a live call to a configured person or destination. Con
 2. In the **Call forwarding** card, enable the ability and add a transfer target with the details your team uses.
 3. Choose whether the target is available **Only during office hours**.
 4. Set the messages used when the assistant hands off a call or cannot complete the transfer.
-5. Choose **Save changes**.
+5. Assistant settings save automatically as you edit.
 
 ## Test call forwarding
 

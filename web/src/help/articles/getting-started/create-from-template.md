@@ -23,7 +23,7 @@ Templates with sample business details have a **Create demo assistant** button. 
 1. Open the assistant's [settings](/assistants).
 2. Update its name, language, voice, greeting and instructions.
 3. Check its rules, knowledge and enabled abilities.
-4. Use **Save changes** after reviewing the settings.
+4. Settings save automatically as you review and edit them.
 
 ## Delete assistants
 

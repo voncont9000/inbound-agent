@@ -16,7 +16,7 @@ After-conversation actions can notify staff, email a customer, add a Google Shee
 4. Configure its recipient or destination, trigger and message or field values.
 5. In a subject, message or Sheets column value, choose **Insert variable** to select a conversation or intake field. Choose **Custom variable…** to add a named placeholder.
 6. For a Sheets action, paste the link from your browser into **Google Sheet link**. You can also enter a spreadsheet ID. A new Sheets action starts with the columns Started, Name, Channel and Summary.
-7. Choose **Save changes**.
+7. Assistant settings save automatically as you edit.
 
 ## Preview an action
 
