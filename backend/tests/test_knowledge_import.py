@@ -59,7 +59,13 @@ async def test_file_import_writes_chunks_digest_and_replaces_chunks(
 
     source = await client.post(
         f"/assistants/{assistant_id}/knowledge/sources",
-        files={"file": ("fees.md", b"The fixed fee is \xc2\xa3595 plus VAT.", "text/markdown")},
+        files={
+            "file": (
+                "fees.md",
+                b"The fixed fee is \xc2\xa3595 plus \x00VAT.",
+                "text/markdown",
+            )
+        },
     )
     assert source.status_code == 201, source.text
     bad_upload = await client.post(
@@ -85,7 +91,13 @@ async def test_file_import_writes_chunks_digest_and_replaces_chunks(
             .where(KnowledgeChunk.source_id == UUID(source_data["id"]))
         )
         stored_source = await session.get(KnowledgeSource, UUID(source_data["id"]))
+        stored_chunk = await session.scalar(
+            select(KnowledgeChunk).where(KnowledgeChunk.source_id == UUID(source_data["id"]))
+        )
         assert stored_source is not None
+        assert stored_chunk is not None
+        assert "\x00" not in stored_chunk.text
+        assert "plus VAT" in stored_chunk.text
         assert not stored_source.manifest["stored_path"].startswith("/")
     assert chunk_count == 1
     digest = await client.get(f"/assistants/{assistant_id}/knowledge/digest")
@@ -102,6 +114,44 @@ async def test_file_import_writes_chunks_digest_and_replaces_chunks(
             .where(KnowledgeChunk.source_id == UUID(source_data["id"]))
         )
     assert chunk_count == 1
+
+
+async def test_unexpected_import_failure_marks_pending_sources_failed(
+    tenant_pair, monkeypatch, tmp_path
+) -> None:
+    account = tenant_pair["first"]
+    client = account["client"]
+    templates = (await client.get("/templates")).json()
+    config = next(item["config"] for item in templates if item["name"] == "uk_law_firm")
+    assistant = await client.post(
+        "/assistants",
+        json={"name": "Failed import assistant", "template": "uk_law_firm", "config": config},
+    )
+    assistant_id = assistant.json()["id"]
+    settings = get_settings()
+    monkeypatch.setattr(settings, "upload_dir", tmp_path)
+    monkeypatch.setattr(settings, "google_api_key", "test-key")
+    monkeypatch.setattr(knowledge_import, "make_genai_client", lambda _key: _FakeClient())
+
+    source = await client.post(
+        f"/assistants/{assistant_id}/knowledge/sources",
+        files={"file": ("usable.txt", b"Usable source text.", "text/plain")},
+    )
+    assert source.status_code == 201, source.text
+
+    async def fail_digest(*_args, **_kwargs):
+        raise RuntimeError("digest generation failed")
+
+    monkeypatch.setattr(knowledge_import, "generate_digest", fail_digest)
+    job = await client.post(f"/assistants/{assistant_id}/knowledge/import")
+    assert job.status_code == 202, job.text
+    assert await run_next_job()
+
+    source_after = (await client.get(f"/assistants/{assistant_id}/knowledge/sources")).json()[
+        "items"
+    ][0]
+    assert source_after["status"] == "failed"
+    assert source_after["manifest"]["last_error"] == "Import failed: RuntimeError"
 
 
 async def test_private_url_source_is_rejected_by_default(tenant_pair) -> None:

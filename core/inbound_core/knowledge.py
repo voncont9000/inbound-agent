@@ -479,6 +479,8 @@ def _source_record(
     title: str = "",
     error: str | None = None,
 ) -> dict[str, Any]:
+    text = _strip_c0_control_chars(text)
+    title = _strip_c0_control_chars(title)
     return {
         "source": source,
         "title": title,
@@ -488,6 +490,12 @@ def _source_record(
         "chars": len(text),
         "errors": [error] if error else [],
     }
+
+
+def _strip_c0_control_chars(value: str) -> str:
+    return "".join(
+        character for character in value if character in "\t\n\r" or ord(character) >= 0x20
+    )
 
 
 def read_document(path: str | Path) -> tuple[str, str]:
