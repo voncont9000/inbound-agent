@@ -169,6 +169,27 @@ input, select, textarea {
   font-weight: 400;
   transition: border-color 150ms cubic-bezier(.4,0,.2,1), background-color 150ms cubic-bezier(.4,0,.2,1);
 }
+input[type="file"] { height: auto; padding: var(--space-2); }
+input[type="file"]::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-button);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 150ms cubic-bezier(.4,0,.2,1);
+}
+input[type="file"]::file-selector-button:hover { border-color: var(--ink); }
+select:not([multiple]):not([size]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%230f0f16' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 16px;
+  padding-right: 2.5rem;
+}
 input:hover, select:hover, textarea:hover { border-color: var(--ink); }
 input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: var(--accent-text); }
 input[type="range"], input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); }
