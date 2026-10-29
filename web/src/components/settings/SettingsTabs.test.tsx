@@ -332,12 +332,47 @@ describe("assistant settings tabs", () => {
     renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
-    await user.clear(screen.getAllByLabelText("Choices")[0]);
+    const choices = screen.getAllByLabelText("Choices")[0];
+    await user.clear(choices);
 
     await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Not saved: fix the highlighted fields"), { timeout: 6000 });
-    expect(screen.getAllByLabelText("Choices")[0]).toHaveAttribute("aria-invalid", "true");
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    expect(choices).toHaveAttribute("aria-invalid", "true");
+    expect(choices).toHaveFocus();
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`);
     expect(putCount).toBe(0);
     server.events.removeListener("request:start", listener);
+  }, 10000);
+
+  it("does not navigate away from the edited tab when another tab has validation errors", async () => {
+    const user = userEvent.setup();
+    const assistant = mockDb.tenants[0].assistants.find(({ id }) => id === assistantId)!;
+    assistant.config.rules!.pronunciations = [{ term: "", say_as: "" }];
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const greeting = screen.getByRole("textbox", { name: "Greeting" });
+    await user.type(greeting, " Keep editing.");
+
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Not saved: fix the highlighted fields"), { timeout: 6000 });
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`);
+    expect(greeting).toHaveFocus();
+  }, 10000);
+
+  it("does not move focus for server validation returned during autosave", async () => {
+    const user = userEvent.setup();
+    server.use(http.put("*/api/assistants/:id", () => HttpResponse.json({
+      detail: [{ loc: ["body", "config", "greeting"], msg: "Server rejected greeting", type: "value_error" }],
+    }, { status: 422 })));
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const greeting = screen.getByRole("textbox", { name: "Greeting" });
+    await user.type(greeting, " Rejected.");
+
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Not saved: fix the highlighted fields"), { timeout: 6000 });
+    expect(await screen.findByRole("link", { name: "Server rejected greeting" })).toBeInTheDocument();
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    expect(greeting).toHaveFocus();
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`);
   }, 10000);
 
   it("retries a server error once, then offers a manual retry", async () => {

@@ -136,6 +136,7 @@ describe("Google OAuth from assistant abilities", () => {
     await user.click(await screen.findByRole("button", { name: "Connect Google Calendar" }));
 
     expect(await screen.findByText("Enter an appointment label.", { selector: ".field-error" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("link", { name: "Enter an appointment label." })).toHaveFocus());
     expect(requests.order).toEqual([]);
     expect(redirect).not.toHaveBeenCalled();
   });

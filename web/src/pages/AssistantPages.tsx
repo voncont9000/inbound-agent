@@ -347,7 +347,8 @@ export function AssistantSettingsPage() {
   const retryTimerRef = useRef<number | null>(null);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const autosaveAfterFlightRef = useRef(false);
-  const saveCurrentRef = useRef<(attempt?: number) => Promise<boolean>>(async () => false);
+  const interactiveSaveRequestedRef = useRef(false);
+  const saveCurrentRef = useRef<(attempt?: number, interactive?: boolean) => Promise<boolean>>(async () => false);
   const flushPendingRef = useRef<() => void>(() => {});
   const activeTab: SettingsTabId = isSettingsTab(tab) ? tab : "general";
   const showTabWithErrors = (found: Record<string, string>) => {
@@ -356,7 +357,7 @@ export function AssistantSettingsPage() {
   };
 
   const save = useMutation({
-    mutationFn: ({ payload }: { payload: Schemas["AssistantUpdate"]; sentDraft: AssistantSettingsDraft; attempt: number }) => unwrap(api.PUT("/assistants/{assistant_id}", { params: { path: { assistant_id: id } }, body: payload })),
+    mutationFn: ({ payload }: { payload: Schemas["AssistantUpdate"]; sentDraft: AssistantSettingsDraft; attempt: number; interactive: boolean }) => unwrap(api.PUT("/assistants/{assistant_id}", { params: { path: { assistant_id: id } }, body: payload })),
     onSuccess: (assistant, { sentDraft }) => {
       baselineRef.current = assistant;
       queryClient.setQueryData(["assistant", id], assistant);
@@ -376,15 +377,17 @@ export function AssistantSettingsPage() {
       }
       void queryClient.invalidateQueries({ queryKey: ["assistant", id] });
     },
-    onError: (caught, { attempt }) => {
+    onError: (caught, { attempt, interactive }) => {
       if (!mountedRef.current) return;
       if (caught instanceof ApiError && caught.status === 422) {
         const found = fieldErrorsFrom422(caught.body);
         setErrors(found);
         setSaveStatus("invalid");
         setHasPendingSave(false);
-        showTabWithErrors(found);
-        window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
+        if (interactive || interactiveSaveRequestedRef.current) {
+          showTabWithErrors(found);
+          window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
+        }
       } else if (attempt === 0 && isRetryableSaveError(caught)) {
         setSaveStatus("retrying");
         setHasPendingSave(true);
@@ -438,9 +441,10 @@ export function AssistantSettingsPage() {
     }
   }, [assistantQuery.data, id]);
 
-  const runSave = async (attempt = 0): Promise<boolean> => {
+  const runSave = async (attempt = 0, interactive = false): Promise<boolean> => {
     if (savePromiseRef.current) {
       autosaveAfterFlightRef.current = true;
+      if (interactive) interactiveSaveRequestedRef.current = true;
       return savePromiseRef.current;
     }
     const currentBaseline = baselineRef.current;
@@ -459,12 +463,15 @@ export function AssistantSettingsPage() {
         setErrors(validation);
         setSaveStatus("invalid");
         setHasPendingSave(false);
-        showTabWithErrors(validation);
-        window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
+        if (interactive) {
+          showTabWithErrors(validation);
+          window.setTimeout(() => document.querySelector<HTMLElement>(".error-summary a")?.focus());
+        }
       }
       return false;
     }
 
+    interactiveSaveRequestedRef.current = false;
     const sentDraft = { config: structuredClone(currentDraft.config), name: currentDraft.name };
     if (mountedRef.current) {
       setErrors({});
@@ -475,9 +482,11 @@ export function AssistantSettingsPage() {
       payload: { name: currentDraft.name, template: currentBaseline.template, config: payloadConfig },
       sentDraft,
       attempt,
+      interactive,
     };
     const pending = save.mutateAsync(request).then(() => true).catch(() => false).finally(() => {
       savePromiseRef.current = null;
+      interactiveSaveRequestedRef.current = false;
       if (autosaveAfterFlightRef.current) {
         autosaveAfterFlightRef.current = false;
         clearRetryTimer();
@@ -581,6 +590,7 @@ export function AssistantSettingsPage() {
     clearDebounceTimer();
     clearRetryTimer();
     if (savePromiseRef.current) {
+      interactiveSaveRequestedRef.current = true;
       const saved = await savePromiseRef.current;
       if (!saved) return false;
     }
@@ -590,7 +600,7 @@ export function AssistantSettingsPage() {
       setPendingSave(false);
       return true;
     }
-    return saveCurrentRef.current(0);
+    return saveCurrentRef.current(0, true);
   }
 
   if (!isSettingsTab(tab)) return <Navigate to={settingsTabPath(id)} replace />;
@@ -623,7 +633,7 @@ export function AssistantSettingsPage() {
       </nav>
       <div className="settings-save">
         <span className={isDirty || saveStatus === "failed" ? "dirty-indicator" : "muted"} aria-live="polite" role="status">{saveStatusText[saveStatus]}</span>
-        {saveStatus === "failed" && <button type="button" className="button-link" onClick={() => { clearRetryTimer(); void saveCurrentRef.current(0); }}>Retry</button>}
+        {saveStatus === "failed" && <button type="button" className="button-link" onClick={() => { clearRetryTimer(); void saveCurrentRef.current(0, true); }}>Retry</button>}
         <HelpLink to={settingsTabHelp[activeTab]} />
       </div>
     </div>

@@ -146,14 +146,12 @@ describe("operator workflows", () => {
     );
   });
 
-  it("validates settings across tabs, saves the complete config, and shows server validation paths", async () => {
+  it("saves the complete config across tabs and keeps validation errors on their tab", async () => {
     const user = userEvent.setup();
     const initialConfig = structuredClone(mockDb.tenants[0].assistants[0].config);
-    let putCount = 0;
     let capturedBody: Record<string, unknown> | undefined;
     const putListener = ({ request }: { request: Request }) => {
       if (request.method === "PUT" && request.url.includes("/assistants/")) {
-        putCount += 1;
         void request.clone().json().then((body) => { capturedBody = body as Record<string, unknown>; });
       }
     };
@@ -164,15 +162,9 @@ describe("operator workflows", () => {
     expect(screen.queryByLabelText("Field name")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Service key")).not.toBeInTheDocument();
 
-    await user.clear(screen.getAllByLabelText("Choices")[0]);
-    await user.click(screen.getByRole("link", { name: "Abilities" }));
-    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`));
-    expect(await screen.findByRole("heading", { name: /errors to fix/ })).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Choices")[0]).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("link", { name: /General.*1 to fix/ })).toBeInTheDocument();
-    expect(putCount).toBe(0);
-
-    await user.type(screen.getAllByLabelText("Choices")[0], "a, b");
+    const choices = screen.getAllByLabelText("Choices")[0];
+    await user.clear(choices);
+    await user.type(choices, "a, b");
     const serviceLabel = screen.getAllByLabelText("Service label")[0];
     await user.clear(serviceLabel);
     await user.type(serviceLabel, "Boiler servicing");
@@ -214,12 +206,13 @@ describe("operator workflows", () => {
     }, { status: 422 })));
     await user.click(screen.getByRole("link", { name: "General" }));
     await user.type(screen.getByRole("textbox", { name: "Greeting" }), " Welcome.");
-    await user.click(screen.getByRole("link", { name: "Knowledge" }));
-    await waitFor(() => expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`));
-    await waitFor(() => expect(screen.getAllByText("Label rejected by server.")).toHaveLength(2));
-    const firstLabel = screen.getAllByLabelText("Field label")[0];
-    expect(firstLabel).toHaveAttribute("aria-invalid", "true");
-    expect(document.getElementById(firstLabel.getAttribute("aria-describedby")?.split(" ")[0] ?? "")).toHaveTextContent("Label rejected by server.");
+    const knowledgeTab = screen.getByRole("link", { name: "Knowledge" });
+    await user.click(knowledgeTab);
+    await waitFor(() => expect(within(screen.getByRole("region", { name: "Settings sections and save status" })).getByRole("status")).toHaveTextContent("Not saved: fix the highlighted fields"), { timeout: 6000 });
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/knowledge`);
+    expect(screen.getByRole("alert")).toHaveTextContent("Also fix: General");
+    expect(knowledgeTab).toHaveFocus();
+    expect(screen.getByRole("link", { name: /General.*1 to fix/ })).toBeInTheDocument();
     server.events.removeListener("request:start", putListener);
   }, 20000);
 
