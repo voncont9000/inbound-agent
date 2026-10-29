@@ -42,10 +42,11 @@ modify it.**
 - All production secrets live only in `/opt/inbound-agent/deploy/.env.production` on the server
   (variable list: `deploy/.env.production.example`). Never overwrite, print or commit it; the
   deploy below excludes it.
-- SSH: `root@188.245.155.13`. Root's `authorized_keys` has two keys: `investment-tracker-deploy`
-  (Vincent's) and `devin-inbound-agent-deploy` (lived on the Devin VM; treat it as gone and remove
-  it from `/root/.ssh/authorized_keys` when convenient). To give a new agent/machine access,
-  append its public key to `/root/.ssh/authorized_keys`.
+- SSH: `ssh root@188.245.155.13`. Root's `authorized_keys` has three keys:
+  `vincent@Vincents-MacBook-Air-3.local` (Vincent's Mac, `~/.ssh/id_ed25519`, the working owner key),
+  `investment-tracker-deploy` (belongs to the other project's deploy, not usable from the Mac) and
+  `devin-inbound-agent-deploy` (lived on the Devin VM; remove it once Devin is no longer used). To give
+  a new agent/machine access, append its public key to `/root/.ssh/authorized_keys`.
 - Accounts behind the keys: Twilio, Google Cloud (OAuth client, Gmail/Calendar/Sheets APIs,
   Pub/Sub), Gemini API, AssemblyAI, Speechify (1 request/s limit), ElevenLabs, Soniox, OpenRouter,
   Langfuse, Cloudflare. All are Vincent's.
