@@ -13,7 +13,7 @@ Call recording is off by default. If you enable it, the assistant's greeting inc
 1. Open the assistant's settings and select **Advanced**.
 2. Find the call recording controls and decide whether recording should be enabled.
 3. Review the consent message and the recording retention period.
-4. Choose **Save changes**.
+4. Assistant settings save automatically as you edit.
 
 ## Play a recording
 

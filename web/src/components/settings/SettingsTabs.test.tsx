@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import { screen, waitFor, within } from "@testing-library/react";
+import { configure, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Schemas } from "../../api/client";
@@ -10,6 +10,9 @@ import { renderApp } from "../../test/renderApp";
 
 const assistantId = "20000000-0000-4000-8000-000000000001";
 const otherAssistantId = "20000000-0000-4000-8000-000000000002";
+
+configure({ asyncUtilTimeout: 6000 });
+const settingsSaveStatus = () => within(screen.getByRole("region", { name: "Settings sections and save status" })).getByRole("status");
 
 describe("assistant settings tabs", () => {
   it.each([
@@ -22,7 +25,7 @@ describe("assistant settings tabs", () => {
     expect(await screen.findByRole("heading", { name: "Brightside reception" })).toBeInTheDocument();
   });
 
-  it.each(settingsTabs.map(({ id, label }) => [id, label]))("shows the %s tab with global test call and Save controls", async (tab, label) => {
+  it.each(settingsTabs.map(({ id, label }) => [id, label]))("shows the %s tab with global test call and autosave status", async (tab, label) => {
     renderApp(`/assistants/${assistantId}/settings/${tab}`, { loggedIn: true });
     await screen.findByRole("heading", { name: "Brightside reception" });
     const settingsNavigation = screen.getByRole("navigation", { name: "Settings sections" });
@@ -31,7 +34,8 @@ describe("assistant settings tabs", () => {
     expect(within(testCallBar).getByRole("button", { name: "Start test call" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Test call" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^Help:/ })).toHaveAttribute("href", expect.stringMatching(/^\/help\//));
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+    expect(settingsSaveStatus()).toHaveTextContent("All changes saved");
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   });
 
   it("renders the contextual Help link inside the settings tab row", async () => {
@@ -153,7 +157,7 @@ describe("assistant settings tabs", () => {
     expect(screen.queryByRole("button", { name: "Add appointment type" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "General" }));
     expect(screen.getByLabelText("Business name")).toHaveValue("Brightside Plumbing & Heating Ltd");
-    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("All changes saved"), { timeout: 6000 });
   });
 
   it("shows the translation notice only for a changed single language and applies the draft translation", async () => {
@@ -210,7 +214,7 @@ describe("assistant settings tabs", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Greeting" })).toHaveValue(
       "Ciao, parli con l’assistente AI di Brightside Plumbing & Heating.",
     ));
-    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("All changes saved"), { timeout: 6000 });
     await waitFor(() => expect(
       screen.queryByRole("button", { name: /Translate them to/ }),
     ).not.toBeInTheDocument());
@@ -236,8 +240,8 @@ describe("assistant settings tabs", () => {
     expect(screen.getByLabelText("Silence goodbye message")).toHaveValue(
       "Terminerò la chiamata. Grazie per aver chiamato.",
     );
-    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
-  });
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("All changes saved"), { timeout: 6000 });
+  }, 10000);
 
   it("hides the translation notice when switching back to the saved language without translating", async () => {
     const user = userEvent.setup();
@@ -261,9 +265,165 @@ describe("assistant settings tabs", () => {
 
     await user.selectOptions(await screen.findByLabelText("Language"), "it-IT");
     expect(await screen.findByRole("button", { name: "Translate them to Italian" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
-
-    expect(await screen.findByText("Changes saved")).toBeInTheDocument();
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("All changes saved"), { timeout: 6000 });
     expect(screen.getByRole("button", { name: "Translate them to Italian" })).toBeInTheDocument();
+  }, 10000);
+
+  it("autosaves a draft after the debounce and reports each save state", async () => {
+    const user = userEvent.setup();
+    const assistant = mockDb.tenants[0].assistants[0];
+    let requestCount = 0;
+    let requestBody: Schemas["AssistantUpdate"] | undefined;
+    let releaseRequest = () => {};
+    const requestGate = new Promise<void>((resolve) => { releaseRequest = resolve; });
+    server.use(http.put("*/api/assistants/:id", async ({ request }) => {
+      requestCount += 1;
+      requestBody = await request.json() as Schemas["AssistantUpdate"];
+      await requestGate;
+      return HttpResponse.json({ ...assistant, ...requestBody });
+    }));
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const greeting = screen.getByRole("textbox", { name: "Greeting" });
+    await user.type(greeting, " Welcome.");
+    const status = within(screen.getByRole("region", { name: "Settings sections and save status" })).getByRole("status");
+    expect(status).toHaveTextContent("Unsaved changes");
+
+    await waitFor(() => expect(requestCount).toBe(1), { timeout: 6000 });
+    expect(requestBody?.config.greeting).toContain("Welcome.");
+    expect(status).toHaveTextContent("Saving…");
+    releaseRequest();
+    await waitFor(() => expect(status).toHaveTextContent("All changes saved"), { timeout: 6000 });
+    expect(requestCount).toBe(1);
+  }, 15000);
+
+  it("keeps edits made during a save and sends the newer draft afterward", async () => {
+    const user = userEvent.setup();
+    const assistant = mockDb.tenants[0].assistants[0];
+    const requestBodies: Schemas["AssistantUpdate"][] = [];
+    let releaseFirstRequest = () => {};
+    const firstRequestGate = new Promise<void>((resolve) => { releaseFirstRequest = resolve; });
+    server.use(http.put("*/api/assistants/:id", async ({ request }) => {
+      const body = await request.json() as Schemas["AssistantUpdate"];
+      requestBodies.push(body);
+      if (requestBodies.length === 1) await firstRequestGate;
+      return HttpResponse.json({ ...assistant, ...body });
+    }));
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const greeting = screen.getByRole("textbox", { name: "Greeting" });
+    await user.type(greeting, " First draft.");
+    await waitFor(() => expect(requestBodies).toHaveLength(1), { timeout: 6000 });
+    await user.type(greeting, " Latest edit.");
+    releaseFirstRequest();
+    await waitFor(() => expect(requestBodies).toHaveLength(2), { timeout: 7000 });
+    expect(requestBodies[1].config.greeting).toContain("Latest edit.");
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("All changes saved"), { timeout: 6000 });
+    expect(greeting).toHaveValue(requestBodies[1].config.greeting);
+  }, 20000);
+
+  it("does not send an invalid draft and explains that it needs fixing", async () => {
+    const user = userEvent.setup();
+    let putCount = 0;
+    const listener = ({ request }: { request: Request }) => {
+      if (request.method === "PUT" && request.url.includes("/assistants/")) putCount += 1;
+    };
+    server.events.on("request:start", listener);
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.click(screen.getByRole("button", { name: "Edit services and intake fields" }));
+    const choices = screen.getAllByLabelText("Choices")[0];
+    await user.clear(choices);
+
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Not saved: fix the highlighted fields"), { timeout: 6000 });
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    expect(choices).toHaveAttribute("aria-invalid", "true");
+    expect(choices).toHaveFocus();
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`);
+    expect(putCount).toBe(0);
+    server.events.removeListener("request:start", listener);
+  }, 10000);
+
+  it("does not navigate away from the edited tab when another tab has validation errors", async () => {
+    const user = userEvent.setup();
+    const assistant = mockDb.tenants[0].assistants.find(({ id }) => id === assistantId)!;
+    assistant.config.rules!.pronunciations = [{ term: "", say_as: "" }];
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const greeting = screen.getByRole("textbox", { name: "Greeting" });
+    await user.type(greeting, " Keep editing.");
+
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Not saved: fix the highlighted fields"), { timeout: 6000 });
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`);
+    expect(greeting).toHaveFocus();
+  }, 10000);
+
+  it("does not move focus for server validation returned during autosave", async () => {
+    const user = userEvent.setup();
+    server.use(http.put("*/api/assistants/:id", () => HttpResponse.json({
+      detail: [{ loc: ["body", "config", "greeting"], msg: "Server rejected greeting", type: "value_error" }],
+    }, { status: 422 })));
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    const greeting = screen.getByRole("textbox", { name: "Greeting" });
+    await user.type(greeting, " Rejected.");
+
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Not saved: fix the highlighted fields"), { timeout: 6000 });
+    expect(await screen.findByRole("link", { name: "Server rejected greeting" })).toBeInTheDocument();
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    expect(greeting).toHaveFocus();
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/general`);
+  }, 10000);
+
+  it("retries a server error once, then offers a manual retry", async () => {
+    const user = userEvent.setup();
+    let putCount = 0;
+    server.use(http.put("*/api/assistants/:id", () => {
+      putCount += 1;
+      return HttpResponse.json({ detail: "Temporary failure" }, { status: 500 });
+    }));
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.type(screen.getByRole("textbox", { name: "Greeting" }), " Retry me.");
+
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Couldn't save. Retrying…"), { timeout: 6000 });
+    await waitFor(() => expect(putCount).toBe(2), { timeout: 6000 });
+    await waitFor(() => expect(settingsSaveStatus()).toHaveTextContent("Couldn't save"), { timeout: 6000 });
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  }, 15000);
+
+  it("flushes a pending autosave when navigating to another settings tab", async () => {
+    const user = userEvent.setup();
+    let requestBody: Schemas["AssistantUpdate"] | undefined;
+    server.use(http.put("*/api/assistants/:id", async ({ request }) => {
+      requestBody = await request.json() as Schemas["AssistantUpdate"];
+      return HttpResponse.json({ ...mockDb.tenants[0].assistants[0], ...requestBody });
+    }));
+    renderApp(`/assistants/${assistantId}/settings/general`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    await user.type(screen.getByRole("textbox", { name: "Greeting" }), " Flush on navigation.");
+    await user.click(screen.getByRole("link", { name: "Rules" }));
+
+    await waitFor(() => expect(requestBody?.config.greeting).toContain("Flush on navigation."), { timeout: 6000 });
+    expect(screen.getByTestId("current-location")).toHaveTextContent(`/assistants/${assistantId}/settings/rules`);
+  }, 10000);
+
+  it("keeps Readback in Advanced and clears caller confirmation when turned off", async () => {
+    const user = userEvent.setup();
+    renderApp(`/assistants/${assistantId}/settings/abilities`, { loggedIn: true });
+    await screen.findByRole("heading", { name: "Brightside reception" });
+    expect(screen.queryByRole("button", { name: /Readback/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Advanced" }));
+    const readback = screen.getByRole("region", { name: "Settings sections and save status" }).parentElement;
+    expect(readback).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Readback" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /confirm critical fields/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /Read back every field marked critical/ }));
+    let confirmation = screen.getByRole("checkbox", { name: /Record the caller's confirmation/ });
+    if (!(confirmation as HTMLInputElement).checked) await user.click(confirmation);
+    await user.click(screen.getByRole("radio", { name: /Off.*Don't read details back/ }));
+    confirmation = screen.getByRole("checkbox", { name: /Record the caller's confirmation/ });
+    expect(confirmation).toBeDisabled();
+    expect(confirmation).not.toBeChecked();
   });
 });

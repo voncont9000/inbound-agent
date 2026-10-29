@@ -21,7 +21,7 @@ Tasks record follow-up work such as callbacks, urgent concerns, complaints or re
 2. In **Urgency**, add a plain-language condition under **Urgent if…**. This is the primary way to mark a conversation urgent.
 3. For structured rules, expand **More rule types: keywords and date deadlines** and choose **Keywords** or **Date deadline**. Specify the phrases or date settings, then enter the reason.
 4. For a date deadline, check the read-only preview to confirm the selected field label, date adjustments and urgency threshold.
-5. Choose **Save changes** and test an example.
+5. Assistant settings save automatically. Test an example.
 
 ### Good to know
 

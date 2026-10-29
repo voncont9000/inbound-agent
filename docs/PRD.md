@@ -175,9 +175,9 @@ template- and prompt-driven and vertical-neutral.
   the template. Booking timing and holding lines sit collapsed inside the booking card, transfer
   messages inside the forwarding card, and the review threshold and call settings under **Advanced**.
 - FR-S3: **Abilities as cards** (calendar booking, call forwarding, after-conversation actions,
-  callbacks/tasks, readback). Every card is off until switched on and shows at most 2-3 required
-  fields; the rest are defaulted. The readback card owns the readback mode (email or critical) and the
-  `confirm_critical_fields` live action.
+  callbacks/tasks). Every card is off until switched on and shows at most 2-3 required fields; the
+  rest are defaulted. Readback is configured under Advanced, where its mode (off/email/critical)
+  and `confirm_critical_fields` live action are managed together.
 - FR-S4: **No technical keys in the UI.** Service keys, field names, appointment-type keys and contact
   keys are generated from the human label (slugified, unique per assistant) and stay stable when the
   label is later edited.
@@ -190,12 +190,13 @@ template- and prompt-driven and vertical-neutral.
 
 *Status (FR-S1–S4, FR-S6):* built in the web app. Settings live at `/assistants/:id/settings/:tab`
 (`general`, `rules`, `knowledge`, `abilities`, `channels`, `advanced`); `/assistants/:id/settings`
-and the old `/assistants/:id/knowledge` page redirect to these tabs. One **Save changes** button saves the whole config
-from any tab, and tabs that have validation errors show a count. Config versions are still stored and
-served by the API, but the settings page no longer shows version history. Knowledge sources and the digest still save on their own.
+and the old `/assistants/:id/knowledge` page redirect to these tabs. Assistant settings autosave the
+whole config after 1.2 seconds without edits; the status bar reports saving, success or failure.
+Tabs with validation errors show a count. Config versions are still stored and served by the API,
+but the settings page no longer shows version history. Knowledge sources and the digest still save on their own.
 Ability cards switch the matching live actions on or off (booking: `check_availability` and
-`book_appointment`; forwarding: `transfer_call`; readback: `confirm_critical_fields`), and Advanced
-lists only the live actions no card owns. Services and intake fields have their own card under General;
+`book_appointment`; forwarding: `transfer_call`). Advanced owns Readback and its `confirm_critical_fields`
+live action, plus the live actions no ability card owns. Services and intake fields have their own card under General;
 they stay structured because extraction, readback and urgency rules use their keys. Prices and contact
 details have no editor any more (the config fields remain and are still rendered into the prompt). Keys are generated in the browser
 (`web/src/lib/keys.ts`) and match the backend key patterns. Saved keys never change. Post-action

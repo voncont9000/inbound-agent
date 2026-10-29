@@ -22,7 +22,7 @@ Start with the relevant check below. If the issue remains, collect the conversat
 
 1. Open the conversation and note the question and the assistant's answer.
 2. Check the assistant's Knowledge settings for the current answer.
-3. Correct the knowledge or rule, choose **Save changes** or **Save digest** as appropriate, and test again.
+3. Correct the knowledge or rule; assistant settings save automatically, while a digest has its own **Save digest** button. Test again.
 
 ## A channel is unavailable
 

@@ -19,7 +19,7 @@ Appointment booking uses Google Calendar. The assistant offers configured appoin
 
 1. In **Abilities** › **Calendar booking**, enable the ability. If the card says booking actions are missing, choose **Turn them on** there.
 2. Review **Booking timing and messages** in the same card, including minimum notice, booking horizon, buffer and maximum slots offered.
-3. Choose **Save changes**.
+3. Assistant settings save automatically as you edit. Connecting Google Calendar saves your settings first.
 4. Make a **Test call** to check how the assistant offers and confirms appointments.
 
 ### Good to know

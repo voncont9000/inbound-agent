@@ -13,7 +13,7 @@ Rules tell the assistant how to handle conversations. Use clear, specific direct
 1. Open the assistant's settings and select **Rules**.
 2. Review the available rule presets and choose the ones that fit how your team works.
 3. Add or edit custom rules when you need a behaviour that a preset does not cover.
-4. Choose **Save changes**.
+4. Assistant settings save automatically as you edit.
 
 ## Set pronunciation and urgency guidance
 

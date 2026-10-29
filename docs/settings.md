@@ -1,7 +1,8 @@
 # Assistant settings layout
 
 Settings live at `/assistants/:id/settings/:tab` (`general`, `rules`, `knowledge`, `abilities`,
-`channels`, `advanced`). One **Save changes** button saves the whole `AssistantConfig` from any tab.
+`channels`, `advanced`). Assistant settings autosave the whole `AssistantConfig` 1.2 seconds after
+the last edit. Calendar and Sheets connections save the draft immediately before starting OAuth.
 Validation errors are routed to the tab that owns the field by `tabForPath` in
 `web/src/lib/settingsTabs.ts`; keep that function in sync when a control moves.
 
@@ -14,9 +15,9 @@ documented in [templates.md](templates.md).
 | General | Assistant name, business name, language and voice, greeting, **Instructions** (custom prompt), **Services and intake fields** |
 | Rules | Rule presets, custom rules, pronunciation, sentence urgency rules, keyword and date urgency rules |
 | Knowledge | Office hours, FAQs, knowledge sources and digest |
-| Abilities | Calendar booking (appointment types, booking timing and holding messages), call forwarding (transfer targets, forwarding messages), after-conversation actions, readback (mode and live confirmation) |
+| Abilities | Calendar booking (appointment types, booking timing and holding messages), call forwarding (transfer targets, forwarding messages), after-conversation actions |
 | Channels | Read-only channel list and a link to workspace channel management; email triage |
-| Advanced | Live actions that no ability card owns (`flag_urgent`, `request_callback`, `log_complaint`, `end_call`), review threshold, call settings and recording |
+| Advanced | Readback (mode and live confirmation), live actions that no ability card owns (`flag_urgent`, `request_callback`, `log_complaint`, `end_call`), review threshold, call settings and recording |
 
 ## Speech speed
 
@@ -42,8 +43,8 @@ browser (`web/src/lib/voices.ts`); the `/voices` API is unchanged.
 | Services and intake fields | Abilities: "Services and intake fields" card with an on/off switch | General › "Services and intake fields" card, collapsed to a count summary; "Suggest from prompt" calls `POST /assistants/{id}/services-draft` (Gemini, `build_services_draft_prompt`/`parse_services_draft`) and replaces the services in the unsaved draft; "Edit services and intake fields" opens the editor | They only shape what the assistant asks for, so they belong with the prompt. Kept structured because extraction, critical-field readback and date urgency rules use the generated field keys. The on/off switch was dropped (an empty list means none). |
 | Price list | Knowledge: "Price list" | No editor (config field kept) | Only rendered into the prompt ("PUBLISHED PRICES"). Prices belong in Knowledge (FAQs, digest) or the custom prompt; `price_list` is still accepted by the API and rendered when set. |
 | Contact details | Knowledge: "Contact details" | No editor (config field kept) | Only rendered into the prompt ("CONTACTS"). Put contact details in Knowledge or the custom prompt; `contacts` is still accepted by the API and rendered when set. |
-| Readback mode | Abilities: Readback on/off card (said "choose under Advanced"); Advanced: "Readback mode" radios (off/email/critical) | Abilities › Readback: switch = off, radios = email / critical | The same setting was in two places. |
-| `confirm_critical_fields` live action | Advanced: Live actions | Abilities › Readback: "Record the caller's confirmation" | It is the live half of readback; turning readback off also removes it. |
+| Readback mode | Abilities: Readback on/off card; Advanced: "Readback mode" radios (off/email/critical) | Advanced › Readback: off/email/critical modes | The setting and confirmation control now live together. |
+| `confirm_critical_fields` live action | Advanced: Live actions | Advanced › Readback: "Record the caller's confirmation" | It is the live half of readback; turning readback off also removes it. |
 | `check_availability`, `book_appointment` live actions | Abilities: Calendar booking switch; Advanced: Live actions checkboxes | Abilities › Calendar booking only (switch, plus a "Turn them on" button if they are missing) | Duplicate control; the booking card note used to send users to Advanced. |
 | `transfer_call` live action | Abilities: Call forwarding switch; Advanced: Live actions checkbox | Abilities › Call forwarding switch only | Duplicate control. |
 | Other live actions (`flag_urgent`, `request_callback`, `log_complaint`, `end_call`) | Advanced: Live actions | Advanced: Live actions (unchanged) | No ability card owns them. |

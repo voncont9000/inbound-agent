@@ -12,7 +12,7 @@ Knowledge helps the assistant answer questions using information supplied by you
 
 1. Open the assistant's settings and select **Knowledge**.
 2. Review the frequently asked questions and office hours.
-3. Add or edit the information the assistant may share, then choose **Save changes**.
+3. Add or edit the information the assistant may share. Assistant settings save automatically.
 
 Published prices and contact details are under **General** › **Instructions** (**Custom prompt**), not Knowledge.
 
