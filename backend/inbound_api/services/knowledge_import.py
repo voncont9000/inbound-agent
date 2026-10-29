@@ -142,99 +142,122 @@ async def knowledge_import(session: AsyncSession, payload: dict[str, Any]) -> di
                         failed_source.manifest = failed_manifests[source.id]
         raise PermanentJobError("No knowledge sources produced usable text.")
 
-    all_records = [
-        record
-        for source in sources
-        for record in (
-            records_by_source[source.id]
-            if usable_by_source[source.id]
-            else retained_records_by_source[source.id]
-        )
-    ]
-    client = make_genai_client(api_key)
+    source_tenant_id = sources[0].tenant_id
     try:
-        digest, usage = await generate_digest(
+        all_records = [
+            record
+            for source in sources
+            for record in (
+                records_by_source[source.id]
+                if usable_by_source[source.id]
+                else retained_records_by_source[source.id]
+            )
+        ]
+        client = make_genai_client(api_key)
+        try:
+            digest, usage = await generate_digest(
+                all_records,
+                business_name=config.business_name,
+                max_chars=config.knowledge.max_digest_chars,
+                client=client,
+                model=settings.knowledge_model,
+            )
+        finally:
+            await client.aio.aclose()
+        total_chunks = 0
+        now = datetime.now(UTC)
+        for source in sources:
+            fresh_records = records_by_source[source.id]
+            if usable_by_source[source.id]:
+                await session.execute(
+                    delete(KnowledgeChunk).where(KnowledgeChunk.source_id == source.id)
+                )
+                chunks = build_chunks(fresh_records)
+                next_index = 0
+                for chunk in chunks:
+                    session.add(
+                        KnowledgeChunk(
+                            tenant_id=source.tenant_id,
+                            source_id=source.id,
+                            chunk_index=next_index,
+                            title=chunk["title"],
+                            text=chunk["text"],
+                            sha256=chunk["sha256"],
+                            embedding=None,
+                        )
+                    )
+                    next_index += 1
+                total_chunks += next_index
+                retained = {
+                    key: value
+                    for key, value in source.manifest.items()
+                    if key in {"stored_path", "filename", "content_type", "size"}
+                }
+                source.manifest = {
+                    **retained,
+                    "pages": [
+                        {key: value for key, value in record.items() if key != "text"}
+                        for record in fresh_records
+                    ],
+                    "chunk_count": next_index,
+                    "status": "ready",
+                }
+                source.status = "ready"
+                source.fetched_at = now
+            else:
+                retained_records = retained_records_by_source[source.id]
+                total_chunks += len(retained_records)
+                errors = [error for record in fresh_records for error in record.get("errors", [])]
+                last_error = "; ".join(errors) or "No usable text was returned by the source."
+                source.manifest = {
+                    **source.manifest,
+                    "status": "error",
+                    "last_error": last_error,
+                    "last_attempt_pages": [
+                        {key: value for key, value in record.items() if key != "text"}
+                        for record in fresh_records
+                    ],
+                }
+                source.status = "failed"
+        digest_row = KnowledgeDigest(
+            tenant_id=assistant.tenant_id,
+            assistant_id=assistant_id,
+            content=digest,
+            edited_by=None,
+        )
+        session.add(digest_row)
+        await session.flush()
+        manifest = build_manifest(
             all_records,
             business_name=config.business_name,
-            max_chars=config.knowledge.max_digest_chars,
-            client=client,
             model=settings.knowledge_model,
+            max_digest_chars=config.knowledge.max_digest_chars,
+            usage=usage,
         )
-    finally:
-        await client.aio.aclose()
-    total_chunks = 0
-    now = datetime.now(UTC)
-    for source in sources:
-        fresh_records = records_by_source[source.id]
-        if usable_by_source[source.id]:
-            await session.execute(
-                delete(KnowledgeChunk).where(KnowledgeChunk.source_id == source.id)
-            )
-            chunks = build_chunks(fresh_records)
-            next_index = 0
-            for chunk in chunks:
-                session.add(
-                    KnowledgeChunk(
-                        tenant_id=source.tenant_id,
-                        source_id=source.id,
-                        chunk_index=next_index,
-                        title=chunk["title"],
-                        text=chunk["text"],
-                        sha256=chunk["sha256"],
-                        embedding=None,
+        return {
+            "digest_id": str(digest_row.id),
+            "digest_chars": len(digest),
+            "chunk_count": total_chunks,
+            "manifest": manifest,
+        }
+    except Exception as error:
+        await session.rollback()
+        try:
+            async with tenant_session(source_tenant_id) as error_session:
+                if await job_lease_held(error_session):
+                    pending_sources = await error_session.scalars(
+                        select(KnowledgeSource).where(
+                            KnowledgeSource.assistant_id == assistant_id,
+                            KnowledgeSource.status == "pending",
+                        )
                     )
-                )
-                next_index += 1
-            total_chunks += next_index
-            retained = {
-                key: value
-                for key, value in source.manifest.items()
-                if key in {"stored_path", "filename", "content_type", "size"}
-            }
-            source.manifest = {
-                **retained,
-                "pages": [
-                    {key: value for key, value in record.items() if key != "text"}
-                    for record in fresh_records
-                ],
-                "chunk_count": next_index,
-                "status": "ready",
-            }
-            source.status = "ready"
-            source.fetched_at = now
-        else:
-            retained_records = retained_records_by_source[source.id]
-            total_chunks += len(retained_records)
-            errors = [error for record in fresh_records for error in record.get("errors", [])]
-            last_error = "; ".join(errors) or "No usable text was returned by the source."
-            source.manifest = {
-                **source.manifest,
-                "status": "error",
-                "last_error": last_error,
-                "last_attempt_pages": [
-                    {key: value for key, value in record.items() if key != "text"}
-                    for record in fresh_records
-                ],
-            }
-            source.status = "failed"
-    digest_row = KnowledgeDigest(
-        tenant_id=assistant.tenant_id,
-        assistant_id=assistant_id,
-        content=digest,
-        edited_by=None,
-    )
-    session.add(digest_row)
-    await session.flush()
-    manifest = build_manifest(
-        all_records,
-        business_name=config.business_name,
-        model=settings.knowledge_model,
-        max_digest_chars=config.knowledge.max_digest_chars,
-        usage=usage,
-    )
-    return {
-        "digest_id": str(digest_row.id),
-        "digest_chars": len(digest),
-        "chunk_count": total_chunks,
-        "manifest": manifest,
-    }
+                    for pending_source in pending_sources:
+                        pending_source.status = "failed"
+                        pending_source.manifest = {
+                            **pending_source.manifest,
+                            "status": "error",
+                            "last_error": f"Import failed: {type(error).__name__}",
+                        }
+        except Exception:
+            LOGGER.exception("Could not mark pending knowledge sources failed")
+        raise

@@ -17,6 +17,7 @@ from inbound_core.knowledge import (
     _PinnedHTTPSConnection,
     _PinnedHTTPSHandler,
     _RequestPacer,
+    _source_record,
     build_chunks,
     build_manifest,
     chunk_text,
@@ -61,6 +62,19 @@ def test_file_reader_override_and_chunk_manifest(tmp_path: Path) -> None:
     assert len(chunks[0]["sha256"]) == 64
     assert manifest["sources"][0]["source"] == "file:client-upload.md"
     assert "digest_cost" not in manifest
+
+
+def test_source_record_removes_c0_controls_except_line_whitespace() -> None:
+    record = _source_record(
+        "https://example.test",
+        "ok",
+        text="Fee\x00 details\x01\tand\r\nhours",
+        title="Source\x02 title",
+    )
+
+    assert record["text"] == "Fee details\tand\r\nhours"
+    assert record["title"] == "Source title"
+    assert record["chars"] == len(record["text"])
 
 
 def test_digest_uses_injected_client_and_truncates_sections() -> None:

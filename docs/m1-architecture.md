@@ -162,6 +162,8 @@ builds the digest from fresh content and retained chunks; a refresh with no usab
 content fails without replacing the latest digest. URL sources and redirect hops are
 resolved and checked to block private and otherwise non-public IP addresses. Set
 `KNOWLEDGE_ALLOW_PRIVATE_URLS=true` only for trusted local development.
+Source titles and text remove C0 control characters except tabs and line breaks; an unexpected
+error after usable content is found marks pending sources failed before the job is retried.
 
 Session cookies are Secure by default. Cookie-authenticated writes validate `Origin`
 against `ALLOWED_ORIGINS` (default `http://localhost:5173`); without an Origin, requests
