@@ -48,7 +48,7 @@ def test_application_engine_uses_non_superuser_non_bypass_role() -> None:
 
 def test_migration_has_applied() -> None:
     heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-    assert heads == ["0181"]
+    assert heads == ["0182"]
     applied = {
         version
         for (version,) in _execute(OWNER_DATABASE_URL, "SELECT version_num FROM alembic_version")

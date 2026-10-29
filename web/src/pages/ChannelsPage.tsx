@@ -63,6 +63,7 @@ export function ChannelsPage() {
   const initializedSelection = useRef(false);
   const assistantFilterId = searchParams.get("assistant") ?? "";
   const connectedGmail = searchParams.get("connected") === "gmail";
+  const gmailInUse = searchParams.get("error") === "gmail_in_use";
 
   const assistants = useQuery({ queryKey: ["assistants"], queryFn: () => unwrap(api.GET("/assistants")) });
   const channels = useQuery({ queryKey: ["workspace-channels"], queryFn: () => unwrap(api.GET("/channels")) });
@@ -210,6 +211,7 @@ export function ChannelsPage() {
       >Add channel</button>}
     />
     {connectedGmail && <p className="channel-connected-notice" role="status">Gmail connected.</p>}
+    {gmailInUse && <p role="alert">This Gmail address is already connected in another workspace.</p>}
     {(pickerOpen || selectedKind) && <section className="channel-add-area" id={pickerId} aria-label="Add channel">
       {pickerOpen && !selectedKind && <ChannelPicker
         gmailMode={gmailMode.data?.mode}

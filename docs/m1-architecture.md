@@ -337,6 +337,8 @@ Run frontend checks from `web/` after sourcing the repository's Node installatio
 
 Current contract gaps handled in the UI:
 
+- Google feature-only OAuth credentials are stored separately from Gmail inbox connections. Feature access is resolved from an assistant-specific credential first, then a workspace credential; these rows are not shown in channel listings.
+
 - `ConversationSummary` has neither `needs_review` nor a contact display name. Review badges are derived from a parallel `has_review=true` conversation query; contact links show `external_ref`.
 - `ConversationDetailResponse` has no review collection. The UI expects review results to be folded into merged intake fields as `status: "human"` with `sources.human`.
 - `GET /me` returns only the current tenant, not memberships. Memberships are kept from login/signup responses for workspace switching.

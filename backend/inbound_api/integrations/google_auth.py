@@ -80,7 +80,7 @@ async def google_connection_for(
         select(ChannelConnection)
         .where(
             ChannelConnection.assistant_id == assistant_id,
-            ChannelConnection.kind == "gmail",
+            ChannelConnection.kind.in_(("gmail", "google")),
             ChannelConnection.status == "active",
         )
         .order_by(ChannelConnection.created_at.desc())
@@ -100,7 +100,7 @@ async def action_google_connection_for(
         .where(
             ChannelConnection.assistant_id == assistant_id,
             ChannelConnection.tenant_id == tenant_id,
-            ChannelConnection.kind == "gmail",
+            ChannelConnection.kind.in_(("gmail", "google")),
             ChannelConnection.status == "active",
         )
         .order_by(ChannelConnection.created_at.desc())
@@ -114,7 +114,7 @@ async def action_google_connection_for(
             select(ChannelConnection)
             .where(
                 ChannelConnection.tenant_id == tenant_id,
-                ChannelConnection.kind == "gmail",
+                ChannelConnection.kind.in_(("gmail", "google")),
                 ChannelConnection.status == "active",
             )
             .order_by(ChannelConnection.created_at.desc())
@@ -134,7 +134,7 @@ def has_google_feature(connection: Any, feature: str) -> bool:
     required_scopes = GOOGLE_SCOPE_SETS.get(feature)
     if required_scopes is None:
         return False
-    if getattr(connection, "kind", "gmail") != "gmail":
+    if getattr(connection, "kind", "gmail") not in {"gmail", "google"}:
         return False
     connection_settings = getattr(connection, "settings", None) or {}
     if get_settings().gmail_mode == "fake":

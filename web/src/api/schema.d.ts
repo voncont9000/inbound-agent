@@ -298,6 +298,23 @@ export interface paths {
         patch: operations["update_channel_assistants__assistant_id__channels__channel_id__patch"];
         trace?: never;
     };
+    "/assistants/{assistant_id}/google-features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Google Features */
+        get: operations["google_features_assistants__assistant_id__google_features_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistants/{assistant_id}/knowledge/digest": {
         parameters: {
             query?: never;
@@ -2906,6 +2923,13 @@ export interface components {
             /** Features */
             features?: string[];
         };
+        /** GoogleFeaturesResponse */
+        GoogleFeaturesResponse: {
+            /** Email */
+            email: string | null;
+            /** Features */
+            features: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -4509,6 +4533,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    google_features_assistants__assistant_id__google_features_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                assistant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleFeaturesResponse"];
                 };
             };
             /** @description Validation Error */

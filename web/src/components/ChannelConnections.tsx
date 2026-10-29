@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "../api/client";
-import { useAssistantChannels, useGmailMode, useGoogleOAuth } from "./channelApi";
+import { useGmailMode, useGoogleFeatures, useGoogleOAuth } from "./channelApi";
 
 export function CalendarConnection({ assistantId }: { assistantId: string }) {
   const [error, setError] = useState("");
   const gmailMode = useGmailMode();
   const calendarMode = useQuery({ queryKey: ["calendar-mode"], queryFn: () => unwrap(api.GET("/calendar/mode")) });
-  const channels = useAssistantChannels(assistantId);
+  const googleFeatures = useGoogleFeatures(assistantId);
   const startCalendarOAuth = useGoogleOAuth(assistantId, ["calendar"], setError);
-  const calendarConnected = channels.data?.items.some((channel) => channel.kind === "gmail" && channel.google_features.includes("calendar")) ?? false;
+  const calendarConnected = googleFeatures.data?.features.includes("calendar") ?? false;
   return <div className="stack">
     {calendarMode.data?.mode === "off" && <p className="help">Calendar booking is not enabled for this deployment. Ask your administrator to enable Calendar integration.</p>}
     {calendarMode.data?.mode === "fake" && <p className="help">

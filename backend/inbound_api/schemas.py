@@ -438,20 +438,25 @@ class ChannelConnectionResponse(BaseModel):
 
     @field_serializer("settings")
     def serialize_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
-        if self.kind == "gmail":
+        if self.kind in {"gmail", "google"}:
             return {key: value for key, value in settings.items() if key != "google_scopes"}
         return settings
 
     @computed_field
     @property
     def google_features(self) -> list[str]:
-        if self.kind != "gmail":
+        if self.kind not in {"gmail", "google"}:
             return []
         return [feature for feature in GOOGLE_SCOPE_SETS if has_google_feature(self, feature)]
 
 
 class ChannelConnectionsResponse(BaseModel):
     items: list[ChannelConnectionResponse]
+
+
+class GoogleFeaturesResponse(BaseModel):
+    features: list[str]
+    email: str | None
 
 
 class KnowledgeSourceCreate(BaseModel):

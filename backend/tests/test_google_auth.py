@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from inbound_api.auth import TenantContext
 from inbound_api.channels import gmail_oauth_state
@@ -131,13 +132,13 @@ async def test_google_connection_for_returns_active_gmail_connection():
 
 
 @pytest.mark.asyncio
-async def test_action_google_connection_for_finds_unassigned_gmail_in_same_tenant(monkeypatch):
+async def test_action_google_connection_for_finds_unassigned_google_in_same_tenant(monkeypatch):
     tenant_id = uuid4()
     assistant_id = uuid4()
     unassigned = SimpleNamespace(
         assistant_id=None,
         tenant_id=tenant_id,
-        kind="gmail",
+        kind="google",
         status="active",
         settings={"google_features": ["gmail"]},
     )
@@ -257,6 +258,7 @@ async def test_callback_stores_granted_scopes_and_keeps_existing_refresh_token(m
     )
     connection = SimpleNamespace(
         id=uuid4(),
+        kind="google",
         assistant_id=assistant_id,
         status="active",
         settings={"keep": True},
@@ -274,7 +276,7 @@ async def test_callback_stores_granted_scopes_and_keeps_existing_refresh_token(m
 
     class FakeGmailClient:
         def __init__(self, _connection, _settings):
-            pass
+            pytest.fail("feature-only OAuth must not start a Gmail watch")
 
         async def watch(self, _topic):
             return "history-42"
@@ -300,7 +302,8 @@ async def test_callback_stores_granted_scopes_and_keeps_existing_refresh_token(m
     assert response.headers["location"] == f"https://app.test/assistants/{assistant_id}/settings"
     assert connection.credentials_ciphertext == "existing-encrypted-refresh-token"
     assert connection.settings["google_scopes"] == granted_scopes
-    assert connection.settings["history_id"] == "history-42"
+    assert "history_id" not in connection.settings
+    gmail_router.enqueue_gmail_sync.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -360,6 +363,137 @@ async def test_plain_gmail_oauth_redirects_to_workspace_channels(monkeypatch):
 
     assert response.status_code == 303
     assert response.headers["location"] == "https://app.test/channels?connected=gmail"
+
+
+@pytest.mark.asyncio
+async def test_feature_oauth_creates_google_credential_without_touching_gmail(monkeypatch):
+    tenant_id, assistant_id, user_id = uuid4(), uuid4(), uuid4()
+    monkeypatch.setattr(
+        gmail_oauth_state,
+        "get_settings",
+        lambda: SimpleNamespace(voice_service_token="test-secret"),
+    )
+    state = gmail_oauth_state.issue_state(tenant_id, assistant_id, user_id, features=["calendar"])
+    settings = SimpleNamespace(
+        gmail_mode="google",
+        gmail_pubsub_topic="projects/example/topics/gmail",
+        allowed_origins=["https://app.test"],
+    )
+    added = []
+    session = SimpleNamespace(
+        get=AsyncMock(return_value=object()),
+        scalar=AsyncMock(return_value=None),
+        add=added.append,
+    )
+
+    @asynccontextmanager
+    async def fake_tenant_session(requested_tenant_id):
+        assert requested_tenant_id == tenant_id
+        yield session
+
+    monkeypatch.setattr(gmail_router, "get_settings", lambda: settings)
+    monkeypatch.setattr(gmail_router, "tenant_session", fake_tenant_session)
+    monkeypatch.setattr(gmail_router, "encrypt_credential", lambda _: "encrypted-refresh-token")
+    monkeypatch.setattr(
+        gmail_router,
+        "exchange_google_code",
+        AsyncMock(
+            return_value=(
+                {
+                    "access_token": "access-token",
+                    "refresh_token": "refresh-token",
+                    "scope": "openid email https://www.googleapis.com/auth/calendar.events "
+                    "https://www.googleapis.com/auth/calendar.freebusy",
+                },
+                {"emailAddress": "owner@example.test"},
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        gmail_router,
+        "GoogleGmailClient",
+        lambda *_: pytest.fail("feature-only OAuth must not start a Gmail watch"),
+    )
+    enqueue = AsyncMock()
+    monkeypatch.setattr(gmail_router, "enqueue_gmail_sync", enqueue)
+
+    response = await gmail_router.gmail_oauth_callback("auth-code", state)
+
+    assert response.headers["location"] == f"https://app.test/assistants/{assistant_id}/settings"
+    assert len(added) == 1
+    connection = added[0]
+    assert connection.kind == "google"
+    assert connection.assistant_id == assistant_id
+    assert connection.external_id == "owner@example.test"
+    assert connection.credentials_ciphertext == "encrypted-refresh-token"
+    assert connection.settings["google_scopes"] == [
+        "openid",
+        "email",
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/calendar.freebusy",
+    ]
+    enqueue.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_inbox_oauth_cross_tenant_conflict_redirects_without_invalid_request(monkeypatch):
+    tenant_id, assistant_id, user_id = uuid4(), uuid4(), uuid4()
+    monkeypatch.setattr(
+        gmail_oauth_state,
+        "get_settings",
+        lambda: SimpleNamespace(voice_service_token="test-secret"),
+    )
+    state = gmail_oauth_state.issue_state(tenant_id, assistant_id, user_id)
+    settings = SimpleNamespace(
+        gmail_mode="google",
+        gmail_pubsub_topic="projects/example/topics/gmail",
+        allowed_origins=["https://app.test"],
+    )
+    statement_calls = []
+
+    @asynccontextmanager
+    async def nested():
+        yield
+
+    async def raise_integrity_error():
+        raise IntegrityError("insert", {}, Exception("unique"))
+
+    session = SimpleNamespace(
+        get=AsyncMock(return_value=object()),
+        scalar=AsyncMock(side_effect=[None, None]),
+        add=lambda _: None,
+        begin_nested=nested,
+        flush=AsyncMock(side_effect=raise_integrity_error),
+    )
+    scalar = session.scalar
+
+    async def record_scalar(statement):
+        statement_calls.append(str(statement))
+        return await scalar(statement)
+
+    session.scalar = record_scalar
+
+    @asynccontextmanager
+    async def fake_tenant_session(_tenant_id):
+        yield session
+
+    monkeypatch.setattr(gmail_router, "get_settings", lambda: settings)
+    monkeypatch.setattr(gmail_router, "tenant_session", fake_tenant_session)
+    monkeypatch.setattr(
+        gmail_router,
+        "exchange_google_code",
+        AsyncMock(
+            return_value=(
+                {"access_token": "access-token"},
+                {"emailAddress": "owner@example.test"},
+            )
+        ),
+    )
+
+    response = await gmail_router.gmail_oauth_callback("auth-code", state)
+
+    assert response.headers["location"] == "https://app.test/channels?error=gmail_in_use"
+    assert len(statement_calls) == 2
 
 
 def test_gmail_connection_response_exposes_features_not_scopes(monkeypatch):
