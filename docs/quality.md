@@ -201,4 +201,6 @@ The Admin area is available to platform admins only. It provides a cross-workspa
 
 Evaluation cases store caller utterances and transcript, assistant, and intake checks. Evaluation runs record case results and failures, plus the run trigger, commit SHA, and pass/fail summary.
 
+The eval fake voice API accepts authenticated recording uploads, discards their audio bytes, and records the byte count and duration in its in-memory state for diagnostics.
+
 The web Admin API uses generated types from `web/src/api/schema.d.ts`.

@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from inbound_core.booking import (
     AvailabilityRequest,
     AvailabilityResponse,
@@ -54,6 +54,7 @@ def create_fake_api(
         "fail_reports": fail_reports,
         "calls": [],
         "reports": [],
+        "recordings": [],
         "bookings": [],
         "busy": [BusyBlock.model_validate(item) for item in (busy_blocks or [])],
         "calendar_delay_ms": calendar_delay_ms,
@@ -231,6 +232,28 @@ def create_fake_api(
         )
         return {"accepted": True}
 
+    @app.post(
+        "/internal/voice/calls/{conversation_id}/recording",
+        status_code=202,
+        dependencies=[],
+    )
+    async def upload_recording(
+        conversation_id: UUID,
+        request: Request,
+        duration_seconds: float | None = Query(default=None, ge=0),
+        x_service_token: str | None = Header(default=None, alias="X-Service-Token"),
+    ) -> dict[str, bool]:
+        await require_token(x_service_token)
+        body = await request.body()
+        app.state.fake["recordings"].append(
+            {
+                "conversation_id": str(conversation_id),
+                "bytes": len(body),
+                "duration_seconds": duration_seconds,
+            }
+        )
+        return {"accepted": True}
+
     @app.get("/_fake/state")
     async def state(
         x_service_token: str | None = Header(default=None, alias="X-Service-Token"),
@@ -239,6 +262,8 @@ def create_fake_api(
         return {
             "calls": app.state.fake["calls"],
             "reports": app.state.fake["reports"],
+            "recordings": app.state.fake["recordings"],
+            "recording_count": len(app.state.fake["recordings"]),
             "bookings": app.state.fake["bookings"],
         }
 
