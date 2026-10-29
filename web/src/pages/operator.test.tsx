@@ -371,6 +371,10 @@ describe("operator workflows", () => {
     server.use(
       http.get("*/api/channels/gmail/mode", () => HttpResponse.json({ mode: "google" })),
       http.get("*/api/calendar/mode", () => HttpResponse.json({ mode: "google" })),
+      http.get("*/api/assistants/:id/google-features", () => HttpResponse.json({
+        features: ["calendar"],
+        email: "calendar@example.test",
+      })),
       http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>(
         "*/api/assistants/:id/channels",
         () => HttpResponse.json({
@@ -399,6 +403,10 @@ describe("operator workflows", () => {
     server.use(
       http.get("*/api/channels/gmail/mode", () => HttpResponse.json({ mode: "fake" })),
       http.get("*/api/calendar/mode", () => HttpResponse.json({ mode: "fake" })),
+      http.get("*/api/assistants/:id/google-features", () => HttpResponse.json({
+        features: ["calendar"],
+        email: "calendar@example.test",
+      })),
       http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>(
         "*/api/assistants/:id/channels",
         () => HttpResponse.json({

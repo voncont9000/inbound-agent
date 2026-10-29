@@ -19,6 +19,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
+from inbound_api.integrations.google_auth import GOOGLE_SCOPE_SETS, action_google_connection_for
 from inbound_api.jobs import enqueue
 from inbound_api.models import (
     Assistant,
@@ -42,6 +43,7 @@ from inbound_api.schemas import (
     CustomTemplateOptions,
     CustomTemplateRequest,
     CustomTemplateResponse,
+    GoogleFeaturesResponse,
     ServicesDraftResponse,
     TemplateResponse,
     TestCallResponse,
@@ -486,11 +488,40 @@ async def list_channels(
         raise HTTPException(status_code=404, detail="Assistant not found")
     rows = await session.scalars(
         select(ChannelConnection)
-        .where(ChannelConnection.assistant_id == assistant_id)
+        .where(ChannelConnection.assistant_id == assistant_id, ChannelConnection.kind != "google")
         .order_by(ChannelConnection.created_at.desc())
     )
     return ChannelConnectionsResponse(
         items=[ChannelConnectionResponse.model_validate(row) for row in rows]
+    )
+
+
+@router.get(
+    "/assistants/{assistant_id}/google-features",
+    response_model=GoogleFeaturesResponse,
+)
+async def google_features(
+    assistant_id: UUID,
+    ctx: TenantContext = _staff,
+    session: AsyncSession = _tenant_session_dependency,
+) -> GoogleFeaturesResponse:
+    if await session.get(Assistant, assistant_id) is None:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    connections = {
+        feature: await action_google_connection_for(
+            session,
+            assistant_id=assistant_id,
+            tenant_id=ctx.tenant_id,
+            feature=feature,
+        )
+        for feature in ("calendar", "sheets", "gmail")
+        if feature in GOOGLE_SCOPE_SETS
+    }
+    matching = [connection for connection in connections.values() if connection is not None]
+    email_connection = connections.get("calendar") or next(iter(matching), None)
+    return GoogleFeaturesResponse(
+        features=[feature for feature, connection in connections.items() if connection is not None],
+        email=email_connection.external_id if email_connection else None,
     )
 
 

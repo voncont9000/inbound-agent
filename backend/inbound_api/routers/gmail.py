@@ -88,54 +88,85 @@ async def gmail_oauth_callback(code: str, state: str):
     email = str(profile.get("emailAddress", "")).strip().lower()
     if "@" not in email:
         raise HTTPException(status_code=502, detail="Google returned an invalid mailbox")
+    base = (settings.allowed_origins or ["http://localhost:5173"])[0].rstrip("/")
     async with tenant_session(tenant_id) as session:
         if await session.get(Assistant, assistant_id) is None:
             raise HTTPException(status_code=404, detail="Assistant not found")
-        connection = await session.scalar(
-            select(ChannelConnection).where(
-                ChannelConnection.kind == "gmail",
-                ChannelConnection.external_id == email,
-            )
-        )
-        if connection is None:
-            connection = ChannelConnection(
-                tenant_id=tenant_id,
-                assistant_id=assistant_id,
-                kind="gmail",
-                external_id=email,
-                status="active",
-                settings={},
-            )
-            session.add(connection)
-            try:
-                async with session.begin_nested():
-                    await session.flush()
-            except IntegrityError:
-                connection = await session.scalar(
-                    select(ChannelConnection).where(
-                        ChannelConnection.kind == "gmail",
-                        ChannelConnection.external_id == email,
-                    )
-                )
-                if connection is None:
-                    raise
-        connection.assistant_id = assistant_id
-        connection.status = "active"
         refresh_token = token_data.get("refresh_token")
-        if refresh_token:
-            connection.credentials_ciphertext = encrypt_credential(refresh_token)
-        elif not connection.credentials_ciphertext:
-            raise HTTPException(status_code=502, detail="Google did not return a refresh token")
-        client = GoogleGmailClient(connection, settings)
-        history_id = await client.watch(settings.gmail_pubsub_topic or "")
-        connection.settings = {
-            **(connection.settings or {}),
-            "google_scopes": str(token_data.get("scope", "")).split(),
-            "history_id": history_id,
-            "watch_renewed_at": datetime.now(UTC).isoformat(),
-        }
-        await enqueue_gmail_sync(session, connection.id)
-    base = (settings.allowed_origins or ["http://localhost:5173"])[0].rstrip("/")
+        if features:
+            connection = await session.scalar(
+                select(ChannelConnection).where(
+                    ChannelConnection.tenant_id == tenant_id,
+                    ChannelConnection.kind == "google",
+                    ChannelConnection.external_id == email,
+                )
+            )
+            if not refresh_token and (connection is None or not connection.credentials_ciphertext):
+                raise HTTPException(status_code=502, detail="Google did not return a refresh token")
+            if connection is None:
+                connection = ChannelConnection(
+                    tenant_id=tenant_id,
+                    assistant_id=assistant_id,
+                    kind="google",
+                    external_id=email,
+                    status="active",
+                    settings={},
+                )
+                session.add(connection)
+            connection.assistant_id = assistant_id
+            connection.status = "active"
+            if refresh_token:
+                connection.credentials_ciphertext = encrypt_credential(refresh_token)
+            connection.settings = {
+                **(connection.settings or {}),
+                "google_scopes": str(token_data.get("scope", "")).split(),
+            }
+        else:
+            connection = await session.scalar(
+                select(ChannelConnection).where(
+                    ChannelConnection.kind == "gmail",
+                    ChannelConnection.external_id == email,
+                )
+            )
+            if connection is None:
+                try:
+                    async with session.begin_nested():
+                        connection = ChannelConnection(
+                            tenant_id=tenant_id,
+                            assistant_id=assistant_id,
+                            kind="gmail",
+                            external_id=email,
+                            status="active",
+                            settings={},
+                        )
+                        session.add(connection)
+                        await session.flush()
+                except IntegrityError:
+                    connection = await session.scalar(
+                        select(ChannelConnection).where(
+                            ChannelConnection.kind == "gmail",
+                            ChannelConnection.external_id == email,
+                        )
+                    )
+                    if connection is None:
+                        return RedirectResponse(
+                            f"{base}/channels?error=gmail_in_use", status_code=303
+                        )
+            connection.assistant_id = assistant_id
+            connection.status = "active"
+            if refresh_token:
+                connection.credentials_ciphertext = encrypt_credential(refresh_token)
+            elif not connection.credentials_ciphertext:
+                raise HTTPException(status_code=502, detail="Google did not return a refresh token")
+            client = GoogleGmailClient(connection, settings)
+            history_id = await client.watch(settings.gmail_pubsub_topic or "")
+            connection.settings = {
+                **(connection.settings or {}),
+                "google_scopes": str(token_data.get("scope", "")).split(),
+                "history_id": history_id,
+                "watch_renewed_at": datetime.now(UTC).isoformat(),
+            }
+            await enqueue_gmail_sync(session, connection.id)
     destination = (
         f"{base}/channels?connected=gmail"
         if not features

@@ -47,6 +47,7 @@ class MembershipRole(StrEnum):
 class ChannelKind(StrEnum):
     PHONE = "phone"
     GMAIL = "gmail"
+    GOOGLE = "google"
     WHATSAPP = "whatsapp"
     WEB = "web"
 
@@ -226,7 +227,6 @@ class AssistantConfigVersion(UUIDPrimaryKeyMixin, TenantMixin, Base):
 
 class ChannelConnection(UUIDPrimaryKeyMixin, TenantMixin, Base):
     __tablename__ = "channel_connections"
-    __table_args__ = (UniqueConstraint("kind", "external_id"),)
 
     assistant_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("assistants.id", ondelete="CASCADE"), nullable=True

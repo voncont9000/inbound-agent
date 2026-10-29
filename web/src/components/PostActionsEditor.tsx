@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
+import { useGoogleFeatures } from "./channelApi";
 import type { AssistantConfig } from "../lib/config";
 import { EMAIL_ACTION_DEFAULTS } from "../lib/emailActionDefaults";
 import { keyFromLabel } from "../lib/keys";
@@ -221,10 +222,7 @@ export function PostActionsEditor({
     queryFn: () => unwrap(api.GET("/post-actions/email-templates")),
   });
   const variableOptions = templateVariableOptions(variables.data ?? [], config.services);
-  const channelsQuery = useQuery({
-    queryKey: ["assistant-channels", assistantId],
-    queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/channels", { params: { path: { assistant_id: assistantId } } })),
-  });
+  const googleFeatures = useGoogleFeatures(assistantId);
   const secrets = useQuery({
     queryKey: ["post-action-secrets", assistantId],
     queryFn: () => unwrap(api.GET("/assistants/{assistant_id}/post-actions/webhook-secrets", { params: { path: { assistant_id: assistantId } } })),
@@ -248,7 +246,10 @@ export function PostActionsEditor({
       params: { path: { assistant_id: assistantId } },
       body: { features: ["sheets"] },
     })),
-    onSuccess: ({ url }) => window.location.assign(url),
+    onSuccess: ({ url }) => {
+      void queryClient.invalidateQueries({ queryKey: ["google-features", assistantId] });
+      window.location.assign(url);
+    },
   });
   const generateSecret = useMutation({
     mutationFn: (actionKey: string) => unwrap(api.POST("/assistants/{assistant_id}/post-actions/{action_key}/webhook-secret", {
@@ -260,8 +261,7 @@ export function PostActionsEditor({
     },
   });
   const needsSheets = actions.some((action) => action.kind === "sheets_row");
-  const gmailConnection = channelsQuery.data?.items.find((channel) => channel.kind === "gmail");
-  const shouldConnectSheets = needsSheets && !gmailConnection?.google_features.includes("sheets");
+  const shouldConnectSheets = needsSheets && !googleFeatures.data?.features.includes("sheets");
 
   useEffect(() => {
     if (!pendingFocusKey) return;

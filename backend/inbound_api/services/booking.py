@@ -26,8 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api import graph
 from inbound_api.integrations.calendar import CalendarProvider, calendar_provider_for
-from inbound_api.integrations.google_auth import google_connection_for, has_google_feature
+from inbound_api.integrations.google_auth import action_google_connection_for
 from inbound_api.models import (
+    Assistant,
     CalendarBooking,
     Commitment,
     CommitmentStatus,
@@ -60,8 +61,15 @@ async def booking_context(
     settings = get_settings()
     if settings.calendar_mode == "off":
         return None
-    connection = await google_connection_for(session, assistant_id)
-    if connection is None or not has_google_feature(connection, "calendar"):
+    tenant_id = await session.scalar(
+        select(Assistant.tenant_id).where(Assistant.id == assistant_id)
+    )
+    if tenant_id is None:
+        return None
+    connection = await action_google_connection_for(
+        session, assistant_id=assistant_id, tenant_id=tenant_id, feature="calendar"
+    )
+    if connection is None:
         return None
     provider = await calendar_provider_for(connection)
     if provider is None:
@@ -84,8 +92,15 @@ async def booking_available(
         return False
     if get_settings().calendar_mode == "off":
         return False
-    connection = await google_connection_for(session, assistant_id)
-    return connection is not None and has_google_feature(connection, "calendar")
+    tenant_id = await session.scalar(
+        select(Assistant.tenant_id).where(Assistant.id == assistant_id)
+    )
+    if tenant_id is None:
+        return False
+    connection = await action_google_connection_for(
+        session, assistant_id=assistant_id, tenant_id=tenant_id, feature="calendar"
+    )
+    return connection is not None
 
 
 async def fetch_busy(session: AsyncSession, ctx: BookingContext, assistant_id: UUID, now: datetime):

@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from inbound_api.auth import TenantContext, get_tenant_session, require_role
 from inbound_api.channels.credentials import encrypt_credential
-from inbound_api.integrations.google_auth import google_connection_for, has_google_feature
+from inbound_api.integrations.google_auth import action_google_connection_for
 from inbound_api.models import (
     Assistant,
     Conversation,
@@ -206,8 +206,13 @@ async def test_post_action(
     elif isinstance(action, SheetsRowAction):
         if settings.sheets_writer == "off":
             would_skip = "Google Sheets writing is off"
-        connection = await google_connection_for(session, assistant_id)
-        if connection is None or not has_google_feature(connection, "sheets"):
+        connection = await action_google_connection_for(
+            session,
+            assistant_id=assistant_id,
+            tenant_id=assistant.tenant_id,
+            feature="sheets",
+        )
+        if connection is None:
             would_skip = "Google Sheets is not connected"
         rendered = {
             "spreadsheet_id": action.spreadsheet_id,

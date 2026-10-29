@@ -607,6 +607,15 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
   http.get<{ id: string }, never, Schemas["ChannelConnectionsResponse"]>("*/api/assistants/:id/channels", ({ params }) => HttpResponse.json<Schemas["ChannelConnectionsResponse"]>({ items: mockDb.channels[String(params.id)] ?? [] })),
+  http.get<{ id: string }, never, Schemas["GoogleFeaturesResponse"]>("*/api/assistants/:id/google-features", ({ params }) => {
+    const channels = mockDb.channels[String(params.id)] ?? [];
+    const features = channels.flatMap((channel) => channel.google_features ?? []);
+    const google = channels.find((channel) => channel.google_features?.length);
+    return HttpResponse.json<Schemas["GoogleFeaturesResponse"]>({
+      features: [...new Set(features)],
+      email: google?.external_id ?? null,
+    });
+  }),
   http.post<{ id: string }, Schemas["ChannelConnectionCreate"], ApiResponse<Schemas["ChannelConnectionResponse"]>>("*/api/assistants/:id/channels", async ({ params, request }) => {
     const assistantId = String(params.id);
     const tenant = selectedTenant(request);

@@ -29,7 +29,9 @@ async def list_channels(
     session: AsyncSession = _tenant_session_dependency,
 ) -> ChannelConnectionsResponse:
     rows = await session.scalars(
-        select(ChannelConnection).order_by(ChannelConnection.created_at.desc())
+        select(ChannelConnection)
+        .where(ChannelConnection.kind != "google")
+        .order_by(ChannelConnection.created_at.desc())
     )
     return ChannelConnectionsResponse(
         items=[ChannelConnectionResponse.model_validate(row) for row in rows]
