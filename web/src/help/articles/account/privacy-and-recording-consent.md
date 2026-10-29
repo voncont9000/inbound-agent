@@ -13,7 +13,7 @@ Review how the assistant introduces itself and whether calls are recorded. Make 
 1. Open the assistant's settings and select **Rules**.
 2. Review the **AI disclosure** setting.
 3. For WhatsApp, the default setting discloses that the first reply is from the business's AI assistant. The alternative can wait until the customer asks.
-4. Choose **Save changes** if you change the setting.
+4. Changes save automatically.
 
 ## Review recording consent
 
