@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
 
+export const googleOAuthNavigation = {
+  assign: (url: string) => window.location.assign(url),
+};
+
 export function useGmailMode() {
   return useQuery({ queryKey: ["gmail-mode"], queryFn: () => unwrap(api.GET("/channels/gmail/mode")) });
 }
@@ -32,7 +36,7 @@ export function useGoogleOAuth(
     })),
     onSuccess: ({ url }) => {
       void queryClient.invalidateQueries({ queryKey: ["google-features", assistantId] });
-      window.location.assign(url);
+      googleOAuthNavigation.assign(url);
     },
     onError: (caught) => onError(caught instanceof Error ? caught.message : "Unable to connect Google."),
   });

@@ -27,6 +27,7 @@ function renderEditor(initialConfig: AssistantConfig) {
         change(next);
         return next;
       })}
+      saveDraft={async () => true}
     />;
   }
   const queryClient = new QueryClient({

@@ -10,6 +10,7 @@ export type SettingsTabProps = {
   /** Last saved configuration; keys present here are never regenerated. */
   saved: AssistantConfig;
   update: UpdateConfig;
+  saveDraft: () => Promise<boolean>;
   errors: Record<string, string>;
   clearFieldError: (path: string) => void;
   schema: unknown;

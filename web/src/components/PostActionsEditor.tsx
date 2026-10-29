@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "../api/client";
-import { useGoogleFeatures } from "./channelApi";
+import { googleOAuthNavigation, useGoogleFeatures } from "./channelApi";
 import type { AssistantConfig } from "../lib/config";
 import { EMAIL_ACTION_DEFAULTS } from "../lib/emailActionDefaults";
 import { keyFromLabel } from "../lib/keys";
@@ -197,10 +197,12 @@ export function PostActionsEditor({
   assistantId,
   config,
   update,
+  saveDraft,
 }: {
   assistantId: string;
   config: AssistantConfig;
   update: (change: (draft: AssistantConfig) => void) => void;
+  saveDraft: () => Promise<boolean>;
 }) {
   const queryClient = useQueryClient();
   const [results, setResults] = useState<Record<string, Schemas["PostActionTestResponse"]>>({});
@@ -209,6 +211,7 @@ export function PostActionsEditor({
   const [showActionPicker, setShowActionPicker] = useState(false);
   const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<{ actionKey: string; templateKey: string } | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [emailPreview, setEmailPreview] = useState<Schemas["EmailPreviewResponse"] | null>(null);
   const actionCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const addActionButtonRef = useRef<HTMLButtonElement>(null);
@@ -248,9 +251,18 @@ export function PostActionsEditor({
     })),
     onSuccess: ({ url }) => {
       void queryClient.invalidateQueries({ queryKey: ["google-features", assistantId] });
-      window.location.assign(url);
+      googleOAuthNavigation.assign(url);
     },
   });
+  const connectGoogleSheets = async () => {
+    setSavingDraft(true);
+    try {
+      if (!(await saveDraft())) return;
+      connectSheets.mutate();
+    } finally {
+      setSavingDraft(false);
+    }
+  };
   const generateSecret = useMutation({
     mutationFn: (actionKey: string) => unwrap(api.POST("/assistants/{assistant_id}/post-actions/{action_key}/webhook-secret", {
       params: { path: { assistant_id: assistantId, action_key: actionKey } },
@@ -355,8 +367,8 @@ export function PostActionsEditor({
     {actions.length === 0 && actionPicker}
     {shouldConnectSheets && <div className="stack">
       <p className="help">Connect Google Sheets to enable sheet actions.</p>
-      <button className="button-primary" type="button" disabled={connectSheets.isPending} onClick={() => connectSheets.mutate()}>
-        {connectSheets.isPending ? "Connecting…" : "Connect Google Sheets"}
+      <button className="button-primary" type="button" disabled={savingDraft || connectSheets.isPending} onClick={() => { void connectGoogleSheets(); }}>
+        {savingDraft ? "Saving changes…" : connectSheets.isPending ? "Connecting…" : "Connect Google Sheets"}
       </button>
       {connectSheets.error && <p role="alert">{connectSheets.error.message}</p>}
     </div>}

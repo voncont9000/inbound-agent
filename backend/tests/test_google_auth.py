@@ -299,7 +299,10 @@ async def test_callback_stores_granted_scopes_and_keeps_existing_refresh_token(m
     response = await gmail_router.gmail_oauth_callback("auth-code", state)
 
     assert response.status_code == 303
-    assert response.headers["location"] == f"https://app.test/assistants/{assistant_id}/settings"
+    assert (
+        response.headers["location"]
+        == f"https://app.test/assistants/{assistant_id}/settings/abilities"
+    )
     assert connection.credentials_ciphertext == "existing-encrypted-refresh-token"
     assert connection.settings["google_scopes"] == granted_scopes
     assert "history_id" not in connection.settings
@@ -419,7 +422,10 @@ async def test_feature_oauth_creates_google_credential_without_touching_gmail(mo
 
     response = await gmail_router.gmail_oauth_callback("auth-code", state)
 
-    assert response.headers["location"] == f"https://app.test/assistants/{assistant_id}/settings"
+    assert (
+        response.headers["location"]
+        == f"https://app.test/assistants/{assistant_id}/settings/abilities"
+    )
     assert len(added) == 1
     connection = added[0]
     assert connection.kind == "google"

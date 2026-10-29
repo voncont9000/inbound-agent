@@ -170,7 +170,7 @@ async def gmail_oauth_callback(code: str, state: str):
     destination = (
         f"{base}/channels?connected=gmail"
         if not features
-        else f"{base}/assistants/{assistant_id}/settings"
+        else f"{base}/assistants/{assistant_id}/settings/abilities"
     )
     return RedirectResponse(destination, status_code=303)
 
