@@ -43,8 +43,9 @@ Run the narrowest tests that cover a change, then let CI run everything.
 - **Production server is shared** with `investment-tracker.service`. Leave it alone.
 - Branches `<agent>/<timestamp>-<slug>`, conventional-commit PR titles (`fix(web): …`,
   `feat(voice): …`), squash merge, one focused PR per change, CI green before merge.
-- Migrations: new numbered file after the current head. Update the expected head in the backend
-  migration test.
+- Migrations: set `down_revision` from `alembic heads` and pick an unused number (the chain is
+  non-monotonic). Never edit a merged migration. Update the expected head in the backend migration test.
+- Squash merges leave local `main` stale: branch each PR from a freshly fetched `origin/main`.
 - After every deploy that touches voice, prompts or extraction, check Admin → Evals for the
   automatic run.
 - Cost-conscious owner: prefer free tiers and the cheapest adequate model. State the per-unit and
